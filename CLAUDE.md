@@ -790,6 +790,36 @@ one that is this page's own:
   own `group/bench`, and an unnamed `group-open:` would have the bench toggling
   the card's transform.
 
+**The depth chrome rides `pointer-fine:`, because the budget it spends is
+per-device rather than per-card.** In full dress a card is about six composited
+planes — the `<li>`'s perspective, the summary's `preserve-3d` and resting
+`rotateX(3deg)`, four content layers on their own `translateZ`, the masked
+floor with its second nested perspective — plus a `drop-shadow` filter buffer
+under the gradient-clipped title. The grid is one card per league with no
+virtualization, so the plane count *is* the account's league count: measured on
+the 113-league account, 791 transformed elements and 113 filter buffers live on
+the page at once. A desktop absorbs that; iOS Safari's per-tab GPU budget does
+not, and at DPR 3 a card's layers run megabytes each — expanding one card was a
+reproducible "a problem repeatedly occurred" tab kill, which is WebKit killing
+the page rather than any error the app could catch. The gate is `pointer-fine`
+rather than a width or a UA sniff because the depth is a *pointer affordance*:
+the tilt exists to be flattened by a hover, and Tailwind already wraps `hover:`
+in `(hover: hover)`, so what touch was still paying for was the resting 3D
+stack and the `group-open` styles, which are gated by nothing. So the
+perspective, `preserve-3d`, every `[transform:…]`, the title's `filter` and —
+the load-bearing one — the open-state `--card-lift-hover` + `--card-halo-hover`
+pair (two 70px blurs, which *open* pins permanently) all carry `pointer-fine:`;
+the hover variants carry `pointer-fine:hover:` on top of the hover gate, so a
+coarse-primary device with a mouse attached cannot lift a card that has no tilt
+to lift from. A coarse pointer gets the same card flat — bevel, gradients,
+resting lift, and on open the border accent, glow and edge light, which stay
+ungated because they are the open affordance mobile keeps. The floor and sheen
+layers are `hidden pointer-fine:block` outright: one is only ever visible
+mid-hover, the other exists to be foreshortened by a tilt that is not there.
+**`lineupchecker/lineup-check-card.tsx` carries the identical gate** — it is the
+same card over the same league list, so it had the same crash, and the two must
+not drift.
+
 Three things were changed against the handoff, each because a render showed it:
 
 - **`PageShell` gained a `console` width (`max-w-6xl`).** At `wide` a league

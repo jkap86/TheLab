@@ -39,6 +39,17 @@ import { LeagueTeams } from "./league-teams";
  * The card stays hook-free, as before: the one interaction it owns is the
  * disclosure, and the state a card does need (which team, which metric) lives
  * in `LeagueTeams` below it.
+ *
+ * All of the depth — the perspective, `preserve-3d`, every `translateZ`, the
+ * title's drop-shadow filter, the open-state lift/halo shadows — rides
+ * `pointer-fine:`, because its budget is per-device rather than per-card: the
+ * stack is ~6 composited planes plus a filter buffer *per league*, with no
+ * virtualization, and iOS Safari's per-tab GPU budget dies on it the moment a
+ * card opens ("a problem repeatedly occurred") where a desktop never notices.
+ * The tilt is a pointer affordance anyway — it exists to be flattened by a
+ * hover — so a coarse pointer gets the same card flat, with the border accent,
+ * glow and edge light as its open affordance. `lineup-check-card.tsx` carries
+ * the identical gate.
  */
 
 /**
@@ -101,21 +112,21 @@ export function LeagueCard({
     // has to be ordered here, on the grid item, rather than on the summary
     // inside it. Without this an open card sits *under* the card to its right,
     // which is the one moment the raise is most visible.
-    <li className="relative flex [perspective:2400px] hover:z-10 has-[details[open]]:z-10">
+    <li className="relative flex pointer-fine:[perspective:2400px] hover:z-10 has-[details[open]]:z-10">
       <details className="group/card flex flex-1 flex-col">
         <summary
           className={
             "lab-card-3d relative flex flex-1 cursor-pointer list-none flex-col rounded-[1.125rem] " +
             "border border-foreground/12 bg-[image:var(--card-bg)] px-[1.375rem] pb-[1.625rem] pt-7 " +
             "shadow-[var(--card-bevel),var(--card-lift)] " +
-            "[transform-style:preserve-3d] [transform-origin:center_bottom] " +
-            "[transform:translateZ(0)_rotateX(3deg)] " +
-            "hover:[transform:translateZ(30px)_rotateX(0deg)] " +
-            "group-open/card:[transform:translateZ(20px)_rotateX(0deg)] " +
+            "pointer-fine:[transform-style:preserve-3d] [transform-origin:center_bottom] " +
+            "pointer-fine:[transform:translateZ(0)_rotateX(3deg)] " +
+            "pointer-fine:hover:[transform:translateZ(30px)_rotateX(0deg)] " +
+            "pointer-fine:group-open/card:[transform:translateZ(20px)_rotateX(0deg)] " +
             "transition-[transform,box-shadow,border-color] duration-[450ms] ease-[cubic-bezier(0.2,0.8,0.2,1)] " +
             "hover:border-active/45 group-open/card:border-active/45 " +
-            "hover:shadow-[var(--card-bevel),var(--card-lift-hover),var(--card-halo-hover)] " +
-            "group-open/card:shadow-[var(--card-bevel),var(--card-lift-hover),var(--card-halo-hover)] " +
+            "pointer-fine:hover:shadow-[var(--card-bevel),var(--card-lift-hover),var(--card-halo-hover)] " +
+            "pointer-fine:group-open/card:shadow-[var(--card-bevel),var(--card-lift-hover),var(--card-halo-hover)] " +
             "focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-active/60"
           }
         >
@@ -125,8 +136,12 @@ export function LeagueCard({
             className="pointer-events-none absolute inset-0 overflow-hidden rounded-[inherit]"
           >
             <span className="absolute inset-x-0 top-0 h-[45%] bg-[image:var(--card-specular)]" />
-            <span className="lab-anim absolute inset-y-0 left-0 w-[55%] -translate-x-[180%] -skew-x-12 bg-[image:var(--card-sheen)] transition-transform duration-[900ms] ease-out group-hover/card:translate-x-[450%]" />
-            <span className="absolute -inset-x-1/4 -bottom-[8%] h-[62%] origin-bottom bg-[image:var(--card-floor)] opacity-40 transition-opacity duration-[450ms] [mask-image:linear-gradient(to_top,#000,transparent_72%)] [transform:perspective(320px)_rotateX(66deg)] group-hover/card:opacity-100 group-open/card:opacity-100" />
+            {/* The sheen only ever moves under a hover, and the floor exists to
+                be foreshortened by a tilt — neither has anything to say on a
+                flat card, so both come out of the tree rather than sitting
+                there as a gradient nobody sees. */}
+            <span className="lab-anim absolute inset-y-0 left-0 hidden w-[55%] -translate-x-[180%] -skew-x-12 bg-[image:var(--card-sheen)] transition-transform duration-[900ms] ease-out group-hover/card:translate-x-[450%] pointer-fine:block" />
+            <span className="absolute -inset-x-1/4 -bottom-[8%] hidden h-[62%] origin-bottom bg-[image:var(--card-floor)] opacity-40 transition-opacity duration-[450ms] [mask-image:linear-gradient(to_top,#000,transparent_72%)] [transform:perspective(320px)_rotateX(66deg)] group-hover/card:opacity-100 group-open/card:opacity-100 pointer-fine:block" />
             <span className="absolute -bottom-[45%] left-1/2 h-[85%] w-[120%] -translate-x-1/2 bg-[radial-gradient(closest-side,var(--accent-glow),transparent_75%)] opacity-30 transition-opacity duration-[450ms] group-hover/card:opacity-80 group-open/card:opacity-80" />
             <span className="absolute inset-x-[18%] top-0 h-px bg-[image:var(--card-edge-light)] opacity-0 transition-opacity duration-[450ms] group-hover/card:opacity-100 group-open/card:opacity-100" />
           </span>
@@ -137,20 +152,20 @@ export function LeagueCard({
               `--card-title-depth`, because `filter` does not compose across two
               declarations the way a `box-shadow` list does, which is why the
               hover glow is a whole second token rather than an addition. */}
-          <span className="relative text-balance bg-[image:var(--chrome-face)] bg-clip-text font-display text-[1.75rem] font-semibold leading-[1.06] tracking-[-0.04em] text-transparent [filter:var(--card-title-depth)] [transform:translateZ(44px)] transition-[filter] duration-[450ms] group-hover/card:[filter:var(--card-title-depth-hover)]">
+          <span className="relative text-balance bg-[image:var(--chrome-face)] bg-clip-text font-display text-[1.75rem] font-semibold leading-[1.06] tracking-[-0.04em] text-transparent transition-[filter] duration-[450ms] pointer-fine:[filter:var(--card-title-depth)] pointer-fine:[transform:translateZ(44px)] pointer-fine:group-hover/card:[filter:var(--card-title-depth-hover)]">
             {league.name}
           </span>
 
           {/* The accent rule: a short cyan hairline that extends on hover. */}
           <span
             aria-hidden
-            className="relative mt-3.5 block h-px w-9 bg-gradient-to-r from-active/50 to-transparent transition-[width] duration-[450ms] [transform:translateZ(36px)] group-hover/card:w-[5.75rem] group-hover/card:from-active group-open/card:w-[5.75rem] group-open/card:from-active"
+            className="relative mt-3.5 block h-px w-9 bg-gradient-to-r from-active/50 to-transparent transition-[width] duration-[450ms] group-hover/card:w-[5.75rem] group-hover/card:from-active group-open/card:w-[5.75rem] group-open/card:from-active pointer-fine:[transform:translateZ(36px)]"
           />
 
           {/* The manager's own line. A league with neither a team name nor a
               record — one whose rosters have not been read — says only what it
               knows, rather than padding the line with a `0–0`. */}
-          <p className="relative mt-[0.9375rem] font-mono text-[0.6875rem] uppercase tracking-[0.16em] text-foreground/60 [transform:translateZ(14px)]">
+          <p className="relative mt-[0.9375rem] font-mono text-[0.6875rem] uppercase tracking-[0.16em] text-foreground/60 pointer-fine:[transform:translateZ(14px)]">
             {teamName ?? "—"}
             {league.record && (
               <>
@@ -168,7 +183,7 @@ export function LeagueCard({
               which is what keeps their `translateZ` alive. A wrapper here would
               be a flat rendering context and the depth would silently go. */}
           <div
-            className={`relative mt-5 grid gap-2.5 ${GRID_COLS[columns.length] ?? GRID_COLS[2]} [transform:translateZ(22px)]`}
+            className={`relative mt-5 grid gap-2.5 ${GRID_COLS[columns.length] ?? GRID_COLS[2]} pointer-fine:[transform:translateZ(22px)]`}
           >
             {columns.map((id) => (
               <MetricTile key={id} id={id} entry={entry} />

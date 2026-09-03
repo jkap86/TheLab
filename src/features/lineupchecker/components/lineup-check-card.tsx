@@ -29,6 +29,12 @@ import {
  *    the card's transform.
  *
  * Hook-free, like `LeagueCard`: the only interaction it owns is the disclosure.
+ *
+ * A fourth constraint travels with the card: the depth chrome rides
+ * `pointer-fine:`, because one card per league times ~6 composited planes each
+ * is what kills an iOS Safari tab when a card opens. `LeagueCard` carries the
+ * argument in full; the gate must stay on both, since this page renders the
+ * same card over the same league list.
  */
 
 /** Sleeper's slot names, shortened to fit a chip. Unmapped ones render as-is. */
@@ -54,21 +60,21 @@ export function LineupCheckCard({
   const kickoff = kickoffCell(entry);
 
   return (
-    <li className="relative flex [perspective:2400px] hover:z-10 has-[details[open]]:z-10">
+    <li className="relative flex pointer-fine:[perspective:2400px] hover:z-10 has-[details[open]]:z-10">
       <details className="group/card flex flex-1 flex-col">
         <summary
           className={
             "lab-card-3d relative flex flex-1 cursor-pointer list-none flex-col rounded-[1.125rem] " +
             "border border-foreground/12 bg-[image:var(--card-bg)] px-[1.375rem] pb-[1.625rem] pt-7 " +
             "shadow-[var(--card-bevel),var(--card-lift)] " +
-            "[transform-style:preserve-3d] [transform-origin:center_bottom] " +
-            "[transform:translateZ(0)_rotateX(3deg)] " +
-            "hover:[transform:translateZ(30px)_rotateX(0deg)] " +
-            "group-open/card:[transform:translateZ(20px)_rotateX(0deg)] " +
+            "pointer-fine:[transform-style:preserve-3d] [transform-origin:center_bottom] " +
+            "pointer-fine:[transform:translateZ(0)_rotateX(3deg)] " +
+            "pointer-fine:hover:[transform:translateZ(30px)_rotateX(0deg)] " +
+            "pointer-fine:group-open/card:[transform:translateZ(20px)_rotateX(0deg)] " +
             "transition-[transform,box-shadow,border-color] duration-[450ms] ease-[cubic-bezier(0.2,0.8,0.2,1)] " +
             "hover:border-active/45 group-open/card:border-active/45 " +
-            "hover:shadow-[var(--card-bevel),var(--card-lift-hover),var(--card-halo-hover)] " +
-            "group-open/card:shadow-[var(--card-bevel),var(--card-lift-hover),var(--card-halo-hover)] " +
+            "pointer-fine:hover:shadow-[var(--card-bevel),var(--card-lift-hover),var(--card-halo-hover)] " +
+            "pointer-fine:group-open/card:shadow-[var(--card-bevel),var(--card-lift-hover),var(--card-halo-hover)] " +
             "focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-active/60"
           }
         >
@@ -78,22 +84,22 @@ export function LineupCheckCard({
             className="pointer-events-none absolute inset-0 overflow-hidden rounded-[inherit]"
           >
             <span className="absolute inset-x-0 top-0 h-[45%] bg-[image:var(--card-specular)]" />
-            <span className="lab-anim absolute inset-y-0 left-0 w-[55%] -translate-x-[180%] -skew-x-12 bg-[image:var(--card-sheen)] transition-transform duration-[900ms] ease-out group-hover/card:translate-x-[450%]" />
-            <span className="absolute -inset-x-1/4 -bottom-[8%] h-[62%] origin-bottom bg-[image:var(--card-floor)] opacity-40 transition-opacity duration-[450ms] [mask-image:linear-gradient(to_top,#000,transparent_72%)] [transform:perspective(320px)_rotateX(66deg)] group-hover/card:opacity-100 group-open/card:opacity-100" />
+            <span className="lab-anim absolute inset-y-0 left-0 hidden w-[55%] -translate-x-[180%] -skew-x-12 bg-[image:var(--card-sheen)] transition-transform duration-[900ms] ease-out group-hover/card:translate-x-[450%] pointer-fine:block" />
+            <span className="absolute -inset-x-1/4 -bottom-[8%] hidden h-[62%] origin-bottom bg-[image:var(--card-floor)] opacity-40 transition-opacity duration-[450ms] [mask-image:linear-gradient(to_top,#000,transparent_72%)] [transform:perspective(320px)_rotateX(66deg)] group-hover/card:opacity-100 group-open/card:opacity-100 pointer-fine:block" />
             <span className="absolute -bottom-[45%] left-1/2 h-[85%] w-[120%] -translate-x-1/2 bg-[radial-gradient(closest-side,var(--accent-glow),transparent_75%)] opacity-30 transition-opacity duration-[450ms] group-hover/card:opacity-80 group-open/card:opacity-80" />
             <span className="absolute inset-x-[18%] top-0 h-px bg-[image:var(--card-edge-light)] opacity-0 transition-opacity duration-[450ms] group-hover/card:opacity-100 group-open/card:opacity-100" />
           </span>
 
-          <span className="relative text-balance bg-[image:var(--chrome-face)] bg-clip-text font-display text-[1.75rem] font-semibold leading-[1.06] tracking-[-0.04em] text-transparent [filter:var(--card-title-depth)] [transform:translateZ(44px)] transition-[filter] duration-[450ms] group-hover/card:[filter:var(--card-title-depth-hover)]">
+          <span className="relative text-balance bg-[image:var(--chrome-face)] bg-clip-text font-display text-[1.75rem] font-semibold leading-[1.06] tracking-[-0.04em] text-transparent transition-[filter] duration-[450ms] pointer-fine:[filter:var(--card-title-depth)] pointer-fine:[transform:translateZ(44px)] pointer-fine:group-hover/card:[filter:var(--card-title-depth-hover)]">
             {league.name}
           </span>
 
           <span
             aria-hidden
-            className="relative mt-3.5 block h-px w-9 bg-gradient-to-r from-active/50 to-transparent transition-[width] duration-[450ms] [transform:translateZ(36px)] group-hover/card:w-[5.75rem] group-hover/card:from-active group-open/card:w-[5.75rem] group-open/card:from-active"
+            className="relative mt-3.5 block h-px w-9 bg-gradient-to-r from-active/50 to-transparent transition-[width] duration-[450ms] group-hover/card:w-[5.75rem] group-hover/card:from-active group-open/card:w-[5.75rem] group-open/card:from-active pointer-fine:[transform:translateZ(36px)]"
           />
 
-          <p className="relative mt-[0.9375rem] font-mono text-[0.6875rem] uppercase tracking-[0.16em] text-foreground/60 [transform:translateZ(14px)]">
+          <p className="relative mt-[0.9375rem] font-mono text-[0.6875rem] uppercase tracking-[0.16em] text-foreground/60 pointer-fine:[transform:translateZ(14px)]">
             {league.team_name?.trim() || "—"}
             {` · ${league.total_rosters}-team`}
             {/* A lineup graded off the roster's *live* starters rather than the
@@ -108,7 +114,7 @@ export function LineupCheckCard({
           {/* A direct child of the summary, so the `translateZ` survives: a
               plain wrapper here is a flat rendering context and the depth would
               go with no error to say so. */}
-          <div className="relative mt-5 grid grid-cols-2 gap-2.5 [transform:translateZ(22px)]">
+          <div className="relative mt-5 grid grid-cols-2 gap-2.5 pointer-fine:[transform:translateZ(22px)]">
             <MetricTile label="Vs optimal" cell={gap} />
             <MetricTile label="Kickoff" cell={kickoff} />
           </div>
