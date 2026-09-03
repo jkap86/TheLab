@@ -7,17 +7,17 @@ import {
   DEFAULT_LEAGUE_FILTERS,
   filterSummary,
   CONSOLE_KEY,
+  ManagerPlate,
   matchesFilters,
   ThemeToggle,
   useLineupColumns,
+  useManagerLeagues,
 } from "@/features/shared";
 
-import { useManagerLeagues } from "../hooks/use-manager-leagues";
 import { useManagerLineups } from "../hooks/use-manager-lineups";
 import { LeagueCard } from "./league-card";
 import { LeagueFiltersDialog } from "./league-filters-dialog";
 import { LineupColumnsDialog } from "./lineup-columns-dialog";
-import { ManagerPlate } from "./manager-plate";
 import { SeasonSummary } from "./season-summary";
 
 /**

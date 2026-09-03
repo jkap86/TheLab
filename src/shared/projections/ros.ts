@@ -20,6 +20,7 @@
 
 import { aggregateWeeklyStats } from "./aggregate.ts";
 import type { PlayerWeekStats } from "./aggregate.ts";
+import { isRealProjection, readPlayerIdentity } from "./identity.ts";
 import type { SleeperProjection } from "../sleeper/types/sleeper.types.ts";
 
 /** One player's summed rest-of-season projection, plus who they are. */
@@ -68,12 +69,13 @@ export function assembleRosProjections(
 
       const known = identity.get(id);
       if (!known || (known.name === null && known.positions.length === 0)) {
-        identity.set(id, readIdentity(row.player));
+        identity.set(id, readPlayerIdentity(row.player));
       }
 
       // A null `game_id` is the feed's spelling of "no game this week"; its
-      // `stats` are ADP placeholders, not a projected zero.
-      if (row.game_id == null || row.stats == null) continue;
+      // `stats` are ADP placeholders, not a projected zero. The predicate lives
+      // in `./identity` because `./week` folds the same feed and must agree.
+      if (!isRealProjection(row)) continue;
       real.push({ player_id: id, week, stats: row.stats });
     }
   }
@@ -92,32 +94,4 @@ export function assembleRosProjections(
     };
   }
   return board;
-}
-
-/**
- * Name and positions off the feed's inlined player object, read defensively —
- * the object is untyped JSON from an undocumented host, and a missing field is
- * an absent fact, never a crash.
- */
-function readIdentity(player: Record<string, unknown> | null): {
-  name: string | null;
-  positions: string[];
-} {
-  if (!player) return { name: null, positions: [] };
-
-  const first = typeof player.first_name === "string" ? player.first_name : "";
-  const last = typeof player.last_name === "string" ? player.last_name : "";
-  const name = `${first} ${last}`.trim() || null;
-
-  const fantasy = Array.isArray(player.fantasy_positions)
-    ? player.fantasy_positions.filter((p): p is string => typeof p === "string")
-    : [];
-  const positions =
-    fantasy.length > 0
-      ? fantasy
-      : typeof player.position === "string" && player.position !== ""
-        ? [player.position]
-        : [];
-
-  return { name, positions };
 }

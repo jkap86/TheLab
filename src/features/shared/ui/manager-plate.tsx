@@ -1,10 +1,15 @@
 import type { ReactNode } from "react";
 
-import { Avatar } from "@/features/shared";
+import { Avatar } from "../avatar";
 
 /**
  * The manager's identity, engraved into a recessed plate: avatar on a raised
  * bezel, a milled groove, then the eyebrow and the name.
+ *
+ * It lives in `features/shared` rather than beside the manager tool because the
+ * lineup checker draws the same plate — the line `CONSOLE_KEY` moved on, and
+ * for the same reason: two hand-copied identity plates are two chances for one
+ * of them to stop matching the console around it.
  *
  * The same plate as the tools page's `LabWordmark`, with two differences that
  * follow from the content rather than from taste. The bezel holds the

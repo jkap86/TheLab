@@ -7,6 +7,27 @@
 export { getRosProjections, ROS_PROJECTIONS_TTL_MS } from "./ros-read";
 export { assembleRosProjections } from "./ros";
 export type { RosPlayerProjection, RosProjections, RosWeek } from "./ros";
+export { getWeekProjections, WEEK_PROJECTIONS_TTL_MS } from "./week-read";
+export { assembleWeekProjections, dayLockedPlayers } from "./week";
+export type { WeekPlayerProjection, WeekProjections } from "./week";
+export { isRealProjection, readPlayerIdentity } from "./identity";
+export type { PlayerIdentity } from "./identity";
+export {
+  clampWeek,
+  isPlausibleWeek,
+  LAST_REGULAR_WEEK,
+  parseRequestedWeek,
+} from "./weeks";
+export type { RequestedWeek } from "./weeks";
+export {
+  KICKOFF_BUFFER_MS,
+  kickoffMoves,
+  kickoffRanks,
+  orderLineupByKickoff,
+} from "./kickoff-order";
+export type { KickoffMove, KickoffPlayer, KickoffSeat } from "./kickoff-order";
+export { lockedPlayers } from "./locks";
+export type { LockInputs } from "./locks";
 export {
   compareLineup,
   eligible,

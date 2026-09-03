@@ -1,16 +1,17 @@
 import type { GraphWeeks, WeekRange } from "./graph";
+import { LAST_REGULAR_WEEK } from "../projections/weeks.ts";
 
 /**
- * Last week of the NFL regular season, and so the ceiling for a season that has
- * finished.
+ * Re-exported rather than declared, which reverses the note that stood here.
  *
- * Declared here rather than imported: in TheLabX it lives in
- * `projections/weeks.ts`, which is the module that also decides which weeks of
- * projections to keep warm. That port has not landed, and a constant is
- * cheaper to move later than a dependency on a folder that does not exist is to
- * fake now — it moves back beside projections when they arrive.
+ * It used to be declared in this file because `projections/weeks.ts` had not
+ * been ported and "a constant is cheaper to move later than a dependency on a
+ * folder that does not exist is to fake now" — with the promise that it moves
+ * back beside projections when they arrive. The week-scoped projections behind
+ * the lineup checker are that arrival, so it lives there now and this keeps the
+ * name every existing caller imports.
  */
-export const LAST_REGULAR_WEEK = 18;
+export { LAST_REGULAR_WEEK };
 
 /**
  * Which weeks of a league's week-keyed collections one sync fetches.

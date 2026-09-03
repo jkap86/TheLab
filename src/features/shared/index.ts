@@ -21,5 +21,8 @@ export {
   useLineupColumns,
 } from "./lineup-columns";
 export { THEME_BOOT_SCRIPT } from "./theme";
+export { useManagerLeagues } from "./use-manager-leagues";
+export type { ManagerLeaguesState } from "./use-manager-leagues";
 export { ThemeToggle } from "./theme-toggle";
+export { ManagerPlate } from "./ui/manager-plate";
 export { PageShell } from "./ui/page-shell";

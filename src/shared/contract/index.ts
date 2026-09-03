@@ -23,3 +23,10 @@ export {
   type LeagueLineupEntry,
   type ManagerLineupsPayload,
 } from "./lineups";
+export {
+  type LineupCheckPlayer,
+  type LineupCheckSeat,
+  type LineupCheckLeague,
+  type LineupCheckStatus,
+  type ManagerLineupCheckPayload,
+} from "./lineup-check";

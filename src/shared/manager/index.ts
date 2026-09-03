@@ -97,3 +97,7 @@ export {
   startingSlotCount,
 } from "./adp-value";
 export type { AdpRosterValue } from "./adp-value";
+export { getManagerWeekLineups } from "./queries";
+export type { ManagerWeekLineupRow } from "./queries";
+export { solveWeekLineup } from "./week-lineups";
+export type { WeekLineupLeague } from "./week-lineups";

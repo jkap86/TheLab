@@ -1,7 +1,7 @@
 import type { PoolClient } from "pg";
 
 import { bulkInsert, LOCK_KEYS, pool, withAdvisoryLock, withTransaction } from "@/shared/db";
-import { errorMessage, mapWithConcurrency } from "@/shared/util";
+import { easternDate, errorMessage, mapWithConcurrency } from "@/shared/util";
 
 import { fetchKtcPlayerHistory } from "./client";
 import { int } from "./parse";
@@ -52,15 +52,12 @@ const HISTORY_ON_CONFLICT = `(format, ktc_id, date) DO UPDATE SET
  * stamping snapshots with the server's local (or UTC) date would file a late
  * evening scrape under tomorrow — and later collide with the authoritative
  * series when the backfill writes the same day under KTC's own date.
+ *
+ * The zone itself lives in `util/easternDate`, which the lineup checker's
+ * day-lock is the second reader of: two spellings of "which day is it in New
+ * York" is two chances for one of them to be the server's.
  */
-function ktcToday(): string {
-  return new Intl.DateTimeFormat("en-CA", {
-    timeZone: "America/New_York",
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-  }).format(new Date());
-}
+const ktcToday = (): string => easternDate();
 
 /**
  * Record today's value/rank for every entry on a board.

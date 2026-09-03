@@ -458,3 +458,110 @@ export async function getUnlistedManagerLeagueIds(
   );
   return rows.map((r) => r.league_id);
 }
+
+/**
+ * One league's week, as the lineup checker reads it: the league's own slots and
+ * scoring, and the manager's roster with the lineup they had set *that week*.
+ *
+ * `starters` and `players` are the raw Sleeper arrays, padding included — the
+ * solve dedupes and drops `""`/`"0"` itself, because `compareLineup` reads
+ * `starters` **positionally** against the league's starting slots and a
+ * cleaned-up array would no longer line up.
+ */
+export type ManagerWeekLineupRow = {
+  league_id: string;
+  total_rosters: number;
+  roster_positions: string[] | null;
+  scoring_settings: Record<string, number> | null;
+  /** Sleeper seats this league's lineup itself — there is no gap to report. */
+  best_ball: boolean;
+  roster_id: number;
+  starters: string[] | null;
+  players: string[] | null;
+  /**
+   * Which lineup `starters` actually is.
+   *
+   * `"week"` is the `matchups` row for the week asked about — the lineup that
+   * was really set then. `"current"` is the roster's live `starters`, which is
+   * the same array for the week being played and a *different week's lineup*
+   * for every other week the stepper walks. The caller says which, so a reader
+   * is never shown today's lineup under another week's heading.
+   */
+  as_of: "week" | "current";
+};
+
+type ManagerWeekLineupSqlRow = Omit<ManagerWeekLineupRow, "best_ball" | "as_of"> & {
+  best_ball: boolean | null;
+  week_starters: string[] | null;
+  week_players: string[] | null;
+};
+
+/**
+ * Every league the manager fielded a team in, with their roster for one week.
+ *
+ * **The first read of the `matchups` table**, which the sync has been filling
+ * since the league graph landed. That is the whole point of it here: Sleeper's
+ * `rosters.starters` is a *live* field — whatever the manager last moved to —
+ * so grading week 3 against it would grade today's lineup and label it week 3.
+ * The `matchups` row records what was set that week, and a `LEFT JOIN` is what
+ * lets the two be told apart rather than silently substituted: a week with no
+ * stored row falls back to the live lineup and is **flagged `as_of:
+ * "current"`**, because the sync only fetches weeks up to the one being played
+ * and a future week has no row by construction.
+ *
+ * A row whose `starters` is stored but empty counts as absent, since Sleeper
+ * writes an empty array for a week a league never scheduled — `COALESCE` on the
+ * array alone would prefer that to a real lineup.
+ *
+ * Gated on {@link MANAGER_LEAGUE_SQL}, the same predicate the leagues list and
+ * the lineups route use, so the tool's league set cannot drift from the list
+ * the page draws beside it.
+ *
+ * One row per league rather than every roster in it: this tool answers for the
+ * manager's own lineup, where `getManagerLeagueRosters` has to solve all twelve
+ * to rank one among them.
+ */
+export async function getManagerWeekLineups(
+  userId: string,
+  season: string,
+  week: number,
+): Promise<ManagerWeekLineupRow[]> {
+  const { rows } = await pool.query<ManagerWeekLineupSqlRow>(
+    `SELECT l.league_id, l.total_rosters, l.roster_positions, l.scoring_settings,
+            (CASE WHEN l.settings->>'best_ball' ~ '^[0-9]+$'
+                  THEN (l.settings->>'best_ball')::int = 1 END) AS best_ball,
+            r.roster_id,
+            r.starters AS starters,
+            r.players  AS players,
+            m.starters AS week_starters,
+            m.players  AS week_players
+       FROM leagues l
+       JOIN rosters r
+         ON r.league_id = l.league_id AND r.owner_id = $1
+       LEFT JOIN matchups m
+         ON m.league_id = l.league_id AND m.roster_id = r.roster_id AND m.week = $3
+      WHERE l.season = $2
+        AND ${MANAGER_LEAGUE_SQL}
+      ORDER BY l.league_id`,
+    [userId, season, week],
+  );
+
+  return rows.map((row) => {
+    const stored = Array.isArray(row.week_starters) && row.week_starters.length > 0;
+    return {
+      league_id: row.league_id,
+      total_rosters: row.total_rosters,
+      roster_positions: row.roster_positions,
+      scoring_settings: row.scoring_settings,
+      // Sleeper omits the key on every league that isn't one, so absent is a
+      // real `false` here — unlike the settings a week has no zero on.
+      best_ball: row.best_ball === true,
+      roster_id: row.roster_id,
+      starters: stored ? row.week_starters : row.starters,
+      // The week's own roster where there is one: a player dropped since is
+      // still who that lineup was chosen from.
+      players: stored ? (row.week_players ?? row.players) : row.players,
+      as_of: stored ? "week" : "current",
+    };
+  });
+}

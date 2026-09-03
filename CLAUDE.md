@@ -108,10 +108,12 @@ a permit it has stopped waiting for. One thing is still trimmed:
 its request budget's, and joins when that ports.
 
 `sleeper/types/sleeper.types.ts` doc comments still cite `SLEEPER_DATA_BASE` and
-`manager/crawl-ttl`, which arrive with the projections and crawler ports. Twelve
-of its fourteen types have no reader yet, and that is deliberate: it is the
+`manager/crawl-ttl`, which arrive with the projections and crawler ports. Most
+of its fourteen types still have no reader, and that is deliberate: it is the
 ported schema-of-record, and re-transcribing an API by hand is the expensive
-half. `Tool` was trimmed the other way, to the five fields anything consumes —
+half. `SleeperScoreGame` is the case that argued for keeping them — typed and
+unread for as long as it existed, then the whole of what the lineup checker's
+kickoff ordering needed, warning included. `Tool` was trimmed the other way, to the five fields anything consumes —
 `icon`, `pattern`, `group` and `browses` were set and never read, and re-adding
 a field is cheap.
 
@@ -792,6 +794,124 @@ is derived rather than designed, as on `/tools`; it was checked at 1280/1440 and
 390 in both schemes, and the one number worth knowing is that the gauge's arc
 sits at 4.49:1 against its track in light against 14.6:1 in dark — decorative
 contrast, with the figure itself at 5.2:1.
+
+## Checking a week's lineup
+
+`/lineupchecker` answers two questions per league for one NFL week: **what the
+lineup as set projects against the best one still reachable from it**, and
+**whether its starters are seated in the order they lock best in**. It reads the
+stored account rather than a username in its URL — which is what the tool
+registry already declared for it (no `hrefFor`, not `accountless`), so
+`constants/tools.ts` is untouched.
+
+**Half of it was already in the tree and had never been called.**
+`projections/optimal.ts`'s `compareLineup` — with its `locked` set and its
+`bestBall` branch — was ported and tested with zero callers, and its doc
+comments named three siblings that did not exist. This landed the first,
+`kickoff-order`, and gave the solver its first reader. The build was mostly
+plumbing between two things that were already right.
+
+**The 1-hour buffer is not a lock rule, and reading it as one is the mistake to
+avoid.** `KICKOFF_BUFFER_MS` buckets kickoff *instants into ranks* at one-hour
+granularity, and only a rank difference moves a seat: two kickoffs twenty
+minutes apart are one seat's worth of flexibility, so asking for a swap over
+them is a press that buys nothing — the Sunday 4:05/4:25 windows are exactly
+this case, and without the buffer the column read `2 to move` on lineups nobody
+would have moved. The *lock* (`projections/locks.ts`) is still to the minute.
+The bucket is measured **from the instant that opened it, not from the previous
+one**: chaining is transitive, so a week of games fifty minutes apart would
+collapse to a single rank however many hours it spanned and the ordering would
+silently switch off.
+
+The objective is `Σ breadth(seat) × kickoff-rank(player)`, maximised exactly by
+a Hungarian assignment rather than by pairwise swaps — rotations of three are
+real and no two of them may legally trade. **Later kickoffs go in the broader
+seats**, which is the direction that reads backwards until you say why: a flex
+that kicks off at 1pm is a flex spent, and every pivot that needed it for the
+rest of the week is off the table. Verified against real week-1 data, where the
+Wednesday opener is the *earliest* game and correctly takes the strict QB seat
+while a Sunday 1pm QB moves to SUPER_FLEX.
+
+**`matchups.starters` is the week's lineup; `rosters.starters` is today's.**
+This is the first read of the `matchups` table, which the sync has been filling
+since the league graph landed, and it is the whole reason a week stepper means
+anything: Sleeper's roster `starters` is a *live* field, so grading week 3
+against it would grade today's lineup and label it week 3.
+`getManagerWeekLineups` LEFT JOINs the week's row and falls back to the live one
+**flagged `as_of: "current"`**, which the card prints — the sync only fetches up
+to the week being played, so a future week has no row by construction and
+silence there would be a claim. A stored row whose `starters` is empty counts as
+absent, since Sleeper writes one for a week a league never scheduled.
+
+**Three failures, three different answers**, and the route's shape is that
+distinction: the *database* read fails → 500, because it is the list the page is
+made of; the *projections* read fails → `projections: "error"` with no leagues,
+never a page of confident zeroes under a successful status; the *schedule* read
+fails → everything else answers, `kickoff_moves` is null per league and the
+locks fall back to the day rule. `getWeekKickoffs` never throws, which is what
+makes the third possible.
+
+**Zero and absent are different answers everywhere on this wire**, and the
+client's three-way grammar is what makes that visible: a number in the alert
+tone (act on it), a word (`Set`, `In order` — a real and good zero), or an em
+dash (no answer at all). `kickoff_moves: 0` is "already in order"; `null` is a
+best-ball league or a week with no published kickoffs. A tile printing `0` for
+both would quietly claim the second was checked. Likewise `points: null` is "the
+feed has no row for this id" where `0` is a row with no game — a real projected
+zero, and the player stays in the candidate pool because he can be *started* and
+dropping him would overstate what the lineup projects.
+
+### What moved, and why
+
+- **`LAST_REGULAR_WEEK` went to `projections/weeks.ts`.** Its own doc comment in
+  `manager/graph-weeks.ts` promised it would "move back beside projections when
+  they arrive"; week-scoped projections are that arrival. `manager` re-exports
+  it, so no existing caller changed. `parseRequestedWeek` joins it there and
+  answers in **three states** for the reason `parseRequestedSeason` does at
+  length: collapsing absent and invalid is how `?week=abc` quietly becomes the
+  current week and a reader is shown one week's lineup under another's heading.
+- **`ManagerPlate` and `useManagerLeagues` went to `features/shared`** — the
+  line `CONSOLE_KEY` moved on, and the same one: a second feature reads them.
+  `ndjson.ts` travelled with the hook but stayed **out** of that barrel, on
+  `local-store.ts`'s terms.
+- **`readPlayerIdentity` and `isRealProjection` went to
+  `projections/identity.ts`.** Two folds now read the same feed, and the two
+  judgements they must agree on — which rows are real projections, and how to
+  read a player off one — are exactly what a second spelling would drift on.
+- **`easternDate` went to `shared/util`**, with `ktcToday()` becoming a caller.
+  KTC's series and an NFL week both roll over on Eastern days, and two spellings
+  of "which day is it in New York" is two chances for one to be the server's.
+
+### Deliberately not ported
+
+- **The opponent half** — who you play, their projection, Sleeper's league
+  median, and the week's projected record. That is a *matchups* tool; the schema
+  is already waiting for it (`matchups.matchup_id` plus its pairing index), and
+  a median needs every team in the league solved rather than just the manager's.
+- **`openingKickoff` came with `parse.ts` and has no reader**, kept because a
+  whole-file port with its tests is the cheap half; its wired caller
+  (`getFirstKickoff`, backing a season countdown) is absent and arrives with the
+  header that wants one.
+- **`week-inputs.ts`, `outlook.ts`, `candidates.ts`, `getUpcomingWeek`** — all
+  read the `projections` and `players` tables TheLabX stores and this app does
+  not. `week.ts`/`week-read.ts` is that read re-homed onto a fetch, and
+  `getNflState`'s `display_week` is `getUpcomingWeek`'s answer from the only
+  source here.
+- **TheLabX's metric catalogue** (`ColumnsBar`, `SubjectRail`, `MetricColumns`)
+  — none of it exists here, and two fixed tiles do not earn it.
+
+`week-read.ts` caches **a keyed map, not `ros-read`'s single slot**: that file
+justifies one entry with "the app asks for one season from one week at a time",
+which is true of a span and false the moment a stepper exists — eighteen presses
+against one slot is eighteen refetches. Bounded at four so a session cannot pin
+all eighteen, evicted by *use* rather than by first fetch. Its TTL is **five
+minutes against the ROS board's thirty**, which is the difference between a
+season board that moves on injury news over days and a week board read by
+somebody setting a lineup an hour before kickoff — the Sunday-morning inactive
+is exactly what half an hour of staleness would hide.
+
+Checked at 1280 and 390 in both schemes. Light mode is derived rather than
+designed, as everywhere else on the console.
 
 ## Theme
 
