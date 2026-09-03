@@ -5,6 +5,7 @@ export type { SslMode, SslEnv } from "./ssl";
 export { resolveDatabaseUrl, DATABASE_URL_ENV } from "./config";
 export type { DatabaseUrlResolution } from "./config";
 export { jsonb } from "./json";
+export { msInterval } from "./interval";
 export { bulkInsert } from "./bulk";
 export { countRows, isFresh } from "./freshness";
 export { withTransaction } from "./transaction";

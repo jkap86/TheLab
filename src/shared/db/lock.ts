@@ -21,12 +21,15 @@ const HASHED_LOCK_CLASSES = {
 
 /**
  * The fixed lock keys, one per background concern that exists as a singleton
- * rather than per some id. TheLabX's class-8675309 block, ids kept exactly —
- * `[8675309, 1]` is its crawler's and arrives with that port. Two separate KTC
- * keys, deliberately: the 15-minute values refresh and the boot-time history
- * backfill overlap by design, and one key would serialise them for no reason.
+ * rather than per some id. TheLabX's class-8675309 block, ids kept exactly, so
+ * two apps against one database coordinate rather than collide. Two separate
+ * KTC keys, deliberately: the 15-minute values refresh and the boot-time
+ * history backfill overlap by design, and one key would serialise them for no
+ * reason.
  */
 export const LOCK_KEYS = {
+  /** The league crawl tick (`shared/manager/crawl.ts`). */
+  crawl: [8675309, 1],
   /** KeepTradeCut board refresh (`shared/ktc/sync.ts`). */
   ktcValues: [8675309, 2],
   /** KeepTradeCut per-player history backfill (`shared/ktc/history.ts`). */

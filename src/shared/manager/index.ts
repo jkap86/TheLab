@@ -105,3 +105,9 @@ export { getManagerWeekLineups } from "./queries";
 export type { ManagerWeekLineupRow } from "./queries";
 export { solveWeekLineup } from "./week-lineups";
 export type { WeekLineupLeague } from "./week-lineups";
+
+// The background crawl, on the KTC and players barrels' terms: the starter and
+// its switch, and nothing else. The tick, the queue, the tiers and the
+// discovery selection stay folder-internal — nothing outside `manager/` decides
+// what to crawl next, and `markLeaguesAccessed` is `sync.ts`'s alone.
+export { LEAGUE_CRAWLER_VAR, startLeagueCrawler } from "./scheduler";

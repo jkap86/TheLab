@@ -205,9 +205,7 @@ budget produced; the crawler port is what makes a derivation earn its place
 again, and the call sites do not move when it does.
 
 **What is deliberately not ported**, each with the route it arrives with: the
-background crawler and its scheduler, discovery and claim queue (the freshness
-columns are already in the schema for it); the per-league refresh press, its
-cooldown gate and the cache-busting token; the in-process read caches and
+per-league refresh press, its cooldown gate and the cache-busting token; the in-process read caches and
 therefore `persistLeagueGraph`'s `affectedOwnerIds`; the request budget and its
 503 taxonomy; and projections *storage* — the pure projections core (solver,
 scorer, aggregation) arrived with the lineups route below, but the Postgres
@@ -215,7 +213,177 @@ tables, the weekly sync and its background loops stay with the loops that need
 them. **Trades and the players map have since arrived**, with the trades board:
 a trade was always these `transactions` rows and is now read
 (`shared/trades`), and `shared/players` mirrors Sleeper's map because a board of
-past trades names players the projections feed no longer carries.
+past trades names players the projections feed no longer carries. **The
+background crawler has since arrived too** — see The league crawler below; the
+freshness columns the schema was carrying for it now have their reader.
+
+## The league crawler
+
+Until this landed, nothing refreshed a league except in front of a request: the
+leagues route read Postgres, and if the manager's graph was stale it ran the
+Sleeper fan-out with the response held open. A league nobody visited went stale
+forever and the corpus only ever grew by someone typing a username.
+`shared/manager/crawl.ts` is a 60-second tick that does both jobs on its own —
+TheLabX's crawler ported, minus the worker split and the trade-stats piggyback.
+
+**It needed no migration, and that is the schema's doing rather than luck.**
+`leagues.sync_attempt_at`, `gone_at`, `last_accessed_at`, the two partial
+indexes and `manager_syncs.attempt_at` were all put in by the league-graph
+migration *for* this port, and `crawl-queue.ts` already held the writing half —
+`markLeaguesAccessed`, `stampLeagueSyncAttempts`, `markLeaguesGone` — with a
+header promising the reading half would extend that file. It did.
+
+**There is no queue table; the queue is the tables.** The refresh queue is
+`leagues`; the discovery queue is `league_users ⋈ leagues ⟕ manager_syncs`. A
+separate table would be a second claim about when a league was last read, and
+the two would disagree the first time a manager-driven sync wrote one and not
+the other — which is the same argument `manager_syncs` and `leagues` already
+settle between themselves with two columns apiece.
+
+**The claim is one statement, and it claims and stamps together.**
+`staleLeagueClaimSql()` is an `UPDATE … RETURNING` that sets `sync_attempt_at`
+on the rows it selects, so two ticks — or two app instances behind the advisory
+lock — can never pick the same batch, and a tick that dies mid-flight rotates
+its batch to the back rather than retrying it immediately. **Two conditions on
+the same `$2` interval, and they are two different questions**: `updated_at`
+says whether work is needed, `sync_attempt_at` says how often it may be asked
+for. A healthy league carries both at the same instant and turns them over
+together; a league that cannot sync stops occupying a slot every minute.
+Collapsing them is how a failing upstream turns every tick into the same doomed
+batch.
+
+**Five tiers, ordered, then longest-untried first.** `crawl-priority.ts`:
+`starved` (past `STARVATION_MULTIPLE` × TTL — the bound that stops a database
+with something always hot in it from deferring a cold league forever),
+`demanded` (`last_accessed_at` inside `DEMAND_WINDOW_MS`), `active` (a live
+`status`; `pre_draft` is deliberately out), `known`, `cold`. **The SQL and the
+pure mirror are generated from the same `CRAWL_PRIORITY` table**, which is the
+whole reason the mirror exists: the statement itself cannot be unit-tested here,
+so `leagueRefreshPriority` / `isLeagueRefreshDue` / `compareLeagueRefresh` are
+what the tests drive, and a tier that changed in one spelling and not the other
+would be a queue that silently orders itself differently from the one described.
+
+**The crawler must never stamp `last_accessed_at`.** Demand is *observed*, not
+inferred — within one rotation every league would look demanded and the five
+tiers would flatten back to the round-robin they replace. `crawl-writes.test.ts`
+pins that there is exactly one writer of that column in the queue module.
+
+**The TTL is seasonal and read from Sleeper each tick** (`crawl-ttl.ts`): 15
+minutes in the regular season, an hour inside the 75-day window before kickoff,
+six hours in the deep offseason. Only `season_type === "regular"` is matched by
+name — Sleeper labels most of the offseason `"off"` and flips to `"pre"` only
+near the preseason, so a gate on either spelling silently reclassifies the weeks
+between — and everything else is decided by distance from `season_start_date`.
+**An unparseable date falls toward the freshest tier**, the rule
+`sync-freshness.ts` and `graph-weeks.ts` were already citing this module for
+before it existed: extra fetches are the failure you can see.
+
+**Discovery's invariant is that a manager is stamped only once every league
+attributable to them is written down** — and the hold is released by the league
+being *written*, not by it succeeding. A tombstone (`persistGoneLeagues`) and a
+parked row (`persistUnsyncedLeagues`) both count. That distinction is the whole
+of `discovery.ts`: unstamped managers sort to the front of `pendingManagers`, so
+a league that fails its first sync *every* time would hold its managers at the
+head of the queue forever and discovery would stop finding anything for anyone,
+while the summary line still reported a healthy refresh pass beside
+`discovered 0`. What still blocks is `unrecordedFailures` — a failure with no
+payload to write a row from — because there is genuinely nothing to record.
+`selectDiscoveryLeagues` takes a manager whole or not at all, except that one
+with more unknowns than the cap takes a capful and is marked *deferred* so they
+still converge; on the first live run every manager was deferred for several
+ticks, which is that arm working rather than a stall.
+
+**`stampManagers` moves `attempt_at` and never names `synced_at`**, which is a
+stronger protection than copying `MANAGER_SYNC_STAMP_SQL`'s conditional: there
+is no branch for a later edit to flatten. The consequence worth knowing is that
+a stamped manager is also suppressed from the leagues route's own retry for
+`SYNC_ATTEMPT_TTL_MS` — correct, since Sleeper *was* just asked about them — and
+bounded, since a manager is enumerated at most once per `CRAWL_MANAGER_TTL_MS`.
+Their leagues still report `stale`, so nothing presents the wait as a completed
+refresh.
+
+**`persistUnsyncedLeagues` is the row that proves the two columns had to be
+two.** A discovered league whose first sync fails outright takes
+`NEVER_REFRESHED_SQL` for `updated_at` and `now()` for `sync_attempt_at` — never
+the column's `DEFAULT now()`, which would have a row nothing has ever read claim
+it was refreshed this second, and which is the same claim `writeLeagueGraph`
+already refuses to make for a *partial* sync (strictly more successful than
+this one). Both writers' `ON CONFLICT` moves only their own marker: a row
+already stored came from a sync that actually saw the league, and that beats the
+enumeration payload these hold.
+
+**Sizing is `batch × TTL / interval`, and the scheduler warns when it is
+missed.** 15 leagues a minute at the 15-minute tier is 225 leagues held current;
+900 at an hour, 5,400 at six. Discovery enumerates 5 managers a tick against a
+`league_users` frontier that was already 846 distinct ids on the day this
+landed, so **the corpus outgrows the refresh capacity long before the frontier
+drains** — that is expected, and what happens is a throttled
+`freshness target missed` line naming the tier, the TTL, the corpus, the backlog
+and the computed capacity. It warns rather than throttling because which knob to
+turn is a judgement: raise `CRAWL_LEAGUE_BATCH`, lower `CRAWL_MANAGER_BATCH`, or
+lengthen `CRAWL_MANAGER_TTL_MS`. Read the telemetry before touching any of them.
+
+**The lock is `withAdvisoryLock` (try/skip), never the blocking form**, and it
+wraps the whole tick including the NFL state read — `lock.ts` states the rule: a
+loop that queued behind another instance instead of skipping would stack ticks.
+A tick that loses it carries `locked: true` and null tier fields, discriminated
+so `if (s.locked)` is also the type guard, and the scheduler counts the skips
+and reports them once per heartbeat rather than once a minute.
+
+**Deliberately not ported**, each with what it arrives with: the `BACKGROUND_JOBS`
+mode gate, `src/worker.ts` and the Procfile — one instance, so `LEAGUE_CRAWLER=off`
+is the switch, on `KTC_SYNC`'s exact terms; the advisory lock already makes a
+second instance correct, and what a mode gate adds is *which process*, which
+arrives with a second one. TheLabX's `refreshStaleTradeStats` piggyback (no
+`trade_market_stats` here — `countTradeTotals` always counts). `leagueRefreshGate`
+and the per-league press, which `sync-freshness.ts` already says arrive together.
+And the request budget: CLAUDE.md said the crawler port was what would make
+deriving `DEFAULT_POOL_MAX`, the pool timeouts, `ADVISORY_LOCK_WAIT_MS` and
+`DEFAULT_MANAGER_SYNC_LIMIT` from a budget earn its place again. **It did not** —
+the crawl bounds itself with `CRAWL_CONCURRENCY` and one lock, and those five
+call sites are unchanged.
+
+### Verified
+
+Run against the live database on the day it landed. `npm run migrate:up`
+reported "No migrations to run", which is the claim above and the reason this
+port is code only. The first tick refreshed exactly the five leagues a hand-run
+of the claim's inner `SELECT` had predicted, in tier order, and the
+missed-target warning fired on them correctly (`oldest=5.2h` against a 15-minute
+tier) and then stopped once they were current. Over five ticks the corpus went
+132 → 207 with `gone` and `updated_at = 'epoch'` both staying zero — every
+discovered league synced whole. The first four ticks stamped **no** managers and
+deferred all five, which is `selectDiscoveryLeagues`' cap arm rather than a
+stall: the queue head is stable across calls, so one manager's unknowns drain 15
+a tick, and on the fifth tick two managers fitted and were stamped —
+`manager_syncs` 2 → 4 with both new rows carrying `attempt_at` and a **null**
+`synced_at`, which is the discovery invariant end to end. Editing source under
+the running server added no second `Loop started` line, and `LEAGUE_CRAWLER=off`
+printed `[crawl] Loop disabled (LEAGUE_CRAWLER=off)` while KTC and players
+started and skipped as fresh — the retrofit keeping their unforced boot tick.
+
+### One loop helper, and a reversed decision
+
+`players/scheduler.ts` used to argue *against* sharing timer code with KTC: "two
+loops with different clocks and different failure stories are two loops, and the
+shared part is four lines of timer bookkeeping." That was true of a daily loop
+and a 15-minute one. It stopped being true here, and the note in that file now
+records why rather than being deleted: **a 60-second tick over a Sleeper fan-out
+can outrun its own interval**, so `util/background-loop.ts` carries a re-entry
+guard — behaviour, not bookkeeping — and a guard living in one loop of three is
+the one that gets forgotten in the fourth. All three schedulers are
+`startBackgroundLoop` now; the clocks, the log lines and the failure stories are
+still each loop's own, which is everything else in those files.
+
+The helper's four guarantees are Node-only (`isNodeRuntime` reads an *absent*
+`NEXT_RUNTIME` as Node, so a loop's own test can start it — the opposite reading
+from `instrumentation.ts`'s guard, which is right because `register()` only ever
+runs inside Next), idempotent on a `globalThis` key, non-overlapping, and
+unkillable. `stop()` releases the guard key, which is what makes any of it
+testable. `tick(firstRun)` is what preserves the rule all three loops share and
+none may lose: **the boot tick does not force and interval ticks do**, because
+the interval equals the TTL and an unforced interval tick would find the rows a
+moment short of stale and skip forever.
 
 ## Valuing a roster off ADP
 

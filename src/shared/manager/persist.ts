@@ -1,6 +1,7 @@
 import type { PoolClient } from "pg";
 
 import { bulkInsert, jsonb as j, pool, withTransaction } from "@/shared/db";
+import type { SleeperLeague } from "@/shared/sleeper";
 import { rebuildTradeParticipants } from "@/shared/trades";
 
 import { dedupeBy } from "./dedupe";
@@ -8,14 +9,152 @@ import type { LeagueGraph } from "./graph";
 import { dedupeMatchups } from "./matchups";
 import { NEVER_REFRESHED_SQL } from "./sync-freshness";
 
-/*
- * TheLabX has two more writers here, both the crawler's: `persistGoneLeagues`
- * (tombstone a league Sleeper 404s the first time it is fetched) and
- * `persistUnsyncedLeagues` (record the row for a discovered league whose first
- * sync failed, so discovery stops re-selecting it). Both exist to bound a
- * discovery pass, and arrive with it. The `gone_at` and `sync_attempt_at`
- * columns they write are already in the schema.
+/**
+ * Store leagues Sleeper no longer serves, tombstoned on arrival.
+ *
+ * `markLeaguesGone` is this marker for a league we already store; this is the
+ * same marker for one we never did — a league that appears in some member's
+ * league list and then 404s the moment the crawler fetches its graph. Writing
+ * the row is what retires it: the id counts as known from then on, so discovery
+ * stops selecting it, and `gone_at` keeps it out of the refresh queue. Without a
+ * row there is nowhere to record the answer, so every member of that league
+ * rediscovers it forever.
+ *
+ * No children are written — there was never a graph to store — and the conflict
+ * clause stamps only the marker: a row already here came from a sync that
+ * actually saw the league, and that data is better than the enumeration payload
+ * this holds. {@link persistLeagueGraph} clears the marker if it comes back.
  */
+export async function persistGoneLeagues(
+  leagues: readonly SleeperLeague[],
+): Promise<void> {
+  await bulkInsert(pool, {
+    table: "leagues",
+    columns: [
+      "league_id",
+      "name",
+      "season",
+      "sport",
+      "status",
+      "total_rosters",
+      "avatar",
+      "previous_league_id",
+      "draft_id",
+      "roster_positions",
+      "settings",
+      "scoring_settings",
+      "metadata",
+    ],
+    rows: leagues,
+    values: (x) => [
+      x.league_id,
+      x.name,
+      x.season,
+      x.sport,
+      x.status,
+      x.total_rosters,
+      x.avatar,
+      x.previous_league_id,
+      x.draft_id,
+      j(x.roster_positions),
+      j(x.settings),
+      j(x.scoring_settings),
+      j(x.metadata),
+    ],
+    trailing: { column: "gone_at", sql: "now()" },
+    onConflict: `(league_id) DO UPDATE SET gone_at = now()`,
+  });
+}
+
+/**
+ * Store the league row for a discovered league whose first sync failed while
+ * Sleeper is still serving it.
+ *
+ * **The third answer beside {@link persistGoneLeagues} and a whole graph.** A
+ * first sync fetches half a dozen child collections, so it can fail for reasons
+ * that are neither "deleted" nor momentary — and with no row, the only record
+ * that the league was ever seen is that the managers pointing at it stayed
+ * unstamped. That hold has no bound of its own (see `./discovery`'s
+ * `unrecordedFailures`), so one permanently-failing league parks its managers at
+ * the head of the discovery queue and stops the pass for everyone.
+ *
+ * Writing the row is the bound, and it is the same move {@link
+ * persistGoneLeagues} makes for the other outcome: the id counts as known from
+ * here on, so discovery stops selecting it, and the **refresh pass** is what
+ * retries it. That is the right home for a retry and discovery never was —
+ * refresh claims in bounded batches, stamps `sync_attempt_at` as it claims so a
+ * league that keeps failing rotates to the back of its own tier, and re-probes
+ * `getLeague` first, so a league that turns out to be deleted is tombstoned
+ * there. Discovery's job is finding leagues; retrying them is not.
+ *
+ * No children are written — there is no graph, and an empty collection would be
+ * a claim about the league rather than the absence of one. The row is inert
+ * until a refresh fills it in: every manager-facing list reaches a league
+ * through `league_users` or `rosters`, so a league with neither appears in
+ * nobody's leagues.
+ *
+ * **The two columns say two different things, and this row is the case that
+ * proves they had to.** `updated_at` means *the last time this league's graph
+ * was successfully written whole*; `sync_attempt_at` means *the last time
+ * anybody tried*. A brand-new row here has never had a graph — that is the whole
+ * reason it exists — so it takes {@link NEVER_REFRESHED_SQL} and the attempt
+ * takes `now()`. Taking `updated_at`'s `DEFAULT now()` instead would be the
+ * claim {@link writeLeagueGraph} already refuses to make one row over: a partial
+ * first sync writes the sentinel, and a *total* first failure is strictly less
+ * successful than that.
+ *
+ * **`DO UPDATE`, and only ever the attempt.** A row already here came from a
+ * sync that actually saw the league, or from a tombstone the refresh pass wrote,
+ * and both are strictly better than the enumeration payload held here — so
+ * nothing else is touched: not the payload, not `gone_at` (only
+ * {@link persistLeagueGraph} clears one), and above all not a legitimate
+ * `updated_at`. A league that has genuinely synced before keeps saying when.
+ * What does move is `sync_attempt_at`, because this *was* an attempt on that
+ * league and a column named for attempts should record it.
+ */
+export async function persistUnsyncedLeagues(
+  leagues: readonly SleeperLeague[],
+): Promise<void> {
+  await bulkInsert(pool, {
+    table: "leagues",
+    columns: [
+      "league_id",
+      "name",
+      "season",
+      "sport",
+      "status",
+      "total_rosters",
+      "avatar",
+      "previous_league_id",
+      "draft_id",
+      "roster_positions",
+      "settings",
+      "scoring_settings",
+      "metadata",
+    ],
+    rows: leagues,
+    values: (x) => [
+      x.league_id,
+      x.name,
+      x.season,
+      x.sport,
+      x.status,
+      x.total_rosters,
+      x.avatar,
+      x.previous_league_id,
+      x.draft_id,
+      j(x.roster_positions),
+      j(x.settings),
+      j(x.scoring_settings),
+      j(x.metadata),
+    ],
+    trailing: [
+      { column: "updated_at", sql: NEVER_REFRESHED_SQL },
+      { column: "sync_attempt_at", sql: "now()" },
+    ],
+    onConflict: `(league_id) DO UPDATE SET sync_attempt_at = now()`,
+  });
+}
 
 /**
  * The child collections a live league **must** have, and therefore the ones an

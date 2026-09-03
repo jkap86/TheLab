@@ -1,4 +1,5 @@
-import { errorMessage } from "@/shared/util";
+import { errorMessage, loopSwitch, startBackgroundLoop } from "@/shared/util";
+import type { BackgroundLoopHandle } from "@/shared/util";
 
 import { syncKtcHistory } from "./history";
 import { KTC_TTL_MS, syncKtcValues } from "./sync";
@@ -9,44 +10,35 @@ import type { KtcSyncSummary } from "./sync";
  * backfill once at boot. Started from `instrumentation.ts` after migrations —
  * and *not awaited* there, since the backfill can run half an hour and
  * `register()` gates request serving.
+ *
+ * Built on {@link startBackgroundLoop} with the players map and the league
+ * crawl; `players/scheduler.ts` carries the note on why the three share a loop
+ * helper now when two of them deliberately did not.
  */
 
 /** Set to `off` (case-insensitive) to disable the loop — TheLabX's switch. */
 export const KTC_SYNC_VAR = "KTC_SYNC";
 
 /**
- * Cached on `globalThis` for the reason the Sleeper limiter and the pg pool
- * are: dev's module reloading would otherwise stack a loop per edit, and every
- * copy would scrape KTC on its own clock.
- */
-const SCHEDULER_KEY = Symbol.for("thelab.ktc.scheduler");
-const globalScope = globalThis as typeof globalThis & {
-  [SCHEDULER_KEY]?: NodeJS.Timeout;
-};
-
-/**
  * Start the loop, idempotently. The boot tick does not force — a restart
  * should respect a cache that is still fresh — and then drains the history
  * queue to completion, once; a player who joins a board mid-process gets
  * forward snapshots only until the next boot (see `./history`). Interval ticks
- * force and sync values only.
- *
- * The timer is `unref()`d so a process with nothing else to do (a build, a
- * script importing this transitively) can exit.
+ * force and sync values only, and the interval *is* the TTL, so an unforced one
+ * would find the board a moment short of stale and skip forever.
  */
-export function startKtcScheduler(): void {
-  if (process.env[KTC_SYNC_VAR]?.trim().toLowerCase() === "off") {
-    return;
-  }
-  if (globalScope[SCHEDULER_KEY]) return;
-
-  const timer = setInterval(() => {
-    void valuesTick(true);
-  }, KTC_TTL_MS);
-  timer.unref();
-  globalScope[SCHEDULER_KEY] = timer;
-
-  void bootTick();
+export function startKtcScheduler(): BackgroundLoopHandle {
+  return startBackgroundLoop({
+    name: "ktc",
+    intervalMs: KTC_TTL_MS,
+    guardKey: "ktc-sync",
+    ...loopSwitch(KTC_SYNC_VAR),
+    cadence: "every 15m; history backfilled once at boot",
+    tick: async (firstRun) => {
+      if (firstRun) return bootTick();
+      await valuesTick(true);
+    },
+  });
 }
 
 async function valuesTick(force: boolean): Promise<KtcSyncSummary | null> {

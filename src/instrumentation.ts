@@ -9,10 +9,11 @@
  * is guarded to the Node.js runtime and loaded dynamically — this keeps the DB
  * code out of any non-Node bundle entirely.
  *
- * TheLabX starts its background loops here too, once migrations have applied.
- * The KTC scheduler is the first of them to arrive; the league crawler stays
- * deferred, and the leagues route syncs on request. Further ports add their own
- * blocks below the KTC one.
+ * The background loops start here too, once migrations have applied — KTC
+ * values, the Sleeper players map, and the league crawl. Each is started and
+ * not awaited, and each guards its own ticks; a failure reaching one of these
+ * catch blocks means the module itself failed to load. Further loops add their
+ * own block below.
  */
 export async function register(): Promise<void> {
   if (process.env.NEXT_RUNTIME !== "nodejs") return;
@@ -50,5 +51,17 @@ export async function register(): Promise<void> {
     startPlayersScheduler();
   } catch (error) {
     console.error("[players] Failed to start the players scheduler:", error);
+  }
+
+  // The same terms again, and this is the loop those terms were written for: a
+  // tick is a Sleeper fan-out across a batch of leagues, and it holds a pool
+  // connection for the length of it. It takes a Postgres advisory lock per
+  // tick, so a second instance against the same database stands down rather
+  // than crawling the same rows twice. `LEAGUE_CRAWLER=off` disables it.
+  try {
+    const { startLeagueCrawler } = await import("@/shared/manager");
+    startLeagueCrawler();
+  } catch (error) {
+    console.error("[crawl] Failed to start the league crawler:", error);
   }
 }
