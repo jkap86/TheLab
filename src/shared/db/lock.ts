@@ -31,6 +31,8 @@ export const LOCK_KEYS = {
   ktcValues: [8675309, 2],
   /** KeepTradeCut per-player history backfill (`shared/ktc/history.ts`). */
   ktcHistory: [8675309, 3],
+  /** Sleeper players-map refresh (`shared/players/sync.ts`). */
+  players: [8675309, 5],
 } as const satisfies Record<string, AdvisoryLockKey>;
 
 /**

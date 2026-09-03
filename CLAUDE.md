@@ -209,10 +209,13 @@ background crawler and its scheduler, discovery and claim queue (the freshness
 columns are already in the schema for it); the per-league refresh press, its
 cooldown gate and the cache-busting token; the in-process read caches and
 therefore `persistLeagueGraph`'s `affectedOwnerIds`; the request budget and its
-503 taxonomy; players, trades, and projections *storage* — the pure projections
-core (solver, scorer, aggregation) arrived with the lineups route below, but
-the Postgres tables, the weekly sync and its background loops stay with the
-loops that need them.
+503 taxonomy; and projections *storage* — the pure projections core (solver,
+scorer, aggregation) arrived with the lineups route below, but the Postgres
+tables, the weekly sync and its background loops stay with the loops that need
+them. **Trades and the players map have since arrived**, with the trades board:
+a trade was always these `transactions` rows and is now read
+(`shared/trades`), and `shared/players` mirrors Sleeper's map because a board of
+past trades names players the projections feed no longer carries.
 
 ## Valuing a roster off ADP
 
@@ -502,6 +505,13 @@ walks its lineup.
 they are the Type and Format rails four inches higher, and two controls over one
 axis is an empty list with nothing on screen saying which emptied it.
 
+**`LeagueFiltersDialog` lives in `features/shared/league-filters-dialog/`**, and
+moved there from `features/manager/components/` when the trades board became a
+second reader — the line `CONSOLE_KEY` and `ManagerPlate` moved on. Only the
+dialog is exported: the rails, bays and rows are its own parts. Its modules
+import the engine beside them as `../league-filters` rather than through the
+`features/shared` barrel, which is that barrel's own contents.
+
 **The dialog edits a draft and commits on Apply** — the one place it diverges
 from `LineupColumnsDialog`, which writes live. Every number in it is a count
 (per option, per rule, and the rail's total), and a count is only readable if
@@ -591,10 +601,13 @@ but no back-series until the next boot.
 The barrel is **server-only** now — the sync drags `pg` in — on the projections
 barrel's exact terms: a client module needing `isSuperflexLineup` imports
 `./roster` relatively. Deliberately not ported, each with what it arrives with:
-`match.ts` and `values.ts` (the Sleeper matcher, with the `players` table),
-`queries.ts`, `history-stats.ts`, `picks.ts` and `roster.ts`'s pricing half
-(`ktcBoardValue`, `rosterKtcValue`) — readers all, arriving with the surface
-that reads them.
+`match.ts` and `values.ts` (the Sleeper matcher), `queries.ts`,
+`history-stats.ts`, `picks.ts` and `roster.ts`'s pricing half (`ktcBoardValue`,
+`rosterKtcValue`) — readers all, arriving with the surface that reads them.
+**The `players` table the matcher needs is no longer the blocker**: it arrived
+with the trades board, so `sleeper_id` is now a backfill rather than a
+migration, and the trades board's own unpriced cards are the surface waiting on
+it.
 
 ## The tools console
 
@@ -912,6 +925,146 @@ is exactly what half an hour of staleness would hide.
 
 Checked at 1280 and 390 in both schemes. Light mode is derived rather than
 designed, as everywhere else on the console.
+
+## The trades board
+
+`/trades` is every trade this database has stored for a season, newest first,
+narrowed three ways. **A trade is not a table**: it is a `transactions` row with
+`type = 'trade' AND status = 'complete'`, which the league sync has been
+mirroring since the graph landed and nothing read until now. The tool card was
+declared from the start (`accountless`, no `hrefFor`) and this is what arrived
+behind it.
+
+**The three narrowings are three different kinds of thing, and the split is the
+whole design.**
+
+- **The league rules run in the browser and only their *answer* crosses the
+  wire.** They are the same `league-filters` engine the manager page uses, over
+  Sleeper's JSONB blobs; a second implementation in SQL would drift silently,
+  and the symptom would be a filter quietly returning the wrong leagues rather
+  than an error. `/api/trades/leagues` hands the page every league that traded
+  this season — once, not per page — and `resolveLeagueScope` sends back
+  whichever of the include/exclude lists is shorter.
+- **The bays run in SQL.** A *bay* is one side of the trade a reader is
+  describing, and **everything in it is what that side received — there is no
+  `gave` field anywhere.** A give is the other bay's take, so "what did he give
+  up" is his name in one bay and the player in the other; that is how a
+  direction gets into the vocabulary without a directional field, and it is the
+  same rule `assembleTrade` stores a trade by. `sidesSql`'s nested `EXISTS` is
+  what makes the two bays *distinct* rosters — two independent subqueries
+  cannot compare their rosters to each other, so `[A] ⇄ [player]` would match a
+  trade where A received the player.
+- **The circle crosses unresolved**, as a word plus the stored account's id.
+  What "my leagues" and "my leaguemates" stand for is the database's answer; a
+  browser holding it would have had to be told it first. Verified against the
+  live corpus, and the nesting the type claims holds exactly:
+  mine 586 ⊆ leaguemates 595 ⊆ leaguemate-leagues 599 ⊆ all 634.
+
+**`trade_participants` is the one derived table, and it is rebuilt *inside*
+`writeLeagueGraph`'s transaction.** A trade names rosters in a jsonb array and a
+reader names people; a jsonb array cannot be joined to, so every read that asks
+"was one of these managers in this trade" would otherwise unnest and cast per
+candidate trade — on the leaguemates circle, the managers facet and both
+denominators, none of which has a `LIMIT` to stop it. It commits with the rows
+it describes or not at all, because a missing participant row makes a trade
+**invisible** to the circle that should have found it: a plausible wrong answer
+rather than a visibly thinner one. Its migration backfills the whole corpus for
+the same reason — the reads switch over the moment the code deploys — and the
+backfill's SQL must stay textually what `tradeParticipantsSql` emits, which
+`sql.test.ts` pins by reading `db/migrations/*.sql`.
+
+**Two indexes on the same column, deliberately.** `transactions_trade_keyset_idx`
+is ordered on `coalesce(status_updated, created, 0)` and
+`transactions_trade_recency_idx` on the *two*-argument coalesce, which to the
+planner are different expressions. The board's page needs the first (a row
+comparison is null-propagating, so the keyset resume folds the null away); the
+counts and facets have no `ORDER BY` and read a date window as a *range* on the
+second. Spelling the window as the sort key would make the older index
+droppable and those counts a full scan — `sql.test.ts` pins each expression to
+the migration that indexes it.
+
+**Zero and absent stay different everywhere on this wire.** `nextCursor: null`
+is the *only* end-of-board signal — a page that exactly fills the limit might
+still be the last one. `total`/`scopeTotal` are counted on a **first page only**
+and are `null` on later ones (and on a failed count, which degrades the
+denominator rather than the list). A player the stored map has no row for keeps
+his **id** on the card: a visible, searchable token beats a blank.
+
+### What this port changed against TheLabX
+
+- **The contract direction inverts.** TheLabX declares `Trade` beside the
+  assembler and its contract imports it; here `shared/contract/trades.ts`
+  declares it and `shared/trades` imports it back with `import type`. The rule
+  this folder exists for is that a `"use client"` module must name a payload
+  without pulling `pg` into the browser, and a trade is named on both sides of
+  that seam. `PlayerSummary` moved for the same reason.
+- **`LEAGUE_COLUMNS_SQL` and `toManagerLeague` were extracted** in
+  `manager/queries.ts` so `getSeasonTradeLeagues` and `getManagerLeagues` cannot
+  drift. A field added to `ManagerLeague` now arrives on both or on neither;
+  `team_name` and `record` are null on the trades list because there is no
+  manager in that question.
+- **No query library and no virtualizer.** `use-trades` is the keyset walk
+  hand-rolled on the house idioms — the subject key is the request's normalised
+  query string, the reset happens *during render*, one abort controller lineage,
+  and `loadMore` is stable because it is handed to an IntersectionObserver (a new
+  identity per render would tear the observer down, and with the sentinel still
+  on screen that walks the whole board in one go). The cost is deliberate and
+  documented: no `keepPreviousData`, so a filter press blanks the list for one
+  round trip. **The page size is 100 rather than TheLabX's 200** because every
+  loaded card stays in the DOM.
+- **`BoundedCache` declares its fields explicitly.** Node's strip-only mode
+  cannot parse a TypeScript parameter property — it fails to *parse*, not to
+  test — so the constructor assigns rather than declaring in its signature.
+
+### Deliberately not ported, each with what it arrives with
+
+- **All valuation.** No KTC or ADP prices on a card. Pricing a traded player
+  needs `ktc_values.sleeper_id`, which is null until the name matcher ports, and
+  pricing a pick needs the rookie-pick board beside it; `enrich.ts` is where
+  both land when they come.
+- **`trade_rosters`, the rewind and the timeline** — the pre-trade roster
+  browser is its own feature.
+- **`trade_market_stats`.** TheLabX precomputes the unnarrowed denominator
+  because its corpus is millions of crawled transactions; here `countTradeTotals`
+  always counts, which is a walk of a partial index holding the trades and
+  nothing else.
+- **The POST-body league scope.** It exists for >500 ids on the *shorter* list,
+  which a manager-sync-fed corpus cannot reach. What must not come back with it
+  is that threshold's older meaning, where the page gave up narrowing and
+  filtered in the browser: a first page of excluded trades renders the empty
+  state, which unmounts the list, which is what would have asked for page two.
+- **The facets memoiser.** Three aggregates over this corpus are milliseconds
+  and a reader who never opens the panel never asks. The one *rule* it carried —
+  count the menus **without** the selection, or each collapses to its own
+  selection the moment you make one — is `facetsQuery` in `trades/params`,
+  applied by `readTradeFacets` so a route cannot forget it.
+
+### The players table came with it
+
+`shared/players` and a daily sync of Sleeper's `/v1/players/nfl` (~12k entries,
+~5MB) are new, on the KTC scheduler's exact terms: `PLAYERS_SYNC=off` disables,
+the **boot tick does not force** (a restart inside the TTL re-downloads nothing)
+and **interval ticks do** (the interval equals the TTL, so an unforced one would
+find the rows a moment short of stale and skip forever). The advisory lock wraps
+the *freshness check*, not just the fetch — otherwise every instance decides for
+itself that a refresh is due and they queue up to download 5MB in turn.
+
+**The trades board is what forced it.** The only name source here was the
+projections feed, which answers for the current season's rostered players, and a
+trade list is history: a 2021 trade names players who have since retired. The
+upsert never deletes, so a player Sleeper drops from the map keeps his row —
+the map is Sleeper's *current* players and the board is not.
+
+Checked at 1280 and 390 in both schemes, against the live corpus: pagination
+appends one page per scroll (100 → 200 → 300 → 400, no runaway), a player
+selected in the search panel narrows the board to exactly that facet's own count
+(16 of 634), and pick labels read "2026 1.05" where the order is known and
+"2027 1st from <owner>" where the origin is a third party. Light mode is derived
+rather than designed, as everywhere else on the console. **The two filter
+dialogs keep their pre-console chrome**, the same open item the leagues console
+records — the `Filters` trigger visibly does not match the mono keys beside it,
+and bringing it onto the panel tokens touches `filter-rail`, `match-rail`,
+`rule-bay` and `rule-row` for both pages at once.
 
 ## Theme
 

@@ -1,7 +1,7 @@
 "use client";
 
 import type { ManagerLeague } from "@/shared/contract";
-import type { FilterRule } from "@/features/shared";
+import type { FilterRule } from "../league-filters";
 
 import type { RulePreset } from "./league-filters-presets";
 import { RuleRow, type RuleKeyOption } from "./rule-row";

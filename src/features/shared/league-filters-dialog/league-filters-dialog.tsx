@@ -20,7 +20,7 @@ import {
   SLOT_GROUPS,
   TEAMS_KEY,
   TYPE_OPTIONS,
-} from "@/features/shared";
+} from "../league-filters";
 
 import { FilterRail } from "./filter-rail";
 import {

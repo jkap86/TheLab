@@ -43,12 +43,16 @@ export {
 } from "./graph-weeks";
 export type { SyncClock } from "./graph-weeks";
 export {
+  LEAGUE_COLUMNS_SQL,
+  getLeaguemateIds,
   getManagerDraftAdp,
+  getManagerLeagueIds,
   getManagerLeagues,
   getManagerLeagueRosters,
   getManagerSyncState,
+  toManagerLeague,
 } from "./queries";
-export type { ManagerLeagueRow } from "./queries";
+export type { LeagueRow, ManagerLeagueRow } from "./queries";
 export { solveLeagueLineup } from "./ros-lineups";
 export type { RosLineupLeague } from "./ros-lineups";
 export { lineupMetricTotals, rankLeagueLineups } from "./league-ranks";

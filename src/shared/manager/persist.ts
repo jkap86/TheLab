@@ -1,6 +1,7 @@
 import type { PoolClient } from "pg";
 
 import { bulkInsert, jsonb as j, pool, withTransaction } from "@/shared/db";
+import { rebuildTradeParticipants } from "@/shared/trades";
 
 import { dedupeBy } from "./dedupe";
 import type { LeagueGraph } from "./graph";
@@ -344,6 +345,15 @@ async function writeLeagueGraph(
         players = EXCLUDED.players, starters_points = EXCLUDED.starters_points,
         players_points = EXCLUDED.players_points, updated_at = now()`,
   });
+
+  // Last, and inside this transaction. `trade_participants` is derived from the
+  // transactions and rosters written above — who was party to each trade — and
+  // the trades board *filters* on it, so a league whose participant rows are
+  // missing is a league whose trades are invisible to the circle that should
+  // have found them. That is a plausible wrong answer rather than a visibly
+  // thinner one, which is why it commits with the rows it describes or not at
+  // all. See `shared/trades/participants` for why it is a wholesale rebuild.
+  await rebuildTradeParticipants(client, l.league_id);
 
   return missing;
 }

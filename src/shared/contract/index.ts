@@ -30,3 +30,14 @@ export {
   type LineupCheckStatus,
   type ManagerLineupCheckPayload,
 } from "./lineup-check";
+export {
+  type TradePickAsset,
+  type TradeSide,
+  type Trade,
+  type PlayerSummary,
+  type LeaguematePayload,
+  type TradesPagePayload,
+  type TradeLeaguesPayload,
+  type TradeFacet,
+  type TradeFacetsPayload,
+} from "./trades";

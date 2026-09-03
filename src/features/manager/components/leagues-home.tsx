@@ -7,6 +7,7 @@ import {
   DEFAULT_LEAGUE_FILTERS,
   filterSummary,
   CONSOLE_KEY,
+  LeagueFiltersDialog,
   ManagerPlate,
   matchesFilters,
   ThemeToggle,
@@ -16,7 +17,6 @@ import {
 
 import { useManagerLineups } from "../hooks/use-manager-lineups";
 import { LeagueCard } from "./league-card";
-import { LeagueFiltersDialog } from "./league-filters-dialog";
 import { LineupColumnsDialog } from "./lineup-columns-dialog";
 import { SeasonSummary } from "./season-summary";
 

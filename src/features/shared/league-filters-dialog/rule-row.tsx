@@ -9,7 +9,7 @@ import {
   isSentinelRule,
   settingSentinel,
   settingValueOptions,
-} from "@/features/shared";
+} from "../league-filters";
 
 /** One entry of a rule's key menu. */
 export type RuleKeyOption = { value: string; label: string; hint?: string };

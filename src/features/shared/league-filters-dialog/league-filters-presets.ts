@@ -1,4 +1,4 @@
-import { type FilterRule, NO_TRADE_DEADLINE, TEAMS_KEY } from "@/features/shared";
+import { type FilterRule, NO_TRADE_DEADLINE, TEAMS_KEY } from "../league-filters";
 
 /**
  * The questions worth one press, as the rules they always were.

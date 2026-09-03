@@ -179,23 +179,74 @@ const FIELDED_A_TEAM_SQL = `(
  */
 const MANAGER_LEAGUE_SQL = `${LIVE_LEAGUE_SQL} AND ${FIELDED_A_TEAM_SQL}`;
 
-/** One row of the leagues read, before the record is folded together. */
-type LeagueRow = {
+/**
+ * The league columns every reader of a {@link ManagerLeague} selects.
+ *
+ * Shared rather than written out per query because two questions now ask it —
+ * a manager's leagues, and the leagues a season's trades happened in — and the
+ * second is not a manager question at all. A field added to `ManagerLeague` has
+ * to arrive in both, and two column lists is how the trades board comes to be
+ * missing a filter key the manager page has.
+ */
+export const LEAGUE_COLUMNS_SQL = `
+  l.league_id, l.name, l.season, l.status, l.total_rosters, l.avatar,
+  l.roster_positions, l.settings, l.scoring_settings`;
+
+/** One row of {@link LEAGUE_COLUMNS_SQL}. */
+export type LeagueRow = {
   league_id: string;
   name: string;
   season: string;
   status: string;
   total_rosters: number;
   avatar: string | null;
-  team_name: string | null;
-  wins: string | null;
-  losses: string | null;
-  ties: string | null;
   // JSONB comes back parsed, so these arrive as the shapes the contract names.
   roster_positions: string[] | null;
   settings: Record<string, unknown> | null;
   scoring_settings: Record<string, number> | null;
 };
+
+/** A {@link LeagueRow} plus the manager-specific half of the leagues read. */
+type ManagerLeagueRowShape = LeagueRow & {
+  team_name: string | null;
+  wins: string | null;
+  losses: string | null;
+  ties: string | null;
+};
+
+/**
+ * A {@link LeagueRow} as the shape every reader holds.
+ *
+ * `team_name` and `record` are arguments rather than columns of the row,
+ * because both are a *manager's* in a league and one caller is asking about
+ * leagues with no manager in the question — see `getSeasonTradeLeagues`, where
+ * null on both is the honest answer rather than a gap to fill.
+ */
+export function toManagerLeague(
+  r: LeagueRow,
+  manager: {
+    team_name?: string | null;
+    record?: ManagerLeague["record"];
+  } = {},
+): ManagerLeague {
+  return {
+    league_id: r.league_id,
+    name: r.name,
+    season: r.season,
+    status: r.status,
+    total_rosters: r.total_rosters,
+    // Resolved here rather than on the client, so a `"use client"` module never
+    // imports `shared/sleeper` to render a face.
+    avatar_url: sleeperAvatarUrl(r.avatar, "thumb"),
+    team_name: manager.team_name ?? null,
+    record: manager.record ?? null,
+    // Sleeper's own blobs, forwarded rather than reduced — see `ManagerLeague`
+    // for why the league filters need the keys and not a set of flags.
+    roster_positions: r.roster_positions,
+    settings: r.settings,
+    scoring_settings: r.scoring_settings,
+  };
+}
 
 /**
  * Read a manager's leagues for a season from the DB, with the manager's own team
@@ -214,9 +265,8 @@ export async function getManagerLeagues(
   userId: string,
   season: string,
 ): Promise<ManagerLeague[]> {
-  const { rows } = await pool.query<LeagueRow>(
-    `SELECT l.league_id, l.name, l.season, l.status, l.total_rosters, l.avatar,
-        l.roster_positions, l.settings, l.scoring_settings,
+  const { rows } = await pool.query<ManagerLeagueRowShape>(
+    `SELECT ${LEAGUE_COLUMNS_SQL},
         lu.team_name,
         mr.settings->>'wins'   AS wins,
         mr.settings->>'losses' AS losses,
@@ -234,23 +284,9 @@ export async function getManagerLeagues(
     [userId, season],
   );
 
-  return rows.map((r) => ({
-    league_id: r.league_id,
-    name: r.name,
-    season: r.season,
-    status: r.status,
-    total_rosters: r.total_rosters,
-    // Resolved here rather than on the client, so a `"use client"` module never
-    // imports `shared/sleeper` to render a face.
-    avatar_url: sleeperAvatarUrl(r.avatar, "thumb"),
-    team_name: r.team_name,
-    record: toRecord(r),
-    // Sleeper's own blobs, forwarded rather than reduced — see `ManagerLeague`
-    // for why the league filters need the keys and not a set of flags.
-    roster_positions: r.roster_positions,
-    settings: r.settings,
-    scoring_settings: r.scoring_settings,
-  }));
+  return rows.map((r) =>
+    toManagerLeague(r, { team_name: r.team_name, record: toRecord(r) }),
+  );
 }
 
 /**
@@ -261,13 +297,69 @@ export async function getManagerLeagues(
  * A single stored count is enough to make the row real, and the other two read
  * as the zeroes Sleeper omits.
  */
-function toRecord(r: LeagueRow): LeagueRecord | null {
+function toRecord(r: ManagerLeagueRowShape): LeagueRecord | null {
   if (r.wins == null && r.losses == null && r.ties == null) return null;
   return {
     wins: Number(r.wins ?? 0),
     losses: Number(r.losses ?? 0),
     ties: Number(r.ties ?? 0),
   };
+}
+
+/**
+ * The ids of a manager's leagues for a season — {@link getManagerLeagues}
+ * reduced to the one column the trades board's `mine` circle binds.
+ *
+ * The same predicate rather than a second one, deliberately: "which leagues are
+ * this manager's" has one answer, and a circle that quietly disagreed with the
+ * manager page about it would be a filter nobody could check.
+ */
+export async function getManagerLeagueIds(
+  userId: string,
+  season: string,
+): Promise<string[]> {
+  const { rows } = await pool.query<{ league_id: string }>(
+    `SELECT l.league_id
+       FROM leagues l
+       JOIN league_users lu
+         ON lu.league_id = l.league_id AND lu.user_id = $1
+      WHERE l.season = $2
+        AND ${MANAGER_LEAGUE_SQL}`,
+    [userId, season],
+  );
+  return rows.map((r) => r.league_id);
+}
+
+/**
+ * Everyone who shares a league with this manager for the season, as ids.
+ *
+ * It keeps two opposing rules intact: *which leagues* count is
+ * {@link FIELDED_A_TEAM_SQL} — a league the manager never played in is not
+ * theirs — and *who counts inside one* is bare membership, because someone
+ * chopped out of a guillotine league is still someone you know.
+ *
+ * **The manager themselves is not among them.** The id list *is* the answer
+ * here, so a manager listed as their own leaguemate would be a claim rather
+ * than a sentinel; a caller that wants the reader in the set says so —
+ * `shared/trades/circle` does, for one of its two leaguemate circles and not
+ * the other, and its doc explains why the asymmetry is right.
+ */
+export async function getLeaguemateIds(
+  userId: string,
+  season: string,
+): Promise<string[]> {
+  const { rows } = await pool.query<{ user_id: string }>(
+    `SELECT DISTINCT lm.user_id
+       FROM leagues l
+       JOIN league_users me
+         ON me.league_id = l.league_id AND me.user_id = $1
+       JOIN league_users lm
+         ON lm.league_id = l.league_id AND lm.user_id <> $1
+      WHERE l.season = $2
+        AND ${MANAGER_LEAGUE_SQL}`,
+    [userId, season],
+  );
+  return rows.map((r) => r.user_id);
 }
 
 /**

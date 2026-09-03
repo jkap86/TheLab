@@ -3,7 +3,7 @@
 import { useMemo } from "react";
 
 import type { ManagerLeague } from "@/shared/contract";
-import { type LeagueFilters, matchesFilters } from "@/features/shared";
+import { type LeagueFilters, matchesFilters } from "../league-filters";
 
 /**
  * One fixed filter: a label and a row of option chips, each carrying what

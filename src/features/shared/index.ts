@@ -12,7 +12,13 @@ export { apiFetch, isAbortError } from "./api";
 export { Avatar } from "./avatar";
 export { CONSOLE_HOUSING, CONSOLE_KEY } from "./console-chrome";
 export { errorMessage } from "./error-message";
+export { ordinal } from "./format";
 export * from "./league-filters";
+// The dialog those rules are built in. It moved here from `features/manager`
+// when the trades board became a second reader — the line `CONSOLE_KEY` and
+// `ManagerPlate` moved on. Only the dialog is exported: the rails, bays and
+// rows are its own parts, on the folder rule the header above states.
+export { LeagueFiltersDialog } from "./league-filters-dialog/league-filters-dialog";
 export {
   DEFAULT_LINEUP_COLUMNS,
   LINEUP_METRIC_IDS,

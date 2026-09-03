@@ -7,7 +7,7 @@ import {
   clearFilter,
   type LeagueFilters,
   leagueBreakdown,
-} from "@/features/shared";
+} from "../league-filters";
 
 /**
  * What the draft leaves, and what it is made of.

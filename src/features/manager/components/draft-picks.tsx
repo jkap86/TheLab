@@ -1,6 +1,6 @@
 import type { RosterPick } from "@/shared/contract";
 
-import { ordinal } from "../helpers/lineup-metrics";
+import { ordinal } from "@/features/shared";
 
 /**
  * The roster's future draft picks, grouped by season — one plate per season,

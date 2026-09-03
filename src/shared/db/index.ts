@@ -6,6 +6,7 @@ export { resolveDatabaseUrl, DATABASE_URL_ENV } from "./config";
 export type { DatabaseUrlResolution } from "./config";
 export { jsonb } from "./json";
 export { bulkInsert } from "./bulk";
+export { countRows, isFresh } from "./freshness";
 export { withTransaction } from "./transaction";
 export {
   withAdvisoryLock,

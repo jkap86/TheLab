@@ -1,5 +1,9 @@
 import type { LineupMetricId, MetricRank } from "@/shared/contract";
 
+// Relative with an explicit extension: this module is read by Node's test
+// runner, which resolves neither the `@/*` aliases nor the shared barrel.
+import { ordinal } from "../../shared/format.ts";
+
 /**
  * Words for the rank metrics — the card's column headers and the dialog's
  * option lines. Imports from the contract are type-only, so this module (like
@@ -61,22 +65,6 @@ export function metricFillClass(id: LineupMetricId): string {
   return METRIC_FAMILY[id] === "points"
     ? "bg-active"
     : "bg-metric-secondary";
-}
-
-/** `1st`, `2nd`, `3rd`, `4th` — with the 11th–13th rule English insists on. */
-export function ordinal(n: number): string {
-  const tens = n % 100;
-  if (tens >= 11 && tens <= 13) return `${n}th`;
-  switch (n % 10) {
-    case 1:
-      return `${n}st`;
-    case 2:
-      return `${n}nd`;
-    case 3:
-      return `${n}rd`;
-    default:
-      return `${n}th`;
-  }
 }
 
 /**

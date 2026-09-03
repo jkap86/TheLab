@@ -41,4 +41,14 @@ export async function register(): Promise<void> {
   } catch (error) {
     console.error("[ktc] Failed to start the KTC scheduler:", error);
   }
+
+  // The same terms: a ~5MB download queued behind the Sleeper limiter must not
+  // gate request serving, and a failed one costs the trades board its names
+  // rather than the server its boot.
+  try {
+    const { startPlayersScheduler } = await import("@/shared/players");
+    startPlayersScheduler();
+  } catch (error) {
+    console.error("[players] Failed to start the players scheduler:", error);
+  }
 }
