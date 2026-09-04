@@ -85,14 +85,18 @@ const weeksIn = ({ from, to }: WeekRange): number[] => {
  * would skip its whole season. Callers pass the full range on a first sync and a
  * short tail window on refreshes — see {@link syncManagerLeagues}.
  *
- * TheLabX threads a cache-busting token through every request this makes, for
- * the one caller that presses a single league and is asking precisely because
- * something changed a moment ago. That route is not ported and every caller
- * here is the manager sync, which wants the CDN copy.
+ * `fresh` is the cache-busting token, threaded through **every** request this
+ * makes and minted once per press by `refreshLeague` — the one caller that
+ * presses a single league and is asking precisely because something changed a
+ * moment ago (see `sleeper/fresh`). One token for the whole graph rather than
+ * one per request, so the ~11 collections are read from a single instant rather
+ * than from eleven. Every other caller is the manager sync or the crawler,
+ * which want the CDN copy and pass nothing.
  */
 export async function fetchLeagueGraph(
   league: SleeperLeague,
   weeks: GraphWeeks,
+  { fresh }: { fresh?: string } = {},
 ): Promise<LeagueGraph> {
   const txWeeks = weeks.transactions;
   const matchupWeeks = weeks.matchups;
@@ -110,20 +114,20 @@ export async function fetchLeagueGraph(
   const matchups: WeekMatchup[] = [];
 
   const [rosters, users, tradedPicks, drafts] = await Promise.all([
-    getLeagueRosters(league.league_id),
-    getLeagueUsers(league.league_id),
-    getLeagueTradedPicks(league.league_id),
-    getLeagueDrafts(league.league_id),
+    getLeagueRosters(league.league_id, fresh),
+    getLeagueUsers(league.league_id, fresh),
+    getLeagueTradedPicks(league.league_id, fresh),
+    getLeagueDrafts(league.league_id, fresh),
     mapWithConcurrency(jobs, CHILD_FETCH_CONCURRENCY, async (job) => {
       if (job.kind === "tx") {
         transactions.push(
-          ...(await getLeagueTransactions(league.league_id, job.week)),
+          ...(await getLeagueTransactions(league.league_id, job.week, fresh)),
         );
         return;
       }
       // Tagged on arrival: a matchup row names its roster but not its week, and
       // the request is the only place the week is known.
-      const week = await getLeagueMatchups(league.league_id, job.week);
+      const week = await getLeagueMatchups(league.league_id, job.week, fresh);
       matchups.push(...week.map((m) => ({ ...m, week: job.week })));
     }),
   ]);
@@ -135,7 +139,7 @@ export async function fetchLeagueGraph(
   // would be persisted as if it were the draft's whole board.
   const draftPicks = (
     await collectWithConcurrency(drafts, CHILD_FETCH_CONCURRENCY, (d) =>
-      getDraftPicks(d.draft_id),
+      getDraftPicks(d.draft_id, fresh),
     )
   ).flat();
 

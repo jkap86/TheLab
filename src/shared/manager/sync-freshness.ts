@@ -24,11 +24,11 @@
  * Hence two timestamps and two questions, which is what the schema already had
  * room for.
  *
- * TheLabX carries a second gate here, `leagueRefreshGate` — the same decision
- * at the other grain, asked of one league instead of a manager's whole graph,
- * and kept in this file because what differs is only who is asking. It arrives
- * with the per-league refresh press it stands behind; nothing here presses one
- * league.
+ * {@link leagueRefreshGate} is the same decision at the other grain — asked of
+ * one league instead of a manager's whole graph — and it lives in this file
+ * because what differs between them is only who is asking. It arrived with the
+ * lineup checker's per-league refresh press, which is the one thing in this app
+ * that presses a single league.
  */
 
 /** How long a **fully successful** sync of the *current* season stays fresh. */
@@ -237,6 +237,126 @@ export function managerSyncGate(
   }
   return { run: true, complete, reason: "due" };
 }
+
+/**
+ * How long one league's refresh press suppresses the next one.
+ *
+ * **Fifteen seconds is a hammer bound, not a freshness TTL**, and the difference
+ * is why this is three orders of magnitude under {@link SYNC_TTL_MS}. A reader
+ * presses this key *because* something changed in Sleeper a moment ago, so a
+ * window long enough to be a staleness policy would refuse exactly the press the
+ * key exists for. What it is sized against is a double-click, a keyboard repeat
+ * and two tabs — the ways one intention becomes several ~11-request fan-outs.
+ *
+ * The manager grain's throttle can be long because a manager's whole graph is a
+ * hundred times the traffic and nobody asks for it by name. `sync-freshness`'s
+ * own test pins `LEAGUE_REFRESH_COOLDOWN_MS < SYNC_TTL_MS / 10`, so a later edit
+ * that reaches for a "sensible" ten minutes here has to argue with a failure.
+ */
+export const LEAGUE_REFRESH_COOLDOWN_MS = 15 * 1000;
+
+/** The two timestamps `leagues` keeps for one league. */
+export type LeagueRefreshState = {
+  /**
+   * Last **successful whole** graph write, or {@link NEVER_REFRESHED_SQL}'s
+   * epoch for a row no sync has ever filled. Owned by `persistLeagueGraph` and
+   * never written by a refresh, which is what keeps it meaning one thing.
+   */
+  updatedAt: Date | null;
+  /**
+   * Last attempt of any outcome — stamped by this press *and* by the crawler's
+   * claim, which is deliberate: both are somebody asking Sleeper about this
+   * league, and the cooldown is about how often it may be asked.
+   */
+  attemptAt: Date | null;
+};
+
+/** Why a press ran or did not — see {@link leagueRefreshGate}. */
+export type LeagueRefreshReason =
+  /** Nothing suppresses it: run the fan-out. */
+  | "due"
+  /** Somebody else's attempt landed while this caller queued on the lock. */
+  | "raced"
+  /** An attempt is still inside {@link LEAGUE_REFRESH_COOLDOWN_MS}. */
+  | "cooldown";
+
+export type LeagueRefreshGate = {
+  run: boolean;
+  reason: LeagueRefreshReason;
+  /** How long until a press would be honoured. Zero for every reason but the cooldown. */
+  retryAfterMs: number;
+};
+
+/**
+ * Decide whether one league's refresh press should run.
+ *
+ * Two arms, and the order is the design:
+ *
+ * 1. **A race is a success, not a refusal.** An attempt at or after
+ *    `requestedAt` means another caller's fan-out landed while this one waited
+ *    on the advisory lock — which is the fan-out this caller wanted, already
+ *    done. It reports `raced` with no wait, and `refreshLeague` turns that into
+ *    `fresh`: the reader gets the data, not an apology. Telling them to wait
+ *    fifteen seconds for work that just finished would be the one refusal with
+ *    nothing behind it.
+ * 2. **Otherwise the cooldown**, measured from the last attempt **of any
+ *    outcome**. A failed attempt buys the same quiet as a successful one, which
+ *    is what stops a reader from hammering a Sleeper that is already failing —
+ *    a key that looks broken is precisely a key that gets pressed again.
+ *
+ * `updatedAt` is not read here at all, and that asymmetry with
+ * {@link managerSyncGate} is deliberate: this gate has no `complete` to report
+ * and no freshness question to answer. A reader pressing a key has already
+ * decided the data in front of them is worth re-reading, so "it is recent
+ * enough" is not this function's judgement to make — only "it was asked for too
+ * recently" is. `refreshLeague` still carries `updatedAt` out to the caller,
+ * because a *refused* answer's one honest fact is when the data it is refusing
+ * to replace was written.
+ *
+ * Asked **inside the advisory lock and nowhere else**, unlike `managerSyncGate`
+ * which is asked on both sides of it. There is no cheap pre-check worth having:
+ * the state read is one indexed row and the lock wait is the thing being saved,
+ * so asking early would add a round trip to save nothing.
+ */
+export function leagueRefreshGate(
+  state: LeagueRefreshState | null,
+  { now, requestedAt }: { now: number; requestedAt: number },
+): LeagueRefreshGate {
+  const attemptAt = state?.attemptAt?.getTime() ?? null;
+
+  if (attemptAt !== null && attemptAt >= requestedAt) {
+    return { run: false, reason: "raced", retryAfterMs: 0 };
+  }
+  if (attemptAt !== null && now - attemptAt < LEAGUE_REFRESH_COOLDOWN_MS) {
+    return {
+      run: false,
+      reason: "cooldown",
+      // Clamped at zero rather than trusted: a clock that stepped backwards
+      // between the two reads would otherwise send a negative wait to a client
+      // that rounds it up into a positive-looking one.
+      retryAfterMs: Math.max(0, LEAGUE_REFRESH_COOLDOWN_MS - (now - attemptAt)),
+    };
+  }
+  return { run: true, reason: "due", retryAfterMs: 0 };
+}
+
+/**
+ * Stamp one league's attempt: `$1` league id.
+ *
+ * Run **before** the fetch, never after, for the reason
+ * {@link stampLeagueSyncAttempts} states at the other call site: a press that
+ * fails or is refused upstream must still hold its own cooldown and still
+ * rotate the league to the back of the crawler's queue. Stamped after, a league
+ * Sleeper is failing on would be re-pressable immediately and would answer the
+ * same way every time.
+ *
+ * A constant rather than an inline query because it names the column two other
+ * writers own — `claimStaleLeagues` sets it as part of claiming, and
+ * `stampLeagueSyncAttempts` sets it in bulk — and three spellings of one
+ * throttle is three chances for one of them to drift.
+ */
+export const LEAGUE_REFRESH_ATTEMPT_SQL = `
+  UPDATE leagues SET sync_attempt_at = now() WHERE league_id = $1`;
 
 /**
  * What `leagues.updated_at` holds for a row whose graph has **never** been

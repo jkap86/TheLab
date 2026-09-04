@@ -176,6 +176,10 @@ export async function getSyncClock(): Promise<SyncClock> {
  * see `./graph-weeks`, which owns both halves of that decision and the reason a
  * finished season must not be bounded by the current one's week.
  *
+ * `options.fresh` is the cache-busting token the per-league refresh press mints;
+ * it is passed through untouched, so this function neither knows nor cares
+ * whether the caller is a reader or a background loop.
+ *
  * Transactions and matchups are gated **separately**, on their own stored
  * weeks. They fill up independently — every league stored before matchups
  * existed has transactions through the current week and no matchups at all — so
@@ -187,9 +191,16 @@ export async function syncLeagueGraphs(
   options: {
     concurrency?: number;
     onProgress?: (progress: SyncProgress) => void;
+    /**
+     * A cache-busting token, passed straight through to every Sleeper request
+     * each league makes — see `sleeper/fresh`. Only `refreshLeague` mints one;
+     * this batch is otherwise the manager sync's and the crawler's, and both
+     * want the CDN copy.
+     */
+    fresh?: string;
   } = {},
 ): Promise<LeagueSyncResult> {
-  const { concurrency = LEAGUE_FETCH_CONCURRENCY, onProgress } = options;
+  const { concurrency = LEAGUE_FETCH_CONCURRENCY, onProgress, fresh } = options;
   const total = leagues.length;
 
   const leagueIds = leagues.map((l) => l.league_id);
@@ -215,7 +226,7 @@ export async function syncLeagueGraphs(
 
   await mapWithConcurrency(leagues, concurrency, async (league) => {
     try {
-      const graph = await fetchLeagueGraph(league, weeksFor(league));
+      const graph = await fetchLeagueGraph(league, weeksFor(league), { fresh });
       const persisted = await persistLeagueGraph(graph);
       counts.rosters += graph.rosters.length;
       counts.leagueUsers += graph.users.length;

@@ -25,6 +25,10 @@ export {
   getLeagueTransactions,
   getLeagueMatchups,
 } from "./leagues";
+// The cache-busting token, for the one path a reader drives — see `./fresh`.
+// Only the mint escapes: `freshUrl` and `CACHE_BUST_PARAM` are how the getters
+// in this folder spend it, which is the barrel's own rule about siblings.
+export { cacheBustToken } from "./fresh";
 export {
   createLimiter,
   sleeperConcurrency,

@@ -88,7 +88,7 @@ function Checker({
     [leagues, filters],
   );
 
-  const check = useLineupCheck(
+  const { payload: check, reread } = useLineupCheck(
     username,
     state.season,
     week,
@@ -206,6 +206,7 @@ function Checker({
                   key={league.league_id}
                   league={league}
                   entry={checked[league.league_id] ?? null}
+                  onSynced={reread}
                 />
               ))}
             </ul>
