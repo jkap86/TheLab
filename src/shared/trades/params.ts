@@ -8,9 +8,12 @@ import { booleanFlag, integer, list } from "../query/parse.ts";
  * primitives relatively with a `.ts` extension — the mechanism the test runner
  * needs, and the reason this module drags no `pg` in.
  *
- * The vocabulary is the client's `TradeFilters` and `LeagueFilters` resolved
- * into ids and instants, so the two ends stay a matched pair. Two fields are
- * worth reading twice:
+ * It reads parameters and never a request: how those parameters arrived — a
+ * query string, or a query string with the league scope in a POST body — is
+ * `./transport`'s, and the whole point of that split is that this module cannot
+ * tell. The vocabulary is the client's `TradeFilters` and `LeagueFilters`
+ * resolved into ids and instants, so the two ends stay a matched pair. Two
+ * fields are worth reading twice:
  *
  * - **The date window arrives as epoch milliseconds, already resolved.** A
  *   trade carries an instant, and the day a reader means by "before today" is
@@ -135,12 +138,16 @@ export type TradeQuery = {
    * they are not narrowing at all.
    *
    * The client sends whichever of the include and exclude lists is shorter (see
-   * `features/trades/league-scope`). **There is no POST-body form here**, where
-   * TheLabX has one: that path exists for a corpus past ~500 leagues on the
-   * *shorter* list, which a manager-sync-fed database does not reach. Past a
-   * few thousand ids the honest failure is a 414 rather than a silently
-   * truncated narrowing; the re-add is TheLabX's shared body parser and a
-   * three-line POST handler.
+   * `features/trades/league-scope`), and **either can outrun a request line**:
+   * the shorter list is bounded by half the corpus, and the corpus is what the
+   * crawler grows. So the ids arrive on the line or in a POST body, whichever
+   * fits — `shared/trades/transport` folds the two into one `URLSearchParams`
+   * before this parser sees either, which is why nothing below knows the
+   * difference. What must never come back is the older reading of that
+   * threshold, where the page gave up narrowing past it and filtered in the
+   * browser: a first page whose trades all came from excluded leagues renders
+   * as an empty board, which unmounts the list, which is what would have asked
+   * for page two.
    */
   leagues: string[] | null;
   /** League ids to exclude — the complement form of the above. */

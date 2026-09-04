@@ -2,7 +2,11 @@ import { NextResponse } from "next/server";
 
 import type { ApiErrorPayload } from "@/shared/contract";
 import { getActiveSeason, parseRequestedSeason } from "@/shared/season";
-import { parseTradeQuery, readTradeFacets } from "@/shared/trades";
+import {
+  parseTradeQuery,
+  readTradeFacets,
+  readTradeParams,
+} from "@/shared/trades";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -20,11 +24,29 @@ export const dynamic = "force-dynamic";
  *
  * Asked for only while the panel is open, which is what makes three grouped
  * aggregates acceptable: a reader who never opens it never pays for them.
+ *
+ * It answers a POST for the same reason the board does, and it has to answer
+ * one wherever the board does: the two take the same query string, so a scope
+ * too long for a request line here is the same scope that was too long there —
+ * see `shared/trades/transport`.
  */
 export async function GET(request: Request) {
-  const url = new URL(request.url);
+  return readFacets(request);
+}
 
-  const requested = parseRequestedSeason(url.searchParams.get("season"));
+export async function POST(request: Request) {
+  return readFacets(request);
+}
+
+async function readFacets(request: Request) {
+  const read = await readTradeParams(request);
+  if (!read.ok) {
+    const error: ApiErrorPayload = { error: read.error };
+    return NextResponse.json(error, { status: read.status });
+  }
+  const { params } = read;
+
+  const requested = parseRequestedSeason(params.get("season"));
   if (requested && !requested.ok) {
     const error: ApiErrorPayload = { error: requested.error };
     return NextResponse.json(error, { status: 400 });
@@ -32,9 +54,7 @@ export async function GET(request: Request) {
   const season = requested?.season ?? (await getActiveSeason());
 
   try {
-    const payload = await readTradeFacets(
-      parseTradeQuery(url.searchParams, season),
-    );
+    const payload = await readTradeFacets(parseTradeQuery(params, season));
     return NextResponse.json(payload, {
       headers: { "Cache-Control": "private, max-age=60" },
     });

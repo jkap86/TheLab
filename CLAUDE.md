@@ -1931,16 +1931,75 @@ his **id** on the card: a visible, searchable token beats a blank.
   because its corpus is millions of crawled transactions; here `countTradeTotals`
   always counts, which is a walk of a partial index holding the trades and
   nothing else.
-- **The POST-body league scope.** It exists for >500 ids on the *shorter* list,
-  which a manager-sync-fed corpus cannot reach. What must not come back with it
-  is that threshold's older meaning, where the page gave up narrowing and
-  filtered in the browser: a first page of excluded trades renders the empty
-  state, which unmounts the list, which is what would have asked for page two.
 - **The facets memoiser.** Three aggregates over this corpus are milliseconds
   and a reader who never opens the panel never asks. The one *rule* it carried —
   count the menus **without** the selection, or each collapses to its own
   selection the moment you make one — is `facetsQuery` in `trades/params`,
   applied by `readTradeFacets` so a route cannot forget it.
+
+### The scope outgrew the request line
+
+The one thing this section listed as unported was TheLabX's **POST-body league
+scope**, on the grounds that a manager-sync-fed corpus could not reach the
+length that needs one. The crawler is what made it reach: a filtered board over
+a two-thousand-league corpus sent ~800 excluded ids, 19KB of query string, and
+Heroku's router answered **431 with an empty body** — which arrives at
+`apiFetch` as a failure naming nothing, so the board went blank the moment a
+reader narrowed it. It is ported now, as `features/trades/trade-query`'s
+`tradeHttpRequest` and `shared/trades/transport`.
+
+**The ids are still all sent, and the fix is only about how.** A cap on the
+scope would be a cap on how many leagues a reader may filter over, enforced at
+the moment they narrow — and the older reading of TheLabX's threshold, where the
+page gave up narrowing past it and filtered in the browser, is the thing this
+file has warned against since the board landed: a first page of excluded trades
+renders the empty state, which unmounts the list, which is what would have asked
+for page two.
+
+**A body is the rest of the query string, form-encoded — not a vocabulary of its
+own.** `readTradeParams` folds it back into one `URLSearchParams` before
+`parseTradeQuery` sees it, so the parser, the SQL and the payload cannot tell
+which method was used, and a parameter that grows unbounded later needs no new
+seam. It is why the two routes are `GET` and `POST` over one handler rather than
+two shapes. Three rules keep the fold honest: the **body wins** on a key both
+carry (`list()` reads repeated keys as one list, so joining them would *widen* a
+scope a stale line parameter had narrowed — a filter failing open); a body that
+is **not** form-encoded is refused **415** rather than read, since
+`new URLSearchParams('{"leagues":["a"]}')` parses happily into a key nobody
+reads and would arrive as no narrowing at all; and the cap is applied to the
+**stream** rather than to the declared length, past which the answer is a 413 —
+never a truncated list.
+
+**The threshold is 2,000 characters of query, far below the 8KB a router
+carries.** That budget covers the request line *and* every header beside it, so
+what is left is ~6KB for cookies and the rest; 2,000 characters is around ninety
+league ids at 22 encoded characters each. It is deliberately conservative
+because what sits on the other side is not a slower board but a bodiless 431.
+**Only the league scope moves**, because only the league scope is unbounded — a
+reader cannot select their way past a request line — and a long request with
+nothing movable in it stays a GET rather than being declined here.
+
+**How a request travelled is not part of what it is.** `tradeQueryKey` is built
+from the parameters and never from the transport, so the paging hook's subject
+does not change on the beat a scope crosses the threshold. The one real cost is
+that a POST forfeits the page route's `Cache-Control: private, max-age=30` — no
+browser caches one — which is why only the long scopes pay it.
+
+#### Verified
+
+Against a throwaway Postgres 16 cluster seeded with 2,000 leagues, one trade
+each, since the failure is a property of corpus size rather than of any stored
+row. The old shape reproduces exactly: 1,999 excluded ids is a 40,006-character
+query string and **431** — locally, from Node's own header limit, the same
+status Heroku returned. The same request through `tradeHttpRequest` is a
+19-character line and a 39,986-byte body, **200**, and the narrowing is exact:
+one trade, from the one league not excluded, `total` and `scopeTotal` both 1.
+`/api/trades/facets` took the identical scope and answered its menus. The keyset
+walk holds over POST — 1,990 excluded, `limit=4`, three pages of 4/4/2 covering
+exactly the ten leagues left, `total` on the first page only and null after,
+`nextCursor` null at the end. A JSON body 415s, a body past the cap 413s, a
+malformed `?season=` still 400s, and a scope short enough to fit is still a
+plain GET.
 
 ### KeepTradeCut prices landed here
 
@@ -2611,3 +2670,92 @@ file's presence.
 `.lab-anim` marks anything decorative that moves, so the
 `prefers-reduced-motion` rule can stop all of it at once. It uses `!important`
 because those animations are set inline.
+
+## The app icon
+
+Until this landed the tab carried Next's own default `favicon.ico` — the app had
+a mark everywhere except the one place a reader sees it before the page paints.
+The design bundle is the `FlaskMark` set on a plate, and it is five files in
+`src/app/`, all of them Next's static metadata conventions rather than anything
+this repo wires by hand.
+
+**The names are the wiring**, and two of the five had to be renamed to get it.
+`app-icons.md` in the bundled docs is the reference, and the rule that decides
+this is in `next/dist/lib/metadata/is-metadata-route.js`: the variant matcher is
+`\d?` — **one optional digit**, not a suffix. So the export's `icon-32.png` and
+`icon-512.png` match nothing and would have shipped as dead bytes in the app
+directory, silently, because an unmatched file in `app/` is not an error. They
+are `icon1.png` and `icon2.png`. The other three (`favicon.ico`, `icon.svg`,
+`apple-icon.png`) are already conventional and were copied under their own names.
+
+What that buys, read off the built HTML rather than assumed:
+
+```
+<link rel="icon" href="/favicon.ico"   sizes="48x48"   type="image/x-icon">
+<link rel="icon" href="/icon.svg"      sizes="any"     type="image/svg+xml">
+<link rel="icon" href="/icon1.png"     sizes="32x32"   type="image/png">
+<link rel="icon" href="/icon2.png"     sizes="512x512" type="image/png">
+<link rel="apple-touch-icon" href="/apple-icon.png" sizes="180x180" type="image/png">
+```
+
+**The plate is what makes the icon scheme-independent, and that is the design
+decision rather than a style.** Everything else in the app is two schemes over
+one set of markup; a favicon cannot be. It is painted onto browser chrome this
+app does not own, `data-theme` is unreachable from it, and a
+`prefers-color-scheme` media query inside an SVG favicon is honoured by Firefox
+and Safari and ignored by Chrome — so a mark that inverted would invert on some
+readers' machines and not others. The bundle answers that by carrying its own
+dark ground (a radial `#16303c → #08090a`, rounded at `rx=7`), so the same file
+is correct on a light tab strip and a dark one. `FlaskMark` on the page keeps
+drawing on `--active` with no ground, because there it *is* in a scheme.
+
+**The flask geometry is the same three paths as
+`features/tools/components/flask-mark.tsx`**, to the digit — the icon is that
+component with a plate behind it, not a second drawing of the same idea. Two
+copies of the path data now exist and cannot be made one: the component is JSX
+reading Tailwind classes off the theme, and the icon is a static file Next hashes
+at build time. The thing to know is which way a change travels — a redrawn mark
+is a redrawn *icon set*, re-exported, because nothing here regenerates the five
+files from the component.
+
+**`icon1.png` is deliberate redundancy and worth naming as such**, since the
+`.ico` already carries 16/32/48 as PNG-encoded entries and the 32 in it is the
+same image. It is the raster fallback in the conventional six-file set, and 7KB
+served only to a reader whose browser passed on the SVG. `icon2.png` at 512 is
+the large-icon slot — an Android home-screen shortcut with no manifest to read
+takes the largest declared `rel="icon"`.
+
+**No web manifest**, and that is the one thing in the bundle left unspent.
+`icon2.png`'s canonical consumer is a manifest's `icons` array, and Next has
+`app/manifest.ts` for it — but a manifest is an *installability* claim (`display`,
+`start_url`, `theme_color`, `background_color`) and none of those four is
+answerable from an icon export. `theme_color` is the sharp one: the app has two
+schemes with a persisted choice, and a manifest names one colour. It arrives with
+a decision about whether this app wants to be installed.
+
+**The SVG is the export minus its C2PA manifest; the three rasters are the
+export whole.** The split is not a position on content credentials, it is where
+the arithmetic falls. In the SVG the `<metadata>` block was 7.7KB of 8.6KB — the
+provenance was ninety per cent of the asset and the drawing was the other ten —
+and it is 848 bytes now, small enough to read in a diff beside
+`flask-mark.tsx`, which is the second thing that buys: this is the one icon
+whose source a person will ever open. The `caBX` chunk in each PNG is 5758 bytes
+against a 21KB and a 105KB file, where the same edit would be re-encoding a
+signed export to shave five per cent nobody measures.
+
+Two things went, not one: the manifest and the `xmlns:c2pa` declaration that was
+its only user. Nothing else in the file was touched — not reformatted, not
+minified — so a re-export still diffs against it in one hunk.
+
+### Verified
+
+`npm run build` lists `/icon.svg`, `/icon1.png`, `/icon2.png` and
+`/apple-icon.png` as static routes and emits the five tags above into every
+prerendered page, which is the check that the rename was the whole of the wiring.
+Rendered through headless Chrome at 16, 32, 64, 128 and 512: the SVG is legible
+at tab size, and against `icon2.png` at 512 the ink measures 50.0% of the plate's
+width against 47.7% and sits centred to within 1.2% — a rasteriser's rounding,
+not two different drawings. The `.ico`'s own 16 and 32 entries were extracted and
+read at 8× and both hold the flask's neck, lip and fluid line. The metadata
+strip was checked the only way worth checking it: the same 512 render before and
+after hashes to the same SHA-256.

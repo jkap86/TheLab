@@ -35,14 +35,22 @@ export type LeagueScope =
 export const ALL_LEAGUES: LeagueScope = { kind: "all" };
 
 /**
- * TheLabX carries a `MAX_LEAGUE_IDS` here and a POST-body form beside it, for a
- * scope whose shorter list is past ~500 ids — ~10KB on a request line, which
- * several proxies refuse with a 414. Neither is ported: this corpus is fed by
- * manager lookups rather than a crawler, so the population cannot reach it.
- * What must **not** come back if it ever does is that threshold's older
- * meaning, where the page gave up narrowing and filtered pages in the browser:
- * a first page whose trades all came from excluded leagues rendered as an empty
- * board, which unmounts the list, which is what would have asked for page two.
+ * **A scope has no size limit here, and the reason is that it cannot honestly
+ * have one.** Its length is a property of the *corpus* — the shorter of the
+ * include and exclude lists is bounded by half of it, and the crawler is what
+ * grows it — so a cap would be a cap on how many leagues a reader may filter
+ * over, enforced at the moment they narrow. That was fine while a
+ * manager-lookup-fed database held a few hundred leagues; the corpus passed a
+ * request line's worth of ids and every filtered board began answering **431
+ * with an empty body**, which reaches the page as a fetch that failed and named
+ * nothing.
+ *
+ * So the ids are still all sent and `tradeHttpRequest` decides only how: on the
+ * line while they fit, in a form-encoded body past that. What must **not** come
+ * back is TheLabX's older reading of that threshold, where the page gave up
+ * narrowing and filtered pages in the browser — a first page whose trades all
+ * came from excluded leagues rendered as an empty board, which unmounts the
+ * list, which is what would have asked for page two.
  */
 
 /**
