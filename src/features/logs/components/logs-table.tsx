@@ -20,8 +20,14 @@ import type { LogRow } from "../helpers/facets";
  *
  * **A missing value is an em dash, never a blank and never a zero** — the app's
  * three-way grammar. A visit with no address is not a visit from 0.0.0.0, and a
- * page with no viewer was not visited by nobody: it was visited by someone whose
- * browser has resolved no account.
+ * route with no subject is not a page about nobody: it is a page that is about
+ * no one in particular, which is most of them.
+ *
+ * **There was a Viewer column and it is gone**, with the cookie and the column
+ * behind it: it named the last account the browser had looked up, which on an
+ * app built for looking other people up is usually not the reader. Every column
+ * left is either stamped by the request or read out of the path — nothing here
+ * claims to know who anybody is.
  *
  * **The Subject column is dropped below `sm`, and the table takes no minimum
  * width.** Five columns in a 390px viewport is 78px each, and the alternative —
@@ -33,6 +39,14 @@ import type { LogRow } from "../helpers/facets";
  * dropping it removes a reading rather than a fact. That is the console card's
  * own rule for its plates, which drop the points rank and the year at the same
  * breakpoint and for the same reason.
+ *
+ * **Losing the Viewer column did not buy Subject a place back at 390, which was
+ * measured rather than assumed.** Shown, the four columns are 79px each — the
+ * width the five-column layout gave its four visible ones, so the phone table
+ * would be exactly as cramped as the arrangement this rule already rejected.
+ * Dropped, the three left are 105px, and the page takes no horizontal scroll
+ * either way. So the breakpoint stays where it was and the width goes to the
+ * columns that survived.
  */
 
 const CELL = "px-3 py-2 align-top";
@@ -45,7 +59,7 @@ export function LogsTable({ rows }: { rows: readonly LogRow[] }) {
       <table className="w-full table-fixed border-collapse text-[0.8125rem]">
         <caption className="sr-only">
           Visits, newest first. Columns: time, tool and route, subject (wide
-          viewports only), viewer, and address.
+          viewports only), and address.
         </caption>
         <thead className="sticky top-0 z-10 bg-[image:var(--housing-bg)]">
           <tr className="border-b border-foreground/12">
@@ -57,9 +71,6 @@ export function LogsTable({ rows }: { rows: readonly LogRow[] }) {
             </th>
             <th scope="col" className={`${HEAD} hidden sm:table-cell`}>
               Subject
-            </th>
-            <th scope="col" className={HEAD}>
-              Viewer
             </th>
             <th scope="col" className={HEAD}>
               Address
@@ -81,7 +92,7 @@ function Row({ row }: { row: LogRow }) {
   // a page only its author reads. The rows are rendered after a fetch, so there
   // is no server render for a locale difference to mismatch against. The clock
   // is pinned to 24 hours all the same — a meridiem is a fifth token in a column
-  // that gets a quarter of 390px, and it wrapped onto a line of its own.
+  // that gets a third of 390px, and it wrapped onto a line of its own.
   const when = new Date(row.seen_at);
   const time = when.toLocaleTimeString(undefined, { hourCycle: "h23" });
   return (
@@ -101,9 +112,6 @@ function Row({ row }: { row: LogRow }) {
       </td>
       <td className={`${CELL} hidden break-all text-readout-line sm:table-cell`}>
         {row.subject ?? <Dash />}
-      </td>
-      <td className={`${CELL} break-all text-readout-line`}>
-        {row.viewer ?? <Dash />}
       </td>
       <td className={`${CELL} break-all font-mono text-[0.6875rem] text-readout-muted`}>
         {row.ip ?? <Dash />}

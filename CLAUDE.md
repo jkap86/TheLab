@@ -1422,6 +1422,88 @@ one deliberate divergence: they **report** their failures, because lineups is an
 enhancement beside a list where a drawer is only this data, and a silent failure
 there is a panel that opens empty with nothing saying why.
 
+### Four facets, behind one key
+
+The players panel narrows by **position, NFL team, age and draft class**, all
+four multi-select, behind a `Filters` key in the search row. It narrowed by
+position alone until this landed, which left the two things a dynasty reader
+opens the list for — how old a player is, and which class he came out of —
+visible as columns and unreachable as questions. Every facet was already on the
+wire: `PlayerShare` carries all four, and the last two are the Age and Class
+columns. Nothing on the server changed and there was no migration.
+
+**The rules live in `helpers/player-filters.ts`**, pure and under Node's own
+runner, for the reason `league-filters/predicates.ts` is: each of them is silent
+when it goes wrong.
+
+- **Empty is "not asked", not "everything chosen".** A facet with nothing
+  selected excludes nobody. Read the other way, a player carrying a value that
+  appeared after the reader last touched the facet would silently drop off the
+  list.
+- **A full-width span is not a filter.** `spanActive` compares a span against
+  the *bounds* rather than against null, so a reader who drags a handle out and
+  back has no filter: the key goes unlit, the summary empties, and — the part
+  that matters — absent ages stop being excluded.
+- **A null age or draft class is outside every span.** An absent answer is not a
+  young player, and folding nulls in would make `22–25` quietly mean "22–25, and
+  everyone we know nothing about". It is the rule the cells already draw an em
+  dash by and the sort already puts absent rows last by.
+- **Counts ride the unfiltered population**, which is the rule the position
+  chips already lived by, now extended to teams: every chip and every menu
+  option says how many players it *would leave*, so a chip that reads zero once
+  pressed cannot happen and a reader can widen without clearing first.
+- **The badge counts facets, not values.** "3" beside the key means three
+  questions are answered, which is what survives the tray being shut.
+- **Bounds are read off the population.** A board with no rookies offers no
+  rookie handle, next year's class arrives without an edit, and a facet with
+  fewer than two distinct values draws no row at all — a slider whose handles
+  cannot be apart answers nothing.
+
+**Team is a `<select>` that adds rather than selects.** A native `multiple`
+select is a scrolling list box on every platform and 32 chips is the tray's
+whole height; chosen teams come back as removable chips, so what is narrowed is
+readable without opening the menu. Options are ordered by count, because the
+codes worth reaching for are the ones the manager actually rosters.
+
+**Age and Class are two stacked `<input type="range">`s** — `.lab-range`, the
+one new stylesheet rule, because a thumb is a pseudo-element and cannot be a
+utility, the argument `.lab-scroll` already makes. Native, so arrow keys,
+Home/End and the platform touch target come free; the inputs are
+`pointer-events: none` with the thumbs re-enabled, which is what lets the two
+overlap without the upper swallowing the lower's handle. The readout carries the
+*state* in its ink — `--readout-label` on both bounds, lit once it narrows —
+rather than in a prefix, since "Any · 2012–2024" is 99px of a 66px window.
+
+**Three things about the tray are load-bearing and all three are silent when
+wrong.** Its open height is a **measured pixel value** re-read by a
+`ResizeObserver`, not a `0fr`→`1fr` grid row, whose interpolation stalls in
+Chrome whenever the subtree is written to in the same frame — and not a
+`max-height`, which either clips a wrapped row of team chips or eases against a
+number nothing on screen matches. Its **transition list is identical in both
+states**, because rewriting `transition` in the same frame as the animated
+property cancels it. And it carries **`inert`** while shut:
+`pointer-events: none` stops the mouse and nothing else, so without it a
+keyboard reader tabs out of the search field into an invisible panel of
+fourteen controls.
+
+**The key rides the search row and the tray wraps onto the line under it**,
+which is one flex row rather than two: `PlayerFilters` is one component, so its
+key and the tray it controls are one node and one `useId` and arrive in one
+slot, and a fragment cannot put half of itself in a row and half in the column
+outside it. The `Pos` well the drawer used to draw is gone — four facets are a
+panel, and a panel that owns its own grooves and labels cannot be laid out from
+the drawer.
+
+**Emptying the list became reachable, and the empty state had to learn it.** One
+position chip could never empty the panel — every chip counts over the
+unfiltered population, so pressing one leaves at least its own count — but four
+facets are an AND, and `RB ∧ BAL ∧ 22–24` is empty while all three read a
+number. `rows.length === 0` alone would report that as "No players rostered in
+these leagues yet.": a claim about the account, made by a narrowing the reader
+could undo, with no key offered to undo it. It is `rows.length === 0 &&
+!filtersActive` now, and the filtered case gets "No players match these
+filters." and the Clear key.
+
 ### The columns are chosen, ordered, and shared between the panels
 
 Five metrics — Value, Age, Class, Rec · Win, Share — of which a row carries at
@@ -1464,19 +1546,24 @@ dropped, the fallback is the reader's own **rightmost** column, not a fixed one.
 which is the console's own rule rather than a style choice: a track holds one
 travelling key and a well holds a panel of controls, and that shape difference
 is what stops the two adjacent control groups from reading as one row of eight
-buttons. **Reordering happens on `dragenter`, not on drop** — the strip is three
-keys wide, so the move is visible while it is being made and there is no drop
-target to miss — and the insert side is decided from the **pre-move** positions,
-because removing the dragged key shifts every key after it down one and a key
-dragged rightward would otherwise land on the index it just vacated and appear
-to do nothing.
+buttons. **Reordering is tap-to-lift, tap-to-drop**: a slab's `⣿` handle arms
+it, accent slots appear between the remaining slabs, and one names where it
+goes. The insert index is read from the **pre-move** positions, because removing
+the lifted slab shifts every slab after it down one and one moved rightward
+would otherwise land on the index it just vacated and appear to do nothing. The
+two slots either side of the lifted slab are **omitted, not disabled** —
+dropping a slab back where it started is not a move, and a target that does
+nothing has to be explained.
 
-**The order is mouse-only and that is a recorded choice**, the one the handoff
-asks be recorded either way: the *set* stays fully keyboard-reachable, since
-every slab's label drops it and every spare key appends it, so any order is
-reachable by dropping and re-adding. A `◀ ▶` pair per slab is what would make
-the order directly reachable, and it is four more controls in a strip that
-already has up to eight.
+**It was a drag, and this file recorded the order as mouse-only** — deliberately,
+on the argument that the *set* stays keyboard-reachable (every slab's label
+drops it and every spare key appends it, so any order is reachable by dropping
+and re-adding) and that a `◀ ▶` pair per slab is four more controls in a strip
+that already holds eight. **Touch is what broke that trade**: HTML5
+`dragstart`/`dragenter` do not fire on a phone at all, so the order was not
+reachable there by any means — not slowly, not awkwardly. Arming costs nothing
+at rest, since the slots exist only while a slab is lifted, and it lands the
+keyboard order for free, which the drag never had.
 
 ### What Value, Age and Class cost on the server
 
@@ -1546,7 +1633,8 @@ one. It costs nothing until a drawer has been opened.
   list, where the column states a fact about a row. `players.years_exp` is
   stored and still unread, for the reason the section above gives.
   The position chips did port — they are read off `PlayerSummary`, which is
-  already on the wire, and 471 rows want them.
+  already on the wire, and 471 rows want them — and they are a facet in the
+  tray above rather than a well of their own since.
 - **The tab pages** (`/manager/[searched]/players` and `/leaguemates`). The same
   lists behind two doors; the drawers are the door this app has.
 
@@ -1615,6 +1703,52 @@ all** on the league whose `roster_positions` are null, which reads `—` for bot
 ladders, both counts and the premium. A `bonus_rec_te` of 0 renders `0` and an
 absent `scoring_settings` renders `—`, which is the null-is-not-zero rule at its
 one visible seam.
+
+**The four facets** were verified the way the redesign was and for the same
+reason — no database is reachable from where they were built — through a
+temporary `/preview` route rendering the real `PlayerSharesDrawer` and
+`LeaguemateSharesDrawer` against fixture payloads, driven over CDP at 1280 and
+390 in both schemes, then deleted. The numbers below are fixtures; what they
+check is the rules and the layout rather than Sleeper.
+
+One render changed the code, and it is the one the handoff's own diff got wrong:
+`{filters}` dropped into the search row put the **tray** in that row too — a
+fragment does not escape its parent — where it laid out 774px wide inside a
+354px panel and was silently clipped by the panel's own `overflow-hidden`, with
+`document.scrollWidth` still reading 390 and nothing on screen saying so. The
+row wraps now; measured after, the tray is 506 of 532 at 1280 and 328 of 354 at
+390, with **zero** elements past the panel in either scheme at either width.
+
+The rules held end to end. Two position chips took 90 rows to 26 with the badge
+reading 1; adding BAL took it to 10 and the badge to 2, with the chosen option
+disabled in the menu, the select snapping back to `+ Add team` and "All 9 teams"
+giving way to a lit chip carrying its own count. Arrow keys on the min-age
+handle moved 21 → 25 (native, no handler), lighting that readout with
+`--readout-text-glow` while the Class one stayed on `--readout-label`, and
+`End` → `Age 35–35` against the `—` position emptied the list to "No players
+match these filters." with the Clear key beside it — the AND case the empty
+state had to learn. Six arrow-lefts back to the bound put the badge out, the
+summary back to "Nothing narrowed" and all 90 rows back, which is `spanActive`
+at both ends. A query nothing answers still says "Nobody by that name."
+
+The tray: 14 controls reachable in DOM order with it open (search → key → 8
+chips → the menu → 4 handles), **0 reachable** with it shut, `inert` on and the
+shell at `0px`. Its measured height followed six team chips wrapping — 288 →
+328 → 369px, the shell equal to the tray to the pixel at each — which is what
+the `ResizeObserver` is for. Under `prefers-reduced-motion: reduce` the shell's
+`transition-property` computes to `none` and the tray opens to its full height
+at once, which is `.lab-anim` doing its job rather than the tray not opening.
+
+The columns strip was driven by **touch**, since that is the whole reason it
+stopped being a drag: `Input.dispatchTouchEvent` on a slab's `⣿` raised two
+slots (of four positions, less the two either side of it, each labelled "Move
+Value here"), a tap on the last stored `["record","share","value"]` and moved
+the header labels and the row cells with it, and a second lift cancelled by its
+own handle left the order untouched. The leaguemates panel, which passes no
+filters at all, is unchanged: no key, a two-child search row 36px tall, nothing
+past its panel. Exactly one `<h1>`, `document.documentElement.scrollWidth`
+equal to the viewport at both widths, and **no console output of any kind** —
+no React warning about the controlled select or the layout effect.
 
 ## KeepTradeCut values
 
@@ -2201,6 +2335,24 @@ minutes against the ROS board's thirty**, which is the difference between a
 season board that moves on injury news over days and a week board read by
 somebody setting a lineup an hour before kickoff — the Sunday-morning inactive
 is exactly what half an hour of staleness would hide.
+
+**The page sits on the ground rather than on a panel of its own**, which is
+the leagues console's arrangement and arrived here later than there. It used
+to draw the rounded, bordered panel every pre-rack page drew — and drew it
+*inside* the shell the manager page had already given up, so a reader walking
+from `/manager` to `/lineupchecker` got a second bounded rectangle inside the
+viewport under a floating rack, which is the doubling `ConsoleGround` exists to
+remove.
+
+**The card width fell out of the same edit, and it is the reason to make it.**
+Both pages are one card per row at `PageShell width="console"`, so the only
+thing that ever made these cards narrower was the panel's own inset and border
+— `px-6 sm:px-13`, which measured **106px** at 1280 (1014 against `/manager`'s
+1120) and **50px** at 390 (312 against 362) — and the two cards are the same
+card over the same league. A league that read whole on `/manager` and clipped
+here would be the shell's `console` arm failing at the one thing it was widened
+for. With the panel gone the two agree by construction rather than by two
+spellings of a width.
 
 Checked at 1280 and 390 in both schemes. Light mode is derived rather than
 designed, as everywhere else on the console.
@@ -2873,15 +3025,17 @@ size it against.
 
 ## Who has visited
 
-`/logs` is every request this app has recorded, narrowed four ways, over a
+`/logs` is every request this app has recorded, narrowed three ways, over a
 window the reader picks. Nothing here recorded a visit before it: there was no
 middleware, no analytics and no table. TheLab2026's feature ported — same
-question, same four-facet shape — with the three things that had to change
-written down below, each because this app is not that one.
+question, one facet fewer — with the three things that had to change written
+down below, each because this app is not that one.
 
 **It needed a migration, and only one table.**
 `db/migrations/1788000000004_create_visitor_logs.sql` is `(id, seen_at, ip,
-route, viewer)` plus one index on `(seen_at DESC, id DESC)`, which is the window
+route)` — it had a fifth column, `viewer`, dropped by
+`1788000000005_drop_visitor_log_viewer.sql`; see The viewer column, and why it
+went — plus one index on `(seen_at DESC, id DESC)`, which is the window
 predicate and the newest-first ordering in one read. The ported original has no
 index at all on a table it full-scans forever, and no primary key; **the identity
 column here is this repo's first synthetic key** and earns one where the other
@@ -2892,22 +3046,53 @@ The read is capped, and a cap over `seen_at` alone splits a tie arbitrarily.
 **The route is stored whole and everything about it is derived at read time.**
 Which tool, whose page, which league — all of it comes out of the path in
 `features/logs/helpers/derive-visit.ts`, so a seventh tool is a line in a pure
-helper rather than a migration. What cannot be derived is the one other column.
+helper rather than a migration. **Everything the page shows is now derived that
+way**, which is what dropping the fifth column left behind: a visit is its
+timestamp, its address and its path, and every reading of it is a pure function
+of the path.
 
-**`route` and `viewer` are two questions, and one column could not answer
-both.** `route` says who was being looked *at*; `viewer` says who was *looking*.
-On `/manager/jkap86` those are two different people whenever anybody looks
-somebody else up, and collapsing them would attribute every visit to its
-subject. It matters more here than it did in the original: **only
-`/manager/[username]` carries a name in its path**, so `/lineupchecker`,
-`/trades` and `/tools` are an address and nothing else without it. The account
-already lives in `localStorage`, which the proxy cannot see, so `storeAccount`
-mirrors the username into a `thelab_viewer` cookie — an underscore, because a
-colon is a separator in the cookie grammar and is not legal in a name. That does
-not reopen the argument `theme.ts` settles against cookies: **that** one is about
-reading a cookie *in the root layout*, which opts the app out of static
-prerendering, and the proxy runs per request regardless, so `/tools` stays
-prerendered.
+### The viewer column, and why it went
+
+The table shipped with a `viewer` beside `route`, on the argument that they are
+two questions one column cannot answer: `route` says who was being looked *at*
+and `viewer` said who was *looking*, which on `/manager/jkap86` are two
+different people whenever anybody looks somebody else up. That argument is
+still true. What was false is that the column answered the second half.
+
+**It held the last account the browser had looked up, not the person looking.**
+The cookie behind it (`thelab_viewer`, mirrored out of `localStorage` by
+`storeAccount`, which the proxy cannot read) was written by exactly one caller:
+the lookup form on `/tools`. That form is also the only way to reach somebody
+else's manager page, because the Manager card resolves to
+`/manager/<stored account>` — so looking a second person up *rewrote the value*,
+and a reader checking five managers finished the session declaring themselves
+the fifth, with every visit before each change attributed to whoever preceded
+it. Nothing authenticated it either; it was a claim by the browser.
+
+So the question went rather than the answer being patched. A column that names
+the wrong person is worse than one that names nobody, in the sense this repo
+uses about a `DEFAULT now()` on a row nothing has read: both are claims the data
+cannot support, and an undercount has exactly one true reading where a
+misattribution has none. **Every column left is either stamped by the request or
+read out of the path**, and the three readouts above the table count the same
+way — visits, addresses, subjects, none of them claiming to be a count of
+people.
+
+**What would bring it back is an identity this app does not have.** Sleeper
+publishes no OAuth and there are no accounts here, so a real viewer needs
+something this app cannot get. The cheap thing that answers what the column was standing
+in for — "is this the same visitor again" — is a random browser id cookie, which
+never names anybody; it is the first thing to add if the log ever has to count
+people rather than requests. **A user-agent column is still the first thing to
+add if it reads as noise**, and neither is here.
+
+The cookie itself outlives the column on every browser that ever resolved an
+account, with a year on its max-age and now no reader, so `storeAccount` expires
+it — the same path that wrote it, and deletable once those browsers have turned
+over. Removing it does not reopen the argument `theme.ts` settles against
+cookies: **that** one is about reading a cookie *in the root layout*, which opts
+the app out of static prerendering. The proxy runs per request regardless, so
+`/tools` was prerendered throughout and still is.
 
 **`ip` is nullable, and the sentinel it replaces is the bug worth naming.** The
 original declares it `INET NOT NULL` and writes the literal strings
@@ -2992,7 +3177,7 @@ payload says whether the cap bit, because a trimmed month presented as the whole
 month is a claim; the original has no `LIMIT` at all.
 
 **One behaviour is deliberately reversed.** The original builds all five of its
-menus from the *fully filtered* list, so choosing an IP leaves that IP as the
+menus (this has three) from the *fully filtered* list, so choosing an IP leaves that IP as the
 only option in the IP menu: the selection can be cleared but never changed, and
 the same goes for every facet in turn. That is exactly the failure `facetsQuery`
 already names for the trades board — count the menus **without** the selection —
@@ -3009,8 +3194,14 @@ Subject is the column to lose because it is the only *derived* one — the route
 printed under the tool already contains it — so dropping it removes a reading
 rather than a fact, which is the console card's own rule for the plates that drop
 the points rank and the year at that breakpoint. The clock is pinned to 24 hours
-for the same width: a meridiem is a fifth token in a quarter of 390px and wrapped
+for the same width: a meridiem is a fifth token in a third of 390px and wrapped
 onto a line of its own.
+
+**Losing the Viewer column did not buy Subject a place back**, and that was
+measured rather than assumed: shown at 390 the four columns are 79px each, the
+same width the five-column layout gave its four visible ones, so the phone table
+would be exactly as cramped as the arrangement the rule above already rejects.
+Dropped, the three left are 105px. The width goes to the columns that survived.
 
 ### Verified
 
@@ -3020,12 +3211,14 @@ disabled under `next dev` and the central decision above is invisible there.
 mirror, and the round trip down-and-up left the table and its index as declared.
 
 Four matched routes logged four rows with the address taken from the *head* of
-`x-forwarded-for` rather than the proxy hop. The viewer chain was driven end to
-end through the real lookup form rather than a planted cookie: `/tools` before
+`x-forwarded-for` rather than the proxy hop. `::ffff:198.51.100.7` stored as
+`198.51.100.7`, and `999.999.999.999` stored as **null** rather than losing the
+row. The viewer chain was driven end to end through the real lookup form rather
+than a planted cookie, and is what the removal below undid: `/tools` before
 resolving an account logged `viewer` null, `storeAccount` wrote
-`thelab_viewer=jkap86`, and `/trades` after it logged `jkap86` — a page whose path
-names nobody. `::ffff:198.51.100.7` stored as `198.51.100.7`, and
-`999.999.999.999` stored as **null** rather than losing the row.
+`thelab_viewer=jkap86`, and `/trades` after it logged `jkap86`. That last step is
+the behaviour that was correct and the reading that was not — see The viewer
+column, and why it went.
 
 The prefetch finding is the one worth repeating: before `isPageView`, one browser
 load of `/tools` wrote six rows including `/comps`; after it, one. `/logs` logged
@@ -3043,9 +3236,25 @@ one `role="status"`, every control labelled, `documentElement.scrollWidth === 39
 at phone width with zero overflowing elements, and no cell colliding with the one
 beside it (`lineupchecker` in a `table-fixed` column was the case that found
 that). The facet rule was driven in the browser: with `203.0.113.5` chosen the
-rows fell 11 → 2 and the Viewer menu to `jkap86` alone, while the Address menu
+rows fell 11 → 2 and the Subject menu to `jkap86` alone, while the Address menu
 still offered all five — and switching straight to `198.51.100.7` worked without
 clearing first, which is the move the original cannot make.
+
+**The removal was verified separately**, against a throwaway Postgres 16 cluster
+and a production build, since the live database was not reachable from where it
+was done. `migrate:up` applied `1788000000005` and left
+`(id, seen_at, ip, route)` with the index intact; `migrate:down -- 1` brought the
+column back empty and `up` dropped it again, which is the round trip that keeps
+that path honest. The proxy still records — a document request with an
+`x-forwarded-for` head *and* a planted `thelab_viewer` cookie wrote a row
+carrying the address and nothing else — and `/api/logs` ships no `viewer` key.
+The legacy cookie's expiry was driven through the real lookup form with the
+cookie planted first: one resolve and the browser holds no cookies at all. Over
+CDP at 1280 and 390 in both schemes, four column headers, three readouts, three
+facet menus, one `<h1>`, one `role="status"`, no element past the viewport and
+`documentElement.scrollWidth === 390`, with the word "viewer" absent from the
+rendered page. 1,027 unit tests pass, and `lint`, `typecheck` and `build` are
+clean.
 
 ### Deliberately not ported
 
@@ -3317,6 +3526,10 @@ way, so the rack is not a new claim. And **the tools, trades and lineup-checker
 pages still draw their own panel** on `--background` rather than on the ground —
 they are unchanged apart from losing their theme key, and giving them the
 full-bleed treatment is a redesign of three pages this bundle does not cover.
+**`/lineupchecker` has since taken the ground**, which cost it no redesign at
+all: it was already the leagues console's plate and cards on a panel of its
+own, so the panel was the only thing between it and `/manager`. See Checking a
+week's lineup.
 
 ### The rack is pinned, and it carries the page's controls
 
@@ -3414,6 +3627,24 @@ row already turns. A filter set from the menu on a phone is therefore the same
 dialog instance as one set from the rack on a desktop. The menu is not a
 `<dialog>`, for `ToolsMenu`'s reason, so its dismissal is spelled out: a
 capture-phase `pointerdown` and an Escape that returns focus to the key.
+
+**And the menu must not dismiss on the press that opens one of its own two
+dialogs**, which is the rule it shipped without and the one whose failure
+nobody can see. Both dialogs are mounted *inside* the menu, and a modal
+`<dialog>` is in the top layer only for as long as it still generates a box: a
+blanket `onClick` that hid the panel took the modal off screen with it, so
+pressing Filters or Columns produced a backdrop over an inert page with nothing
+on it — a key that reads as dead. Above `lg` the panel is `display: contents`
+and there is no menu to close, so it was invisible on a desktop and broken at
+**every width under 1024px**, which is a laptop window as readily as a phone.
+The two Browse keys still dismiss on the press, because a shares drawer is the
+*page's* dialog and nowhere near this box; the two that are mounted here close
+the menu when *they* close, through a capture-phase `close` listener on the
+menu's own root. `close` does not bubble, but the capture phase runs on every
+ancestor regardless — which is what lets the menu hear its own dialogs without
+either of them growing a callback for it. Escape is deferred to the same path
+whenever a `dialog[open]` is inside the menu, or the panel would be hidden on
+the very keystroke that closes the dialog inside it.
 
 #### The header became one plate
 

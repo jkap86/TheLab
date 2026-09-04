@@ -16,50 +16,43 @@ import { useLocalValue, writeLocal } from "./local-store";
 // already typed on `/tools` is the re-prompting `UserLookup` exists to prevent.
 const STORAGE_KEY = "thelab:sleeper-account";
 
-// The same username again, as a cookie, so that `src/proxy.ts` can name whoever
-// is looking when it records a visit. `localStorage` stays the app's own source
-// of truth — everything in this file still reads that — and the cookie exists
-// for the one reader that cannot see it: the proxy runs before any of this does.
+// A `thelab_viewer` cookie used to be written here too, mirroring the username
+// so that `src/proxy.ts` could name whoever was looking when it recorded a
+// visit — the one fact a route cannot carry.
 //
-// Only `/manager/[username]` carries a name in its path, so without this a
-// visit to `/lineupchecker`, `/trades` or `/tools` is an address and nothing
-// else. It is the one thing about a visit that cannot be derived from the route.
+// **It named the wrong person, and this file is why.** `storeAccount` is called
+// by the lookup form on `/tools`, which is also the only way to reach another
+// manager's page: the Manager card resolves to `/manager/<stored account>`, so
+// looking somebody else up means resolving them here. The cookie therefore held
+// the last account this browser looked up rather than the person doing the
+// looking, and a log that names the wrong person is worse than one that names
+// nobody. The column went with it.
 //
-// **An underscore, not the colon the storage keys use.** A colon is a separator
-// in the cookie grammar and is not legal in a cookie name; browsers vary in how
-// they cope, and none of the ways is worth finding out about in production.
-//
-// This does not reopen the argument `theme.ts` settles against cookies. That one
-// is about reading a cookie *in the root layout*, which opts the whole app out
-// of static prerendering; the proxy runs per request no matter what, so `/tools`
-// stays prerendered.
-const VIEWER_COOKIE = "thelab_viewer";
-
-/** A year. Long enough that it outlives the account it names, which is the point. */
-const VIEWER_COOKIE_MAX_AGE = 60 * 60 * 24 * 365;
+// What is left behind is the cookie itself, on every browser that ever resolved
+// an account, with a year on it and now no reader. Expiring it below is the
+// cheap half of the removal: this runs on the next lookup, which is the same
+// path that wrote it.
+const LEGACY_VIEWER_COOKIE = "thelab_viewer";
 
 /** Persist the resolved account (or clear it with `null`) and notify readers. */
 export function storeAccount(user: UserInfo | null) {
   writeLocal(STORAGE_KEY, user ? JSON.stringify(user) : null);
-  writeViewerCookie(user?.username ?? null);
+  clearLegacyViewerCookie();
 }
 
 /**
- * Mirror the username into a cookie, or clear it.
+ * Expire the cookie the visit log used to read.
  *
- * `SameSite=Lax` so it rides a top-level navigation, which is the only request
- * that matters here. No `Secure`, deliberately: development is plain HTTP, and
- * a cookie carrying a username somebody typed into a public lookup form is not
- * a secret. Wrapped because a browser can refuse cookies outright, and a
- * failure to log a visit must not stop an account being stored.
+ * Wrapped because a browser can refuse cookies outright, and tidying up after a
+ * removed feature must not stop an account being stored. Deletable once no
+ * browser that resolved an account before this landed is still in use — a year
+ * from the last one, which is what the cookie's own max-age was.
  */
-function writeViewerCookie(username: string | null) {
+function clearLegacyViewerCookie() {
   try {
-    const value = username ? encodeURIComponent(username) : "";
-    const age = username ? VIEWER_COOKIE_MAX_AGE : 0;
-    document.cookie = `${VIEWER_COOKIE}=${value}; path=/; max-age=${age}; samesite=lax`;
+    document.cookie = `${LEGACY_VIEWER_COOKIE}=; path=/; max-age=0; samesite=lax`;
   } catch {
-    // No cookie, so visits from this browser stay anonymous. Nothing else cares.
+    // Nothing reads it; a browser holding it a while longer costs nothing.
   }
 }
 

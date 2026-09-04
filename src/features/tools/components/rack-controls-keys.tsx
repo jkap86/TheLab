@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 import {
   activeFilterCount,
@@ -52,6 +52,16 @@ import {
  * landed on acts on it, and Escape, which returns focus to the key it came
  * from.
  *
+ * **What it must not do is dismiss on the press that opens one of its own two
+ * dialogs**, and that is the one rule here with a failure nobody can see. Both
+ * are mounted inside this menu, and a modal `<dialog>` is only in the top layer
+ * for as long as it still generates a box: hide the panel and the modal has no
+ * box either, so the press produced a backdrop over an inert page with nothing
+ * on it — a Filters key that reads as dead. The menu closes when *its dialog*
+ * does instead; see the effect below. Above `lg` the panel is `display: contents`
+ * and there is no menu to close, which is why this was invisible on a desktop
+ * and broken at every width under 1024px.
+ *
  * **The same two tracks serve both layouts, and no markup is rendered twice.**
  * The panel is `display: contents` at `md`, so its box stops existing and the
  * tracks join the rack's flex row directly under their own `order` — the trick
@@ -63,25 +73,49 @@ export function RackControlsKeys({ controls }: { controls: RackControls }) {
   const root = useRef<HTMLDivElement>(null);
   const trigger = useRef<HTMLButtonElement>(null);
 
+  // Dismiss the menu, and put focus back on the key it came out of — the panel
+  // is about to stop generating a box, and a browser dumps focus to `<body>`
+  // when the element holding it is hidden out from under it.
+  const dismiss = useCallback(() => {
+    setOpen(false);
+    trigger.current?.focus();
+  }, []);
+
   useEffect(() => {
     if (!open) return;
 
+    const node = root.current;
+    // A dialog opened from in here is still a DOM *descendant* of this menu,
+    // so it is only in the top layer as long as the menu keeps generating a
+    // box: the moment the panel goes `display: none` the modal has no box
+    // either, and what is left on screen is a backdrop over an inert page with
+    // nothing on it. That is why nothing below closes the menu on the press
+    // that opens one — this does, when the dialog itself closes. `close` does
+    // not bubble, but the capture phase runs on every ancestor regardless of
+    // that, which is what lets the menu hear its own dialogs without either of
+    // them growing a callback for it.
+    const onClose = () => dismiss();
     const onDown = (event: PointerEvent) => {
-      if (!root.current?.contains(event.target as Node)) setOpen(false);
+      if (!node?.contains(event.target as Node)) setOpen(false);
     };
     const onKey = (event: KeyboardEvent) => {
       if (event.key !== "Escape") return;
-      setOpen(false);
-      trigger.current?.focus();
+      // A modal inside the menu takes Escape for itself, and `close` above is
+      // what dismisses the menu behind it. Taking it here as well would hide
+      // the panel on the same keystroke that closes the dialog inside it.
+      if (node?.querySelector("dialog[open]")) return;
+      dismiss();
     };
 
     document.addEventListener("pointerdown", onDown, true);
     document.addEventListener("keydown", onKey);
+    node?.addEventListener("close", onClose, true);
     return () => {
       document.removeEventListener("pointerdown", onDown, true);
       document.removeEventListener("keydown", onKey);
+      node?.removeEventListener("close", onClose, true);
     };
-  }, [open]);
+  }, [open, dismiss]);
 
   const { drawer, onOpenDrawer } = controls;
   // Lit on the same rule the Filters key inside is lit by. A closed menu says
@@ -119,11 +153,6 @@ export function RackControlsKeys({ controls }: { controls: RackControls }) {
         id="rack-controls-panel"
         role="group"
         aria-label="Browse and view"
-        // Pressing any key in here dismisses the menu, which is not redundant
-        // with the modal that opens on top of it: closing it here is what
-        // leaves a clean page behind when that modal is dismissed. Above `lg`
-        // there is no menu and the call is a no-op.
-        onClick={() => setOpen(false)}
         className={`${
           open
             ? "absolute right-0 top-full z-50 mt-2.5 flex min-w-[14.5rem] flex-col items-stretch gap-2 rounded-[0.875rem] border border-foreground/8 bg-[image:var(--key-bg)] p-1.5 shadow-[var(--well-shadow),0_24px_44px_-20px_#000]"
@@ -133,9 +162,18 @@ export function RackControlsKeys({ controls }: { controls: RackControls }) {
         <div
           className={`${CONSOLE_TRACK} flex items-center gap-1.5 p-1 lg:order-4 lg:shrink-0`}
         >
+          {/* **These two dismiss the menu on the press and the two below do
+              not**, and the asymmetry is where each one's dialog is mounted.
+              A shares drawer is the *page's* — it is nowhere near this box, so
+              hiding the menu behind it leaves a clean page. The filters and
+              columns dialogs are mounted right here, and hiding the box they
+              sit in takes them off screen with it; see the effect above. */}
           <button
             type="button"
-            onClick={() => onOpenDrawer("player")}
+            onClick={() => {
+              onOpenDrawer("player");
+              setOpen(false);
+            }}
             aria-haspopup="dialog"
             aria-expanded={drawer === "player"}
             // Shape and state composed rather than concatenated onto a string
@@ -147,7 +185,10 @@ export function RackControlsKeys({ controls }: { controls: RackControls }) {
           </button>
           <button
             type="button"
-            onClick={() => onOpenDrawer("leaguemate")}
+            onClick={() => {
+              onOpenDrawer("leaguemate");
+              setOpen(false);
+            }}
             aria-haspopup="dialog"
             aria-expanded={drawer === "leaguemate"}
             className={`${key} ${state(drawer === "leaguemate")}`}

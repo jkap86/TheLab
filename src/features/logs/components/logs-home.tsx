@@ -45,7 +45,6 @@ import { LogsTable, TotalWindow } from "./logs-table";
 
 const FACET_LABELS: Record<FacetKey, string> = {
   tool: "Tool",
-  viewer: "Viewer",
   subject: "Subject",
   ip: "Address",
 };
@@ -130,7 +129,7 @@ export function LogsHome({
               type="search"
               value={query}
               onChange={(e) => setQuery(e.target.value)}
-              placeholder="route, address, viewer"
+              placeholder="route or address"
               // 16px or iOS Safari zooms the page on focus.
               className="w-full rounded-[0.5rem] border border-black/85 bg-[image:var(--readout-bg)] px-3 py-2 text-[16px] text-readout shadow-[var(--window-shadow)] placeholder:text-readout-muted focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-active/60 sm:text-[0.8125rem]"
             />
@@ -161,10 +160,14 @@ export function LogsHome({
         </div>
       </div>
 
-      <div className="mt-4 grid grid-cols-2 gap-2 sm:grid-cols-4">
+      {/* Three readouts, not the four this shipped with: `Viewers` counted the
+          stored accounts behind the visits, which was the last account each
+          browser had looked up rather than the person looking. The grid is an
+          odd number now, so it stays one row at every width rather than
+          leaving a widow on the second. */}
+      <div className="mt-4 grid grid-cols-3 gap-2">
         <TotalWindow label="Visits" value={counts.visits} />
         <TotalWindow label="Addresses" value={counts.ips} />
-        <TotalWindow label="Viewers" value={counts.viewers} />
         <TotalWindow label="Subjects" value={counts.subjects} />
       </div>
 

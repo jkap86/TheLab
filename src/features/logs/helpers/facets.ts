@@ -15,7 +15,7 @@ export type LogRow = VisitorLogEntry & {
   subject: string | null;
 };
 
-export const FACET_KEYS = ["tool", "viewer", "subject", "ip"] as const;
+export const FACET_KEYS = ["tool", "subject", "ip"] as const;
 export type FacetKey = (typeof FACET_KEYS)[number];
 
 /** An empty string is "not filtered", which is the value a `<select>` starts on. */
@@ -23,7 +23,6 @@ export type LogFilters = Record<FacetKey, string>;
 
 export const NO_FILTERS: LogFilters = {
   tool: "",
-  viewer: "",
   subject: "",
   ip: "",
 };
@@ -41,8 +40,6 @@ function valueOf(row: LogRow, key: FacetKey): string | null {
   switch (key) {
     case "tool":
       return row.tool || null;
-    case "viewer":
-      return row.viewer;
     case "subject":
       return row.subject;
     case "ip":
@@ -54,7 +51,7 @@ function valueOf(row: LogRow, key: FacetKey): string | null {
  * Whether a row survives every facet except `except`.
  *
  * `except` is what makes the menus honest — see {@link facetOptions}. Passing
- * null applies all four, which is the list the page actually renders.
+ * null applies all three, which is the list the page actually renders.
  */
 export function matches(
   row: LogRow,
@@ -71,7 +68,7 @@ export function matches(
 /** Free-text search across everything a row shows. */
 export function matchesQuery(row: LogRow, needle: string): boolean {
   if (!needle) return true;
-  return [row.route, row.ip, row.viewer].some((field) =>
+  return [row.route, row.ip].some((field) =>
     field?.toLowerCase().includes(needle),
   );
 }
@@ -97,7 +94,6 @@ export function facetOptions(
 ): Record<FacetKey, string[]> {
   const found: Record<FacetKey, Set<string>> = {
     tool: new Set(),
-    viewer: new Set(),
     subject: new Set(),
     ip: new Set(),
   };
@@ -114,7 +110,6 @@ export function facetOptions(
 
   return {
     tool: [...found.tool].sort(),
-    viewer: [...found.viewer].sort(),
     subject: [...found.subject].sort(),
     // Addresses sort as text, which puts 10.0.0.9 after 10.0.0.10. Numerically
     // is what a reader scanning a column of them expects.
@@ -124,20 +119,25 @@ export function facetOptions(
   };
 }
 
-/** The four numbers the readouts above the table show. */
+/**
+ * The three numbers the readouts above the table show.
+ *
+ * There were four. `viewers` counted the distinct stored accounts behind the
+ * visits, and it counted the wrong thing — see the contract type for why the
+ * column went. What is left is deliberately all *observed*: an address is what
+ * the request carried, a subject is what the path names, and a visit is a
+ * request. None of the three claims to be a person.
+ */
 export function totals(rows: readonly LogRow[]) {
   const ips = new Set<string>();
-  const viewers = new Set<string>();
   const subjects = new Set<string>();
   for (const row of rows) {
     if (row.ip) ips.add(row.ip);
-    if (row.viewer) viewers.add(row.viewer);
     if (row.subject) subjects.add(row.subject);
   }
   return {
     visits: rows.length,
     ips: ips.size,
-    viewers: viewers.size,
     subjects: subjects.size,
   };
 }
