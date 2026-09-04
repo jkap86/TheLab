@@ -32,10 +32,24 @@ const LABELS: Record<KtcBoardChoice, string> = {
 export function KtcBoardKeys({
   board,
   onChange,
+  disabled = false,
   className = "",
 }: {
   board: KtcBoardChoice;
   onChange: (board: KtcBoardChoice) => void;
+  /**
+   * Whether the choice is in force at all.
+   *
+   * The trades board's value panel is what needed it: on the capital and points
+   * bases no market is being read, so the track is a control over nothing.
+   * Disabling it rather than leaving it pressable-but-dimmed is this app's own
+   * rule — the columns picker greys the box that would break its bounds, and a
+   * key that visibly changes nothing is a key a reader presses twice and then
+   * distrusts. Real `disabled` rather than `aria-disabled` is safe because
+   * nothing here has focus at the moment it flips: the press that turns the
+   * track off landed on a control outside it.
+   */
+  disabled?: boolean;
   /** Extra classes for the housing, so a caller can place it in its own row. */
   className?: string;
 }) {
@@ -51,7 +65,8 @@ export function KtcBoardKeys({
           type="button"
           onClick={() => onChange(option)}
           aria-pressed={board === option}
-          className={`rounded-full border px-3 py-1.5 font-mono text-[0.625rem] uppercase tracking-[0.16em] transition-[color,box-shadow] duration-150 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-active/60 ${
+          disabled={disabled}
+          className={`rounded-full border px-3 py-1.5 font-mono text-[0.625rem] uppercase tracking-[0.16em] transition-[color,box-shadow] duration-150 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-active/60 disabled:cursor-not-allowed disabled:hover:text-foreground/58 ${
             board === option
               ? "border-active/45 bg-[image:var(--key-bg)] text-readout shadow-[var(--key-shadow)] [text-shadow:var(--readout-text-glow)]"
               : "border-transparent text-foreground/58 hover:text-readout"

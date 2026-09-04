@@ -2,32 +2,32 @@ import { NextResponse } from "next/server";
 
 import type {
   ApiErrorPayload,
-  KtcFormat,
   LeaguematePayload,
   Trade,
   TradesPagePayload,
 } from "@/shared/contract";
+import { getRosProjections, restOfSeasonStart } from "@/shared/projections";
+import type { RosProjections } from "@/shared/projections";
 import { getActiveSeason, parseRequestedSeason } from "@/shared/season";
-import { sleeperAvatarUrl } from "@/shared/sleeper";
-import { ktcBoardValue } from "@/shared/ktc";
-import type { KtcBoards } from "@/shared/ktc";
-import { ktcPickPrice, pickTier } from "@/shared/ktc/picks";
+import { getNflState, sleeperAvatarUrl } from "@/shared/sleeper";
 import {
-  assetKey,
   collectEnrichmentIds,
   countTradeTotals,
   draftOrderKey,
   getDraftSlots,
+  getTradeLeagueRosters,
   getTradeManagers,
   listTrades,
   lookupKtcMarkets,
   lookupLeagueMarkets,
   lookupPlayers,
+  lookupSeasonAdp,
   parseTradeQuery,
   pickSlotKey,
   readTradeParams,
+  readTradeValues,
 } from "@/shared/trades";
-import type { TradeLeagueMarket, TradeQuery } from "@/shared/trades";
+import type { TradeQuery } from "@/shared/trades";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -107,7 +107,7 @@ async function readTradesPage(request: Request) {
     const first = query.cursor === null;
     const [totals, names] = await Promise.all([
       first ? resolveTotals(query) : Promise.resolve(EMPTY_TOTALS),
-      resolveNames(page.trades),
+      resolveNames(page.trades, season),
     ]);
 
     const payload: TradesPagePayload = {
@@ -157,16 +157,28 @@ async function resolveTotals(
 }
 
 /**
- * The names the ids on this page stand for, and what its assets are worth.
+ * The names the ids on this page stand for, and what its assets are worth on
+ * each of the board's three bases.
  *
- * The five lookups are independent and run together; each is a no-op on an
- * empty id list, which is the common case for every page after the first few.
- * The league *rows* are deliberately still not among them — those arrive whole
- * from `/api/trades/leagues`, once per season — but a league's superflex
- * reading and its size are, because a valuation needs both and the page route
- * has never had a reason to read them until now.
+ * The lookups are independent and run together; each is a no-op on an empty id
+ * list, which is the common case for every page after the first few. The league
+ * *rows* are deliberately still not among them — those arrive whole from
+ * `/api/trades/leagues`, once per season — but a league's superflex reading,
+ * its size, its lineup, its scoring and its rostered players all are, because a
+ * valuation and a rank need every one of them.
+ *
+ * **Three of the reads are not bounded by the page, and all three are cached
+ * behind their own TTL**: the season's ADP aggregate (`lookupSeasonAdp`), the
+ * folded projections span (`getRosProjections`, half an hour) and the two KTC
+ * markets (`getKtcBoards`, the sync's own fifteen minutes). None of them is
+ * re-read per scroll, which is what makes three bases affordable at all.
+ *
+ * **Every basis degrades on its own.** A failed projections span, an
+ * unreadable market and a season with no completed draft each cost that basis
+ * and nothing else — the page still answers, and the panel says which basis has
+ * nothing to say. A valuation must never fail a page of trades.
  */
-async function resolveNames(trades: readonly Trade[]) {
+async function resolveNames(trades: readonly Trade[], season: string) {
   // Deduplicated per namespace rather than across all three — see
   // {@link collectEnrichmentIds} for the collision one shared `Set` allowed.
   const {
@@ -177,14 +189,25 @@ async function resolveNames(trades: readonly Trade[]) {
 
   const leagueIds = [...new Set(trades.map((t) => t.league_id))];
 
-  const [players, managers, draftSlots, leagueMarkets, ktcMarkets] =
-    await Promise.all([
-      lookupPlayers(playerIds),
-      getTradeManagers(managerIds),
-      getDraftSlots(draftKeys),
-      lookupLeagueMarkets(leagueIds),
-      lookupKtcMarkets(),
-    ]);
+  const [
+    players,
+    managers,
+    draftSlots,
+    leagueMarkets,
+    leagueRosters,
+    ktcMarkets,
+    adp,
+    projections,
+  ] = await Promise.all([
+    lookupPlayers(playerIds),
+    getTradeManagers(managerIds),
+    getDraftSlots(draftKeys),
+    lookupLeagueMarkets(leagueIds),
+    getTradeLeagueRosters(leagueIds),
+    lookupKtcMarkets(),
+    resolveSeasonAdp(season),
+    resolveProjections(season),
+  ]);
 
   const resolvedManagers: Record<string, LeaguematePayload> = {};
   for (const [id, m] of managers) {
@@ -195,19 +218,64 @@ async function resolveNames(trades: readonly Trade[]) {
     };
   }
 
+  const { assetValues, values } = readTradeValues({
+    trades,
+    leagues: leagueMarkets,
+    rosters: leagueRosters,
+    orders: draftSlots,
+    adp,
+    projections: projections.board,
+    fromWeek: projections.fromWeek,
+    markets: ktcMarkets,
+  });
+
   return {
     players: Object.fromEntries(players),
     managers: resolvedManagers,
     // Narrowed to the picks the page actually holds: a league's order covers
     // every roster in it, and a page names two or three of them.
     pickSlots: resolvePickSlots(trades, draftSlots),
-    assetValues: resolveAssetValues(
-      trades,
-      draftSlots,
-      leagueMarkets,
-      ktcMarkets,
-    ),
+    assetValues,
+    values,
   };
+}
+
+/** The empty capital board — what a season with no stored drafts prices. */
+const NO_ADP = { superflex: new Map(), standard: new Map() };
+
+/**
+ * The season's draft-capital board, or an empty one.
+ *
+ * A basis, not the page: a failed aggregate costs the capital column its
+ * numbers and the panel says the basis has nothing to price against, which is
+ * the same degradation the lineups route makes of an account with no synced
+ * drafts.
+ */
+async function resolveSeasonAdp(season: string) {
+  try {
+    return await lookupSeasonAdp(season);
+  } catch (error) {
+    console.warn(`[trades] draft capital unavailable for ${season}:`, error);
+    return NO_ADP;
+  }
+}
+
+/**
+ * The rest-of-season projections span, on the same three readings the lineups
+ * and timeline routes take: a past season has no span at all, a failed fetch
+ * leaves the basis empty, and neither fails the request.
+ */
+async function resolveProjections(
+  season: string,
+): Promise<{ board: RosProjections; fromWeek: number | null }> {
+  const fromWeek = await restOfSeasonStart(season, getNflState).catch(() => null);
+  if (fromWeek === null) return { board: {}, fromWeek: null };
+  try {
+    return { board: await getRosProjections(season, fromWeek), fromWeek };
+  } catch (error) {
+    console.warn(`[trades] projections unavailable for ${season}:`, error);
+    return { board: {}, fromWeek: null };
+  }
 }
 
 /**
@@ -234,84 +302,4 @@ function resolvePickSlots(
     }
   }
   return slots;
-}
-
-/**
- * What KeepTradeCut prices each asset on this page at, on **both** of its
- * markets.
- *
- * Both, because the reader's `auto`/`dynasty`/`redraft` choice is applied in
- * the browser here — see {@link TradesPagePayload.assetValues} for why that
- * differs from the lineups route, which has to resolve it before it can rank.
- * What is *not* left to the browser is the superflex axis: which of KTC's two
- * QB columns a league reads is a fact about the league, so it is resolved here
- * and only one number per market crosses the wire.
- *
- * Keyed by {@link assetKey}, narrowed to the assets this page actually names —
- * the same rule `resolvePickSlots` follows, and the reason a market of ~500
- * rows does not ship whole behind every scroll.
- *
- * An asset neither market prices is simply absent, which the card reads as an
- * em dash. That includes every FAAB payment, which is not looked up at all: a
- * league's own currency is not something a market prices, and never will be.
- */
-function resolveAssetValues(
-  trades: readonly Trade[],
-  orders: ReadonlyMap<string, ReadonlyMap<number, number>>,
-  leagues: ReadonlyMap<string, TradeLeagueMarket>,
-  markets: Partial<Record<KtcFormat, KtcBoards>>,
-): TradesPagePayload["assetValues"] {
-  const values: TradesPagePayload["assetValues"] = {};
-
-  /** Both markets' prices for one asset, or nothing where neither has one. */
-  const price = (
-    read: (boards: KtcBoards, superflex: boolean) => number | null,
-    superflex: boolean,
-  ) => {
-    const dynasty = markets.dynasty ? read(markets.dynasty, superflex) : null;
-    const redraft = markets.redraft ? read(markets.redraft, superflex) : null;
-    return dynasty === null && redraft === null ? null : { dynasty, redraft };
-  };
-
-  for (const trade of trades) {
-    // A league with no stored row prices nothing rather than being guessed at
-    // as a 1QB league of unknown size — the read is cached and a miss means the
-    // league genuinely is not stored.
-    const league = leagues.get(trade.league_id);
-    if (!league) continue;
-    const { superflex, total_rosters } = league;
-
-    for (const side of trade.sides) {
-      for (const id of side.players) {
-        const key = assetKey(trade.league_id, id);
-        if (key in values) continue;
-        const found = price(
-          (boards, sf) => ktcBoardValue(sf, boards.values[id]),
-          superflex,
-        );
-        if (found) values[key] = found;
-      }
-
-      for (const pick of side.picks) {
-        const key = assetKey(trade.league_id, pick);
-        if (key in values) continue;
-        // The pick's own third of the round where its draft order is set, and
-        // null where it is not — most picks on this board are seasons out, and
-        // `ktcPickPrice` reads that as "take the untiered row, then the middle
-        // one", which is the convention every trade calculator uses.
-        const slot = orders
-          .get(draftOrderKey(trade.league_id, pick.season))
-          ?.get(pick.roster_id);
-        const tier =
-          slot === undefined ? null : pickTier(slot, total_rosters);
-        const found = price((boards, sf) => {
-          const match = ktcPickPrice(boards.picks, pick, tier);
-          return match ? ktcBoardValue(sf, match.price) : null;
-        }, superflex);
-        if (found) values[key] = found;
-      }
-    }
-  }
-
-  return values;
 }

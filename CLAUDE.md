@@ -1187,8 +1187,12 @@ parameters.
 one answer, and flipping it on either page moves the other. On the manager page
 the control sits at the foot of the **Columns** dialog — it is not a view of
 the leagues, it is what four of those nine columns *mean*, and it is
-meaningless while none is chosen; on `/trades` it sits in the control rail
-beside Filters and Search, because there it changes every number on every card.
+meaningless while none is chosen; on `/trades` it sits inside the **Value**
+panel, for the same reason one grain down — the board says which of KTC's two
+markets answers, and KTC is one of three bases there, so out on the rail beside
+Filters and Search it read as a control over every number on the page rather
+than over one basis of three. It is disabled on the other two, which is argued
+where the panel is.
 
 ### The one asymmetry, and why
 
@@ -2983,8 +2987,12 @@ his **id** on the card: a visible, searchable token beats a blank.
 
 ### Deliberately not ported, each with what it arrives with
 
-- **ADP prices.** KTC prices landed — see below — but there is still no ADP
-  board in this repo, so `enrich.ts` resolves one valuation rather than two.
+- **Board *selection* for the ADP prices.** ADP prices landed with the value
+  basis — see The value basis, and colour on an asset — off a season-wide
+  `getSeasonDraftAdp`. What is still absent is the half `adp-value.ts` has always
+  named as missing: `adpBoardFor`, the filters and the signature that decide
+  *which* crawled drafts a board is pooled from. It arrives with `/api/adp`, and
+  is the read that replaces this one.
 - **`trade_rosters` and the anchored timeline.** **The rewind and the rail have
   since landed** — on the manager card, over a league's whole log; see The
   league's history. What is still absent is this board's own half of it: a sheet
@@ -3124,6 +3132,219 @@ recorded — the `Filters` trigger visibly did not match the mono keys beside it
 **Closed since**: the manager console pass re-housed the shared dialog, so this
 page got it too, and the trigger now takes `CONSOLE_KEY_PILL` like the `Search`
 and `To today` keys it stands beside.
+
+### The value basis, and colour on an asset
+
+Every figure on this board was KeepTradeCut and nothing said so. KTC is one
+answer to "what is this worth" and the app already derives two others — the ADP
+curve `/manager` prices a roster's capital with, and a rest-of-season projection
+under the league's own scoring — so the board offers all three behind one key,
+and each take-side figure is coloured and metered by where that asset stands
+among the priced assets of its own league. Applied from a design handoff.
+
+**It needed no migration.** `rosters.players`, `leagues.scoring_settings`,
+`leagues.roster_positions` and `draft_picks` have all been stored since the
+league-graph migration; what was missing was a read of them from this route.
+
+**All three bases ship and the client picks, which is the same trade this
+payload already made for KTC's two markets.** A basis is a *display unit*:
+putting it in `TradeRequest` would reset a scrolled keyset walk to page one to
+change one — the documented cost of this board having no `keepPreviousData` —
+and flipping basis is **comparative**, a reader switching between two to watch
+one card change, so a round trip per press would land in exactly the case the
+control exists for. `TradeAssetValue` is therefore `{capital, ktc:{dynasty,
+redraft}, ros}` per asset, and the panel is a render.
+
+**The rank is why any of this is server-side.** A value is a lookup and the
+browser could do it; a *rank* is a statement about a population, and the
+population is the league — every player its rosters hold and every cell of its
+pick grid — where the client holds only the page it has scrolled to. Computed
+there, a colour would mean "third-best among the fourteen currently on screen",
+which is a different sentence and a false one. So `shared/trades/valuation.ts`
+builds one universe per league per basis and ranks into it.
+
+**A `{rank, of}` crosses the wire, never a percentile.** `rankPercentile` and
+`rankFill` in `features/shared/rank-ramp` are what the manager card's meters and
+hues already come off and they must be fed the same number or the bar and the
+colour disagree; `shared/` cannot import that module, so a percentile computed
+server-side would be a second spelling of it on the far side of the seam. Shipping
+the rank is what lets this board read them through the identical two functions —
+and `rankPercentile` rather than `rankFill` for the hue, because `rankFill`
+answers 0 to two questions and painting "nothing to rank" full red claims a
+result.
+
+**The asset's own figure is in its own population.** The universe is the
+league's rostered players unioned with the players this page's trades name: a
+traded player may since have been dropped, and left out he would rank `of + 1`
+and the meter would run past its own track.
+
+**The pick population is the league's grid, not the picks on the page** — every
+(season, round) the market prices, one entry per roster, tiered by the draft
+order where that season's is known and untiered where it is not, which is most
+of them. Ownership never enters it, because who holds a cell does not change
+what the league's picks are worth. Players and picks rank in **one** ranking,
+because that is what the colour claims; split, a 2029 4th would sit at the top
+of a three-item pick ladder beside a card saying it is worth 190.
+
+**Three bases, and only one of them prices a pick.** There is no ADP pick ladder
+in this repo (`ktcPickDiscount` is unported and arrives with `/api/adp`) and a
+pick has no rest-of-season projection because it is not a player yet, so both
+answer null and the card draws an em dash. A zero would say a 2027 first is
+worth nothing.
+
+**A league that cannot anchor a basis is left off it rather than given a
+degenerate one.** `leagueAdpPool` is teams × starters, so a league with no
+stored size has a pool of zero and every player collapses onto the peak;
+`scoreStatLine` reads a null scoring table as nothing scored and answers a flat
+zero for everyone in the league. Both are the same claim in different clothes,
+and both read as "not priced" — which the all-zero arm of the ranker would
+refuse to rank anyway.
+
+**`getSeasonDraftAdp` is the one genuinely new read, and it is a widening rather
+than an invention.** `getManagerDraftAdp` is a manager's synced drafts and this
+board is `accountless` by construction, so there was no manager whose drafts
+could be the population. Both are now one statement with the manager as its only
+difference — every judgement in it (which draft is a rookie board, which are
+excluded, how the two fold) is a rule about drafts rather than about whose they
+are, and two copies would be two chances to read one of Sleeper's quirks
+differently on two pages showing the same players. The two splits that make an
+average meaningful are unchanged: superflex apart from standard, rookie apart
+from full. What is still absent is board *selection* — no `adpBoardFor`, no
+filters — which arrives with `/api/adp` and is the read that replaces this one.
+
+**Three reads are not bounded by the page and all three are cached**: the season
+ADP aggregate (`lookupSeasonAdp`, fifteen minutes on `globalThis`, evicted on
+rejection), the folded projections span (`getRosProjections`, half an hour) and
+the two markets (`getKtcBoards`, the sync's own fifteen). None is re-read per
+scroll, which is what makes three bases affordable. **Every basis degrades on its
+own** — a failed span, an unreadable market and a season with no completed draft
+each cost that basis and nothing else, and `values` on the payload is what the
+panel says so from.
+
+**The colour lands on the take track only, and no total is ever coloured.** A
+give line is the other side's take line, so colouring both would draw every
+asset on a two-sided card twice in the same hue and the card would stop reading
+take-first — the one thing its redundancy is paid for by. And a coloured total
+is a fairness indicator by implication, which `trade-card.tsx` rules out by
+name. The side header gained a `CAP`/`KTC`/`PTS` unit instead: three figures on
+three scales never share a column without one, and a total that changed because
+the reader flipped the panel would otherwise be indistinguishable from one that
+moved.
+
+**The Auto/Dynasty/Redraft keys moved off the rail and into the panel**, the
+same call that put them at the foot of the manager page's Columns dialog: they
+are a KTC question and say nothing on the other two bases, so out on the rail
+they read as a second control over every number on the page. **Disabled on the
+other two bases rather than dimmed-but-pressable**, which is where this differs
+from the prototype — a key that visibly changes nothing is one a reader presses
+twice and then distrusts, and this app's rule is to make an ineffective control
+unreachable rather than to let it be pressed and ignored. Real `disabled` is
+safe because nothing in that group has focus when the basis moves: the press
+that turns it off landed on a lamp above.
+
+**The panel is the rail's width, not the key's.** Anchored to its own key it
+would be a 23rem box hanging off a control two thirds along a 362px row, and at
+a phone's width it would leave the viewport on the left; anchored to the rail
+(`relative z-30`) its right edge is the shell's own gutter and it cannot. It is
+**not a `<dialog>`**, on `ToolsMenu`'s terms, and it deliberately **stays open on
+a press** — see comparative, above — so the capture-phase `pointerdown` and the
+Escape that returns focus are spelled out rather than inherited.
+
+**The basis has its own storage key** (`thelab:trade-value-basis`), not a share
+of `thelab:ktc-board`: those are two questions and only one is about KTC — the
+board choice says *which market*, this says whether a market is being read at
+all — so a reader on the capital basis still has a board choice and it still
+means what it meant.
+
+**The page took `ConsoleGround` and dropped its own panel**, which is the answer
+to the handoff's blocking width question and is recorded there rather than here:
+see the report under **The page width, answered**, below.
+
+#### The page width, answered
+
+The handoff asks for a report and the report is short, because the premise was
+wrong: **`/manager` is not edge-to-edge and never was.** Both pages already
+passed `PageShell width="console"` — `max-w-6xl`, 72rem, 1152px — and the shell
+has exactly three arms (`default` and `wide` are both `max-w-4xl`, differing
+only in gutters; `console` alone is `max-w-6xl`). `app-rack.tsx` is `fixed` and
+its own width, tied to the shell only through `--rack-clear`.
+
+So the whole difference was the panel `TradesHome` drew *inside* the shell —
+`px-5 sm:px-10` plus a border, which is ~106px at 1280 and ~50px at 390 that
+this page spent and `/manager` did not. It is the identical finding
+`/lineupchecker` recorded when it took the ground, down to the numbers, and it
+took the identical fix: the panel is gone, the route renders `ConsoleGround`,
+and a trade card is now the same width as a league card by construction rather
+than by two spellings of a width. `/tools` (on `wide`) is untouched.
+
+#### The other three questions
+
+- **Positional vs overall percentile** is **overall**, as the prototype implies,
+  and it is the one answer that is not obviously right — flagged back rather than
+  settled. Two things push against positional here. A pick has no position at
+  all, and picks and players rank in one ranking for the reason above; and the
+  colour is meant to say "where does this asset stand among what this league
+  trades", which is a question about the league's whole board rather than about
+  a depth chart. The cost is real and is the handoff's own: tight ends and
+  kickers read cold against running backs. Positional would be a second ranking
+  keyed on `PlayerSummary.position` and is a small change to `valuation.ts` if
+  that is the call.
+- **The dimmed board track is `disabled`** — argued above.
+- **Mobile** holds. The meter's 9rem cap is a `max-width` and reads as a meter in
+  a ~290px window; the side header is name (`min-w-0 truncate`), unit, total and
+  fits at 390 with the sides stacked below `sm`; the panel sits at x=14 of 390.
+
+#### Verified
+
+Rendered through a temporary `/preview` route against the real `TradesList`,
+`TradeCard` and `ValuePanel` — the real tokens, the real Tailwind build and the
+real `local-store` hooks, so a driven run exercises the persistence — then driven
+over CDP at 1280 and 390 in both schemes and deleted. The method's two mechanics
+are unchanged: `--no-proxy-server`, and `localhost` rather than `127.0.0.1`. No
+database is reachable from where this was built, so **the numbers below are
+fixtures** and what they check is the rules and the layout rather than Sleeper.
+
+The fixtures are two leagues — a dynasty superflex whose assets rank across a
+214-asset universe, and a redraft league with one priced asset a side so nothing
+ranks — plus a kicker priced on no basis, a FAAB leg, a three-way trade and an
+undated one.
+
+Every arm landed. On KTC the first card drew four coloured take figures with four
+meters (`8,120` at rank 2 of 214 → a full-width green bar, `640` at 205 → a red
+sliver) and the give track opposite stayed `--readout-muted` with **no meters and
+no colour**; both side totals stayed `--readout-text` under a `KTC` unit.
+Switching to Capital left the panel **open**, moved the key to `Value · Capital`,
+the readout to `CAP` and the figures to the capital column — and dropped the card
+to **three** meters, the pick having no ADP ladder to place it on, which is the
+"a pick prices on KTC alone" rule on screen. Pts ROS did the same to `241 / 148 /
+204`. The board keys read `[false,false,false]` on KTC and `[true,true,true]` on
+the other two with the note switching to "Only the KTC basis reads a board". The
+second league drew its figures with **zero** meters — nothing to rank. The
+staleness line read `mixed · 41m ago`, the older of the two markets. Escape
+closed the panel and returned focus to the key; an outside `pointerdown` closed
+it.
+
+At every width and in both schemes: the panel inside the viewport (x=14, width
+362 at 390; x=832, width 368 at 1280), `document.documentElement.scrollWidth`
+equal to the viewport, zero overflowing elements, exactly one `<h1>`, and no
+console output but the dev server's own React-DevTools and HMR lines.
+
+`valuation.test.ts` is where the arithmetic is pinned rather than rendered:
+competition ranking with ties sharing and the next distinct skipping, a null rank
+for a population of one and for an all-zero one, a dropped player still inside his
+own population, the grid as the pick population, a slot's tier off the league's
+draft order, a pick null on both non-KTC bases, an unsized league unable to anchor
+the curve, an unscored league unable to score a projection, an empty `weeks`
+reading as no projection where an empty `stats` reads as a projected zero, an
+unreadable market costing its own column alone, and `auto_board` reading "mixed"
+only where a page holds both kinds.
+
+**Not verified against real data**, which is the gap to close first. Three things
+a render cannot check: whether the season-wide ADP board's coverage is wide enough
+for the capital basis to be worth reading on a corpus this size, what the
+projections read costs on a page spanning a hundred leagues (the board is shared
+and cached, but it is scored per league), and whether the pick grid a league
+enumerates matches the one its own card draws.
 
 ## Tracking placeholder picks
 

@@ -2,7 +2,11 @@
 
 import { useEffect, useRef } from "react";
 
-import type { KtcBoardChoice, ManagerLeague } from "@/shared/contract";
+import type {
+  KtcBoardChoice,
+  ManagerLeague,
+  TradeValueBasis,
+} from "@/shared/contract";
 
 import type { TradesData } from "../trades-data";
 import { TradeCard } from "./trade-card";
@@ -25,6 +29,7 @@ import { TradeCard } from "./trade-card";
 export function TradesList({
   data,
   leaguesById,
+  basis,
   board,
   hasMore,
   loadingMore,
@@ -33,11 +38,12 @@ export function TradesList({
   data: TradesData;
   leaguesById: Map<string, ManagerLeague>;
   /**
-   * The reader's KeepTradeCut market choice, passed down rather than read from
-   * the store inside each card: `TradeCard` is `memo`'d over a list that can
-   * run to hundreds of rows, and a hook inside it would subscribe every one of
-   * them to the same value.
+   * The reader's value basis and KeepTradeCut market, passed down rather than
+   * read from the store inside each card: `TradeCard` is `memo`'d over a list
+   * that can run to hundreds of rows, and a hook inside it would subscribe
+   * every one of them to the same two values.
    */
+  basis: TradeValueBasis;
   board: KtcBoardChoice;
   hasMore: boolean;
   loadingMore: boolean;
@@ -71,6 +77,7 @@ export function TradesList({
             trade={trade}
             league={leaguesById.get(trade.league_id) ?? null}
             data={data}
+            basis={basis}
             board={board}
           />
         ))}

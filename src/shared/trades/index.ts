@@ -17,6 +17,7 @@ export type { TradeCursor } from "./cursor";
 export {
   clearTradeEnrichmentCaches,
   lookupKtcMarkets,
+  lookupSeasonAdp,
   lookupLeagueMarkets,
   lookupPlayers,
 } from "./enrich";
@@ -47,6 +48,7 @@ export {
   getSeasonTradeLeagues,
   getTradeFacets,
   getTradeLeagueMarkets,
+  getTradeLeagueRosters,
   getTradeManagers,
   listTrades,
 } from "./queries";
@@ -58,5 +60,7 @@ export type {
   TradeTotals,
   TradesPage,
 } from "./queries";
+export { readTradeValues } from "./valuation";
+export type { TradeValuationInput } from "./valuation";
 export { MAX_TRADE_BODY_BYTES, readTradeParams } from "./transport";
 export type { TradeParams } from "./transport";

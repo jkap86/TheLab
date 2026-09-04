@@ -10,7 +10,9 @@
  * runtime imports, and `shared/trades` imports it back with `import type`.
  */
 
+import type { KtcFormat } from "./ktc";
 import type { ManagerLeague } from "./leagues";
+import type { MetricRank } from "./lineups";
 // Moved to `names.ts` when the shares drawers became their second reader.
 // Re-exported so this module stays a complete surface for a trades caller.
 import type { LeaguematePayload, PlayerSummary } from "./names";
@@ -182,28 +184,113 @@ export type TradesPagePayload = {
    */
   pickSlots: Record<string, number>;
   /**
-   * What KeepTradeCut prices each asset on this page at, on **both** of its
-   * markets — keyed by `assetKey`, which is league-scoped for the reason
-   * `pickSlotKey` is: one league's 2027 first is not another's.
+   * What each asset on this page is worth on **every basis the board offers**,
+   * keyed by `assetKey` — which is league-scoped for the reason `pickSlotKey`
+   * is: one league's 2027 first is not another's.
    *
-   * **Both markets ship and the client picks between them**, which is the one
-   * place the reader's board choice does not ride the request, and the
-   * difference from `/api/user/[username]/lineups` is what the number is *for*.
-   * There it is ranked, so the choice has to be resolved before a rank can
-   * exist. Here it is only printed — so sending it would reset a scrolled
-   * keyset walk to page one to change a display unit, which is the documented
-   * cost of this board having no `keepPreviousData`.
+   * **All three bases ship and the client picks between them**, which is the
+   * same trade this payload already made for KeepTradeCut's two markets and it
+   * is made for the same reason. A basis is a *display unit*: putting it in
+   * `TradeRequest` would reset a scrolled keyset walk to page one to change
+   * one, which is the documented cost of this board having no
+   * `keepPreviousData`. Flipping basis is also comparative — a reader switches
+   * between two to watch the same card change — so a round trip per press is
+   * the wrong cost in exactly the case the control exists for.
    *
    * The **superflex** axis is still resolved server-side, because that is a
-   * fact about the league rather than a reader's choice: a two-QB league reads
-   * a different column, and which one is not something anybody chooses.
+   * fact about the league rather than a reader's choice; so is every rank,
+   * because a rank is a statement about a population only the server holds.
    *
-   * An asset KTC cannot price is **absent**, and an asset it prices on one
-   * market and not the other carries a null on that side — a kicker is on the
-   * redraft board and nowhere near the dynasty one. Neither is a zero. FAAB is
+   * An asset no basis prices is **absent**, and one priced on some bases and
+   * not others carries a null on each it is off. Neither is a zero. FAAB is
    * never here at all: it is a league's own currency and no market prices it.
    */
-  assetValues: Record<string, { dynasty: number | null; redraft: number | null }>;
+  assetValues: Record<string, TradeAssetValue>;
+  /**
+   * What answered, per basis — the value panel's own staleness and coverage
+   * line, and the same courtesy `ManagerLineupsPayload.ktc` extends: these are
+   * someone else's numbers on a cache, and anything showing them should be able
+   * to say how old they are.
+   *
+   * Null on a basis nothing could be read for, which the board renders as a
+   * column of em dashes rather than as a failed page — the degradation the
+   * lineups route already makes.
+   */
+  values: TradeValueSources;
+};
+
+/** Which of the three bases a figure on the trades board is read on. */
+export type TradeValueBasis = "capital" | "ktc" | "ros";
+
+/**
+ * One asset's figure on one basis, and where that figure places among the
+ * priced assets of its own league.
+ *
+ * **The rank ships rather than a percentile**, which is not a spelling choice:
+ * `rankPercentile` and `rankFill` in `features/shared/rank-ramp` are what the
+ * manager card's meters and hues are already taken from, and they must be fed
+ * the same number or the bar and the colour disagree. Shipping `{rank, of}` —
+ * the shape the lineups payload already ranks its nine metrics in — is what
+ * lets this board read them through the identical two functions. A percentile
+ * computed here would be a second spelling of that arithmetic on the far side
+ * of the wire, where `shared/` cannot import the module that owns it.
+ *
+ * Null where there is nothing to place the figure against, which is two cases
+ * and not one — a league with fewer than two priced assets, and one where every
+ * priced asset totals zero. `MetricRank`'s own rule, for its own reason: "1st
+ * of 12" among all-zero totals is a claim.
+ */
+export type TradeAssetPrice = {
+  value: number;
+  rank: MetricRank | null;
+};
+
+/**
+ * One asset priced on all three bases.
+ *
+ * KeepTradeCut is two entries rather than one because its two markets are two
+ * markets, resolved in the browser against each league's own type — see
+ * `@/shared/ktc/board-choice`. The other two bases have no such axis: draft
+ * capital reads one curve and projected points read one feed, each against the
+ * league's own lineup depth and scoring, which are facts rather than choices.
+ *
+ * **A pick is priced on KeepTradeCut alone**, and that is a real gap rather
+ * than an omission: there is no ADP pick ladder in this repo to place one on
+ * (`ktcPickDiscount` is unported, and arrives with `/api/adp`), and a draft
+ * pick has no rest-of-season projection because it is not a player yet. Both
+ * read as an em dash, which is the honest answer and never a zero.
+ */
+export type TradeAssetValue = {
+  capital: TradeAssetPrice | null;
+  ktc: { dynasty: TradeAssetPrice | null; redraft: TradeAssetPrice | null };
+  ros: TradeAssetPrice | null;
+};
+
+/** What answered on each basis, for the panel to say so. */
+export type TradeValueSources = {
+  /**
+   * The KeepTradeCut markets, and what `auto` resolves to across the leagues
+   * **this page** names — "mixed" where it holds both kinds, which is the
+   * honest word for a board no single market is true of. It moves as the reader
+   * scrolls into leagues of the other kind, which is correct: it describes what
+   * is on screen.
+   */
+  ktc: {
+    auto_board: KtcFormat | "mixed";
+    /** When each market's rows were scraped, ISO 8601; null where unread. */
+    scraped_at: { dynasty: string | null; redraft: string | null };
+  } | null;
+  /**
+   * How many players the draft-capital curve prices, or null where no completed
+   * draft of this season is stored to average one from. Coverage follows the
+   * data, the same way the lineups route's fallback board does.
+   */
+  capital: { players: number } | null;
+  /**
+   * The projections span the points basis sums, or null where none could be
+   * read — a past season, or a failed feed.
+   */
+  ros: { from_week: number } | null;
 };
 
 /**

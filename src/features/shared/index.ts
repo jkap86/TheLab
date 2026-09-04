@@ -24,9 +24,19 @@ export {
 } from "./console-chrome";
 export { errorMessage } from "./error-message";
 export { storeKtcBoard, useKtcBoard } from "./ktc-board";
+export {
+  DEFAULT_TRADE_VALUE_BASIS,
+  TRADE_VALUE_BASES,
+  parseTradeValueBasis,
+  storeTradeValueBasis,
+  useTradeValueBasis,
+} from "./trade-value-basis";
 export { KtcBoardKeys } from "./ui/ktc-board-keys";
 export { formatInstantDate, formatInstantTime, ordinal } from "./format";
-export { rankColor } from "./rank-ramp";
+// The rank ramp and its two readings. The trades board joined the manager
+// card as a reader when its asset values gained a place in their own league:
+// a bar and a hue drawn from one rank on two pages must come off one module.
+export { placeAmong, rankColor, rankFill, rankPercentile } from "./rank-ramp";
 export * from "./league-filters";
 // The dialog those rules are built in. It moved here from `features/manager`
 // when the trades board became a second reader — the line `CONSOLE_KEY` and

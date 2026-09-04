@@ -785,17 +785,65 @@ export async function getLeagueLineupRow(
  * the same derived list `isSuperflexLineup` reads, bound rather than spelled,
  * so the two cannot drift.
  */
-export async function getManagerDraftAdp(
+export function getManagerDraftAdp(
   userId: string,
   season: string,
-): Promise<{ superflex: Map<string, AdpEntry>; standard: Map<string, AdpEntry> }> {
+): Promise<DraftAdpBoards> {
+  return readDraftAdp(season, userId);
+}
+
+/**
+ * The same two boards over **every** stored draft of the season, with no
+ * manager in the question.
+ *
+ * The trades board is what needed one. It is `accountless` by construction —
+ * the trades worth reading are the market's, not one account's — so there is no
+ * manager whose synced drafts could be the population, and the draft-capital
+ * basis had nothing to price against. Widening the population is the only
+ * answer available: what the corpus holds *is* the board here.
+ *
+ * **The two splits that make an average meaningful are unchanged**, which is
+ * what keeps this from being the pooling `adp-value.ts` warns against. Superflex
+ * and standard drafts stay apart because a quarterback is a different asset in
+ * each, and rookie boards stay apart from full ones because their `pick_no` is
+ * not the same unit. What is pooled is drafts of the *same* kind across leagues,
+ * which is what an average draft position has always meant.
+ *
+ * It is still the fallback's ADP rather than TheLabX's crawled boards: there is
+ * no board *selection* here — no `adpBoardFor`, no filters, no signature — so a
+ * reader cannot ask to be priced against dynasty startups alone. That arrives
+ * with `/api/adp`, and this is the read it will replace.
+ */
+export function getSeasonDraftAdp(season: string): Promise<DraftAdpBoards> {
+  return readDraftAdp(season, null);
+}
+
+/** The two populations an ADP average can legitimately be pooled over. */
+export type DraftAdpBoards = {
+  superflex: Map<string, AdpEntry>;
+  standard: Map<string, AdpEntry>;
+};
+
+/**
+ * The body both readings share, with the manager as the only difference.
+ *
+ * One statement rather than two, because every judgement in it — which draft is
+ * a rookie board, which drafts are excluded, how the two boards fold together —
+ * is a rule about drafts rather than about whose they are. Two copies would be
+ * two chances for one of Sleeper's quirks to be read differently on two pages
+ * showing the same players.
+ */
+async function readDraftAdp(
+  season: string,
+  userId: string | null,
+): Promise<DraftAdpBoards> {
   const { rows } = await pool.query<{
     player_id: string;
     adp: number;
     superflex: boolean;
     rookie: boolean;
   }>(
-    `WITH manager_leagues AS (
+    `WITH scoped_leagues AS (
        SELECT l.league_id,
               ${DYNASTY_LEAGUE_SQL} AS dynasty,
               ${INAUGURAL_LEAGUE_SQL} AS inaugural,
@@ -803,10 +851,14 @@ export async function getManagerDraftAdp(
                  FROM jsonb_array_elements_text(l.roster_positions) slot
                 WHERE slot = ANY($3::text[])) > 1 AS superflex
          FROM leagues l
-         JOIN league_users lu
-           ON lu.league_id = l.league_id AND lu.user_id = $1
         WHERE l.season = $2
           AND ${LIVE_LEAGUE_SQL}
+          -- A null manager is the corpus-wide read; the parameter is still
+          -- bound so the two share one plan-shaped statement.
+          AND ($1::text IS NULL
+               OR EXISTS (SELECT 1 FROM league_users lu
+                           WHERE lu.league_id = l.league_id
+                             AND lu.user_id = $1))
      ),
      league_drafts AS (
        -- Sequenced over the league's drafts WHOLE, before the two exclusions
@@ -816,13 +868,13 @@ export async function getManagerDraftAdp(
        SELECT d.draft_id,
               d.status,
               d.type,
-              ml.dynasty,
-              ml.inaugural,
-              ml.superflex,
+              sl.dynasty,
+              sl.inaugural,
+              sl.superflex,
               row_number() OVER (PARTITION BY d.league_id
                                  ORDER BY d.start_time ASC NULLS LAST, d.draft_id) AS seq
          FROM drafts d
-         JOIN manager_leagues ml ON ml.league_id = d.league_id
+         JOIN scoped_leagues sl ON sl.league_id = d.league_id
      ),
      boards AS (
        SELECT draft_id,

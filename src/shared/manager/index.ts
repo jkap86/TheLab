@@ -58,9 +58,15 @@ export {
   getManagerLeagueRosters,
   getManagerRosters,
   getManagerSyncState,
+  getSeasonDraftAdp,
   toManagerLeague,
 } from "./queries";
-export type { LeagueRow, LeaguemateRow, ManagerLeagueRow } from "./queries";
+export type {
+  DraftAdpBoards,
+  LeagueRow,
+  LeaguemateRow,
+  ManagerLeagueRow,
+} from "./queries";
 export { solveLeagueLineup } from "./ros-lineups";
 export type { RosLineupLeague } from "./ros-lineups";
 export { lineupMetricTotals, rankLeagueLineups } from "./league-ranks";

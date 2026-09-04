@@ -1,7 +1,7 @@
 import type { ManagerLeague, Trade } from "@/shared/contract";
 import { pool } from "@/shared/db";
 import { QB_ELIGIBLE_STARTING_SLOTS } from "@/shared/ktc";
-import { LEAGUE_COLUMNS_SQL, toManagerLeague } from "@/shared/manager";
+import { LEAGUE_COLUMNS_SQL, LEAGUE_TYPE_SQL, toManagerLeague } from "@/shared/manager";
 import type { LeagueRow } from "@/shared/manager";
 
 import { assembleTrade } from "./assemble";
@@ -527,7 +527,39 @@ export async function getTradeManagers(
  * evidence of a second quarterback, and the 1QB column is the conservative
  * reading of a league nobody can see.
  */
-export type TradeLeagueMarket = { superflex: boolean; total_rosters: number };
+export type TradeLeagueMarket = {
+  superflex: boolean;
+  total_rosters: number;
+  /**
+   * Sleeper's `settings.type`, for the one thing about KeepTradeCut that still
+   * has to be resolved server-side: what `auto` lands on across the leagues a
+   * page names. Read through `LEAGUE_TYPE_SQL`, so a league that stored none
+   * arrives as 0 — redraft, which is how Sleeper's own absence reads and the
+   * same conservative fold the card makes of a row that has not arrived.
+   */
+  league_type: number;
+  /**
+   * The league's starting lineup, which is what the draft-capital curve is
+   * anchored to: `leagueAdpPool` is teams × starters, so the same ADP is worth
+   * the same in a 10- and a 14-team league and a deeper-starting one extends
+   * value further down the board. Null where the lineup was never synced, which
+   * `leagueAdpPool` folds to its own typical depth rather than to a pool of
+   * zero.
+   */
+  roster_positions: string[] | null;
+  /**
+   * The league's own scoring, which the points basis needs and Sleeper's
+   * `pts_ppr` is not: a TE-premium or 6-point-passing league differs by exactly
+   * the margin that reorders a board.
+   */
+  scoring_settings: Record<string, number> | null;
+  /**
+   * How deep this league's drafts run, which bounds the pick population its
+   * assets are ranked against. Null where settings say nothing, and then the
+   * market's own depth is the bound — KTC prices four rounds and no more.
+   */
+  draft_rounds: number | null;
+};
 
 export async function getTradeLeagueMarkets(
   leagueIds: readonly string[],
@@ -538,12 +570,24 @@ export async function getTradeLeagueMarkets(
     league_id: string;
     superflex: boolean;
     total_rosters: number | null;
+    league_type: number;
+    roster_positions: string[] | null;
+    scoring_settings: Record<string, number> | null;
+    draft_rounds: number | null;
   }>(
     `SELECT l.league_id,
             (SELECT count(*)
                FROM jsonb_array_elements_text(l.roster_positions) slot
               WHERE slot = ANY($2::text[])) > 1 AS superflex,
-            l.total_rosters
+            l.total_rosters,
+            ${LEAGUE_TYPE_SQL} AS league_type,
+            l.roster_positions,
+            l.scoring_settings,
+            -- Guarded before the cast, this file's own house rule for reading a
+            -- number out of an untyped blob: Sleeper has sent this as a string,
+            -- as a number and not at all.
+            CASE WHEN l.settings->>'draft_rounds' ~ '^[0-9]+$'
+                 THEN (l.settings->>'draft_rounds')::int END AS draft_rounds
        FROM leagues l
       WHERE l.league_id = ANY($1)`,
     [leagueIds, [...QB_ELIGIBLE_STARTING_SLOTS]],
@@ -558,7 +602,79 @@ export async function getTradeLeagueMarkets(
       // board to divide", so every pick in that league falls to the untiered
       // lookup rather than to a tier computed against nothing.
       total_rosters: r.total_rosters ?? 0,
+      league_type: r.league_type,
+      roster_positions: r.roster_positions,
+      scoring_settings: r.scoring_settings,
+      draft_rounds: r.draft_rounds,
     };
   }
+  return out;
+}
+
+/**
+ * How long a league's rostered population is reused.
+ *
+ * It moves on a sync rather than on a page, and what it feeds is a *ranking* —
+ * so the cost of being a few minutes stale is one asset placing a position or
+ * two differently, never a wrong price. The same window the market facts above
+ * take, for the same reason.
+ */
+const LEAGUE_ROSTERS_TTL_MS = 15 * 60 * 1000;
+
+const leagueRostersCache = new BoundedCache<readonly string[] | null>(
+  5000,
+  LEAGUE_ROSTERS_TTL_MS,
+);
+
+/**
+ * Every player held in each league, deduplicated — the population an asset's
+ * standing on a trade card is measured against.
+ *
+ * **A rank needs a population, and the page is not one.** The client holds the
+ * trades it has scrolled to, which is a sample of the board rather than a
+ * league, so "where does this asset place" cannot be answered there at all;
+ * this is the read that makes it answerable. It is the *league's* players and
+ * not the market's whole board deliberately — a mid-tier back is near the
+ * bottom of what a deep dynasty league holds and near the top of what a
+ * ten-team redraft does, and it is the league in front of the reader that the
+ * card is about.
+ *
+ * Sleeper's `""`/`"0"` slot padding is filtered in SQL, which `queries.ts` has
+ * warned about since the graph landed: a raw `players` array overcounts, and
+ * here it would seat a phantom at the bottom of every ranking.
+ *
+ * A league with no stored rosters is held as an absence rather than dropped, so
+ * an id that resolves to nothing is asked about once rather than per page.
+ */
+export function getTradeLeagueRosters(
+  leagueIds: readonly string[],
+): Promise<Map<string, readonly string[]>> {
+  return cachedLookup(leagueRostersCache, leagueIds, readLeagueRosters);
+}
+
+async function readLeagueRosters(
+  leagueIds: readonly string[],
+): Promise<Record<string, readonly string[]>> {
+  if (leagueIds.length === 0) return {};
+
+  const { rows } = await pool.query<{
+    league_id: string;
+    players: string[];
+  }>(
+    `SELECT r.league_id,
+            array_agg(DISTINCT p.player_id) AS players
+       FROM rosters r
+       CROSS JOIN LATERAL jsonb_array_elements_text(
+              CASE WHEN jsonb_typeof(r.players) = 'array'
+                   THEN r.players ELSE '[]'::jsonb END) AS p(player_id)
+      WHERE r.league_id = ANY($1)
+        AND p.player_id <> ''
+        AND p.player_id <> '0'
+      GROUP BY r.league_id`,
+    [leagueIds],
+  );
+
+  const out: Record<string, readonly string[]> = {};
+  for (const r of rows) out[r.league_id] = r.players;
   return out;
 }

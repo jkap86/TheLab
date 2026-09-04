@@ -1,6 +1,8 @@
 import type { KtcFormat, PlayerSummary } from "@/shared/contract";
 import { getKtcBoards } from "@/shared/ktc";
 import type { KtcBoards } from "@/shared/ktc";
+import { getSeasonDraftAdp } from "@/shared/manager";
+import type { DraftAdpBoards } from "@/shared/manager";
 import { getPlayersByIds } from "@/shared/players";
 
 import { BoundedCache, cachedLookup } from "./cache";
@@ -116,8 +118,56 @@ export async function lookupKtcMarkets(): Promise<
   return out;
 }
 
+/**
+ * How long the season's draft-capital board is reused.
+ *
+ * The population behind it is completed drafts, which arrive a handful at a
+ * time over a preseason and never after: what this window is sized against is a
+ * draft *finishing* mid-session, not a value drifting. It is the same fifteen
+ * minutes the league facts above take, and the aggregate it saves is a scan of
+ * every stored pick of the season — the one read on this route that is not
+ * bounded by the page.
+ */
+const SEASON_ADP_TTL_MS = 15 * 60 * 1000;
+
+type SeasonAdpEntry = { at: number; boards: Promise<DraftAdpBoards> };
+
+/**
+ * Cached on `globalThis` rather than in module scope, for `board-read`'s and
+ * `ros-read`'s reason: a per-bundle copy would re-run the aggregate once per
+ * route rather than once per process. Keyed by season, since a board is asked
+ * for one season at a time but a stale bookmark can name another.
+ */
+const SEASON_ADP_KEY = Symbol.for("thelab.trades.seasonAdp");
+const globalScope = globalThis as typeof globalThis & {
+  [SEASON_ADP_KEY]?: Map<string, SeasonAdpEntry>;
+};
+
+/**
+ * The season's two ADP populations, from cache where it is fresh.
+ *
+ * **A failed read is evicted, never cached** — the `memoize-manager-lookup`
+ * rule, which every memo in this app follows: a database blip remembered for
+ * fifteen minutes is an outage extended by exactly the mechanism meant to
+ * absorb one, and this read has a caller that degrades to an unpriced basis.
+ */
+export function lookupSeasonAdp(season: string): Promise<DraftAdpBoards> {
+  const entries = (globalScope[SEASON_ADP_KEY] ??= new Map());
+  const cached = entries.get(season);
+  if (cached && Date.now() - cached.at < SEASON_ADP_TTL_MS) return cached.boards;
+
+  const entry: SeasonAdpEntry = { at: Date.now(), boards: getSeasonDraftAdp(season) };
+  entries.set(season, entry);
+  entry.boards.catch(() => {
+    // Only our own entry — a newer read may already be underway.
+    if (entries.get(season) === entry) entries.delete(season);
+  });
+  return entry.boards;
+}
+
 /** For tests, and for a sync that has just replaced what this holds. */
 export function clearTradeEnrichmentCaches(): void {
   playersCache.clear();
   leagueMarketCache.clear();
+  globalScope[SEASON_ADP_KEY]?.clear();
 }

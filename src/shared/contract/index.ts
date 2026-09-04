@@ -53,6 +53,10 @@ export {
   type TradeLeaguesPayload,
   type TradeFacet,
   type TradeFacetsPayload,
+  type TradeAssetPrice,
+  type TradeAssetValue,
+  type TradeValueBasis,
+  type TradeValueSources,
 } from "./trades";
 export {
   type RosterTimelinePayload,

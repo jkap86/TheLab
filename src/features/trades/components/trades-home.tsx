@@ -3,14 +3,15 @@
 import { type ReactNode, useMemo, useState } from "react";
 
 import {
+  CONSOLE_KEY,
   DEFAULT_LEAGUE_FILTERS,
-  KtcBoardKeys,
   LeagueFiltersDialog,
   activeFilterCount,
   filterSummary,
-  storeKtcBoard,
+  storeTradeValueBasis,
   useKtcBoard,
   useStoredAccount,
+  useTradeValueBasis,
 } from "@/features/shared";
 
 import {
@@ -28,6 +29,7 @@ import { resolveLeagueScope, tradeQueryKey } from "../trade-query";
 import type { TradeRequest } from "../trade-query";
 import { CircleNote, CircleStepper } from "./trade-controls";
 import { SeekKey } from "./seek-key";
+import { ValuePanel } from "./value-panel";
 import { TradeSearch } from "./trade-search";
 import { TradesList } from "./trades-list";
 
@@ -71,11 +73,14 @@ export function TradesHome({
   const [filters, setFilters] = useState<TradeFilters>(DEFAULT_TRADE_FILTERS);
   const [seek, setSeek] = useState<TradeSeek>(DEFAULT_TRADE_SEEK);
   const [searchOpen, setSearchOpen] = useState(false);
-  // The KTC market this device reads. Unlike the manager page it does **not**
-  // ride the request: this board only prints the number, so putting it in
-  // `TradeRequest` would reset a scrolled keyset walk to page one to change a
-  // display unit. The payload carries both markets and the card picks — see
+  // The value basis and the KTC market this device reads. Unlike the manager
+  // page neither rides the request: this board only *prints* the number, so
+  // putting either in `TradeRequest` would reset a scrolled keyset walk to page
+  // one to change a display unit — and flipping basis is comparative, so that
+  // cost would land in exactly the case the control exists for. The payload
+  // carries every basis and both markets and the card picks — see
   // `TradesPagePayload.assetValues`.
+  const basis = useTradeValueBasis();
   const ktcBoard = useKtcBoard();
 
   const narrowingLeagues = activeFilterCount(leagueFilters) > 0;
@@ -126,16 +131,14 @@ export function TradesHome({
   const searchCount = activeTradeFilterCount(filters);
 
   return (
-    <div className="relative rounded-3xl border border-foreground/9 bg-[image:var(--panel-bg)] px-5 pb-14 pt-8 shadow-[var(--panel-shadow)] sm:px-10 sm:pb-16 sm:pt-12">
-      <span
-        aria-hidden
-        className="pointer-events-none absolute inset-0 rounded-[inherit] bg-[image:var(--panel-grain)]"
-      />
-      <span
-        aria-hidden
-        className="pointer-events-none absolute inset-x-[12%] top-0 h-px bg-[image:var(--panel-specular)]"
-      />
-
+    // The page sits on the ground the route renders rather than on a panel of
+    // its own — see `ConsoleGround`, and the lineup checker, which took the
+    // same edit for the same measured reason. The panel's inset and border were
+    // ~106px at 1280 and ~50px at 390 that this page spent and `/manager` did
+    // not, so the same card over the same league was narrower here on a shell
+    // both pages already set to `console`. With the panel gone the two agree by
+    // construction rather than by two spellings of a width.
+    <div className="relative">
       <header className="relative flex flex-wrap items-center gap-4">
         <div className="min-w-0">
           {heading}
@@ -157,8 +160,15 @@ export function TradesHome({
       </div>
 
       {/* The controls rail. The rule fills what the keys leave, so they read as
-          mounted on the console's trim rather than floating above the list. */}
-      <div className="relative my-7 flex flex-wrap items-center gap-3">
+          mounted on the console's trim rather than floating above the list.
+
+          **The rail is the value panel's positioning context, and it is raised
+          above the cards.** Anchored to its own key the panel would be a 23rem
+          box hanging off a control two thirds of the way along the row, and at
+          a phone's width it would leave the viewport; anchored here its right
+          edge is the shell's own gutter. The `z-30` is what lets it overlap the
+          first card rather than being painted under it. */}
+      <div className="relative z-30 my-7 flex flex-wrap items-center gap-3">
         <div
           aria-hidden
           className="h-px flex-1 bg-gradient-to-r from-active/35 via-foreground/5 to-transparent"
@@ -178,16 +188,23 @@ export function TradesHome({
           onChange={setLeagueFilters}
           leagues={leagues}
         />
-        {/* Beside the two filter keys rather than inside either dialog: unlike
-            the manager page's Columns panel, which owns the four columns this
-            choice gives meaning to, here it changes every number on every card
-            and belongs where they are. */}
-        <KtcBoardKeys board={ktcBoard} onChange={storeKtcBoard} />
+        {/* What every figure on the board is, and — inside it — which
+            KeepTradeCut market answers when that is the basis. The board keys
+            used to stand out here on the rail, where they read as a control
+            over every number on the page rather than over one basis of three;
+            moving them in is the same call that put them at the foot of the
+            manager page's Columns dialog. */}
+        <ValuePanel
+          basis={basis}
+          onBasis={storeTradeValueBasis}
+          board={ktcBoard}
+          sources={data?.values ?? null}
+        />
         <button
           type="button"
           onClick={() => setSearchOpen((v) => !v)}
           aria-expanded={searchOpen}
-          className="shrink-0 rounded-full border border-foreground/10 bg-[image:var(--key-bg)] px-4 py-2 font-mono text-[0.6875rem] uppercase tracking-[0.16em] text-foreground/80 shadow-[var(--key-shadow)] transition-[transform,box-shadow,color] duration-150 hover:text-readout active:translate-y-0.5 active:shadow-[var(--key-shadow-pressed)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-active/60"
+          className={CONSOLE_KEY}
         >
           Search
           {searchCount > 0 && (
@@ -258,6 +275,7 @@ export function TradesHome({
         <TradesList
           data={data}
           leaguesById={byId}
+          basis={basis}
           board={ktcBoard}
           hasMore={hasMore}
           loadingMore={loadingMore}

@@ -37,11 +37,24 @@ export type TradesData = {
   /** Pick key → draft slot, for the picks whose league has set an order. */
   pickSlots: Record<string, number>;
   /**
-   * Asset key → what KeepTradeCut prices it at on each of its two markets.
-   * Merged like the name maps: a page carries the keys it names, and a later
-   * page re-sending one it shares with an earlier page writes the same answer.
+   * Asset key → what each of the three bases prices it at, and where it places
+   * in its own league. Merged like the name maps: a page carries the keys it
+   * names, and a later page re-sending one it shares with an earlier page
+   * writes the same answer.
    */
   assetValues: TradesPagePayload["assetValues"];
+  /**
+   * What answered on each basis — the value panel's staleness and coverage
+   * line.
+   *
+   * **Taken from the newest page rather than the first**, which is the opposite
+   * of the two denominators above and right for the opposite reason. Those are
+   * counted once and held because a later page cannot state them; this is
+   * restated on every page and *moves* — `auto_board` describes the leagues a
+   * page names, so a reader who has scrolled into leagues of the other kind is
+   * on a mixed board and the panel has to say so.
+   */
+  values: TradesPagePayload["values"];
 };
 
 /**
@@ -63,10 +76,7 @@ export function foldTradePages(
   const players: Record<string, PlayerSummary> = {};
   const managers: Record<string, LeaguematePayload> = {};
   const pickSlots: Record<string, number> = {};
-  const assetValues: Record<
-    string,
-    { dynasty: number | null; redraft: number | null }
-  > = {};
+  const assetValues: TradesPagePayload["assetValues"] = {};
 
   let total: number | null = null;
   let scopeTotal: number | null = null;
@@ -108,5 +118,6 @@ export function foldTradePages(
     managers,
     pickSlots,
     assetValues,
+    values: pages[pages.length - 1].values,
   };
 }
