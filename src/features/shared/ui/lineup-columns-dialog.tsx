@@ -60,6 +60,10 @@ import { KtcBoardKeys } from "./ktc-board-keys";
  * sibling feature importing another; the sibling it can legally read is this
  * folder. `LINEUP_METRIC_LABELS` came with it, to `lineup-columns.ts`, beside
  * the metric order it is the other half of.
+ *
+ * **It came back down onto the page since**, and the rack no longer mounts it:
+ * `ColumnsStrip` is its one call site, which is what the trigger's legend below
+ * is written for.
  */
 export function LineupColumnsDialog({
   columns,
@@ -93,13 +97,14 @@ export function LineupColumnsDialog({
         aria-haspopup="dialog"
         className={triggerClassName}
       >
-        Columns
-        {/* The count is a plain trailing figure, not a badge: unlike Filters
-            this key is never "off", so there is no state for a lit chip to
-            announce — only how many of the four are in use. */}
-        <span className="ml-2 tabular-nums text-foreground/55">
-          {columns.length}
-        </span>
+        {/* **`Edit columns`, and no count.** The key used to read `Columns 2`
+            in the app rack, where a closed key was the only thing on screen
+            saying how many of the four were in use. It stands in the page's own
+            columns tray now, beside a lit chip per chosen column: the count is
+            there already and by name, so repeating it as a figure is the same
+            news twice, and the legend says what the key *does* rather than
+            re-labelling the tray it is mounted in. */}
+        Edit columns
       </button>
 
       <dialog

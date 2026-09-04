@@ -8,38 +8,28 @@ import {
   type ReactNode,
 } from "react";
 
-import type {
-  KtcBoardChoice,
-  LineupMetricId,
-  ManagerLeague,
-  ManagerLineupsPayload,
-} from "@/shared/contract";
-
-import type { LeagueFilters } from "../league-filters";
-
 /**
- * Everything the app rack needs to draw a page's Browse and View controls.
+ * Everything the app rack needs to draw a page's Browse controls.
  *
  * The rack is mounted in `layout.tsx`, above `{children}`, so it cannot see the
- * state of the page under it — and the four keys it now carries are all
- * page-specific. This is the seam: a page publishes, the rack consumes, and a
- * page that publishes nothing renders no controls at all. It is the same rule
- * `app-rack.tsx` already applies to the tools page's menu.
+ * state of the page under it — and the keys it carries are page-specific. This
+ * is the seam: a page publishes, the rack consumes, and a page that publishes
+ * nothing renders no controls at all. It is the same rule `app-rack.tsx`
+ * already applies to the tools page's menu.
+ *
+ * **It carried six more fields until the View track came off the rack** — the
+ * filter state and its setter, the unfiltered league list, the column
+ * selection, the KTC market and its scrape stamp. Those controls are on the
+ * manager page's own identity plate now, where the state already lives, so
+ * nothing crosses this seam for them and they are gone from the type rather
+ * than left published and unread: a field nobody reads is a field the next
+ * reader of either file has to prove is dead.
  *
  * `drawer` rides along with `onOpenDrawer` because the two Browse keys report
  * which drawer is open (`aria-expanded`, and the lit state that goes with it);
  * the drawers themselves stay mounted on the page, where their state lives.
  */
 export type RackControls = {
-  filters: LeagueFilters;
-  onFilters: (filters: LeagueFilters) => void;
-  /** The **unfiltered** list — what every count inside the dialog is taken over. */
-  leagues: readonly ManagerLeague[];
-  columns: readonly LineupMetricId[];
-  /** The stored KeepTradeCut market — see `useKtcBoard`. */
-  board: KtcBoardChoice;
-  /** Which market answered and when it was scraped; null when none could. */
-  ktc: ManagerLineupsPayload["ktc"];
   /**
    * Which shares drawer is open, or null.
    *
@@ -58,7 +48,7 @@ export type RackControls = {
  * **This was `RackReadoutProvider`**, which carried the lit pill naming whose
  * page you were on. The pill is gone — the identity plate names the manager and
  * the season now, so the pill was a second answer to a question already
- * answered, and its ~185px is exactly what the two new control tracks needed.
+ * answered, and its ~185px is exactly what the control tracks needed.
  * The provider was the right *shape* for what replaced it, so it was extended
  * rather than deleted: one object published upward into one rack, with the same
  * argument about where the truth lives.
@@ -108,39 +98,11 @@ export function useRackControls(): RackControls | null {
  */
 export function usePublishRackControls(controls: RackControls): void {
   const publish = useContext(WriteContext);
-  const {
-    filters,
-    onFilters,
-    leagues,
-    columns,
-    board,
-    ktc,
-    drawer,
-    onOpenDrawer,
-  } = controls;
+  const { drawer, onOpenDrawer } = controls;
 
   useEffect(() => {
     if (!publish) return;
-    publish({
-      filters,
-      onFilters,
-      leagues,
-      columns,
-      board,
-      ktc,
-      drawer,
-      onOpenDrawer,
-    });
+    publish({ drawer, onOpenDrawer });
     return () => publish(null);
-  }, [
-    publish,
-    filters,
-    onFilters,
-    leagues,
-    columns,
-    board,
-    ktc,
-    drawer,
-    onOpenDrawer,
-  ]);
+  }, [publish, drawer, onOpenDrawer]);
 }

@@ -10,8 +10,11 @@ import {
 } from "./lineup-metrics.ts";
 
 describe("formatRank", () => {
-  test("a rank reads as ordinal of field size", () => {
-    assert.equal(formatRank({ rank: 2, of: 12 }), "2nd of 12");
+  test("a rank reads as the ordinal alone", () => {
+    // The field size is deliberately absent from the *text* — see the module.
+    // It is still read by the meter and the ramp below, which is why `of` is
+    // still on the value being formatted here.
+    assert.equal(formatRank({ rank: 2, of: 12 }), "2nd");
   });
 
   test("null is the em dash, for absent and degenerate alike", () => {

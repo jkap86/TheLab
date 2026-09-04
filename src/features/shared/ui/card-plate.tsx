@@ -132,6 +132,29 @@ export function ReadingPlate({
  * The label is drawn at the plate's own weight rather than the readout's — it
  * is stamped into the metal, not lit — which is what keeps the figure beside it
  * the only thing on the plate a reader's eye lands on.
+ *
+ * **The figure steps up with the rank tiles losing their denominator**, and the
+ * two changes are one: a card that no longer spends nine characters on `2nd of
+ * 12` in every tile can afford its plate to carry the reading a reader came for
+ * at a size they can take in without stopping. The label grows with it, because
+ * a 8px label under a 17px figure reads as a caption that fell off something
+ * else rather than as the figure's own name.
+ *
+ * **It steps up at `sm` and not below, which a render at 390 forced rather than
+ * the handoff asking for it.** A plate sits opposite the league's own name in
+ * one flex row, and at phone width the two are competing for ~322px: measured,
+ * the step-up takes a two-field plate from 155px to 182px and leaves the league
+ * name 71px — six characters, where `StandingPlate` already drops its third
+ * field precisely to keep that number at nine. So the size is the question the
+ * width answers, not the card: below `sm` every reading plate keeps the type it
+ * had, and at 640 the same name has 236px and the design's own figure. It is
+ * the rule the trade card's date already lives by, one row up.
+ *
+ * The step lands on every reading plate in the app — the lineup checker's
+ * projected score and the picktracker's next pick as well as the league card's
+ * standing — which is the point of the shared component, and each was checked
+ * at 390 and 1280. `PlateDivider` grows on the same breakpoint: a divider cut
+ * shorter than the type either side of it reads as a gap rather than a cut.
  */
 export function PlateField({
   label,
@@ -141,11 +164,11 @@ export function PlateField({
   children: ReactNode;
 }) {
   return (
-    <span className="inline-flex items-baseline gap-[5px]">
-      <span className="font-mono text-[0.5rem] uppercase tracking-[0.18em] text-foreground/[0.42]">
+    <span className="inline-flex items-baseline gap-[5px] sm:gap-[0.375rem]">
+      <span className="font-mono text-[0.5rem] uppercase tracking-[0.18em] text-foreground/[0.42] sm:text-[0.625rem]">
         {label}
       </span>
-      <span className="font-mono text-[0.8125rem] font-medium tabular-nums text-foreground/[0.97]">
+      <span className="font-mono text-[0.8125rem] font-medium tabular-nums text-foreground/[0.97] sm:text-[1.0625rem]">
         {children}
       </span>
     </span>
@@ -163,7 +186,7 @@ export function PlateDivider() {
   return (
     <span
       aria-hidden
-      className="h-[13px] w-px bg-[image:var(--groove)] shadow-[var(--groove-highlight)]"
+      className="h-[13px] w-px bg-[image:var(--groove)] shadow-[var(--groove-highlight)] sm:h-[17px]"
     />
   );
 }

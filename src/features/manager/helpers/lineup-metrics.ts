@@ -8,10 +8,20 @@ import { ordinal } from "../../shared/format.ts";
  * A rank cell's text. The em dash covers both "no answer yet" (the payload
  * has not landed) and "nothing to rank" (the metric was degenerate
  * league-wide) — the reader's next move is the same either way.
+ *
+ * **The field size is not printed, and that is a deliberate reversal.** It used
+ * to read `2nd of 12`, which put a nine- or ten-character string in a tile that
+ * takes an equal quarter of a card: at four columns the figure was the widest
+ * thing on the row and read as a sentence rather than as a reading. The
+ * denominator survives in exactly one place on the card — the configuration
+ * window's `Teams` field — where it is the scale every other count beside it is
+ * read against, and it survives in the *maths* here unchanged: {@link rankFill}
+ * and {@link rankPercentile} both still divide by `rank.of`, so the meter and
+ * the ramp know the field size even though the text no longer states it.
  */
 export function formatRank(rank: MetricRank | null): string {
   if (!rank) return "—";
-  return `${ordinal(rank.rank)} of ${rank.of}`;
+  return ordinal(rank.rank);
 }
 
 /*

@@ -586,7 +586,9 @@ mistake it for. `ktc_picks` is the number that *is* summed, and it is the one
 that owes the reader that distinction.
 
 On the page, each league card is the league name plus up to four rank columns
-("2nd of 12"), with the season line, team/record and the team browser behind a
+("2nd" — the field size moved to the config window's `Teams`; see The rank is
+the reading, below), with the season line, team/record and the team browser
+behind a
 `<details>` disclosure — the browser standing under a history rail that redraws
 it over the rosters of any past moment, priced at today's values (The league's
 history, below). `league-card.tsx` stays hook-free on purpose, and the state a
@@ -601,7 +603,7 @@ seat-level gaps. The panes sit side by side at
 *every* width, phones included — stacking put the roster below twelve teams —
 so truncation, not wrapping, is what carries a narrow card. The column's metric is a per-card
 `<select>` (default ROS starters) and the list is *sorted* by it, because it
-is the standings behind the card's "2nd of 12" — the order and the number must
+is the standings behind the card's "2nd" — the order and the number must
 agree — and when every team totals zero on the metric the column shows dashes,
 the same all-zero rule the server ranks `null` by. Selection is *resolved*,
 not synced (`chosen ?? manager's team`), so a payload refresh under an open
@@ -3731,6 +3733,11 @@ second reader. The labels landed in `lineup-columns.ts` beside `METRIC_ORDER`,
 which they are the other exhaustive `Record<LineupMetricId, …>` of: the same
 compiler seam, twice.
 
+**Two of these four keys have since come back down onto the page** — see The
+controls came back down onto the plate, below; what the rack still carries is
+the Browse pair, and the paragraphs here describe the four-key row they were
+measured as.
+
 **Below `lg` the four keys collapse behind one icon-only key that opens a
 menu.** That is the question the handoff leaves open and asks be decided before
 shipping, and it is decided the way this folder decided it once already:
@@ -3849,6 +3856,148 @@ still renders no `<nav>` and no controls, with its theme key pinned right.
 number above is a fixture, and the QB/SF split's one open question — whether any
 league in the corpus starts two bare `QB` slots with no `SUPER_FLEX` — needs the
 database rather than a render.
+
+### The controls came back down onto the plate
+
+Two of the four keys the rack took are on the manager page again, and the
+argument that put them up there is the one that failed. A pinned rack is
+reachable at any scroll depth, which is why the two Browse keys stay — but the
+**Filters** key up there and the plate's own `Leagues 9 / 14` were the same news
+in two places, and neither said *what* had been narrowed. **The plate carries a
+strip now** (`ManagerPlate`'s new `controls` slot): the Filters key, a `Clear`
+key that appears only while something is filtering, and the summary sentence
+that had been standing alone under the plate since the merge. The key, the
+figure it moves and the words for it are one object.
+
+**The strip is a full-width flex item, not a fourth column.** The plate is
+already `flex w-full flex-wrap` whenever it has children, so `w-full` is the
+whole mechanism, and the separator is a **milled cut read horizontally** — a
+dark hairline with a light one under it — rather than `--groove`, which is the
+vertical channel beside the avatar and would read as a rule turned on its side.
+
+**The columns are a tray of chips under the plate**, `ColumnsStrip` in a
+`CONSOLE_WELL`: one lit chip per chosen column, pressable to remove, with the
+existing `LineupColumnsDialog` as `Edit columns` at the far end. Same problem as
+the subject tokens and the same answer — a closed dialog says nothing, and a
+reader who chose two columns three scrolls ago had nothing on screen naming
+them. **The last chip is guarded in the strip rather than in the store**, and
+that is the rule most likely to be got wrong: `normalize` falls back to
+`DEFAULT_LINEUP_COLUMNS` when handed an empty array, which is right for a stale
+stored value and exactly wrong for this press — removing the last column would
+silently restore all four defaults rather than clearing the row. The press is a
+no-op instead, which is the same bound the dialog enforces by disabling its last
+ticked box. Both write through `storeLineupColumns`, so a chip pressed here and
+a box unticked in there are one edit under `thelab:lineup-columns`.
+
+The dialog's trigger lost its count with the move. In the rack that figure was
+the only thing on screen saying how many of the four were in use; beside a chip
+per column it is the same news twice, so the key reads `Edit columns` — what it
+does, rather than a second label for the tray it stands in. **The prototype's
+unchosen-column chips are deliberately not shipped**: nine metrics as a
+permanent strip is the picker rebuilt in the page, and the picker is one key
+away.
+
+**`RackControls` lost six fields rather than keeping them published and
+unread.** The filter state and its setter, the unfiltered league list, the
+column selection, the KTC market and its scrape stamp all crossed that seam for
+controls that are no longer up there; a field nobody reads is a field the next
+reader of either file has to prove is dead. What is left is `{ drawer,
+onOpenDrawer }`. The rack key's `filtering` lit state reads `drawer !== null`
+now, and the `close` listener in `rack-controls-keys.tsx` went with the dialogs
+it existed for — **the rule it enforced stays written down in that file**,
+because it comes straight back with any dialog mounted in that subtree: a modal
+`<dialog>` is in the top layer only while it still generates a box, so hiding
+the panel it lives in leaves a backdrop over an inert page. The two remaining
+keys open the *page's* drawers, mounted nowhere near that box, so they dismiss
+on the press. The collapse breakpoint stays `lg`: one track is ~220px less than
+two and `md` may well hold it now, but what is on the other side of a wrong
+guess is `--rack-clear` computed against a rack that is quietly two rows tall.
+
+### The rank is the reading, and the denominator is the config window's
+
+`formatRank` prints `2nd`, not `2nd of 12`. A tile takes an equal quarter of a
+card, and at four columns a nine- or ten-character figure was the widest thing
+on the row — read as a sentence rather than as a reading. **The maths is
+untouched**: `rankFill` and `rankPercentile` both still divide by `rank.of`, so
+the meter and the ramp know the field size the text no longer states, and the em
+dash still covers "no answer yet" and "nothing to rank" alike. The denominator
+survives in exactly one place on the card, the configuration window's `Teams`
+field, where it is the scale every count beside it is read against — which is
+why that field states `12` and never `12 of 12`.
+
+**The meter is capped at 88px and the cap is on the track, not the tile.** A bar
+running the whole of a quarter-card share reads as a progress bar being filled;
+at one column it was a bar the width of the card. The label has to keep the full
+width or `ROS starters` truncates, which is why the cap sits where it does.
+
+**The config window's readings are three groups that wrap whole** — *what game*
+(the tags), *the scale* (teams, starters) and *the lineup* (the three ladders
+and the TE premium), each `inline-flex whitespace-nowrap`. Loose in the flex row
+the line broke wherever it ran out of width, stranding a label on one line with
+its number on the next. The two dividers stay siblings *between* the groups, so
+the window's own `gap-x` spaces them and the only wrap points are the two that
+exist. Measured: `scrollWidth === clientWidth` in a 330px box.
+
+**The card's reading plate reads `Rank · Rec · Pts`** — the standing is what the
+plate is read for and the record is how it was arrived at — and `PlateField`
+steps up to a 17px figure under a 10px label, with `PlateDivider` following it
+to 17px.
+
+**That step-up is `sm` and up, which a render at 390 forced.** The handoff asks
+for it flat and names this as the thing to re-check, and the check failed: a
+plate sits opposite the league's own name in one flex row, and at phone width
+the step takes a two-field plate from 155px to 182px and leaves the league name
+**71px — six characters**, where `StandingPlate` already drops its third field
+precisely to hold that number at nine. So the size is the question the width
+answers rather than the card: below `sm` every reading plate keeps the type it
+had (98px of name, restored), and at 640 the same name has 236px and the
+design's own figure. It is the rule the trade card's date already lives by, one
+row up — and doing it on the breakpoint rather than through the `size` prop the
+handoff offers means the lineup checker's `Proj` plate and the picktracker's
+`On the clock` plate are fixed at 390 too, without either of them being told.
+
+#### Verified
+
+Rendered through a temporary `/preview` route against the real components,
+tokens and Tailwind build — the method the console-card, shares and rack passes
+established, since no database is reachable from where this was built (the boot
+hook skips migrations with no `DATABASE_URL` and the loops log their refusals,
+which is the server coming up healthy against nothing) — then screenshotted over
+CDP at 1280, 768, 390 and 360 in both schemes and deleted. The two mechanics
+that method needs are unchanged: `--no-proxy-server`, and `localhost` rather
+than `127.0.0.1`.
+
+The fixtures are three leagues — a dynasty superflex with a full solve, a
+keeper league whose `roster_positions` and `settings` never synced, and a
+best-ball redraft — plus a bare `ReadingPlate` for each of `PlateField`'s other
+two readers. Every arm landed. The tiles read `2nd`, `11th`, `1st`, `7th` and
+**all twelve meters measured exactly 88px** at every width. The unsynced league
+drew `—` for both counts, both ladders and the premium with no pips, and no
+reading plate at all. The config window wrapped by group with
+`scrollWidth === clientWidth` at 358 and at 330.
+
+The chip strip was driven end to end: pressing `ROS bench` stored
+`["ros_starters","capital_total","capital_bench"]` and moved the tile headers
+and the grid with it, three more presses took it to `["ros_starters"]`, and
+pressing **the last chip changed nothing** — the guard, rather than a silent
+restore of the four defaults. `GRID_COLS` followed to `grid-cols-1`. The Filters
+key opened a `:modal` dialog named `League filters` from the plate, applying
+`Dynasty` lit the key, raised its badge, printed the summary sentence in the
+strip and brought up the `Clear` key, which was absent at rest and put all three
+back. The strip is one 58px row at 1280 and wraps its sentence under the keys
+below it.
+
+At every width and in both schemes: `document.documentElement.scrollWidth` equal
+to the viewport at 1280, 768 and 390, one `<h1>`, and **no console output of any
+kind** — no React warning about the strip or the tray. At 360 the page takes 3px
+of horizontal scroll from the *rack*, which is the pre-existing sub-390 overflow
+this file already records and nothing in this pass touches.
+
+**Not verified against real data**, which is the gap to close first: every
+number above is a fixture. What a render cannot check is the one thing the
+denominator's removal turns on — that `Teams` is genuinely the scale a reader
+reads a bare `2nd` against on a page of a hundred cards, where the field size
+differs between them.
 
 ## The console card
 

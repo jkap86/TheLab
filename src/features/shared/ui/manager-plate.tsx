@@ -38,12 +38,24 @@ import { Avatar } from "../avatar";
  * `inline-flex` and lets whatever sits beside it have the rest of the row.
  * Editing the box in place would have moved the checker's header without
  * anyone asking.
+ *
+ * **`controls` is the second seam, and it is a strip rather than a fourth
+ * column.** The manager page's Filters key came back down off the app rack and
+ * onto this plate, because up there it was a second answer to a question the
+ * plate already had the figure for — the rack's key and the plate's
+ * `Leagues 9 / 14` were the same news in two places, and only one of them says
+ * what was narrowed. It renders after `children` as a full-width flex item, so
+ * the plate's own `flex-wrap` gives it a line of its own, and it is separated
+ * by a milled *cut* read horizontally — a dark hairline with a light one under
+ * it — rather than by `--groove`, which is the vertical channel beside the
+ * avatar and would read as a rule turned on its side.
  */
 export function ManagerPlate({
   name,
   avatarUrl,
   eyebrow,
   children,
+  controls,
 }: {
   /** Display name, or the username where Sleeper has no display name. */
   name: string;
@@ -57,6 +69,12 @@ export function ManagerPlate({
    * `flex-wrap` here is for.
    */
   children?: ReactNode;
+  /**
+   * The page's own controls, on the plate's bottom strip — see the module note.
+   * A caller passing these is also passing `children`: the strip needs the
+   * plate's full-width box, which only a plate carrying a season has.
+   */
+  controls?: ReactNode;
 }) {
   return (
     <div
@@ -98,6 +116,16 @@ export function ManagerPlate({
       </div>
 
       {children}
+
+      {/* `w-full` is what makes this a strip and not a fourth column: the plate
+          is `flex w-full flex-wrap` whenever it has children, so a full-width
+          item takes its own line under them. The border pair is the plate's
+          milled cut read horizontally — see the module note. */}
+      {controls && (
+        <div className="flex w-full flex-wrap items-center gap-3 border-t border-black/55 pt-3.5 shadow-[0_-1px_0_rgba(255,255,255,0.05)]">
+          {controls}
+        </div>
+      )}
     </div>
   );
 }

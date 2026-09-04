@@ -57,6 +57,17 @@ import { Scanlines } from "./card-plate";
  * a composited layer per card on a board that appends a hundred at a time and
  * never unmounts one.
  *
+ * **The readings are three groups, and each wraps whole.** They used to sit
+ * loose in the flex row, so a narrow card broke the line wherever it ran out of
+ * width — between the QB and SF ladders, or between `Teams` and `Starters`,
+ * leaving a label stranded on a line of its own with its number on the next.
+ * The three are *what game* (the format and lineup-mode tags), *the scale*
+ * (teams and starters) and *the lineup* (the three ladders and the TE premium),
+ * each an `inline-flex` `whitespace-nowrap` span, so the only wrap points left
+ * are the two between them. The dividers stay siblings *between* the groups —
+ * two of them, not five — which is what lets the window's own `gap-x` space
+ * them and keeps a divider from ever ending a wrapped line.
+ *
  * Like every lit surface on the card it carries its own scanlines, and like
  * every one of them the layer is a child rather than a second background,
  * because CSS has no way to spell the overlay on an element that already has
@@ -96,7 +107,8 @@ export function LeagueConfigWindow({
     >
       <Scanlines />
 
-      <span className="relative inline-flex items-center gap-1.5">
+      {/* What game. */}
+      <span className="relative inline-flex flex-nowrap items-center gap-[0.375rem] whitespace-nowrap">
         <Tag lit>{TYPE_LABELS.get(leagueType(league)) ?? "Redraft"}</Tag>
         {/* The lineup mode is stated either way — "Managed" is a fact about the
             league, and a tag that appeared only for best ball would leave the
@@ -128,21 +140,28 @@ export function LeagueConfigWindow({
 
       <Divider />
 
-      <Field label="Teams">{teams ?? "—"}</Field>
-      <Field label="Starters">{starters ?? "—"}</Field>
+      {/* The scale. */}
+      <span className="relative inline-flex flex-nowrap items-baseline gap-3.5 whitespace-nowrap">
+        <Field label="Teams">{teams ?? "—"}</Field>
+        <Field label="Starters">{starters ?? "—"}</Field>
+      </span>
 
       <Divider />
 
-      {/* `SF 0` on a one-QB league is the statement to want, and the two-pip
-          floor is what makes it one: none of the one this board could have. A
-          null count still draws no ladder — see {@link Ladder}. */}
-      <Ladder label="QB" slots={qb} />
-      <Ladder label="SF" slots={sf} />
-      <Ladder label="TE" slots={te} />
+      {/* The lineup. `SF 0` on a one-QB league is the statement to want, and
+          the two-pip floor is what makes it one: none of the one this board
+          could have. A null count still draws no ladder — see {@link Ladder}.
 
-      {/* After the TE ladder deliberately: the premium is a fact about the slot
-          beside it, not another number on the league's own scale. */}
-      <Field label="TE prem">{tePremium ?? "—"}</Field>
+          The TE premium comes after the TE ladder deliberately: it is a fact
+          about the slot beside it, not another number on the league's own
+          scale — which is also why it is inside this group rather than a fourth
+          thing loose in the row. */}
+      <span className="relative inline-flex flex-nowrap items-center gap-3.5 whitespace-nowrap">
+        <Ladder label="QB" slots={qb} />
+        <Ladder label="SF" slots={sf} />
+        <Ladder label="TE" slots={te} />
+        <Field label="TE prem">{tePremium ?? "—"}</Field>
+      </span>
     </div>
   );
 }

@@ -272,15 +272,18 @@ export function LeagueCard({
 function StandingPlate({ league }: { league: ManagerLeague }) {
   // `phone: false` is dropped below `sm` — see the note below.
   const fields: { label: string; value: string; phone: boolean }[] = [];
-  if (league.record) {
-    fields.push({ label: "Rec", value: formatRecord(league.record), phone: true });
-  }
+  // **Rank leads, and the record follows it.** The standing is what the plate
+  // is read for — the record is how it was arrived at — so it takes the
+  // position a reader's eye lands on first, nearest the card's own edge.
   if (league.standings_rank !== null) {
     fields.push({
       label: "Rank",
       value: ordinal(league.standings_rank),
       phone: true,
     });
+  }
+  if (league.record) {
+    fields.push({ label: "Rec", value: formatRecord(league.record), phone: true });
   }
   if (league.points_rank !== null) {
     fields.push({ label: "Pts", value: ordinal(league.points_rank), phone: false });
@@ -372,9 +375,16 @@ function MetricTile({
       >
         {formatRank(rank)}
       </p>
+      {/* **Capped at 88px, where the label and the figure above take the tile's
+          full width.** A meter that runs the whole of an equal quarter-card
+          share reads as a progress bar being filled rather than as a gauge
+          being read, and at one column it was a bar the width of the card. The
+          cap is on the *track*, so the fill's percentage resolves against 88px
+          and a full meter is 88px of gauge. It is deliberately not on the tile:
+          the label has to keep the full width or "ROS starters" truncates. */}
       <span
         aria-hidden
-        className="relative mt-2.5 block h-1 rounded-full bg-[var(--meter-track)] shadow-[inset_0_1px_3px_rgba(0,0,0,0.95)]"
+        className="relative mt-2.5 block h-1 max-w-[5.5rem] rounded-full bg-[var(--meter-track)] shadow-[inset_0_1px_3px_rgba(0,0,0,0.95)]"
       >
         <span
           className="block h-1 rounded-full"

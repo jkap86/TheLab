@@ -7,6 +7,9 @@ import {
   DEFAULT_LEAGUE_FILTERS,
   filterSummary,
   CONSOLE_KEY,
+  CONSOLE_KEY_PILL,
+  CONSOLE_TRACK,
+  LeagueFiltersDialog,
   ManagerPlate,
   matchesFilters,
   usePublishRackControls,
@@ -28,6 +31,7 @@ import {
   useManagerLeaguemates,
   useManagerPlayers,
 } from "../hooks/use-manager-shares";
+import { ColumnsStrip } from "./columns-strip";
 import { LeagueCard } from "./league-card";
 import { LeaguemateSharesDrawer } from "./leaguemate-shares-drawer";
 import { PlayerSharesDrawer } from "./player-shares-drawer";
@@ -46,22 +50,33 @@ import { SubjectTokens } from "./subject-tokens";
  * warm one shows its stored leagues immediately and puts the same sync's
  * progress in a pill above them. Both are the same stream.
  *
- * **The header is one plate.** It was four instruments on a row — the identity
- * plate, a season housing, a Browse housing and a View housing — and every one
- * of them was a box saying something about the same person. The season is
- * engraved onto the plate itself now (see {@link SeasonSummary}), and the four
- * control keys have gone up into the app rack, where they are reachable at any
- * scroll depth rather than only at the top of a hundred-league page.
+ * **The header is one plate, and it carries its own controls.** It was four
+ * instruments on a row — the identity plate, a season housing, a Browse housing
+ * and a View housing — and every one of them was a box saying something about
+ * the same person. The season is engraved onto the plate itself now (see
+ * {@link SeasonSummary}), and the four control keys went up into the app rack,
+ * where they were reachable at any scroll depth rather than only at the top of
+ * a hundred-league page.
+ *
+ * **Two of the four have since come back down**, and the reason is that up
+ * there they were a second answer to a question this plate already had the
+ * figure for. The rack's lit Filters key said "a filter is on"; the plate's
+ * `Leagues 9 / 14` said the same thing with a number, and neither said what had
+ * been narrowed — so the key, the count and the summary sentence are one strip
+ * on the plate now (see {@link ManagerPlate}'s `controls`), and the column
+ * selection is the tray under it (see {@link ColumnsStrip}), where a closed
+ * dialog's state is finally named. The rack keeps the two Browse keys, which
+ * open drawers rather than describing this page.
  *
  * **The rack is mounted in `layout.tsx`, so it cannot see this component's
- * state — and that is the real cost of putting the controls up there.** The
- * state stays here, because everything else on the page reads it: `filters` and
+ * state — and that is the real cost of putting anything up there.** The state
+ * stays here, because everything else on the page reads it: `filters` and
  * `subjects` are the two narrowing passes, `drawer` and `opened` are what the
  * drawers below are mounted and opened by, and the per-subject reset during
  * render owns all four. What crosses the seam is one published object —
- * {@link usePublishRackControls} — and the rule that comes with it is the one
- * the tools menu already lives by: a page that publishes nothing renders no
- * controls.
+ * {@link usePublishRackControls}, now the drawer pair alone — and the rule that
+ * comes with it is the one the tools menu already lives by: a page that
+ * publishes nothing renders no controls.
  *
  * **The panel is gone.** The page used to draw a rounded, bordered panel with
  * `--background` showing around it; the ground in `layout.tsx` is that surface
@@ -195,19 +210,13 @@ export function LeaguesHome({
     setDrawer(kind);
   }, []);
 
-  // The four control keys the rack draws for this page. `leagues` is the
-  // unfiltered list deliberately — it is the population the Filters dialog
-  // counts every one of its options over.
-  usePublishRackControls({
-    filters,
-    onFilters: setFilters,
-    leagues,
-    columns,
-    board: ktcBoard,
-    ktc: lineups?.ktc ?? null,
-    drawer,
-    onOpenDrawer: openDrawer,
-  });
+  // **The two Browse keys, and nothing else.** Filters and Columns came back
+  // down onto the plate and the tray under it — see the header below — so the
+  // rack no longer needs the filter state, the unfiltered league list, the
+  // column selection or the KTC pair, and none of them is published. Publishing
+  // a field the rack does not read is a field that looks load-bearing to the
+  // next reader of either file.
+  usePublishRackControls({ drawer, onOpenDrawer: openDrawer });
 
   return (
     <div className="relative">
@@ -215,6 +224,58 @@ export function LeaguesHome({
         <ManagerPlate
           name={name}
           avatarUrl={user?.avatar_url ?? null}
+          /*
+            **The Filters key sits on the plate, not in the rack**, and the
+            summary sentence sits beside it. Up in the rack the key was a second
+            answer to a question the plate already carried the figure for: the
+            rack's lit key said "a filter is on" and the plate's `Leagues 9 / 14`
+            said the same thing with a number, while neither said *what* was
+            narrowed. Here the key, the count and the sentence are one object,
+            and pressing the key is a press away from the figure it moves.
+
+            `leagues` is the **unfiltered** list deliberately — it is the
+            population every count inside the dialog is taken over, and handing
+            it the filtered one would collapse each of the dialog's own menus to
+            the selection already made.
+          */
+          controls={
+            leagues.length > 0 ? (
+              <>
+                <span className={`${CONSOLE_TRACK} flex items-center gap-1.5 p-1`}>
+                  <LeagueFiltersDialog
+                    filters={filters}
+                    onChange={setFilters}
+                    leagues={leagues}
+                    triggerClassName={`${CONSOLE_KEY_PILL} inline-flex items-center`}
+                  />
+                  {/* Only while there is something to clear: a key that is a
+                      no-op three quarters of the time is a key a reader stops
+                      reading. */}
+                  {activeFilterCount(filters) > 0 && (
+                    <button
+                      type="button"
+                      onClick={() => setFilters(DEFAULT_LEAGUE_FILTERS)}
+                      className={CONSOLE_KEY}
+                    >
+                      Clear
+                    </button>
+                  )}
+                </span>
+                {/* The filter summary in words, which the View housing's
+                    readout used to carry under its count and which then stood
+                    alone under the plate. It says the *filters* only: the
+                    subject selection has the token tray below, where it can be
+                    undone. `flex-[1_1_12rem]` is what lets it take the rest of
+                    the strip and then drop to its own line rather than
+                    truncating the moment the keys grow. */}
+                {leagueNarrowing && (
+                  <p className="m-0 min-w-0 flex-[1_1_12rem] truncate font-mono text-[0.6875rem] uppercase tracking-[0.16em] text-active">
+                    {leagueNarrowing}
+                  </p>
+                )}
+              </>
+            ) : undefined
+          }
           eyebrow={
             <span className="flex items-baseline gap-2">
               {heading}
@@ -239,19 +300,17 @@ export function LeaguesHome({
           ) : undefined}
         </ManagerPlate>
 
-        {/*
-          The filter summary in words, which the View housing's readout used to
-          carry under its count. With that housing in the rack the sentence has
-          no home up there — a pinned rack has no room for a line of prose — so
-          it lands here, directly under the figure it explains. It is the same
-          line `lineup-checker-home.tsx` draws under its own plate, and it says
-          the *filters* only: the subject selection has the token tray below,
-          where it can be undone.
-        */}
-        {leagueNarrowing && (
-          <p className="relative mt-3.5 truncate font-mono text-[0.6875rem] uppercase tracking-[0.16em] text-active">
-            {leagueNarrowing}
-          </p>
+        {/* Which rank columns the cards below are carrying, named and
+            removable — the other half of what the rack's View track used to
+            hold, and the half a closed dialog could never say. Inside the
+            header, under the plate, because it describes the grid the plate
+            counts. */}
+        {leagues.length > 0 && (
+          <ColumnsStrip
+            columns={columns}
+            board={ktcBoard}
+            ktc={lineups?.ktc ?? null}
+          />
         )}
       </header>
 
