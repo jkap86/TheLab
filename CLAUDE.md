@@ -2000,6 +2000,192 @@ recorded — the `Filters` trigger visibly did not match the mono keys beside it
 page got it too, and the trigger now takes `CONSOLE_KEY_PILL` like the `Search`
 and `To today` keys it stands beside.
 
+## Tracking placeholder picks
+
+`/picktracker` was the one tool this app *declared* and did not have: an entry in
+`constants/tools.ts`, a key in the rack, and a 404 behind both. It is TheLabX's
+feature ported, plus a live half that repo never had.
+
+**It is a decoder for a league convention, not a draft board.** Leagues that let
+managers trade next year's rookie picks during a startup draft cannot draft
+those rookies — they are not in Sleeper's player pool yet — so they draft
+**kickers as stand-ins**, and the Nth kicker off the board is rookie pick N. That
+makes Sleeper's own numbers wrong on purpose: `shared/picktracker/picks.ts`
+sorts by `pick_no`, filters to `metadata.position === "K"` and **numbers from the
+filtered index**, so the pick's own `round`/`pick_no` are discarded. Verified
+against a live league, which is the check worth keeping because agreement would
+mean the filter had failed: Sleeper's `1.04`, `2.01`, `2.04`, `2.12`, `3.01` are
+placeholder `1.01` through `1.05`.
+
+Two adjacent traps ride in that file's doc comments. Teams per round is
+`settings.teams`, because `draft_order` maps only *users who claimed a slot* and
+is null before an order is set — `seasonDraftSlots` documents the same trap.
+And `nextPickLabel` gates on `draft.status`, never on arithmetic, because after
+the last pick the arithmetic still names a plausible slot that will never exist.
+
+**It needed no migration and reads no table.** Four Sleeper calls behind ~230
+lines of pure logic; `npm run migrate:up` reported "No migrations to run". It is
+therefore a **deliberate exception to "a cache-backed route reads and nothing
+else"**, joining the manager routes and `POST /api/league/[leagueId]/sync`: the
+tool follows a draft *while it happens*, for any league id whether a sync has
+seen it or not, and the crawler's fifteen-minute live tier is most of a draft.
+
+### Why SSE, and why the poll is shared
+
+**Sleeper publishes no push API** — the documented API is read-only REST, whose
+only operational guidance is "stay under 1000 API calls per minute". The socket
+its own client uses is undocumented and unversioned and would be this repo's
+first runtime dependency outside React/Next/`pg` for a protocol client. So
+something must poll, and the only question is where.
+
+**It polls server-side, once per league.** The tool is meant to be pasted into a
+league chat mid-draft, so a dozen people opening one link is the ordinary case,
+not an edge — and a poll per viewer would be a dozen fan-outs for one draft. A
+client timer is also throttled to ~1/min in a background tab, the argument the
+lineup checker's Sync key already makes against a client-side countdown. What
+reaches the browser is SSE rather than a websocket because a route handler can
+return a `ReadableStream` today (the leagues route already streams NDJSON) where
+an upgrade would need a custom server this app does not have.
+
+**A tick is two calls, and the split that makes it two is a decision rather than
+an optimisation.** `trackPlaceholderDraft` reads the league, its drafts, its
+picks and its members; `retrackPlaceholderDraft` re-reads only the draft and its
+picks against a held `PicktrackerContext`. But **the context is immutable
+*during* a draft, not immutable**: before one starts, `draft_order` is unset, the
+league's size can still change and members are still joining, so a room re-reads
+it whole while the status is `pre_draft` and once more on any status transition.
+Holding the first read forever labels every pick against a team count from
+before the order was set and drops any manager who joined since.
+
+**The change signal is `status:last_picked:kickerCount`.** `drafts.last_picked`
+is Sleeper's own stamp of the most recent pick, which is the one thing it is
+right for — this repo's `SleeperDraft` doc warns against reading it as an *end*,
+and a running edge is exactly what a change detector wants. It is paired with the
+kicker count because a non-kicker pick moves the stamp and changes nothing on
+this board, and with the status so that a draft *completing* registers even
+though its last pick is not new. Nothing is sent when nothing changed, which is
+what makes a 15-second cadence reasonable on a page left open for three hours.
+
+**A completed draft stops the poller outright.** `pollIntervalMs` answers null,
+the timer is cleared, and the stream stays open holding a board that will not
+change — a finished draft is a fact, not a feed.
+
+### The four things that are silent when wrong
+
+- **Bytes must be written before the first `await` in `start`.** Next flushes
+  response headers on the first chunk, not when the `Response` is returned — its
+  own comment in `pipe-readable.js` says so. Until something is enqueued the
+  browser has no headers and `EventSource.onopen` has not fired, so the reader
+  stares at a connection that is in fact healthy. The route writes a jittered
+  `retry:` line first; the jitter is because a fixed reconnect delay is a
+  thundering herd when a dozen viewers lose one deploy together.
+- **`desiredSize` needs a queuing strategy to mean anything.** A `ReadableStream`
+  built with no strategy gets a count-based high-water mark of **one**, so
+  `desiredSize` drops to 0 the instant one chunk is queued and unpulled — the
+  normal state of a healthy stream. A back-pressure guard read against that
+  default silently discards every frame after the first, which is precisely what
+  it did: the connection opened, `onopen` fired, and no board ever arrived. The
+  stream is constructed with `new CountQueuingStrategy({ highWaterMark: 16 })`.
+- **The in-flight open is shared, and that is the feature's whole claim.**
+  Looking a room up, missing, and *then* awaiting a four-call read has every
+  simultaneous cold joiner run its own — and simultaneous cold joiners are the
+  use case. The promise is registered before the await with nothing between the
+  miss and the insert; re-checking the registry afterwards would deduplicate the
+  *room* and never the Sleeper work already spent. Verified: six concurrent cold
+  viewers produced exactly one `room open` line.
+- **A terminal failure must say so before closing.** `EventSource` reconnects on
+  *any* close, so a league id that will never resolve would be retried a second
+  apart forever by every tab that opened it. The route sends `type: "error"` and
+  closes; the hook calls `close()` on it. Both halves are required. Measured: a
+  nonsense id answers one frame and closes in 0.26s.
+
+**The room is ref-counted and its teardown is deferred by 30 seconds.** The
+linger is not politeness: React's StrictMode double-mount takes the count
+1 → 0 → 1 within a turn, so without it every dev page load costs two four-call
+reads. It is cancelled *before* a rejoining subscriber is added, because a timer
+firing between the two would tear down a room that has just been joined. A room
+is also born with an armed teardown, as the backstop for a joiner that goes away
+between the read landing and its seat being taken. Verified: both test rooms
+logged `room closed` after their linger — a poller outliving its subscribers is
+the failure with no symptom.
+
+`startBackgroundLoop` is deliberately **not** reused. It is a fixed
+`intervalMs` where a room's cadence changes with the draft's status and then
+stops, and its guard is a `Set` of app-lifetime loop *names* where a room is
+ephemeral and keyed by league. Teaching it a variable interval and a per-key
+lifecycle is most of what it does — that is a fork wearing a shared name.
+
+**The poller must never hold a limiter slot between ticks.** It gets that for
+free by calling the getters, which take a slot around the call; an edit that
+wrapped a whole tick in `sleeperLimiter.run` would park one of a 24-slot
+process-wide budget per watched league, and the symptom would be manager syncs
+queueing behind idle draft rooms.
+
+**One thing has no answer and is written down rather than guarded.** Fan-in is
+**per process**: there is no cross-process bus here, and an advisory lock would
+be actively wrong, since it would let one instance's poller win while that
+instance's viewers sit on the other one. The app runs one instance by
+construction — the crawler's section already depends on it — and this is the
+first feature whose *reader-facing* correctness does, rather than only its
+efficiency. A second instance multiplies the Sleeper budget by N and wants
+sticky routing by league id, not a lock.
+
+### The board, and the picker
+
+The board is **one console card at page width**: `CONSOLE_CARD` with
+`LeaguePlate` straddling the top edge and a `ReadingPlate` carrying the next
+placeholder up, so it reads as the same instrument the manager, trades and
+lineup-checker cards are. Rows are **flat** on the shares drawer's budget
+argument — no perspective, no `translateZ`, nothing to gate behind
+`pointer-fine:` and no reason for a virtualizer, since a draft is a few dozen
+rows. The pick chip is `CONSOLE_WINDOW` rather than `CONSOLE_READOUT`: inside a
+housing a readout is a window, and the difference is the lit lip closing the
+recess. An autopick's manager is an **em dash**, never a guessed name.
+
+**`mt-6` on the card is clearance, not spacing.** `CardPlateRow` hangs 13px above
+the card's own box, so a card standing on its own — rather than in a grid whose
+gap already pays for it — puts the league plate over whatever precedes it.
+Measured at 9px of overlap on the back link before it was added.
+
+The landing page is the picker plus a raw-id form, and **the raw-id form is the
+path the tool was designed for**, not a fallback: opened from a league chat,
+there is an id in the URL bar and no account in hand. With no stored account it
+is the whole page — idle rather than empty, since nothing is fetched.
+
+**The combobox fixes four defects TheLabX's own design notes list as known and
+unfixed**, all verified over CDP: Tab closes it; the first ArrowDown out of a
+shut popup opens at index 0 rather than skipping the first league; Enter only
+picks while the popup is open, so Enter after Escape cannot pick out of an
+invisible list; and option ids are keyed by `league_id`, because positional ids
+tell an assistive technology that row four was renamed when the list was
+replaced.
+
+### Verified
+
+Against the live database and Sleeper on the day it landed. `migrate:up` reported
+"No migrations to run", which is the claim above and why this port is code only.
+The snapshot route answered a real 12-team league with 67 placeholder picks whose
+labels disagree with Sleeper's own slots on every row. Six concurrent cold stream
+subscribers opened **one** room; both test rooms tore down after their linger.
+A nonsense id answered one `error` frame and closed; the snapshot route 404'd it;
+`POST` to the stream answered 405 with `Allow: GET`. In the browser: `onopen`
+then a `board` frame, a heartbeat at 20s, and no further frames on a complete
+draft. Over CDP at 1280 and 390 in both schemes — one `<h1>` per page, the rack's
+key lit on `/picktracker` *and* `/picktracker/<id>`, `documentElement.scrollWidth
+=== 390` at phone width, 113 leagues in the picker with `aria-activedescendant`
+naming a real option id.
+
+### Deliberately not ported
+
+TheLabX's board is a plain table with a manual Refresh button and no live half at
+all; the refresh key is kept here for the reason its own Sync key argues, that a
+reader of a live tool presses things when they doubt them, and because it is the
+only control that works where a proxy buffers the stream. Its capacity caps, an
+operator kill switch and a snapshot cache in front of the registry are all
+designs this does not carry: the ref-count already bounds pollers by actual
+readers, and each of those arrives with a second instance or a load problem to
+size it against.
+
 ## The app rack
 
 The app had no navigation. `/tools` was the only way to another tool and a
