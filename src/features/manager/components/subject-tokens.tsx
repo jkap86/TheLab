@@ -10,10 +10,12 @@ import { subjectKey } from "../helpers/league-subjects";
  * that combines them, and a way to clear the lot.
  *
  * **It exists because a drawer that is closed says nothing.** That is the same
- * problem `ViewHousing`'s readout solves for the two dialogs — both hide their
- * own state, so something on the page has to name the narrowing. A subject
- * narrowing needs more room than that readout has (it names people, not a
- * count), so it takes a tray of its own between the rule and the grid.
+ * problem the plate's `Leagues` figure solves for the two dialogs — both hide
+ * their own state, so something on the page has to name the narrowing. (It was
+ * the `ViewHousing` readout's job when this was written; that housing has since
+ * moved into the app rack and the figure onto the identity plate.) A subject
+ * narrowing needs more room than a figure has, because it names people rather
+ * than a count, so it takes a tray of its own between the rule and the grid.
  *
  * The mode toggle appears only above one subject, because with one picked `all`
  * and `any` are the same question and a control with no effect is worse than no
