@@ -1,6 +1,7 @@
 import { Fragment } from "react";
 
 import type {
+  KtcBoardChoice,
   LeagueLineupEntry,
   LeagueRecord,
   LineupMetricId,
@@ -35,7 +36,7 @@ import {
   rankFill,
   rankPercentile,
 } from "../helpers/lineup-metrics";
-import { LeagueTeams } from "./league-teams";
+
 
 /**
  * One league, as an instrument housing that rises toward the viewer.
@@ -84,8 +85,8 @@ import { LeagueTeams } from "./league-teams";
  * The card stays hook-free, as before: the one interaction it owns is the
  * disclosure, and the state a card does need lives below it — which team and
  * which metric in `LeagueTeams`, and where in the league's history the reader
- * is standing in `TimelineView`, which wraps that browser and swaps it for the
- * same two panes at a past moment.
+ * is standing in `TimelineView`, which draws that browser over the rosters of
+ * whichever moment the rail is on.
  *
  * All of the depth — the perspective, `preserve-3d`, every `translateZ`, the
  * open-state lift/halo shadows — rides `pointer-fine:`, because its budget is
@@ -124,12 +125,23 @@ export function LeagueCard({
   league,
   columns,
   entry,
+  season,
+  username,
+  board,
 }: {
   league: ManagerLeague;
   /** The chosen rank columns, in canonical order — see `useLineupColumns`. */
   columns: readonly LineupMetricId[];
   /** This league's solve + ranks, once the batched lineups read lands. */
   entry?: LeagueLineupEntry | null;
+  /**
+   * What a *past* stop is priced against — the same season, manager and market
+   * the present table was solved on, so the two are one comparison rather than
+   * two rulers. See `TimelineSubject`.
+   */
+  season: string | null;
+  username: string;
+  board: KtcBoardChoice;
 }) {
   return (
     // The `perspective` makes each `<li>` its own stacking context, so a card
@@ -221,23 +233,24 @@ export function LeagueCard({
           <Scanlines />
           <div className="relative">
             <TimelineView
-              leagueId={league.league_id}
-              // The reader's own team, so scrubbing back answers "what did I
-              // have" without a second press. It is read off the same payload
-              // the browser below is seeded from, so the two halves open on the
-              // same team; null while the lineups read is in flight, which the
-              // rail falls back from to the head of the list.
-              seedRosterId={
+              subject={{
+                leagueId: league.league_id,
+                season,
+                username,
+                board,
+              }}
+              entry={entry ?? null}
+              // The reader's own team, so a past stop marks and ranks the same
+              // team the present table does. Read off the payload the table is
+              // drawn from, so the two cannot disagree; null while the lineups
+              // read is in flight, which marks no team rather than the wrong one.
+              managerRosterId={
                 entry?.teams.find((t) => t.is_manager)?.roster_id ?? null
               }
             >
-              {entry && entry.teams.length > 0 ? (
-                <LeagueTeams entry={entry} />
-              ) : (
-                <p className="m-0 font-mono text-[0.6875rem] uppercase tracking-[0.16em] text-readout-label">
-                  No rosters read for this league yet
-                </p>
-              )}
+              <p className="m-0 font-mono text-[0.6875rem] uppercase tracking-[0.16em] text-readout-label">
+                No rosters read for this league yet
+              </p>
             </TimelineView>
           </div>
         </div>

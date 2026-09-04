@@ -7,8 +7,6 @@ import {
   stopSummary,
   timelineCaveat,
   timelineMoveCount,
-  timelinePickAssets,
-  timelineRosterGroups,
   timelineRosters,
   timelineStop,
 } from "./timeline.ts";
@@ -49,12 +47,14 @@ const payload: RosterTimelinePayload = {
       {
         roster_id: 1,
         name: "Alpha",
+        user_id: "u1",
         players: ["moved", "pickup"],
         picks: [{ season: "2027", round: 1, roster_id: 2 }],
       },
       {
         roster_id: 2,
         name: "Beta",
+        user_id: "u2",
         players: ["late"],
         picks: [],
       },
@@ -88,12 +88,16 @@ const payload: RosterTimelinePayload = {
     ],
   },
   players: {},
+  pricing: null,
 };
 
 describe("timelineMoveCount", () => {
   test("a missing payload is no rail at all", () => {
     assert.equal(timelineMoveCount(null), 0);
-    assert.equal(timelineMoveCount({ timeline: null, players: {} }), 0);
+    assert.equal(
+      timelineMoveCount({ timeline: null, players: {}, pricing: null }),
+      0,
+    );
   });
 
   test("one stop per move", () => {
@@ -222,67 +226,6 @@ describe("movedPlayerNames", () => {
   });
 });
 
-describe("timelineRosterGroups", () => {
-  const players = {
-    qb: player("qb", "QB"),
-    wr1: player("wr1", "WR"),
-    wr2: player("wr2", "WR"),
-  };
-
-  test("positions come back in lineup order, players by name inside one", () => {
-    const groups = timelineRosterGroups(["wr2", "qb", "wr1"], players);
-    assert.deepEqual(
-      groups.map((g) => g.position),
-      ["QB", "WR"],
-    );
-    assert.deepEqual(
-      groups[1].players.map((p) => p.name),
-      ["WR1", "WR2"],
-    );
-  });
-
-  test("Sleeper's padding is dropped, not drawn as a player", () => {
-    assert.deepEqual(timelineRosterGroups(["", "0"], players), []);
-  });
-
-  test("an unplaceable player keeps his id and sorts last", () => {
-    const groups = timelineRosterGroups(["stranger", "qb"], players);
-    assert.deepEqual(
-      groups.map((g) => g.position),
-      ["QB", "—"],
-    );
-    assert.equal(groups[1].players[0].name, "stranger");
-  });
-});
-
-describe("timelinePickAssets", () => {
-  const rosters = timelineRosters(payload, 0);
-
-  test("neither a slot nor a price is claimed at a past moment", () => {
-    const [pick] = timelinePickAssets(rosters[0], rosters);
-    assert.equal(pick.slot, null);
-    assert.equal(pick.value, null);
-  });
-
-  test("origin is named only where it is somebody else's", () => {
-    assert.equal(timelinePickAssets(rosters[0], rosters)[0].from, "Beta");
-
-    const own = timelinePickAssets(
-      { ...rosters[1], picks: [{ season: "2027", round: 2, roster_id: 2 }] },
-      rosters,
-    );
-    assert.equal(own[0].from, null);
-  });
-
-  test("an origin the league no longer lists still names a roster", () => {
-    const orphan = timelinePickAssets(
-      { ...rosters[0], picks: [{ season: "2027", round: 3, roster_id: 9 }] },
-      rosters,
-    );
-    assert.equal(orphan[0].from, "Roster 9");
-  });
-});
-
 describe("stopSummary", () => {
   test("the present is named rather than dated", () => {
     assert.equal(stopSummary(timelineStop(payload, 0), {}), "as they stand today");
@@ -315,6 +258,10 @@ describe("timelineCaveat", () => {
       timelineCaveat("Sep 18, 2026", "after trade · Moved"),
       /^After trade · Moved\. Every roster as it stood on Sep 18, 2026, reconstructed/,
     );
+  });
+
+  test("it says the numbers are today's, which is the claim it exists to make", () => {
+    assert.match(timelineCaveat("Sep 18, 2026", ""), /priced at today's values/);
   });
 
   test("a summary it has none of leaves a sentence rather than a stray full stop", () => {

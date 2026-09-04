@@ -2,35 +2,42 @@
 
 import { useMemo, useState, type ReactNode } from "react";
 
+import type { LeagueLineupEntry } from "@/shared/contract";
+
 import { CONSOLE_KEY_PILL } from "../../console-chrome";
 import { formatInstantDate } from "../../format";
 import {
   stopSummary,
   timelineCaveat,
   timelineMoveCount,
-  timelineRosters,
   timelineStop,
 } from "../../timeline";
+import { timelineEntry } from "../../timeline-entry";
 import { useTimeline } from "../../use-timeline";
+import type { TimelineSubject } from "../../use-timeline";
+import { LeagueTeams } from "../league-teams";
 import { TimelineRail } from "./timeline-rail";
-import { TimelineRosters } from "./timeline-rosters";
 
 /**
  * A league's present, with its past a drag away.
  *
- * **At "now" this is exactly its `children`**, which is the promise the whole
- * arrangement is arranged around: the rail opens at the present, the panel
- * below it is the same panel with the same props, and a reader who never
- * touches the slider sees no change at all. Only stepping back swaps the body —
- * and it *swaps* rather than laying a past roster under the card's numbers,
- * because every one of those numbers is a fact about the league today. See
- * {@link TimelineRosters} for why that would be a claim rather than a reading.
+ * **At "now" this is exactly the card's own browser**, which is the promise the
+ * whole arrangement is arranged around: the rail opens at the present, the
+ * table below it is the same table with the same numbers, and a reader who
+ * never touches the slider sees no change at all.
  *
- * **The present body is a node rather than something this builds**, so the host
- * keeps its own — the card passes its teams browser, seeded on whatever the
- * reader had selected. It is unmounted while the reader is in the past, which
- * costs nothing: the payload behind it is already in hand, so returning to now
- * re-renders rather than re-reads.
+ * **Stepping back changes the rosters and nothing else.** The past is drawn by
+ * the same `LeagueTeams` — the same metric column, the same lens, the same
+ * breakdown and the same pick pills — over the roster set the rewind produces,
+ * priced on **today's** boards. See `timelineEntry` for why that is the honest
+ * question rather than a compromise: nothing here stores a past projection or a
+ * past market, so "what was it worth then" cannot be answered, while "what
+ * would it be worth now" is exactly what a reader scrubbing back is asking.
+ *
+ * **One element at one position, deliberately.** The browser is rendered here
+ * rather than swapped for a second component, so React keeps its instance
+ * across a scrub — the reader's metric, lens and selected team all survive
+ * crossing "now", where two elements would reset all three on every move.
  *
  * **The log is not read until somebody asks for it.** A card's disclosure body
  * is rendered whether or not the card is open and there are a hundred of them
@@ -40,19 +47,21 @@ import { TimelineRosters } from "./timeline-rosters";
  * pays once.
  */
 export function TimelineView({
-  leagueId,
-  seedRosterId = null,
+  subject,
+  entry,
+  managerRosterId = null,
   children,
 }: {
-  /** The league this rail replays. */
-  leagueId: string;
+  /** Which league this replays, and which boards to price its past against. */
+  subject: TimelineSubject;
+  /** The card's own answer — what "now" is. Null while the solve is in flight. */
+  entry: LeagueLineupEntry | null;
   /**
-   * The roster the past half opens on — the reader's own team, where the card
-   * knows it, so scrubbing back answers "what did *I* have" without a press.
-   * Null falls back to the head of the list.
+   * Which roster is the reader's own, so the past table marks and ranks the
+   * same team the present one does. Null until the lineups read lands.
    */
-  seedRosterId?: number | null;
-  /** What "now" is — the panel the host draws. */
+  managerRosterId?: number | null;
+  /** What to draw where there is no table to draw — the card's empty state. */
   children: ReactNode;
 }) {
   // How many of the league's newest moves are reversed. **Zero rather than a
@@ -61,35 +70,27 @@ export function TimelineView({
   // the rail additive rather than something the body has to wait for.
   const [back, setBack] = useState(0);
 
-  // Which manager the historical half is showing.
-  //
-  // **Held here rather than in the view, so it survives the rail moving.** The
-  // roster list is rebuilt at every stop; a selection held inside it would reset
-  // as the reader dragged, which is the one thing a timeline must not do — the
-  // question being asked is what *this* manager held over time, so the manager
-  // is what stays fixed while the moment moves. It is deliberately *not* shared
-  // with the teams browser's own selection: that one is seeded the same way and
-  // then owned by the browser, and reaching into it would mean the card
-  // reporting a selection it currently keeps to itself.
-  const [rosterId, setRosterId] = useState<number | null>(seedRosterId);
-
   // Whether the reader has asked for the history at all — see the note above.
   // Local and one-way: once opened it stays open for the life of this card, so
   // scrubbing never re-arms a gate.
   const [opened, setOpened] = useState(false);
 
-  const { payload, loading, error } = useTimeline(leagueId, opened);
+  const { payload, loading, error } = useTimeline(subject, opened);
 
   const moves = timelineMoveCount(payload);
   const stop = timelineStop(payload, back);
   const players = payload?.players ?? EMPTY_PLAYERS;
-  // Only where the reader has actually stepped back. At "now" this would be the
-  // current rosters — which the body already draws, from its own read — so
-  // computing it would be a rewind of nothing for an answer nobody shows.
-  const rosters = useMemo(
-    () => (stop.back > 0 ? timelineRosters(payload, stop.back) : []),
-    [payload, stop.back],
+
+  // Solved only where the reader has actually stepped back. At "now" this would
+  // be the current rosters on the current boards — which the card already has,
+  // from its own read — so computing it would be a solve of nothing for an
+  // answer nobody shows.
+  const past = useMemo(
+    () => (stop.back > 0 ? timelineEntry(payload, stop.back, managerRosterId) : null),
+    [payload, stop.back, managerRosterId],
   );
+
+  const shown = past ?? entry;
 
   return (
     <>
@@ -112,8 +113,9 @@ export function TimelineView({
           both come back as no timeline. Drawing nothing at all would be right
           for something nobody had asked for and is wrong for an answer somebody
           has — a control that vanishes on press is worse than one that says it
-          found nothing. */}
-      {/* The 50px floor is measured rather than chosen: the `History` key's own
+          found nothing.
+
+          The 50px floor is measured rather than chosen: the `History` key's own
           row is 36px and the rail's is 35, so without it pressing the key would
           shift the whole table below by a pixel. */}
       <div className="mb-3.5 flex min-h-[3.125rem] items-center gap-3 border-b border-foreground/10 pb-3.5">
@@ -126,13 +128,13 @@ export function TimelineView({
             >
               History
             </button>
-            {/* **Dropped below `sm` rather than truncated**, the rule the
-                theme key's legend and the standing plate's points rank both
-                keep: at 390 it breaks mid-word, and a sentence cut to
-                "…through its stored …" reads as a rendering fault where the
-                key beside it already says what it does. */}
+            {/* **Dropped below `sm` rather than truncated**, the rule the theme
+                key's legend and the standing plate's points rank both keep: at
+                390 it breaks mid-word, and a sentence cut to "…through its
+                stored …" reads as a rendering fault where the key beside it
+                already says what it does. */}
             <span className="hidden min-w-0 truncate text-[0.75rem] text-foreground/45 sm:inline">
-              Rewind this league through its stored moves
+              Rewind this league, priced at today&rsquo;s values
             </span>
           </>
         )}
@@ -163,24 +165,24 @@ export function TimelineView({
         )}
       </div>
 
-      {stop.back === 0 || !payload?.timeline ? (
-        children
-      ) : (
-        <TimelineRosters
-          rosters={rosters}
-          players={players}
-          selectedId={rosterId}
-          onSelect={setRosterId}
-          // `this point` rather than the formatter's own `date unknown`, which
-          // reads as a broken sentence in the one place the two spellings
-          // differ — a caveat has to stay a sentence. Unreachable in practice,
-          // since the read that produced the event excludes undated rows, and
-          // cheap to be right about.
-          caveat={timelineCaveat(
+      {shown && shown.teams.length > 0 ? <LeagueTeams entry={shown} /> : children}
+
+      {/* Under the table, where the card keeps everything that says how the
+          numbers above it are known. It has to stay on screen with them, which
+          is why it is not on the rail a scroll away — and it is drawn only in
+          the past, because at "now" there is nothing to caveat. */}
+      {past && (
+        <p className="m-0 mt-4 text-[0.7rem] leading-relaxed text-foreground/45">
+          {/* `this point` rather than the formatter's own `date unknown`, which
+              reads as a broken sentence in the one place the two spellings
+              differ — a caveat has to stay a sentence. Unreachable in practice,
+              since the read that produced the event excludes undated rows, and
+              cheap to be right about. */}
+          {timelineCaveat(
             stop.at === null ? "this point" : formatInstantDate(stop.at),
             stopSummary(stop, players),
           )}
-        />
+        </p>
       )}
     </>
   );

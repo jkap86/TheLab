@@ -1,41 +1,26 @@
+import { getLeagueLineupRow } from "@/shared/manager";
+import type { ManagerLeagueRow } from "@/shared/manager";
 import { pool } from "@/shared/db";
-import {
-  DYNASTY_LEAGUE_TYPE,
-  LEAGUE_TYPE_SQL,
-  dynastyPickGrid,
-  leagueTeamName,
-  ownedDraftPicks,
-} from "@/shared/manager";
-import type { LeagueDraft, TradedPick } from "@/shared/manager";
 import { asNumber, isRecord, items, numbers } from "@/shared/trades/jsonb";
 import { TRADE_SORT_SQL } from "@/shared/trades/sql";
 
-import type { RewindTransaction, RosterState } from "./rewind";
+import type { RewindTransaction } from "./rewind";
 
 /**
- * The stored halves of a league's replay: what its rosters hold now, and every
- * move that got them there.
+ * The stored halves of a league's replay: the league as a solve reads it, and
+ * every move that got its rosters where they are.
  *
- * **It reads stored rows and fetches nothing.** `transactions`, `rosters`,
- * `traded_picks` and `drafts` are what the league crawler and the manager sync
- * already wrote, so a league neither has reached comes back with no timeline
- * rather than being synced on demand — the rule every route but the two
- * documented exceptions keeps.
+ * **It reads stored rows and fetches nothing from Sleeper.** `transactions`,
+ * `rosters`, `traded_picks` and `drafts` are what the league crawler and the
+ * manager sync already wrote, so a league neither has reached comes back with
+ * no timeline rather than being synced on demand — the rule every route but the
+ * two documented exceptions keeps.
  *
- * What it does that its neighbours do not is *derive*: the pick portfolio is
- * `traded_picks` overlaid on a grid whose seasons depend on the league's
- * format, which is the same resolution `getManagerLeagueRosters` makes and for
- * the same reason. That cost is affordable here for the reason the rail is
- * behind a press: one league, on a reader's own request, once per open card.
+ * **The league row is `getLeagueLineupRow`'s and not this module's own**, which
+ * is what lets a past stop be priced by the same solve the card in front of the
+ * rail is drawn by: the rewind starts from that row's rosters and pick grid, and
+ * `./pricing` puts today's boards over it.
  */
-
-/** One roster as it stands now, named — the state the walk rewinds *from*. */
-export type LeagueRosterState = {
-  roster_id: number;
-  /** Team name, then the owner's display name, then "Roster N". */
-  name: string;
-  state: RosterState;
-};
 
 /** One move, narrowed to what the payload promises. */
 export type TimelineEvent = {
@@ -60,10 +45,9 @@ export type TimelinePick = {
 
 /** Everything a timeline replays. */
 export type LeagueTimeline = {
-  league_id: string;
-  /** Every roster as it stands now, in roster-id order. */
-  rosters: LeagueRosterState[];
-  /** The league's completed moves, newest first — see {@link readTimelineEvents}. */
+  /** The league as a solve reads it — rosters, members, picks, drafts. */
+  league: ManagerLeagueRow;
+  /** Its completed moves, newest first — see {@link readTimelineEvents}. */
   events: TimelineEvent[];
 };
 
@@ -82,12 +66,13 @@ export type LeagueTimeline = {
  * "a draft is not a transaction" is the one that bites hardest at exactly that
  * end of the rail.
  *
- * Null on two terms, neither of them an error and neither stopping the league
- * being shown as it stands:
+ * Null on three terms, none an error and none stopping the league being shown
+ * as it stands:
  *
- * - **No rosters stored.** A league the crawler has recorded but not yet filled
- *   in; there is nothing to rewind *from*, and synthesising empty rosters is the
- *   claim this module refuses everywhere else.
+ * - **No such live league stored.** One the crawler has never reached, or one
+ *   Sleeper stopped serving.
+ * - **No rosters stored.** There is nothing to rewind *from*, and synthesising
+ *   empty rosters is the claim this module refuses everywhere else.
  * - **No dated completed moves.** A league nobody has moved a player in has no
  *   rail to draw, and drawing an empty one would be a control that explains
  *   itself instead of doing anything.
@@ -95,149 +80,13 @@ export type LeagueTimeline = {
 export async function getLeagueTimeline(
   leagueId: string,
 ): Promise<LeagueTimeline | null> {
-  const [rosters, events] = await Promise.all([
-    readLeagueRosterStates(leagueId),
+  const [league, events] = await Promise.all([
+    getLeagueLineupRow(leagueId),
     readTimelineEvents(leagueId),
   ]);
-  if (rosters.length === 0 || events.length === 0) return null;
+  if (!league || league.rosters.length === 0 || events.length === 0) return null;
 
-  return { league_id: leagueId, rosters, events };
-}
-
-/**
- * Every roster in the league as it stands now — the state the walk rewinds
- * *from*, with the name the card calls it by already on it.
- *
- * Five reads rather than one because a roster's players are a column and its
- * picks are a derivation, and because naming a team is `league_users`' answer
- * rather than `rosters`'. An empty answer is a league with no rosters stored,
- * which {@link getLeagueTimeline} reads as "nothing to say" rather than as a
- * league of empty teams.
- */
-async function readLeagueRosterStates(
-  leagueId: string,
-): Promise<LeagueRosterState[]> {
-  const [league, rosters, users, tradedPicks, drafts] = await Promise.all([
-    readLeague(leagueId),
-    readRosters(leagueId),
-    readUsers(leagueId),
-    readTradedPicks(leagueId),
-    readDrafts(leagueId),
-  ]);
-  if (!league || rosters.length === 0) return [];
-
-  const picksByRoster = ownedDraftPicks(
-    tradedPicks,
-    rosters.map((r) => r.roster_id),
-    league.season,
-    league.league_type === DYNASTY_LEAGUE_TYPE
-      ? dynastyPickGrid(league.season, drafts, league.previous_league_id)
-      : null,
-  );
-
-  return rosters.map((r) => ({
-    roster_id: r.roster_id,
-    // `leagueTeamName` rather than a second reading of the same two columns:
-    // the teams pane on the card in front of this rail calls the team the same
-    // thing, and two spellings is how "now" and "then" come to disagree about
-    // whose roster a reader is looking at.
-    name: leagueTeamName(users, r.roster_id, r.owner_id),
-    state: {
-      // The column is nullable and untyped — null is Sleeper's own spelling of
-      // an empty roster, and a non-array must read as "no players" rather than
-      // throw halfway through the walk.
-      players: Array.isArray(r.players)
-        ? r.players.filter((id): id is string => typeof id === "string")
-        : [],
-      picks: (picksByRoster.get(r.roster_id) ?? []).map((p) => ({
-        season: p.season,
-        round: p.round,
-        // `ownedDraftPicks` names the origin `original_roster_id`; on the wire
-        // and in the transactions being reversed it is Sleeper's `roster_id`.
-        roster_id: p.original_roster_id,
-      })),
-    },
-  }));
-}
-
-type LeagueMetaRow = {
-  season: string;
-  previous_league_id: string | null;
-  league_type: number;
-};
-
-async function readLeague(leagueId: string): Promise<LeagueMetaRow | null> {
-  const { rows } = await pool.query<LeagueMetaRow>(
-    `SELECT l.season, l.previous_league_id, ${LEAGUE_TYPE_SQL} AS league_type
-       FROM leagues l WHERE l.league_id = $1`,
-    [leagueId],
-  );
-  return rows[0] ?? null;
-}
-
-async function readRosters(leagueId: string): Promise<
-  Array<{ roster_id: number; owner_id: string | null; players: unknown }>
-> {
-  const { rows } = await pool.query<{
-    roster_id: number;
-    owner_id: string | null;
-    players: unknown;
-  }>(
-    `SELECT roster_id, owner_id, players FROM rosters WHERE league_id = $1
-      ORDER BY roster_id`,
-    [leagueId],
-  );
-  return rows;
-}
-
-/**
- * Who is in the league, for naming a roster.
- *
- * `ORDER BY updated_at` so the newest spelling wins where one person was synced
- * under different names — the same reading `getManagerLeaguemates` takes of the
- * same table.
- */
-async function readUsers(leagueId: string): Promise<
-  Array<{
-    user_id: string;
-    display_name: string | null;
-    team_name: string | null;
-  }>
-> {
-  const { rows } = await pool.query<{
-    user_id: string;
-    display_name: string | null;
-    team_name: string | null;
-  }>(
-    `SELECT user_id, display_name, team_name
-       FROM league_users WHERE league_id = $1
-      ORDER BY updated_at`,
-    [leagueId],
-  );
-  return rows;
-}
-
-async function readTradedPicks(leagueId: string): Promise<TradedPick[]> {
-  const { rows } = await pool.query<TradedPick>(
-    `SELECT season, round, roster_id, owner_id
-       FROM traded_picks WHERE league_id = $1`,
-    [leagueId],
-  );
-  return rows;
-}
-
-async function readDrafts(leagueId: string): Promise<LeagueDraft[]> {
-  const { rows } = await pool.query<LeagueDraft>(
-    // The two casts the manager queries make for the same reasons: `start_time`
-    // is a BIGINT `pg` hands back as a string, and `rounds` is regex-guarded
-    // before its cast so one league's junk value cannot fail the read.
-    `SELECT draft_id, season, status, start_time::float8 AS start_time,
-            CASE WHEN settings->>'rounds' ~ '^[0-9]+$'
-                 THEN (settings->>'rounds')::int END AS rounds
-       FROM drafts WHERE league_id = $1`,
-    [leagueId],
-  );
-  return rows;
+  return { league, events };
 }
 
 /**

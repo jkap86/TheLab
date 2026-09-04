@@ -9,4 +9,3 @@
 
 export { TimelineView } from "./timeline-view";
 export { TimelineRail } from "./timeline-rail";
-export { TimelineRosters } from "./timeline-rosters";

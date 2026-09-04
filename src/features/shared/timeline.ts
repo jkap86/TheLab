@@ -2,7 +2,6 @@ import { rewindRosters } from "../../shared/timeline/rewind.ts";
 import type { RosterPick, RosterState } from "../../shared/timeline/rewind.ts";
 import type {
   PlayerSummary,
-  RosterPick as CardRosterPick,
   RosterTimelinePayload,
   TimelineEventPayload,
 } from "@/shared/contract";
@@ -95,6 +94,8 @@ export type TimelineRoster = {
   roster_id: number;
   /** Who holds it *now* — see {@link timelineRosters}. */
   name: string;
+  /** The holder's user id, which is how the solve finds the manager's team. */
+  user_id: string | null;
   players: string[];
   picks: RosterPick[];
 };
@@ -133,6 +134,7 @@ export function timelineRosters(
   return timeline.rosters.map((roster) => ({
     roster_id: roster.roster_id,
     name: roster.name,
+    user_id: roster.user_id,
     players: states.get(roster.roster_id)?.players ?? [],
     picks: states.get(roster.roster_id)?.picks ?? [],
   }));
@@ -228,23 +230,31 @@ export function stopSummary(
 }
 
 /**
- * The line under a past league, which has three jobs and states all of them
+ * The line under a past league, which has four jobs and states all of them
  * plainly.
  *
  * It says *what* moment this is, because the rail's own readout is a row up and
  * a reader who has scrolled the card can no longer see it — and the rail can
  * only afford a date, so this is the one place the move itself is named. It
- * says *when*. And it says the rosters are **reconstructed**, because nothing
- * about a list of names admits that it was derived: Sleeper stores no history,
- * so this is today's rosters with every move since undone.
+ * says *when*. It says the rosters are **reconstructed**, because nothing about
+ * a list of names admits that it was derived: Sleeper stores no history, so
+ * this is today's rosters with every move since undone.
  *
- * **Only the draft limit is stated, and that is a judgement rather than an
- * omission.** `shared/timeline/rewind` documents two: a draft is not a
- * transaction, and the pick horizon is today's. The first is visible in the
- * rosters on screen — a rookie class sitting on teams that had not drafted it
- * yet — and the second shows up as picks quietly absent, which no wording on a
- * two-line note is going to make legible. A caveat that lists everything is one
- * nobody finishes.
+ * And it says **the numbers are today's**, which is the one thing a reader
+ * would otherwise get exactly backwards. The table above is the card's own, so
+ * every figure in it reads as a figure — and a projection, an ADP and a KTC
+ * price are all *now*, because this app stores no history of any of the three.
+ * What the past pane answers is therefore a counterfactual, "what would this
+ * roster be worth today", and saying so is what separates it from a claim about
+ * October. See `timeline-entry` for why that is the question worth answering.
+ *
+ * **Only the draft limit is stated of the reconstruction's two**, and that is a
+ * judgement rather than an omission. `shared/timeline/rewind` documents two: a
+ * draft is not a transaction, and the pick horizon is today's. The first is
+ * visible in the rosters on screen — a rookie class sitting on teams that had
+ * not drafted it yet — and the second shows up as picks quietly absent, which no
+ * wording on a two-line note is going to make legible. A caveat that lists
+ * everything is one nobody finishes.
  *
  * It takes the formatted date rather than the instant, so this module stays free
  * of the formatter and the rail keeps one spelling of a moment.
@@ -253,118 +263,5 @@ export function timelineCaveat(when: string, summary: string): string {
   const lead = summary
     ? `${summary.charAt(0).toUpperCase()}${summary.slice(1)}. `
     : "";
-  return `${lead}Every roster as it stood on ${when}, reconstructed by undoing every move since — so a class drafted after this date is already on the roster that took it.`;
-}
-
-/**
- * Where the positions sort in a rewound roster.
- *
- * A past roster has no lineup: seating one would need the projections and the
- * scoring for a week that is over, which is a different question from the one
- * the rail is asking. So it is grouped the way a roster page groups — by
- * position, in the order a lineup fills — and everything the players map cannot
- * place sorts last under its own heading rather than being dropped.
- */
-const POSITION_ORDER = ["QB", "RB", "WR", "TE", "K", "DEF"];
-
-/** A player as a rewound roster draws him — the summary, or the bare id. */
-export type TimelinePlayer = {
-  player_id: string;
-  name: string;
-  position: string | null;
-};
-
-/**
- * Whether an id is a player at all.
- *
- * Sleeper pads an unfilled roster slot with an empty id or a literal `"0"`, and
- * a row reading `0` is a rendering fault wearing a player's seat. One spelling,
- * two readers: the count beside a team in the list and the rows in the pane
- * beside it must not disagree about how many players a roster held.
- */
-const isHeldPlayer = (id: string): boolean => Boolean(id) && id !== "0";
-
-/** How many players a roster held at a stop — the number the teams list shows. */
-export function timelineRosterSize(playerIds: readonly string[]): number {
-  return playerIds.reduce((total, id) => total + (isHeldPlayer(id) ? 1 : 0), 0);
-}
-
-/**
- * One roster's players at a stop, grouped by position in lineup order.
- *
- * An id the players map has no row for keeps its **id** — a visible, searchable
- * token beats a blank, which is the same call every other list here makes.
- */
-export function timelineRosterGroups(
-  playerIds: readonly string[],
-  players: Readonly<Record<string, PlayerSummary>>,
-): { position: string; players: TimelinePlayer[] }[] {
-  const groups = new Map<string, TimelinePlayer[]>();
-
-  for (const id of playerIds) {
-    if (!isHeldPlayer(id)) continue;
-    const summary = players[id];
-    const position = summary?.position ?? null;
-    const key = position ?? "—";
-    const list = groups.get(key);
-    const player: TimelinePlayer = {
-      player_id: id,
-      name: summary?.name || id,
-      position,
-    };
-    if (list) list.push(player);
-    else groups.set(key, [player]);
-  }
-
-  for (const list of groups.values()) {
-    list.sort((a, b) => a.name.localeCompare(b.name));
-  }
-
-  return [...groups.entries()]
-    .map(([position, players]) => ({ position, players }))
-    .sort((a, b) => positionRank(a.position) - positionRank(b.position));
-}
-
-function positionRank(position: string): number {
-  const at = POSITION_ORDER.indexOf(position);
-  return at === -1 ? POSITION_ORDER.length : at;
-}
-
-/**
- * A rewound roster's picks in the shape the card's own `DraftPicks` draws.
- *
- * **Reusing that component rather than drawing a second pick grid** is what
- * keeps "now" and "then" the same object: the seasons group into the same
- * plates, a pick reads by its round the same way, and an acquired one names the
- * roster it came from. Two of its three fields are deliberately null, and both
- * absences are the honest reading rather than a gap:
- *
- * - **`slot`** is where a pick falls once a draft order is set, and an order is
- *   a fact about a draft rather than about a moment — but the *holder* at this
- *   stop may not be the roster whose slot the card resolved, so printing one
- *   would attribute today's board position to a past portfolio. A round is what
- *   this can say without claiming.
- * - **`value`** is a KeepTradeCut price, which is today's market. Pricing a
- *   past roster on it is a defensible reading and a different one from what the
- *   card's own totals mean; until the rail has a market of its own to name, an
- *   absent price is the answer that cannot mislead.
- *
- * `from` is relative to the roster holding the pick — the same asset is "from
- * Slim" in one portfolio and origin-less in the one it came out of.
- */
-export function timelinePickAssets(
-  roster: TimelineRoster,
-  rosters: readonly TimelineRoster[],
-): CardRosterPick[] {
-  return roster.picks.map((pick) => ({
-    season: pick.season,
-    round: pick.round,
-    slot: null,
-    from:
-      pick.roster_id === roster.roster_id
-        ? null
-        : (rosters.find((r) => r.roster_id === pick.roster_id)?.name ??
-          `Roster ${pick.roster_id}`),
-    value: null,
-  }));
+  return `${lead}Every roster as it stood on ${when}, reconstructed by undoing every move since — and priced at today's values, so these are what each team would be worth now rather than what it was worth then.`;
 }

@@ -145,8 +145,13 @@ const NO_KTC: KtcPricing = { values: new Map(), picks: {}, superflex: false };
  * a league read on the redraft market, which has no pick rows. That is a
  * genuine gap and reads as one: the pick falls out of the total rather than
  * dragging it toward zero.
+ *
+ * Exported for `shared/timeline`, which prices the same league's pick grid for
+ * a rewound portfolio: the two vocabularies meet in exactly one place, and a
+ * second meeting is a past pick priced off a different third of its round from
+ * the one the card beside it shows.
  */
-function pickValue(
+export function pickValue(
   ktc: KtcPricing,
   teams: number,
   pick: { season: string; round: number; slot: number | null },

@@ -49,6 +49,7 @@ export {
   // league reading as dynasty here and as redraft there is a pick grid that
   // disagrees with the one the card beside it draws.
   LEAGUE_TYPE_SQL,
+  getLeagueLineupRow,
   getLeaguemateIds,
   getManagerDraftAdp,
   getManagerLeaguemates,
@@ -64,18 +65,22 @@ export { solveLeagueLineup } from "./ros-lineups";
 export type { RosLineupLeague } from "./ros-lineups";
 export { lineupMetricTotals, rankLeagueLineups } from "./league-ranks";
 export type { LeagueRosterRow, RankLeague, RankedRoster } from "./league-ranks";
-export { leagueTeamName, solveLeagueEntry } from "./league-teams";
+export { leagueTeamName, pickValue, solveLeagueEntry } from "./league-teams";
 export type { KtcPricing, LineupLeagueRow } from "./league-teams";
 export {
   DYNASTY_LEAGUE_TYPE,
   DYNASTY_PICK_SEASONS,
   dynastyPickGrid,
+  leaguePickBoard,
   leagueRosterPicks,
   ownedDraftPicks,
+  pickCellKey,
 } from "./draft-picks";
 export type {
   DraftPickAsset,
   DraftPickGrid,
+  LeaguePickBoard,
+  PickCell,
   LeagueDraft,
   LeagueDraftRow,
   LeagueUserName,
