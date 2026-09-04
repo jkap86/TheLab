@@ -73,3 +73,31 @@ export function resolveKtcFormat(
   if (choice !== "auto") return choice;
   return leagueType === DYNASTY_LEAGUE_TYPE ? "dynasty" : "redraft";
 }
+
+/**
+ * The market a number spanning *many* leagues is read on.
+ *
+ * A second function rather than a `null` league type through {@link
+ * resolveKtcFormat}, because it is a different rule and not a degenerate case
+ * of that one: there, `auto` means "each league on the board its own type
+ * implies", and the question only has an answer per league. The shares drawer's
+ * Value column is one figure for a player held across a dozen leagues, so there
+ * is no league to resolve against — and the two candidate readings, "the board
+ * most of them imply" and "one board, named", are not the same kind of answer.
+ *
+ * **`auto` reads dynasty here.** It is the board carrying rookie-pick rows, and
+ * the one a cross-league comparison implies: somebody looking at a player they
+ * hold in nine leagues is asking what he is worth to hold, which is the dynasty
+ * question. The forcing states still force, which is what they are for — a
+ * reader whose account is all redraft says so once and every panel follows.
+ *
+ * What must never happen is the third option: averaging the two markets. Three
+ * figures on three scales never share a column, and a pooled read is *wrong*
+ * rather than differently weighted — see the ADP board split for the same bug
+ * with the same shape.
+ */
+export function resolveKtcCrossLeagueFormat(
+  choice: KtcBoardChoice,
+): KtcFormat {
+  return choice === "auto" ? "dynasty" : choice;
+}

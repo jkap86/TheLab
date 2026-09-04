@@ -41,6 +41,19 @@ export {
   useLineupColumns,
 } from "./lineup-columns";
 export {
+  DEFAULT_SHARES_COLUMNS,
+  MAX_SHARES_COLUMNS,
+  SHARES_COLUMN_IDS,
+  SHARES_COLUMN_WIDTHS,
+  SHARES_COLUMNS_BY_KIND,
+  mergeSharesColumns,
+  sharesColumnLabel,
+  sharesColumns,
+  storeSharesColumns,
+  useSharesColumns,
+} from "./shares-columns";
+export type { SharesColumnId, SharesPanelKind } from "./shares-columns";
+export {
   RackReadoutProvider,
   usePublishRackReadout,
   useRackReadout,

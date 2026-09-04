@@ -119,9 +119,19 @@ export function LeaguesHome({
     setOpened(new Set());
   }
 
+  // The KTC market this device reads. It rides *both* server reads below for
+  // one reason: the price a shares row prints and the ranks a card prints are
+  // on one market or they are on two, and the reader chose one.
+  const ktcBoard = useKtcBoard();
+
   // Read once, by both drawers and by the predicate below — see the hook for
   // why the latch rather than `drawer !== null`.
-  const players = useManagerPlayers(username, state.season, opened.has("player"));
+  const players = useManagerPlayers(
+    username,
+    state.season,
+    opened.has("player"),
+    ktcBoard,
+  );
   const leaguemates = useManagerLeaguemates(
     username,
     state.season,
@@ -130,6 +140,12 @@ export function LeaguesHome({
 
   const narrowing =
     activeFilterCount(filters) > 0 || subjects.subjects.length > 0;
+  // **The league filters only** — never the subject selection. A drawer's
+  // readout says what population its shares are counted over, and the subjects
+  // are picked *in* the drawers: naming them there would have the panel
+  // describe a narrowing it is the source of.
+  const leagueNarrowing =
+    activeFilterCount(filters) > 0 ? filterSummary(filters) : null;
 
   // **The two narrowings are two passes and the order is the cheap one.** A
   // league rejected on its type never has its roster walked — and the drawers
@@ -161,11 +177,9 @@ export function LeaguesHome({
 
   // Fetched once the leagues settle — `!refreshing` flipping true is also what
   // refetches after a cold sync, when the rosters this read solves from were
-  // just written. See the hook.
-  // The KTC market this device reads. It rides the request rather than being
+  // just written. See the hook. The board rides the request rather than being
   // applied here, because the four KTC columns are ranked and only the server
-  // can rank them — see the hook.
-  const ktcBoard = useKtcBoard();
+  // can rank them.
   const lineups = useManagerLineups(
     username,
     state.season,
@@ -353,6 +367,8 @@ export function LeaguesHome({
           open={drawer === "player"}
           onClose={() => setDrawer(null)}
           leagues={leagueFiltered}
+          leagueTotal={leagues.length}
+          filterSummary={leagueNarrowing}
           read={players}
           subjects={subjects}
           onToggle={(s) => setSubjects((prev) => toggleSubject(prev, s))}
@@ -363,6 +379,8 @@ export function LeaguesHome({
           open={drawer === "leaguemate"}
           onClose={() => setDrawer(null)}
           leagues={leagueFiltered}
+          leagueTotal={leagues.length}
+          filterSummary={leagueNarrowing}
           read={leaguemates}
           selfId={user?.user_id ?? null}
           subjects={subjects}

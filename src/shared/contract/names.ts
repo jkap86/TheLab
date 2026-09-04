@@ -27,6 +27,45 @@ export type PlayerSummary = {
 };
 
 /**
+ * A player as the shares drawer reads him: the summary above, plus the three
+ * figures its Value, Age and Class columns are drawn from.
+ *
+ * **A sibling type rather than three more fields on {@link PlayerSummary}**,
+ * because the trades board is that type's other reader and none of these three
+ * is a fact it asks for: a trade names players who have since retired, and
+ * shipping an age and a price for each of them would be wire weight nothing on
+ * that page renders. The shares payload is the one place they are wanted, so it
+ * is the one payload that carries them.
+ *
+ * All three are **null where the answer is absent, never zero** — the rule the
+ * whole app is written on. An unpriced player is the ordinary case (KTC's
+ * boards are a churning few hundred skill players), a defence has no age, and a
+ * draft class is only as good as what Sleeper stored.
+ */
+export type PlayerShareSummary = PlayerSummary & {
+  /** Sleeper's own `age`, as it stores it. Null where it has none. */
+  age: number | null;
+  /**
+   * The season this player came into the league, **as Sleeper recorded it** —
+   * `metadata.rookie_year` and nothing else.
+   *
+   * It is deliberately not derived from `years_exp`. `activeSeason - years_exp`
+   * covers many more players and is wrong for anyone who went undrafted or
+   * missed a season, and a wrong year on a dynasty page is worse than an absent
+   * one — the same call `resolveSleeperIds` makes when it leaves an ambiguous
+   * KTC row unmatched. The derivation is available if somebody measures its
+   * error against the stored map first.
+   */
+  draft_class: number | null;
+  /**
+   * KeepTradeCut's price, on the one board named by `ManagerPlayersPayload.ktc`
+   * — never an average of the two markets, which would be three scales sharing
+   * a column.
+   */
+  ktc_value: number | null;
+};
+
+/**
  * A league member as sent to the client (avatar id resolved to a URL).
  *
  * `display_name` is nullable where the stored `league_users` row has none; a

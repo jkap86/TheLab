@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 
 import type {
+  KtcBoardChoice,
   ManagerLeaguematesPayload,
   ManagerPlayersPayload,
 } from "@/shared/contract";
@@ -42,6 +43,8 @@ function useSharesResource<T>(
   season: string | null,
   enabled: boolean,
   failure: string,
+  /** Extra query, already encoded, or "" — see {@link useManagerPlayers}. */
+  query = "",
 ): SharesRead<T> {
   const [state, setState] = useState<SharesState<T>>({
     data: null,
@@ -52,7 +55,7 @@ function useSharesResource<T>(
   // Reset during render, the way `useManagerLeagues` documents: an effect would
   // paint one frame of the previous manager's shares under the new manager's
   // name — and, worse here, under the new manager's selected subjects.
-  const subject = `${username} ${season ?? ""}`;
+  const subject = `${username} ${season ?? ""} ${query}`;
   const [renderedSubject, setRenderedSubject] = useState(subject);
   if (renderedSubject !== subject) {
     setRenderedSubject(subject);
@@ -68,7 +71,7 @@ function useSharesResource<T>(
 
     const url =
       `/api/user/${encodeURIComponent(username)}/${path}` +
-      `?season=${encodeURIComponent(season)}`;
+      `?season=${encodeURIComponent(season)}${query}`;
 
     void (async () => {
       try {
@@ -90,7 +93,7 @@ function useSharesResource<T>(
     })();
 
     return () => controller.abort();
-  }, [path, username, season, enabled, failure]);
+  }, [path, username, season, enabled, failure, query]);
 
   // **Derived, not stored.** Writing `loading: true` from inside the effect is
   // a synchronous setState in an effect body — a cascading render, and what the
@@ -103,10 +106,21 @@ function useSharesResource<T>(
   };
 }
 
+/**
+ * The rosters read, and the one of the two that takes a KeepTradeCut board.
+ *
+ * **The board joins the subject key**, which is what blanks the map for one
+ * round trip rather than leaving the old market's prices under the new
+ * market's name — the cost `useManagerLineups` already pays for the same flip,
+ * and for the same reason: a price on the wrong board is a wrong number, not a
+ * stale one. It costs nothing until a drawer has been opened, since `enabled`
+ * gates the request either way.
+ */
 export function useManagerPlayers(
   username: string,
   season: string | null,
   enabled: boolean,
+  board: KtcBoardChoice,
 ): SharesRead<ManagerPlayersPayload> {
   return useSharesResource(
     "players",
@@ -114,6 +128,7 @@ export function useManagerPlayers(
     season,
     enabled,
     "Failed to load rosters",
+    `&ktc_board=${encodeURIComponent(board)}`,
   );
 }
 

@@ -2,14 +2,22 @@ import type { PlayerSummary } from "@/shared/contract";
 import { pool } from "@/shared/db";
 
 import { toPlayerSummary } from "./summary";
-import type { PlayerNameRow } from "./summary";
+import type { PlayerNameRow, PlayerShareRow } from "./summary";
 
 /**
  * Reads over the stored players map.
  *
- * Two — the trades board resolving a page's ids to names, and the matchable set
- * the KTC name matcher walks. TheLabX's other four (the rookie class, the
- * search, and its two comps reads) arrive with the surfaces that ask them.
+ * Three — the trades board resolving a page's ids to names, the same read plus
+ * the two dated columns the shares drawer draws its Age and Class from, and the
+ * matchable set the KTC name matcher walks. TheLabX's other three (the rookie
+ * class, the search, and its two comps reads) arrive with the surfaces that ask
+ * them.
+ *
+ * **The first two are separate statements rather than one wider one**, and
+ * deliberately: the trades board resolves several hundred ids per page and
+ * renders none of the dated columns, so widening its read would be two casts
+ * per row and two fields on the wire for a page that has nothing to do with
+ * them.
  */
 
 /**
@@ -34,6 +42,40 @@ export async function getPlayersByIds(
 
   const out: Record<string, PlayerSummary> = {};
   for (const r of rows) out[r.player_id] = toPlayerSummary(r);
+  return out;
+}
+
+/**
+ * The same resolution plus the two columns the shares drawer dates a player by.
+ *
+ * Both are lifted out of Sleeper's raw blob and **both are regex-guarded before
+ * the cast**, the house rule `getMatchablePlayers` below already follows: junk
+ * in an untyped blob must read as "unknown", never fail the statement for every
+ * other player in the batch.
+ *
+ * `draft_class` is `metadata.rookie_year` and **nothing else** — see
+ * `PlayerShareSummary.draft_class` for why the obvious `activeSeason -
+ * years_exp` fallback is not taken here. An absent id is absent, on
+ * {@link getPlayersByIds}' rule.
+ */
+export async function getPlayerShareRows(
+  ids: string[],
+): Promise<Record<string, PlayerShareRow>> {
+  if (ids.length === 0) return {};
+
+  const { rows } = await pool.query<PlayerShareRow>(
+    `SELECT player_id, full_name, first_name, last_name, position, team,
+            CASE WHEN data->>'age' ~ '^[0-9]{1,3}$'
+                 THEN (data->>'age')::int END AS age,
+            CASE WHEN data->'metadata'->>'rookie_year' ~ '^[0-9]{4}$'
+                 THEN (data->'metadata'->>'rookie_year')::int END AS draft_class
+       FROM players
+      WHERE player_id = ANY($1)`,
+    [ids],
+  );
+
+  const out: Record<string, PlayerShareRow> = {};
+  for (const r of rows) out[r.player_id] = r;
   return out;
 }
 

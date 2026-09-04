@@ -1,4 +1,5 @@
-import type { LeaguematePayload, PlayerSummary } from "./names";
+import type { KtcFormat } from "./ktc";
+import type { LeaguematePayload, PlayerShareSummary } from "./names";
 
 /**
  * The two shares reads: which of a manager's leagues hold which players, and
@@ -30,11 +31,37 @@ export type ManagerPlayersPayload = {
    */
   rosters: Record<string, string[]>;
   /**
-   * Player ids → name/position/team, for every id named above. A missing id is
-   * simply absent, never a placeholder row: the fold has the id in hand and
-   * shows it, which is a searchable token rather than an empty cell.
+   * Player ids → name/position/team plus the drawer's three figures, for every
+   * id named above. A missing id is simply absent, never a placeholder row: the
+   * fold has the id in hand and shows it, which is a searchable token rather
+   * than an empty cell.
    */
-  players: Record<string, PlayerSummary>;
+  players: Record<string, PlayerShareSummary>;
+  /**
+   * Which KeepTradeCut market every `ktc_value` above was read on, and when
+   * those rows were scraped. **Null when no board could be read**, which is
+   * what turns the drawer's Value column into a column of em dashes rather than
+   * a column of zeroes.
+   *
+   * **One board for the whole panel, and it has to be**, which is the one place
+   * this payload differs in kind from the lineups one. There a price is per
+   * league, so `auto` resolves per league and the payload can answer `"mixed"`;
+   * here a row *spans* leagues, so there is no league to resolve against and a
+   * single figure has to name a single market — `auto` reads dynasty, the board
+   * with pick rows and the one a cross-league comparison implies. Averaging the
+   * two would be the pooled-ADP bug in a second place.
+   *
+   * `superflex` is false and is stated rather than assumed for the same reason.
+   * Which of KTC's two QB columns a league reads is a fact about that league,
+   * and a shares row is not one — so the panel fixes the 1QB column and says
+   * so, rather than letting a price move when a filter does.
+   */
+  ktc: {
+    board: KtcFormat;
+    superflex: false;
+    /** ISO 8601; null when the board matched nothing. */
+    updated_at: string | null;
+  } | null;
 };
 
 /** `GET /api/user/[username]/leaguemates` — who is in those leagues. */

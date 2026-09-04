@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { describe, test } from "node:test";
 
-import type { ManagerLeague, PlayerSummary } from "@/shared/contract";
+import type { ManagerLeague, PlayerShareSummary } from "@/shared/contract";
 
 import { playerShares } from "./shares.ts";
 
@@ -15,8 +15,18 @@ function summary(
   name: string,
   position: string | null = "RB",
   team: string | null = "ATL",
-): PlayerSummary {
-  return { player_id, name, position, team };
+  extra: Partial<PlayerShareSummary> = {},
+): PlayerShareSummary {
+  return {
+    player_id,
+    name,
+    position,
+    team,
+    age: null,
+    draft_class: null,
+    ktc_value: null,
+    ...extra,
+  };
 }
 
 const A = league("a");
