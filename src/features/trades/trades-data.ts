@@ -36,6 +36,12 @@ export type TradesData = {
   managers: Record<string, LeaguematePayload>;
   /** Pick key → draft slot, for the picks whose league has set an order. */
   pickSlots: Record<string, number>;
+  /**
+   * Asset key → what KeepTradeCut prices it at on each of its two markets.
+   * Merged like the name maps: a page carries the keys it names, and a later
+   * page re-sending one it shares with an earlier page writes the same answer.
+   */
+  assetValues: TradesPagePayload["assetValues"];
 };
 
 /**
@@ -57,6 +63,10 @@ export function foldTradePages(
   const players: Record<string, PlayerSummary> = {};
   const managers: Record<string, LeaguematePayload> = {};
   const pickSlots: Record<string, number> = {};
+  const assetValues: Record<
+    string,
+    { dynasty: number | null; redraft: number | null }
+  > = {};
 
   let total: number | null = null;
   let scopeTotal: number | null = null;
@@ -69,6 +79,7 @@ export function foldTradePages(
     Object.assign(players, page.players);
     Object.assign(managers, page.managers);
     Object.assign(pickSlots, page.pickSlots);
+    Object.assign(assetValues, page.assetValues);
 
     // First stated wins, so a later page's `null` cannot unstate it.
     if (total === null && page.total !== null) total = page.total;
@@ -96,5 +107,6 @@ export function foldTradePages(
     players,
     managers,
     pickSlots,
+    assetValues,
   };
 }

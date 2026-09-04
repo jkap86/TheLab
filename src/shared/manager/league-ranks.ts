@@ -7,18 +7,22 @@
  * the usual reason.
  *
  * **One solve per roster is the whole design.** `solveLeagueLineup` already
- * prices every player's points *and* draft capital onto the lineup it returns,
- * so all five metrics fall out of the solves the rank needs anyway — there is
- * no second valuation pass to drift from the first. Every solve is returned,
+ * prices every player's points, draft capital *and* KeepTradeCut value onto the
+ * lineup it returns, so eight of the nine metrics fall out of the solves the
+ * rank needs anyway — there is no second valuation pass to drift from the
+ * first. The ninth, `ktc_picks`, is the one thing not on a player, and it
+ * arrives priced for the same reason. Every solve is returned,
  * totals attached: the expanded card lets the reader open any team in the
  * league, so the payload carries all of them, not just the manager's.
  * (It used to discard the others; the team picker is what reversed that.)
  *
  * **A metric ranks null when every roster in the league totals zero on it.**
- * That one rule covers both degenerate cases — no projections read (both ROS
- * metrics zero everywhere) and no synced drafts (all three capital metrics) —
- * because "1st of 12" among all-zero totals is a claim, not an answer. Ties on
- * a real total share the better rank and the next distinct total skips
+ * That one rule covers every degenerate case — no projections read (both ROS
+ * metrics zero everywhere), no synced drafts (all three capital metrics), an
+ * unreadable KTC board (all four KTC metrics), and a league read on the redraft
+ * market, which carries no rookie-pick rows so `ktc_picks` is zero for
+ * everyone. "1st of 12" among all-zero totals is a claim, not an answer. Ties
+ * on a real total share the better rank and the next distinct total skips
  * ("1, 2, 2, 4"), so tied managers read the same honest number.
  */
 
@@ -52,13 +56,32 @@ export type RankLeague = {
 };
 
 /**
- * All five metric totals off one solved lineup. Exported for the tests: the
- * sums here are what the ranks compare, so their edge rules — null points and
- * null capital both count zero, the ROS bench re-rounds the way the starters
- * total already is — are pinned where they live.
+ * All nine metric totals off one solved lineup and the roster's pick portfolio.
+ * Exported for the tests: the sums here are what the ranks compare, so their
+ * edge rules — an unpriced player counts zero on every scale, the ROS bench
+ * re-rounds the way the starters total already is — are pinned where they live.
+ *
+ * **`starters` and `bench` are a partition of the roster**, by construction:
+ * `solveLeagueLineup` builds both out of one deduplicated player list, so the
+ * two sums cannot double-count anyone or exceed the whole. That is why this
+ * takes a lineup rather than walking the roster the way TheLabX's
+ * `rosterKtcValue` has to (see `ktc/roster` for the version of this that does).
+ *
+ * **`ktc_total` is the only metric that includes the picks, and it includes all
+ * three parts**: `ktc_starters + ktc_bench + ktc_picks`, so the four
+ * reconcile exactly and a reader can see where a roster's worth sits. Capital
+ * is deliberately not arranged that way — `capital_total` is the players alone,
+ * because ADP prices a *player* and there is no pick ladder here to add.
+ *
+ * `pickValue` is what KTC prices this roster's future picks at, already summed
+ * by the caller (`./league-teams`, which resolves each pick's tier against the
+ * league's own draft order). Zero where the roster owns no priced pick —
+ * including every roster in a league read on the redraft market — which the
+ * all-zero rule above then reads correctly as "nothing to rank".
  */
 export function lineupMetricTotals(
   lineup: LeagueLineup,
+  pickValue = 0,
 ): Record<LineupMetricId, number> {
   const starterCapital = lineup.starters.reduce(
     (sum, seat) => sum + (seat.player?.adp_value ?? 0),
@@ -66,6 +89,14 @@ export function lineupMetricTotals(
   );
   const benchCapital = lineup.bench.reduce(
     (sum, player) => sum + (player.adp_value ?? 0),
+    0,
+  );
+  const starterKtc = lineup.starters.reduce(
+    (sum, seat) => sum + (seat.player?.ktc_value ?? 0),
+    0,
+  );
+  const benchKtc = lineup.bench.reduce(
+    (sum, player) => sum + (player.ktc_value ?? 0),
     0,
   );
   return {
@@ -76,6 +107,10 @@ export function lineupMetricTotals(
     capital_total: starterCapital + benchCapital,
     capital_bench: benchCapital,
     capital_starters: starterCapital,
+    ktc_total: starterKtc + benchKtc + pickValue,
+    ktc_starters: starterKtc,
+    ktc_bench: benchKtc,
+    ktc_picks: pickValue,
   };
 }
 
@@ -102,6 +137,14 @@ export function rankLeagueLineups(
   managerUserId: string,
   projections: RosProjections,
   adp: ReadonlyMap<string, number>,
+  ktc: ReadonlyMap<string, number> = new Map(),
+  /**
+   * Roster id → what KTC prices that roster's future picks at. Handed in rather
+   * than derived, because the pick portfolios are reconstructed from the same
+   * league row one layer up (`./league-teams`) and rebuilding them here would be
+   * a second reconstruction to drift from the one the card renders.
+   */
+  pickValues: ReadonlyMap<number, number> = new Map(),
 ): {
   lineup: LeagueLineup | null;
   ranks: LineupRanks;
@@ -115,8 +158,12 @@ export function rankLeagueLineups(
       scoring_settings: league.scoring_settings,
       players: roster.players,
     };
-    const lineup = solveLeagueLineup(one, projections, adp);
-    return { roster, lineup, totals: lineupMetricTotals(lineup) };
+    const lineup = solveLeagueLineup(one, projections, adp, ktc);
+    const totals = lineupMetricTotals(
+      lineup,
+      pickValues.get(roster.roster_id) ?? 0,
+    );
+    return { roster, lineup, totals };
   });
 
   const manager = solved.find(
@@ -131,6 +178,10 @@ export function rankLeagueLineups(
         capital_total: null,
         capital_bench: null,
         capital_starters: null,
+        ktc_total: null,
+        ktc_starters: null,
+        ktc_bench: null,
+        ktc_picks: null,
       },
       rosters: solved,
     };
@@ -159,6 +210,10 @@ export function rankLeagueLineups(
       capital_total: rankOn("capital_total"),
       capital_bench: rankOn("capital_bench"),
       capital_starters: rankOn("capital_starters"),
+      ktc_total: rankOn("ktc_total"),
+      ktc_starters: rankOn("ktc_starters"),
+      ktc_bench: rankOn("ktc_bench"),
+      ktc_picks: rankOn("ktc_picks"),
     },
     rosters: solved,
   };

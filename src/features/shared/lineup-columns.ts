@@ -19,7 +19,14 @@ import { useLocalValue, writeLocal } from "./local-store";
 // the template.
 const STORAGE_KEY = "thelab:lineup-columns";
 
-/** The most columns a card can carry before the grid stops reading. */
+/**
+ * The most columns a card can carry before the grid stops reading.
+ *
+ * **Unmoved by the KTC metrics arriving**, deliberately: the cap is about how
+ * much a card's tile row can hold at 390px — four tiles is already two rows of
+ * two on a phone — not about how many lenses exist to choose between. Nine
+ * options and four slots is the picker doing its job.
+ */
 export const MAX_LINEUP_COLUMNS = 4;
 
 // Exhaustive by construction — the client half of the contract's compiler
@@ -30,6 +37,10 @@ const METRIC_ORDER: Record<LineupMetricId, number> = {
   capital_total: 2,
   capital_bench: 3,
   capital_starters: 4,
+  ktc_total: 5,
+  ktc_starters: 6,
+  ktc_bench: 7,
+  ktc_picks: 8,
 };
 
 /** Every metric the columns dialog offers, in canonical column order. */
@@ -37,7 +48,13 @@ export const LINEUP_METRIC_IDS: readonly LineupMetricId[] = (
   Object.keys(METRIC_ORDER) as LineupMetricId[]
 ).sort((a, b) => METRIC_ORDER[a] - METRIC_ORDER[b]);
 
-/** The four columns a first visit shows. */
+/**
+ * The four columns a first visit shows.
+ *
+ * Unchanged by the KTC metrics, so nobody's stored selection moves and a reader
+ * who never opens the picker sees the page they had. The KTC columns are opt-in
+ * because the market they read is a preference — see `ktc-board.ts`.
+ */
 export const DEFAULT_LINEUP_COLUMNS: readonly LineupMetricId[] = [
   "ros_starters",
   "ros_bench",

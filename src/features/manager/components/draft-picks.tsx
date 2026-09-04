@@ -13,6 +13,16 @@ import { ordinal } from "@/features/shared";
  * which pick this is. Acquired picks are lit either way: a third party's 1st is
  * a different asset from your own, order or no order.
  *
+ * **The KeepTradeCut price rides the pill, and an unpriced pick shows nothing
+ * rather than a dash.** This is one place the app's usual three-way grammar
+ * gives way, and it is a density argument rather than an exception to the rule:
+ * a portfolio is a dozen pills three words wide, and a column of em dashes
+ * across the seasons KTC has no opinion about would be more ink than the picks
+ * themselves. The claim a dash exists to prevent — that an unpriced pick is
+ * worth nothing — is not available to make here, because there is no zero on
+ * screen to mistake it for. `ktc_picks` on the card is the number that *is*
+ * summed, and it is the one that owes the reader that distinction.
+ *
  * Renders nothing when the roster owns no picks — every redraft league, and
  * any dynasty whose pick market this sync can't see. There is no empty state
  * for "the pick market here is quiet". Hook-free, like the card it sits in.
@@ -66,6 +76,11 @@ export function DraftPicks({ picks }: { picks: readonly RosterPick[] }) {
                   {pick.slot === null && pick.from && (
                     <span className="max-w-24 truncate opacity-70">
                       {pick.from}
+                    </span>
+                  )}
+                  {pick.value !== null && (
+                    <span className="tabular-nums opacity-60">
+                      {pick.value.toLocaleString("en-US")}
                     </span>
                   )}
                 </span>

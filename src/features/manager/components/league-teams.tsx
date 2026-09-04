@@ -9,6 +9,7 @@ import { LINEUP_METRIC_LABELS } from "../helpers/lineup-metrics";
 import { DraftPicks } from "./draft-picks";
 import {
   type Lens,
+  lensUnit,
   LineupBreakdown,
   LineupLensKeys,
   lineupTotal,
@@ -37,7 +38,11 @@ import {
  * visible to the keys and to the list at once.
  */
 
-/** Points read to a decimal; capital is a whole-number scale. Same spellings as the breakdown. */
+/**
+ * Points read to a decimal; draft capital and KeepTradeCut are both whole-number
+ * scales. The same spellings as the breakdown's own `cell`, which is what keeps
+ * the column agreeing with the rows it sorts.
+ */
 function formatTotal(metric: LineupMetricId, value: number): string {
   if (metric === "ros_starters" || metric === "ros_bench") {
     return value.toFixed(1);
@@ -114,7 +119,7 @@ export function LeagueTeams({ entry }: { entry: LeagueLineupEntry }) {
                 {total}
               </span>
               <span className="relative font-mono text-[0.625rem] uppercase tracking-[0.16em] text-readout/60">
-                {lens === "points" ? "pts" : "cap"}
+                {lensUnit(lens)}
               </span>
             </span>
           )}

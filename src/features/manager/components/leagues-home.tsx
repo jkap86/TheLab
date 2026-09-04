@@ -2,7 +2,12 @@
 
 import { type ReactNode, useMemo, useState } from "react";
 
-import type { LineupMetricId, ManagerLeague } from "@/shared/contract";
+import type {
+  KtcBoardChoice,
+  LineupMetricId,
+  ManagerLeague,
+  ManagerLineupsPayload,
+} from "@/shared/contract";
 
 import {
   activeFilterCount,
@@ -16,6 +21,7 @@ import {
   ManagerPlate,
   matchesFilters,
   usePublishRackReadout,
+  useKtcBoard,
   useLineupColumns,
   useManagerLeagues,
 } from "@/features/shared";
@@ -156,10 +162,15 @@ export function LeaguesHome({
   // Fetched once the leagues settle — `!refreshing` flipping true is also what
   // refetches after a cold sync, when the rosters this read solves from were
   // just written. See the hook.
+  // The KTC market this device reads. It rides the request rather than being
+  // applied here, because the four KTC columns are ranked and only the server
+  // can rank them — see the hook.
+  const ktcBoard = useKtcBoard();
   const lineups = useManagerLineups(
     username,
     state.season,
     leagues.length > 0 && !refreshing,
+    ktcBoard,
   );
   const columns = useLineupColumns();
 
@@ -211,6 +222,8 @@ export function LeaguesHome({
           onChange={setFilters}
           leagues={leagues}
           columns={columns}
+          board={ktcBoard}
+          ktc={lineups?.ktc ?? null}
           matched={visible.length}
           narrowing={narrowing}
         />
@@ -440,6 +453,8 @@ function ViewHousing({
   onChange,
   leagues,
   columns,
+  board,
+  ktc,
   matched,
   narrowing,
 }: {
@@ -447,6 +462,8 @@ function ViewHousing({
   onChange: (filters: LeagueFilters) => void;
   leagues: readonly ManagerLeague[];
   columns: readonly LineupMetricId[];
+  board: KtcBoardChoice;
+  ktc: ManagerLineupsPayload["ktc"];
   matched: number;
   narrowing: boolean;
 }) {
@@ -464,7 +481,12 @@ function ViewHousing({
           leagues={leagues}
           triggerClassName={key}
         />
-        <LineupColumnsDialog columns={columns} triggerClassName={key} />
+        <LineupColumnsDialog
+          columns={columns}
+          board={board}
+          ktc={ktc}
+          triggerClassName={key}
+        />
 
         <span
           className={`${CONSOLE_READOUT} ml-auto flex flex-col rounded-[0.625rem] px-3 py-2 sm:ml-0 sm:mt-auto`}

@@ -1,11 +1,21 @@
 /**
- * Which of a market's two boards a league reads: the superflex question.
+ * Which of a market's two boards a league reads, and which of its two numbers.
  *
- * **This is the superflex half of TheLabX's `ktc/roster`.** The rest of that
- * file prices rosters on KeepTradeCut, and it arrives with the KTC port; what
- * is here is the one predicate other concerns already need — ADP boards and
- * lineup pricing both split on it, and two spellings of "starts more than one
- * quarterback" drifting apart is the bug this file exists to prevent.
+ * The superflex predicate came first, for the concerns that already split on it
+ * — ADP boards and lineup pricing both do, and two spellings of "starts more
+ * than one quarterback" drifting apart is the bug this file exists to prevent.
+ * {@link ktcBoardValue} joined it with the KTC columns, and is the same idea one
+ * step on: having decided which board a league reads, every surface must read
+ * the *number* off it the same way.
+ *
+ * **TheLabX's `rosterKtcValue` is deliberately not here.** It walks a roster
+ * asking whether each player starts — never the lineup — because a lineup
+ * naming an unheld player would otherwise push `starters` past `total` and hand
+ * back a negative bench. That guard has nothing to guard against in this repo:
+ * `solveLeagueLineup` builds the seats and the bench as a partition of the one
+ * deduplicated roster it was given, so `lineupMetricTotals` sums a split that is
+ * exact by construction. It arrives if a lineup ever reaches the totals from
+ * somewhere other than the solve that produced them.
  *
  * Pure and free of runtime imports beyond the slot vocabulary. The vocabulary
  * comes in relatively with a `.ts` extension, the same mechanism
@@ -55,4 +65,26 @@ export function isSuperflexLineup(
     QB_ELIGIBLE_STARTING_SLOTS.includes(slot),
   );
   return qbSlots.length > 1;
+}
+
+/**
+ * The price a league reads for one player: the superflex or the 1QB number, per
+ * {@link isSuperflexLineup}. Null where KTC prices neither board — or where the
+ * player is off the board entirely, which is what passing `undefined` through
+ * means — and callers must keep that distinct from zero: being unpriced is a
+ * different claim from being worth nothing, the same three-way grammar the rest
+ * of the app writes its numbers in.
+ *
+ * One function rather than a `superflex ? sf : oneqb` per surface, so the two
+ * boards are never read differently by two readers of the same row. The
+ * argument is structural rather than `KtcValue` imported from `./values`,
+ * which keeps this file free of runtime *and* type edges — it is deep-imported
+ * by client modules that must not reach a `pg`-backed sibling.
+ */
+export function ktcBoardValue(
+  superflex: boolean,
+  value: { sf: number | null; oneqb: number | null } | undefined,
+): number | null {
+  if (!value) return null;
+  return superflex ? value.sf : value.oneqb;
 }

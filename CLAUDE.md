@@ -451,7 +451,7 @@ sync, which is exactly when the rosters it solves from were written.
 
 **Every team ships, solved.** Each league's payload entry is
 `{ teams, ranks }` (`LeagueLineupEntry`), one `LeagueTeam` per stored roster —
-lineup, all five metric totals, pick portfolio, label, `is_manager` — because
+lineup, all nine metric totals, pick portfolio, label, `is_manager` — because
 the expanded card is a team browser, not a mirror of the manager's roster.
 (It used to ship the manager's lineup alone and reduce everyone else to a
 rank; the team picker is what reversed that, and the ~50KB a twelve-team
@@ -462,16 +462,24 @@ drift from the ranks beside it. `manager/league-teams.ts` composes the entry
 — `solveLeagueEntry` = ranks + picks + the `leagueTeamName` label rule
 (team name → owner's display name → "Roster N", blanks folding in with null)
 — so the route stays a handler; `manager/league-ranks.ts` remains the pure
-solve-and-rank underneath: one `solveLeagueLineup` per roster, all five metric
-totals read off that one solve (the solver already prices `points` *and*
-`adp_value` onto every player, so there is no second valuation pass to drift
-from the first). Ranks are standard competition ranking — ties share the better rank,
+solve-and-rank underneath: one `solveLeagueLineup` per roster, eight of the
+nine metric totals read off that one solve (the solver prices `points`,
+`adp_value` *and* `ktc_value` onto every player, so there is no second
+valuation pass to drift from the first). The ninth, `ktc_picks`, is the one
+thing not on a player — which is why **the picks are now resolved *before* the
+ranks** in `solveLeagueEntry`. Resolving them afterwards, as it did until the
+KTC columns landed, would mean either a second reconstruction of the same pick
+grid or a rank computed without the picks beside a card showing them, and the
+two would disagree with nothing on screen saying so. Ranks are standard competition ranking — ties share the better rank,
 the next distinct total skips — and `of` counts the rosters actually ranked,
 orphans and empty rosters included, not `total_rosters`. **A metric ranks
 `null` when every roster in the league totals zero on it**: one rule that
-covers both `from_week: null` (no projections → both ROS metrics) and an empty
-ADP board (all three capital metrics), because "1st of 12" among all-zero
-totals is a claim. One subtlety the tests pin: player *identity* (positions)
+covers `from_week: null` (no projections → both ROS metrics), an empty ADP
+board (all three capital metrics), an unreadable KTC board (all four KTC
+metrics) and a league read on the **redraft** market, whose board carries no
+rookie-pick rows so `ktc_picks` is zero for everyone — correctly, since a
+redraft pick is not an asset anybody holds into next year. "1st of 12" among
+all-zero totals is a claim. One subtlety the tests pin: player *identity* (positions)
 rides the projections feed, so a wholly absent feed nulls the capital
 starters/bench **split** too — nobody can be seated, the roster's capital all
 lands on the bench — while `capital_total` keeps ranking. Capital ranks are
@@ -488,7 +496,65 @@ of the seam — the server's ranks literal, the client's `METRIC_ORDER` in
 `features/shared/lineup-columns.ts` — so adding an id breaks both compiles
 until it is placed. A value export from `contract/` would break that folder's
 zero-runtime character, and the client cannot read a list out of
-`shared/manager` without dragging `pg` into the bundle.
+`shared/manager` without dragging `pg` into the bundle. **Adding the four KTC
+ids is what that seam is for**: it broke four compiles — the ranks literal,
+`lineupMetricTotals`, `METRIC_ORDER` and `LINEUP_METRIC_LABELS` — and nothing
+else.
+
+### The KeepTradeCut columns
+
+`ktc_starters`, `ktc_bench`, `ktc_picks` and `ktc_total` price a roster on
+KeepTradeCut. Four decisions carry them.
+
+**KTC never enters the solver.** The seat order is projections first and draft
+capital second — the `ADP_TIEBREAK` epsilon — and `ktc_value` is hung on an
+already-seated player and read back for the totals. The two terms in `score`
+are a projection of what a player will *do* and, failing that, of what a draft
+room thought of him: both statements about production. A trade market is a
+statement about what a player is worth to *acquire*, and letting it decide a
+seat would bench a productive veteran under a rookie nobody can start. The KTC
+columns report a roster's worth; they do not set its lineup.
+
+**`ktc_total` is the only metric that includes the picks, and it includes all
+three parts** — `ktc_starters + ktc_bench + ktc_picks`, so the four reconcile
+exactly and a reader can see where a roster's worth sits. Capital is
+deliberately not arranged that way: `capital_total` is the players alone,
+because ADP prices a *player* and there is no pick ladder here to add. The
+starters/bench split is exact by construction rather than by a guard —
+`solveLeagueLineup` builds both out of one deduplicated roster — which is why
+TheLabX's `rosterKtcValue`, whose whole job is to keep a lineup naming an
+unheld player from handing back a negative bench, is not ported.
+
+**A pick is priced by a third of its round, and most picks have no third.**
+KTC names a pick "2027 Mid 1st"; Sleeper holds one by a roster, and
+`leagueRosterPicks` has already turned that into the slot it falls on — snake
+reversal included, because that flip is what decides which third. `pickTier`
+places the slot against the league's own size, and answers null both for a pick
+whose draft does not exist yet (most of them) and for a league too small for
+"early" to mean anything; `ktcPickPrice` reads that as "the untiered row, then
+the middle one", the convention every trade calculator uses. The pricing is a
+**callback** into `leagueRosterPicks` rather than two more arguments, so
+`draft-picks.ts` keeps knowing only which picks a roster owns.
+
+**Unpriced is not zero, and the gap is real.** KTC prices three seasons of four
+rounds, so every 2029 pick and every round past the fourth comes back null and
+falls out of the total rather than dragging it toward zero. TheLabX's
+`ktcPickDiscount` is what could extrapolate past that horizon, and it is
+deliberately unported: it exists to carry KTC's season-over-season opinion onto
+an *ADP* scale as a dimensionless ratio, and there is no ADP pick ladder here
+to scale. It arrives with `/api/adp`. The same rule covers players: KTC's
+boards are a churning top few hundred skill players, so an unpriced bench stash
+is the ordinary case rather than a fault.
+
+On the card, the four are ordinary rank tiles and the expanded browser gained a
+third **lens** beside Points and Capital — three figures on three scales never
+share a column, because they would read as the same unit — plus the price on
+each pick pill. The pills are the one place the app's three-way grammar gives
+way: an unpriced pick shows *nothing* rather than an em dash, because a dozen
+pills three words wide would otherwise be more dash than pick, and the claim a
+dash prevents is not available to make when there is no zero on screen to
+mistake it for. `ktc_picks` is the number that *is* summed, and it is the one
+that owes the reader that distinction.
 
 On the page, each league card is the league name plus up to four rank columns
 ("2nd of 12"), with the season line, team/record and the team browser behind a
@@ -610,6 +676,114 @@ with `/api/adp`.
 pricing the way `adp-value.ts` was from its board half — ADP boards and lineup
 pricing both split on it and a second spelling is the drift it prevents. The
 folder's sync half arrived since; see the KeepTradeCut section below.
+
+## Choosing a KeepTradeCut market
+
+KTC publishes two markets, and which one a league should read is *usually*
+obvious from its type and not always — a deep keeper league trades like a
+dynasty, and somebody comparing a keeper league against a dynasty one wants
+both on one scale. So the board is a **reader's choice** with three states:
+`auto` (the default), `dynasty` and `redraft`.
+
+**`auto` is a rule, not a third market.** A dynasty league reads the dynasty
+board and everything else reads redraft — keeper, chopped and redraft alike.
+Keeper is the arguable one and it falls that way deliberately: KTC has no
+keeper market, the two it has differ by how much a rookie stash is worth, and a
+keeper league carrying one or two players is far closer to a redraft than to a
+dynasty. A reader who disagrees has the forcing states, which is what they are
+for. Verified live: `auto` sent exactly the 79 dynasty leagues of a 113-league
+account to the dynasty board, which is the only board with pick rows, and
+`ktc_picks` ranked in exactly those 79.
+
+**The rule lives in `shared/ktc/board-choice.ts` and nowhere else**, because it
+has four readers — the lineups route, the trades route, the manager page's
+Columns dialog and the trade card — two of which cannot see that folder's
+server-only barrel and deep-import it the way they already reach
+`@/shared/ktc/roster`. `DYNASTY_LEAGUE_TYPE` comes from `manager/draft-picks`
+rather than being spelled `2`, so the pick grid and this cannot come to
+disagree about what "dynasty" means.
+
+**An unreadable value becomes `auto` rather than 400ing**, which is the
+opposite call from `parseRequestedSeason` and right for the opposite reason. A
+season names *which data* a page is about, so `?season=abc` has to fail or a
+reader is shown one year under another's heading. A board names which of two
+prices to print for data already chosen, and `auto` is the neutral form of that
+question — the reading `/api/trades` gives every one of its narrowing
+parameters.
+
+**One stored preference, read by both pages** (`thelab:ktc-board`, on
+`account.ts`'s and `lineup-columns.ts`'s terms). "Which market do I read" has
+one answer, and flipping it on either page moves the other. On the manager page
+the control sits at the foot of the **Columns** dialog — it is not a view of
+the leagues, it is what four of those nine columns *mean*, and it is
+meaningless while none is chosen; on `/trades` it sits in the control rail
+beside Filters and Search, because there it changes every number on every card.
+
+### The one asymmetry, and why
+
+**The manager page sends the choice; the trades board does not.** The
+difference is what the number is *for*.
+
+On `/manager` the four KTC columns are **ranked**, and a rank across a league's
+twelve rosters is something only the server can compute — so the choice rides
+the request as `?ktc_board=` and joins `useManagerLineups`' subject key, which
+blanks the ranks for one round trip rather than painting the old market's
+numbers under the new label. That is the cost a season change already pays, for
+one request covering the whole page. The route resolves `auto` per league and
+**echoes what answered** (`ManagerLineupsPayload.ktc`), with `"mixed"` for an
+account holding both kinds — the honest name, since no single one is true of
+the column — and the scrape time beside it, because these are someone else's
+numbers on a fifteen-minute cache.
+
+On `/trades` the number is only **printed**. Putting the flip in `TradeRequest`
+would reset a scrolled keyset walk to page one to change a display unit — the
+documented cost of that board having no `keepPreviousData` — so the payload
+carries **both** markets per asset (`assetValues`) and the card picks. What is
+*not* left to the browser is the superflex axis: which of KTC's two QB columns
+a league reads is a fact about the league, not a preference, so it is resolved
+server-side and one number per market crosses the wire. Verified live: flipping
+to Redraft changed every figure on screen with **zero** fetches and all 100
+loaded rows held, while the same flip on `/manager` issued exactly one request.
+
+`assetKey` is **league-scoped**, for the reason `pickSlotKey` is: a pick's own
+identity (`k:2027:1:5`) describes a different asset in every league on the
+board, so an unscoped key would have one league's first quietly priced as
+another's. It is declared in `shared/trades/asset-keys.ts` rather than beside
+the card, because the route writes these keys and `shared/` must never import
+from `features/`.
+
+### Verified
+
+Run against the live database on the day it landed. `npm run migrate:up`
+reported "No migrations to run", which is the claim the KTC section makes about
+`sleeper_id` being a backfill rather than a migration, and the reason this is
+code only.
+
+A forced sync resolved **463 of 492** dynasty skill players and **369 of 371**
+redraft entries (300 before the `PK`/`DST` rename), with every `RDP` row still
+null — a pick is not a Sleeper player — and no id whose position disagreed with
+its KTC row. The 29 dynasty misses are the matcher refusing an ambiguous pair,
+which is the behaviour rather than the shortfall.
+
+`/api/user/jkap86/lineups` answered 200 on all four board values.
+`ktc_total === ktc_starters + ktc_bench + ktc_picks` held for **every team in
+every one of 113 leagues**; `?ktc_board=auto` priced all 113 and ranked
+`ktc_picks` in exactly 79 — the account's dynasty count — where `=redraft`
+ranked it in **none** and `=dynasty` in 80 (the extra being a non-dynasty
+league whose picks have been traded, so its derived grid has rows). A superflex
+dynasty league priced Jayden Daniels at 7123 and its unplaced 2027 first at
+5592, both `sf_value` to the digit, with rounds 5+ null — KTC prices four.
+`?ktc_board=nonsense` answered as `auto`; `?season=abc` still 400s.
+
+`/api/trades` shipped 380 asset values for a 100-trade page: 114 picks, all
+dynasty-only, and 143 assets priced on the dynasty board alone. Every figure
+matched the stored row for its league's own QB column.
+
+Over CDP at 1280 and 390 in both schemes: nine options in the Columns dialog
+with the fifth greying out at four, the board keys reading `AUTO`/`DYNASTY`/
+`REDRAFT` with the readout `mixed · 11m ago`, four rank tiles on a card, three
+lens keys, and pick pills reading `1st 5,592` / `2nd 3,444`. Exactly one `<h1>`
+per page and `document.scrollWidth === 390` at phone width with a card open.
 
 ## Filtering the league list
 
@@ -916,11 +1090,13 @@ returns the same full array — so the sync fetches the two bare URLs.
 Of 280 names on both boards when this landed, 183 carried different ids —
 Bijan Robinson was dynasty `1414` and redraft `1507` — and the same number can
 name different people on the two boards, so `ktc_id` alone would silently mix
-them. The slug embeds the id, so it is per-board too; nothing links an entry
-across formats until the Sleeper matcher ports. `sleeper_id` ships nullable
-and unwritten for that port — deliberately absent from both halves of the
-upsert, so the matcher's backfilled ids survive every refresh — and must never
-go unique: two KTC rows can legitimately resolve to one Sleeper player.
+them. The slug embeds the id, so it is per-board too; **nothing links an entry
+across formats except `sleeper_id`**, which the matcher now writes (below).
+It must never go unique: the match is name-based, so two KTC rows can
+legitimately resolve to one Sleeper player — and with `format` in the key,
+every player who is on both boards *is* such a pair by construction.
+`foldKtcValues` is what resolves that at read time, per format and per QB
+board independently.
 
 **`validateKtcBoard` runs before the transaction opens, and the floors are
 per-format.** The reconcile that follows the upsert is destructive by design —
@@ -948,16 +1124,59 @@ one number today's row and the backfilled series can agree on. The known cost
 of boot-only: a player who joins a board mid-process accrues forward snapshots
 but no back-series until the next boot.
 
-The barrel is **server-only** now — the sync drags `pg` in — on the projections
-barrel's exact terms: a client module needing `isSuperflexLineup` imports
-`./roster` relatively. Deliberately not ported, each with what it arrives with:
-`match.ts` and `values.ts` (the Sleeper matcher), `queries.ts`,
-`history-stats.ts`, `picks.ts` and `roster.ts`'s pricing half (`ktcBoardValue`,
-`rosterKtcValue`) — readers all, arriving with the surface that reads them.
-**The `players` table the matcher needs is no longer the blocker**: it arrived
-with the trades board, so `sleeper_id` is now a backfill rather than a
-migration, and the trades board's own unpriced cards are the surface waiting on
-it.
+### The matcher, and reading a board back
+
+Until the KTC columns landed, `ktc_values` was 897 rows nothing could reach.
+**KTC publishes no Sleeper id and Sleeper carries none of KTC's**, so the only
+bridge is the name — and `sleeper_id`, which every read here joins on, was
+nullable and never written. `match.ts` is that bridge, ported whole: three
+tiers, most precise first (normalized full name + position; a collision broken
+to the single active or rostered player; last name + position + birth year, for
+the nicknames), and **anything still ambiguous left unresolved** — a null id is
+honest, a wrong player is not. Verified against the live board: two active WR
+Davises born 1999, neither on a team, so KTC's "Gabriel Davis" resolves to
+neither. That is the rule working, not a miss.
+
+**One thing in it is this repo's own, and it exists because this repo scrapes
+the redraft board.** TheLabX only ever read the dynasty one, which carries
+neither a kicker nor a defence, so its matcher never met KTC's `PK` and `DST`
+against Sleeper's `K` and `DEF`. Here they were **70 of the 71** unmatched
+redraft entries — two of the ten seats a redraft lineup fills, going unpriced.
+`KTC_POSITIONS` renames them before the key is built rather than adding a
+fallback tier, since the position is half of every lookup key; the names line
+up on both sides once they do, because Sleeper stores a defence as
+"Philadelphia" / "Eagles". Measured after: redraft 300 → **369 of 371**,
+dynasty **463 of 492** skill players.
+
+**The ids are resolved per format and written by both halves of the upsert**,
+which reverses what this file used to say. They were absent because nothing
+could resolve one and an `EXCLUDED` overwrite would have erased a hand-filled
+id; now the matcher is the only writer and it is deterministic over the same
+players table, so re-deciding every run is exactly what lets a bad match be
+*corrected* rather than frozen. The 12k-row players read is lazy and shared
+across both formats — only KTC's ids are per-board — and resolves **before** the
+transaction opens, on `validateKtcBoard`'s terms: an index build is not work to
+hold a pooled connection across. `ensurePlayersFresh` is best-effort in a
+try/catch, because a players refresh failing must not stop values updating.
+
+The reads are `queries.ts` (`getKtcBoard`, `getKtcPickBoard`) with
+`board-read.ts` in front of them, and **both take a format, because every read
+of this table must**: a dynasty row and a redraft row are two markets, not two
+readings of one. `getKtcBoard` reads the market **whole** rather than binding
+ids — the manager page prices every roster in every league it lists, so the id
+list is larger than the ~500-row board — and `board-read` holds it on
+`projections/ros-read`'s exact terms: the sync's own TTL (a cache outliving
+what it caches is a second staleness policy), a failed read evicted rather than
+cached, and a map keyed by format rather than one slot, since an account
+holding both kinds of league reads both boards on one request.
+
+The barrel is **server-only** — the sync and the reads drag `pg` in — on the
+projections barrel's exact terms: a client module needing `isSuperflexLineup`,
+`ktcBoardValue` or the pick vocabulary imports `./roster` / `./picks` /
+`./board-choice` relatively. Still deliberately not ported, each with what it
+arrives with: `history-stats.ts`, `getKtcValuesAsOf` and `getKtcSfHistoryAsOf`
+(the comps reads), and `rosterKtcValue` — the last one because the guard it
+carries has nothing to guard against here; see the lineups section.
 
 ## The tools console
 
@@ -1623,10 +1842,8 @@ his **id** on the card: a visible, searchable token beats a blank.
 
 ### Deliberately not ported, each with what it arrives with
 
-- **All valuation.** No KTC or ADP prices on a card. Pricing a traded player
-  needs `ktc_values.sleeper_id`, which is null until the name matcher ports, and
-  pricing a pick needs the rookie-pick board beside it; `enrich.ts` is where
-  both land when they come.
+- **ADP prices.** KTC prices landed — see below — but there is still no ADP
+  board in this repo, so `enrich.ts` resolves one valuation rather than two.
 - **`trade_rosters`, the rewind and the timeline** — the pre-trade roster
   browser is its own feature.
 - **`trade_market_stats`.** TheLabX precomputes the unnarrowed denominator
@@ -1643,6 +1860,36 @@ his **id** on the card: a visible, searchable token beats a blank.
   count the menus **without** the selection, or each collapses to its own
   selection the moment you make one — is `facetsQuery` in `trades/params`,
   applied by `readTradeFacets` so a route cannot forget it.
+
+### KeepTradeCut prices landed here
+
+`enrich.ts`'s header always said this was where the KTC lookups would land, and
+they did: the name matcher filled `ktc_values.sleeper_id` and `ktc/picks`
+reached the rookie-pick rows, so a card prices its players, its picks and each
+side's total. FAAB stays `—` permanently — a league's own currency is not
+something a market prices — and a side that could price **none** of its haul
+totals `—` rather than `0`, which is the rule `asset-value.ts` was written to
+carry before it had any numbers to carry it for. A zero there is a claim in
+exactly the sense a `DEFAULT now()` is.
+
+Both markets ship per asset and the card picks between them; that asymmetry
+with the manager page is argued in **Choosing a KeepTradeCut market** above.
+Three reads back it, all cached and all narrowed to what the page names:
+`lookupLeagueMarkets` (a league's superflex reading and its size — the second
+is the width a round's thirds divide, taken from `total_rosters` rather than
+from a draft order that loses a departed user's slot), `getDraftSlots`, which
+was already there, and `lookupKtcMarkets`, which is a deliberate pass-through
+rather than a fourth cache: `shared/ktc/board-read` already holds the boards
+for the sync's TTL, and a second cache in front of it would be a second
+staleness policy for one set of numbers.
+
+**The superflex predicate is asked in SQL against the same derived list
+`isSuperflexLineup` reads**, bound rather than spelled, the arrangement
+`getManagerDraftAdp` already uses. One consequence worth knowing, because it
+looks like a bug and is not: a league with a single `SUPER_FLEX` slot and *no*
+`QB` slot reads the **1QB** column, since it starts at most one quarterback.
+Checked live against stored rows — a real two-QB league priced every asset off
+`sf_value` to the digit.
 
 ### The players table came with it
 
@@ -1875,16 +2122,17 @@ the league name runs under the date.
 
 ### The three data dependencies, and where each landed
 
-**KTC values on a trade's assets: still blocked, and the `—` is the design.**
-`shared/ktc` scrapes both markets but `ktc_values.sleeper_id` is nullable and
-never written — the Sleeper↔KTC matcher is one of the deliberately unported
-pieces — so nothing here can price a player, a pick needs `ktc/picks.ts`
-beside it, and FAAB has no market value and never will. What landed is
-`features/trades/asset-value.ts`: the value column, the side total, and **the
-rule that outlives the gap** — a side with nothing priced totals `—`, never
-`0`, because a zero there is a claim in the sense this file uses the word
-about `DEFAULT now()`. `NO_ASSET_VALUES` is the single reference the matcher
-replaces; `asset-value.test.ts` pins the summing rule with fixtures today.
+**KTC values on a trade's assets: blocked when this shipped, filled in
+since.** `shared/ktc` scraped both markets but `ktc_values.sleeper_id` was
+nullable and never written, so nothing could price a player and a pick had no
+board to read. What landed *then* was `features/trades/asset-value.ts` — the
+value column, the side total, and **the rule that outlived the gap**: a side
+with nothing priced totals `—`, never `0`, because a zero there is a claim in
+the sense this file uses the word about `DEFAULT now()`. The matcher and the
+pick board arrived with the KTC columns and filled the seam; `NO_ASSET_VALUES`
+survives as the empty state rather than as the permanent one, and FAAB is still
+`—` for good — it is a league's own currency and no market prices it. See
+**KeepTradeCut prices landed here** in the trades section.
 
 **The league avatar needed nothing.** `ManagerLeague.avatar_url` already
 carries it, resolved server-side by `sleeperAvatarUrl`, so the trades board

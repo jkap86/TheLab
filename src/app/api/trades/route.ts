@@ -2,24 +2,31 @@ import { NextResponse } from "next/server";
 
 import type {
   ApiErrorPayload,
+  KtcFormat,
   LeaguematePayload,
   Trade,
   TradesPagePayload,
 } from "@/shared/contract";
 import { getActiveSeason, parseRequestedSeason } from "@/shared/season";
 import { sleeperAvatarUrl } from "@/shared/sleeper";
+import { ktcBoardValue } from "@/shared/ktc";
+import type { KtcBoards } from "@/shared/ktc";
+import { ktcPickPrice, pickTier } from "@/shared/ktc/picks";
 import {
+  assetKey,
   collectEnrichmentIds,
   countTradeTotals,
   draftOrderKey,
   getDraftSlots,
   getTradeManagers,
   listTrades,
+  lookupKtcMarkets,
+  lookupLeagueMarkets,
   lookupPlayers,
   parseTradeQuery,
   pickSlotKey,
 } from "@/shared/trades";
-import type { TradeQuery } from "@/shared/trades";
+import type { TradeLeagueMarket, TradeQuery } from "@/shared/trades";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -129,12 +136,14 @@ async function resolveTotals(
 }
 
 /**
- * The names the ids on this page stand for.
+ * The names the ids on this page stand for, and what its assets are worth.
  *
- * The three lookups are independent and run together; each is a no-op on an
+ * The five lookups are independent and run together; each is a no-op on an
  * empty id list, which is the common case for every page after the first few.
- * Leagues are deliberately **not** among them — they arrive whole from
- * `/api/trades/leagues`, once per season.
+ * The league *rows* are deliberately still not among them — those arrive whole
+ * from `/api/trades/leagues`, once per season — but a league's superflex
+ * reading and its size are, because a valuation needs both and the page route
+ * has never had a reason to read them until now.
  */
 async function resolveNames(trades: readonly Trade[]) {
   // Deduplicated per namespace rather than across all three — see
@@ -145,11 +154,16 @@ async function resolveNames(trades: readonly Trade[]) {
     draftKeys,
   } = collectEnrichmentIds(trades);
 
-  const [players, managers, draftSlots] = await Promise.all([
-    lookupPlayers(playerIds),
-    getTradeManagers(managerIds),
-    getDraftSlots(draftKeys),
-  ]);
+  const leagueIds = [...new Set(trades.map((t) => t.league_id))];
+
+  const [players, managers, draftSlots, leagueMarkets, ktcMarkets] =
+    await Promise.all([
+      lookupPlayers(playerIds),
+      getTradeManagers(managerIds),
+      getDraftSlots(draftKeys),
+      lookupLeagueMarkets(leagueIds),
+      lookupKtcMarkets(),
+    ]);
 
   const resolvedManagers: Record<string, LeaguematePayload> = {};
   for (const [id, m] of managers) {
@@ -166,6 +180,12 @@ async function resolveNames(trades: readonly Trade[]) {
     // Narrowed to the picks the page actually holds: a league's order covers
     // every roster in it, and a page names two or three of them.
     pickSlots: resolvePickSlots(trades, draftSlots),
+    assetValues: resolveAssetValues(
+      trades,
+      draftSlots,
+      leagueMarkets,
+      ktcMarkets,
+    ),
   };
 }
 
@@ -193,4 +213,84 @@ function resolvePickSlots(
     }
   }
   return slots;
+}
+
+/**
+ * What KeepTradeCut prices each asset on this page at, on **both** of its
+ * markets.
+ *
+ * Both, because the reader's `auto`/`dynasty`/`redraft` choice is applied in
+ * the browser here — see {@link TradesPagePayload.assetValues} for why that
+ * differs from the lineups route, which has to resolve it before it can rank.
+ * What is *not* left to the browser is the superflex axis: which of KTC's two
+ * QB columns a league reads is a fact about the league, so it is resolved here
+ * and only one number per market crosses the wire.
+ *
+ * Keyed by {@link assetKey}, narrowed to the assets this page actually names —
+ * the same rule `resolvePickSlots` follows, and the reason a market of ~500
+ * rows does not ship whole behind every scroll.
+ *
+ * An asset neither market prices is simply absent, which the card reads as an
+ * em dash. That includes every FAAB payment, which is not looked up at all: a
+ * league's own currency is not something a market prices, and never will be.
+ */
+function resolveAssetValues(
+  trades: readonly Trade[],
+  orders: ReadonlyMap<string, ReadonlyMap<number, number>>,
+  leagues: ReadonlyMap<string, TradeLeagueMarket>,
+  markets: Partial<Record<KtcFormat, KtcBoards>>,
+): TradesPagePayload["assetValues"] {
+  const values: TradesPagePayload["assetValues"] = {};
+
+  /** Both markets' prices for one asset, or nothing where neither has one. */
+  const price = (
+    read: (boards: KtcBoards, superflex: boolean) => number | null,
+    superflex: boolean,
+  ) => {
+    const dynasty = markets.dynasty ? read(markets.dynasty, superflex) : null;
+    const redraft = markets.redraft ? read(markets.redraft, superflex) : null;
+    return dynasty === null && redraft === null ? null : { dynasty, redraft };
+  };
+
+  for (const trade of trades) {
+    // A league with no stored row prices nothing rather than being guessed at
+    // as a 1QB league of unknown size — the read is cached and a miss means the
+    // league genuinely is not stored.
+    const league = leagues.get(trade.league_id);
+    if (!league) continue;
+    const { superflex, total_rosters } = league;
+
+    for (const side of trade.sides) {
+      for (const id of side.players) {
+        const key = assetKey(trade.league_id, id);
+        if (key in values) continue;
+        const found = price(
+          (boards, sf) => ktcBoardValue(sf, boards.values[id]),
+          superflex,
+        );
+        if (found) values[key] = found;
+      }
+
+      for (const pick of side.picks) {
+        const key = assetKey(trade.league_id, pick);
+        if (key in values) continue;
+        // The pick's own third of the round where its draft order is set, and
+        // null where it is not — most picks on this board are seasons out, and
+        // `ktcPickPrice` reads that as "take the untiered row, then the middle
+        // one", which is the convention every trade calculator uses.
+        const slot = orders
+          .get(draftOrderKey(trade.league_id, pick.season))
+          ?.get(pick.roster_id);
+        const tier =
+          slot === undefined ? null : pickTier(slot, total_rosters);
+        const found = price((boards, sf) => {
+          const match = ktcPickPrice(boards.picks, pick, tier);
+          return match ? ktcBoardValue(sf, match.price) : null;
+        }, superflex);
+        if (found) values[key] = found;
+      }
+    }
+  }
+
+  return values;
 }

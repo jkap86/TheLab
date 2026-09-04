@@ -23,6 +23,8 @@ export {
   CONSOLE_WINDOW,
 } from "./console-chrome";
 export { errorMessage } from "./error-message";
+export { storeKtcBoard, useKtcBoard } from "./ktc-board";
+export { KtcBoardKeys } from "./ui/ktc-board-keys";
 export { ordinal } from "./format";
 export { rankColor } from "./rank-ramp";
 export * from "./league-filters";

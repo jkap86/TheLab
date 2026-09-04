@@ -45,37 +45,92 @@ function unprojected(id: string, positions: string[]): RosProjections[string] {
 const NO_ADP = new Map<string, number>();
 const NO_PROJECTIONS: RosProjections = {};
 
+/** A lineup with one seated starter, an empty seat and two on the bench. */
+function lineupFixture(): LeagueLineup {
+  return {
+    league_id: "L1",
+    starters: [
+      {
+        slot: "FLEX",
+        player: {
+          player_id: "a",
+          name: null,
+          positions: ["WR"],
+          points: 7.5,
+          adp_value: 100,
+          ktc_value: 6000,
+        },
+      },
+      { slot: "QB", player: null },
+    ],
+    bench: [
+      {
+        player_id: "b",
+        name: null,
+        positions: [],
+        points: 2.25,
+        adp_value: null,
+        ktc_value: 1500,
+      },
+      {
+        player_id: "c",
+        name: null,
+        positions: [],
+        points: null,
+        adp_value: 40,
+        ktc_value: null,
+      },
+    ],
+    projected_points: 7.5,
+    unknown_slots: [],
+  };
+}
+
 describe("lineupMetricTotals", () => {
   test("sums each lens off one lineup, counting nulls as zero", () => {
-    const lineup: LeagueLineup = {
-      league_id: "L1",
-      starters: [
-        {
-          slot: "FLEX",
-          player: {
-            player_id: "a",
-            name: null,
-            positions: ["WR"],
-            points: 7.5,
-            adp_value: 100,
-          },
-        },
-        { slot: "QB", player: null },
-      ],
-      bench: [
-        { player_id: "b", name: null, positions: [], points: 2.25, adp_value: null },
-        { player_id: "c", name: null, positions: [], points: null, adp_value: 40 },
-      ],
-      projected_points: 7.5,
-      unknown_slots: [],
-    };
-    assert.deepEqual(lineupMetricTotals(lineup), {
+    assert.deepEqual(lineupMetricTotals(lineupFixture(), 9000), {
       ros_starters: 7.5,
       ros_bench: 2.25,
       capital_total: 140,
       capital_bench: 40,
       capital_starters: 100,
+      ktc_total: 16500,
+      ktc_starters: 6000,
+      ktc_bench: 1500,
+      ktc_picks: 9000,
     });
+  });
+
+  // The reason the four KTC metrics are arranged the way they are: a reader
+  // can see where a roster's worth sits, and the parts add up to the whole.
+  // Capital deliberately does not include picks, so it must not start.
+  test("the four KTC metrics reconcile and capital is unmoved by picks", () => {
+    const totals = lineupMetricTotals(lineupFixture(), 9000);
+    assert.equal(
+      totals.ktc_total,
+      totals.ktc_starters + totals.ktc_bench + totals.ktc_picks,
+    );
+    assert.equal(totals.capital_total, lineupMetricTotals(lineupFixture()).capital_total);
+  });
+
+  // An unpriced player is off KTC's board, which is a different claim from
+  // being worth nothing — but a *sum* has to put something there, and zero is
+  // the only value that leaves the other rosters' totals comparable.
+  test("an unpriced player contributes nothing rather than breaking the sum", () => {
+    const lineup = lineupFixture();
+    lineup.starters[0]!.player!.ktc_value = null;
+    lineup.bench[0]!.ktc_value = null;
+    const totals = lineupMetricTotals(lineup);
+    assert.equal(totals.ktc_starters, 0);
+    assert.equal(totals.ktc_bench, 0);
+    assert.equal(totals.ktc_total, 0);
+  });
+
+  // No pick argument at all is the state every non-dynasty league is in, and
+  // every league when the board could not be read.
+  test("picks default to nothing rather than to undefined arithmetic", () => {
+    assert.equal(lineupMetricTotals(lineupFixture()).ktc_picks, 0);
+    assert.equal(lineupMetricTotals(lineupFixture()).ktc_total, 7500);
   });
 });
 
@@ -244,6 +299,10 @@ describe("rankLeagueLineups", () => {
       capital_total: null,
       capital_bench: null,
       capital_starters: null,
+      ktc_total: null,
+      ktc_starters: null,
+      ktc_bench: null,
+      ktc_picks: null,
     });
   });
 });

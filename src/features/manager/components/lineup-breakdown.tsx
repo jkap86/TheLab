@@ -7,11 +7,15 @@ import { CONSOLE_TRACK } from "@/features/shared";
  * A league card's rest-of-season lineup: the optimal starters in slot order,
  * the bench behind a disclosure, and a total for the seated starters.
  *
- * The number column is one lens at a time — rest-of-season points, or the
- * draft-capital value. Flipping the *whole* column is the point: a
- * draft-capital figure beside a points figure would read as the same unit, so
- * the two never share a column, and a player the current lens has nothing to
- * say about shows an em dash rather than a borrowed number.
+ * The number column is one lens at a time — rest-of-season points, the
+ * draft-capital value, or KeepTradeCut's price. Flipping the *whole* column is
+ * the point: three figures on three different scales side by side would read as
+ * the same unit, so they never share a column, and a player the current lens
+ * has nothing to say about shows an em dash rather than a borrowed number.
+ *
+ * The three are genuinely three questions, which is why none of them can stand
+ * in for another: what a player will *do* from here, what a draft room thought
+ * of him, and what he is worth to acquire.
  *
  * **The lens is owned by `LeagueTeams`, not by this component.** Its keys and
  * its total sit on the panes' shared control row, above both panes, because
@@ -34,24 +38,29 @@ const SLOT_LABELS: Record<string, string> = {
   FLEX: "FLX",
 };
 
-export type Lens = "points" | "capital";
+export type Lens = "points" | "capital" | "ktc";
 
 function cell(player: LineupPlayer | null, lens: Lens): string {
   if (!player) return "—";
-  if (lens === "points") {
-    return player.points == null ? "—" : player.points.toFixed(1);
-  }
-  return player.adp_value == null
-    ? "—"
-    : player.adp_value.toLocaleString("en-US");
+  const value =
+    lens === "points"
+      ? player.points
+      : lens === "capital"
+        ? player.adp_value
+        : player.ktc_value;
+  if (value == null) return "—";
+  // Points read to a decimal; both valuations are whole-number scales.
+  return lens === "points" ? value.toFixed(1) : value.toLocaleString("en-US");
 }
 
 /**
  * The starters' total under the current lens, so the headline number always
- * agrees with the column beneath it. Capital sums client-side off the same
- * `adp_value` the rows show — no second valuation to disagree with. Null where
- * the lens has nothing to total, which is what keeps a `0.0 pts` off a card
- * whose projections never landed.
+ * agrees with the column beneath it. Both valuations sum client-side off the
+ * very fields the rows show — no second valuation to disagree with — and the
+ * points total is the server's own, which is the one that carries a rounding
+ * rule. Null where the lens has nothing to total, which is what keeps a
+ * `0.0 pts` off a card whose projections never landed and a `0 ktc` off one
+ * whose board could not be read.
  */
 export function lineupTotal(lineup: LeagueLineup, lens: Lens): string | null {
   if (lens === "points") {
@@ -59,16 +68,34 @@ export function lineupTotal(lineup: LeagueLineup, lens: Lens): string | null {
       ? lineup.projected_points.toFixed(1)
       : null;
   }
-  const capital = lineup.starters.reduce(
-    (sum, seat) => sum + (seat.player?.adp_value ?? 0),
+  const total = lineup.starters.reduce(
+    (sum, seat) =>
+      sum +
+      ((lens === "capital" ? seat.player?.adp_value : seat.player?.ktc_value) ??
+        0),
     0,
   );
-  return capital > 0 ? capital.toLocaleString("en-US") : null;
+  return total > 0 ? total.toLocaleString("en-US") : null;
+}
+
+/** What each lens is called, and the unit its total is labelled with. */
+const LENS_LABELS: Record<Lens, { key: string; unit: string }> = {
+  points: { key: "Points", unit: "pts" },
+  capital: { key: "Capital", unit: "cap" },
+  ktc: { key: "KTC", unit: "ktc" },
+};
+
+/** In control order — the two derived from this page's own data, then the market. */
+export const LENSES: readonly Lens[] = ["points", "capital", "ktc"];
+
+/** A lens's total unit, for the readout beside the keys. */
+export function lensUnit(lens: Lens): string {
+  return LENS_LABELS[lens].unit;
 }
 
 /**
- * The lens keys, as a pair of tactile keys in one housing: the resting shadow
- * carries a 3px riser and the pressed one drops to 1px, so the key travels.
+ * The lens keys, as tactile keys in one housing: the resting shadow carries a
+ * 3px riser and the pressed one drops to 1px, so the key travels.
  */
 export function LineupLensKeys({
   lens,
@@ -83,22 +110,22 @@ export function LineupLensKeys({
       aria-label="Value lens"
       className={`${CONSOLE_TRACK} inline-flex gap-1 p-1`}
     >
-      {(["points", "capital"] as const).map((option) => (
+      {LENSES.map((option) => (
         <button
           key={option}
           type="button"
           onClick={() => onChange(option)}
           aria-pressed={lens === option}
-          // The unselected option is bare text *on the track*, not a second
-          // key: two raised faces in one channel is a pair of buttons, where
-          // one raised and one flush is a switch showing its position.
-          className={`rounded-full border px-3.5 py-1.5 font-mono text-[0.625rem] uppercase tracking-[0.16em] transition-[color,box-shadow] duration-150 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-active/60 ${
+          // An unselected option is bare text *on the track*, not a second
+          // key: three raised faces in one channel is a row of buttons, where
+          // one raised and the rest flush is a switch showing its position.
+          className={`rounded-full border px-3 py-1.5 font-mono text-[0.625rem] uppercase tracking-[0.16em] transition-[color,box-shadow] duration-150 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-active/60 ${
             lens === option
               ? "border-active/45 bg-[image:var(--key-bg)] text-readout shadow-[var(--key-shadow)] [text-shadow:var(--readout-text-glow)]"
               : "border-transparent text-foreground/58 hover:text-readout"
           }`}
         >
-          {option === "points" ? "Points" : "Capital"}
+          {LENS_LABELS[option].key}
         </button>
       ))}
     </div>

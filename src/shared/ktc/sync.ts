@@ -6,10 +6,13 @@ import {
   withAdvisoryLock,
   withTransaction,
 } from "@/shared/db";
+import { ensurePlayersFresh, getMatchablePlayers } from "@/shared/players";
+import type { MatchablePlayer } from "@/shared/players";
 import { errorMessage } from "@/shared/util";
 
 import { fetchKtcRankings } from "./client";
 import { recordDailySnapshot } from "./history";
+import { resolveSleeperIds } from "./match";
 import { int } from "./parse";
 import { validateKtcBoard } from "./validate";
 import type { KtcFormat } from "./types";
@@ -65,14 +68,45 @@ export async function syncKtcValues(
   options: { force?: boolean } = {},
 ): Promise<KtcSyncSummary> {
   const summary = await withAdvisoryLock(LOCK_KEYS.ktcValues, async () => {
+    const matchable = lazyMatchablePlayers();
     const boards: KtcBoardSyncSummary[] = [];
     for (const format of KTC_FORMATS) {
-      boards.push(await syncBoard(format, options.force ?? false));
+      boards.push(await syncBoard(format, options.force ?? false, matchable));
     }
     return { locked: false, boards };
   });
 
   return summary ?? { locked: true, boards: [] };
+}
+
+/**
+ * The Sleeper players the matcher indexes, read at most once per run and only
+ * if a board actually writes.
+ *
+ * Lazy on both counts and neither is a micro-optimisation: the table is ~12k
+ * rows, both formats resolve against the *same* copy of it (only KTC's ids are
+ * per-board), and the common tick is two boards found fresh and nothing to
+ * match at all. A refresh of the players map is attempted first and is
+ * **best-effort** — a stale players table still matches nearly everything,
+ * where letting its failure propagate would stop KTC values updating over a
+ * dependency they only lean on.
+ */
+function lazyMatchablePlayers(): () => Promise<MatchablePlayer[]> {
+  let pending: Promise<MatchablePlayer[]> | null = null;
+  return () => {
+    pending ??= (async () => {
+      try {
+        await ensurePlayersFresh();
+      } catch (error) {
+        console.warn(
+          "[ktc] Players refresh failed; sleeper_id may be null:",
+          errorMessage(error),
+        );
+      }
+      return getMatchablePlayers();
+    })();
+    return pending;
+  };
 }
 
 /** A board's stored state: how many rows carry a price, and how stale they are. */
@@ -97,6 +131,7 @@ async function boardState(
 async function syncBoard(
   format: KtcFormat,
   force: boolean,
+  matchable: () => Promise<MatchablePlayer[]>,
 ): Promise<KtcBoardSyncSummary> {
   try {
     const { priced, fresh } = await boardState(format);
@@ -138,21 +173,32 @@ async function syncBoard(
       );
     }
 
+    // Resolved **before** the transaction opens, on `validateKtcBoard`'s own
+    // terms: a 12k-row read and an index build are not work to hold a pooled
+    // connection across. Per format, because `playerID` is per-board — the same
+    // Sleeper player is legitimately reached from a dynasty row and a redraft
+    // one, which is what `./values` folds back together at read time.
+    const sleeperIds = resolveSleeperIds(players, await matchable());
+
     await withTransaction(async (client) => {
-      // `sleeper_id` is deliberately absent from both halves of the upsert: the
-      // sync has nothing to say about it (the name matcher arrives with the
-      // players table), and an EXCLUDED overwrite would erase the matcher's
-      // backfilled ids on the next refresh.
+      // `sleeper_id` is written by both halves of the upsert, which reverses
+      // what this file used to say. It was absent because nothing could resolve
+      // one and an EXCLUDED overwrite would have erased a hand-filled id; now
+      // the matcher is the only writer and it is deterministic over the same
+      // players table, so re-deciding every run is exactly what lets a bad
+      // match be *corrected* rather than frozen in place. A run that resolves
+      // nothing (an empty players table) does clear the column — which is the
+      // honest reading of "nothing here can vouch for these ids".
       await bulkInsert(client, {
         table: "ktc_values",
         columns: [
-          "format", "ktc_id", "player_name", "slug", "position", "team",
+          "format", "ktc_id", "sleeper_id", "player_name", "slug", "position", "team",
           "rookie", "age", "sf_value", "sf_rank", "sf_position_rank",
           "oneqb_value", "oneqb_rank", "oneqb_position_rank", "data",
         ],
         rows: players,
         values: (p) => [
-          format, int(p.playerID),
+          format, int(p.playerID), sleeperIds.get(p.playerID) ?? null,
           p.playerName ?? null, p.slug ?? null, p.position ?? null,
           p.team || null, Boolean(p.rookie),
           typeof p.age === "number" ? p.age : null,
@@ -163,6 +209,7 @@ async function syncBoard(
         ],
         trailing: { column: "updated_at", sql: "now()" },
         onConflict: `(format, ktc_id) DO UPDATE SET
+            sleeper_id = EXCLUDED.sleeper_id,
             player_name = EXCLUDED.player_name, slug = EXCLUDED.slug,
             position = EXCLUDED.position, team = EXCLUDED.team,
             rookie = EXCLUDED.rookie, age = EXCLUDED.age,

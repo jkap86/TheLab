@@ -358,8 +358,8 @@ describe("leagueRosterPicks", () => {
     const picks = rosterOne(league, "2026");
 
     assert.deepEqual(picks, [
-      { season: "2027", round: 1, slot: null, from: null },
-      { season: "2027", round: 1, slot: null, from: "Slim" },
+      { season: "2027", round: 1, slot: null, from: null, value: null },
+      { season: "2027", round: 1, slot: null, from: "Slim", value: null },
     ]);
   });
 
@@ -372,12 +372,12 @@ describe("leagueRosterPicks", () => {
     const byRoster = leagueRosterPicks(league, "2026");
 
     assert.deepEqual(byRoster.get(1), [
-      { season: "2027", round: 1, slot: null, from: null },
-      { season: "2027", round: 1, slot: null, from: "Slim" },
+      { season: "2027", round: 1, slot: null, from: null, value: null },
+      { season: "2027", round: 1, slot: null, from: "Slim", value: null },
     ]);
     assert.deepEqual(byRoster.get(2), [
-      { season: "2027", round: 2, slot: null, from: null },
-      { season: "2027", round: 2, slot: null, from: "Me" },
+      { season: "2027", round: 2, slot: null, from: null, value: null },
+      { season: "2027", round: 2, slot: null, from: "Me", value: null },
     ]);
   });
 
@@ -392,8 +392,8 @@ describe("leagueRosterPicks", () => {
     const picks = rosterOne(league, "2026");
 
     assert.deepEqual(picks, [
-      { season: "2026", round: 1, slot: 2, from: null },
-      { season: "2026", round: 1, slot: 1, from: "Slim" },
+      { season: "2026", round: 1, slot: 2, from: null, value: null },
+      { season: "2026", round: 1, slot: 1, from: "Slim", value: null },
     ]);
   });
 
@@ -492,6 +492,7 @@ describe("leagueRosterPicks", () => {
       round: 1,
       slot: null,
       from: "Roster 3",
+      value: null,
     });
   });
 

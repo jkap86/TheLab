@@ -6,6 +6,8 @@
  * `"use client"` module without dragging `pg` or the solver along.
  */
 
+import type { KtcFormat } from "./ktc";
+
 /** One rostered player, as the lineup solve priced him. */
 export type LineupPlayer = {
   player_id: string;
@@ -25,6 +27,23 @@ export type LineupPlayer = {
    * superflex setting. Null when those drafts never priced the player.
    */
   adp_value: number | null;
+  /**
+   * KeepTradeCut's price for this player on the market the league reads — which
+   * market being the reader's `ktc_board` choice resolved against the league's
+   * type, and which of its two numbers being the league's superflex setting.
+   *
+   * **Null is "off the board", never zero**, the same distinction the two
+   * fields above draw. KTC's boards are a churning top few hundred skill
+   * players — no kickers, no defences, no IDP, and no deep bench — so an
+   * unpriced player is the ordinary case rather than a fault, and zeroing him
+   * would put a claim where there is no opinion.
+   *
+   * **It plays no part in the seating.** The lineup is solved on projections
+   * first and draft capital second (see `manager/ros-lineups`); this is hung on
+   * an already-seated player and read back for the totals. A market price
+   * deciding who starts would be a different tool.
+   */
+  ktc_value: number | null;
 };
 
 /** One starting slot, filled or empty. */
@@ -57,7 +76,11 @@ export type LineupMetricId =
   | "ros_bench"
   | "capital_total"
   | "capital_bench"
-  | "capital_starters";
+  | "capital_starters"
+  | "ktc_total"
+  | "ktc_starters"
+  | "ktc_bench"
+  | "ktc_picks";
 
 /**
  * Standard competition rank among the league's stored rosters: tied totals
@@ -69,9 +92,14 @@ export type MetricRank = { rank: number; of: number };
 
 /**
  * Null where the metric is degenerate league-wide — every roster totals zero,
- * which is what no projections (both ROS metrics) or no synced drafts (all
- * three capital metrics) look like. "1st of 12" among all-zero totals would be
- * a claim; the card renders an em dash instead.
+ * which is what no projections (both ROS metrics), no synced drafts (all three
+ * capital metrics) and an unreadable or empty KTC board (all four KTC metrics)
+ * look like. "1st of 12" among all-zero totals would be a claim; the card
+ * renders an em dash instead.
+ *
+ * `ktc_picks` reaches that state on its own in a league read on the **redraft**
+ * market, which carries no rookie-pick rows at all — correctly, since a redraft
+ * pick is not an asset anybody holds into next year.
  */
 export type LineupRanks = Record<LineupMetricId, MetricRank | null>;
 
@@ -98,6 +126,24 @@ export type RosterPick = {
    * the card. Falls back to "Roster N" where the origin roster has no owner.
    */
   from: string | null;
+  /**
+   * What KeepTradeCut prices this pick at, on the market and the QB board the
+   * league reads — the same pair of choices {@link LineupPlayer.ktc_value}
+   * carries, since the two are summed into one total.
+   *
+   * **KTC prices a pick by a third of the round and Sleeper holds one by a
+   * roster**, so the lookup places it: a pick whose draft order is set takes
+   * its own third (slot 3 of 12 is an early 1st), and one whose draft does not
+   * exist yet — most of them — takes KTC's middle row, the stand-in every trade
+   * calculator uses for an unplaced future pick.
+   *
+   * **Null is a genuine gap and not a zero.** KTC prices three seasons of four
+   * rounds; a pick past that horizon has no row to read and no honest way to be
+   * extrapolated onto one (see `ktc/picks` for why the discount machinery that
+   * could is deliberately unported). It falls out of the total rather than
+   * dragging it down.
+   */
+  value: number | null;
 };
 
 /**
@@ -105,8 +151,9 @@ export type RosterPick = {
  * and its total under every rankable lens.
  *
  * `totals` ships rather than being re-summed on the client because the sums
- * carry edge rules (`lineupMetricTotals` — null points and null capital count
- * zero, the bench re-rounds) and a second spelling of them is how the teams
+ * carry edge rules (`lineupMetricTotals` — null points, capital and KTC values
+ * all count zero, the ROS bench re-rounds, and `ktc_total` is the only metric
+ * that includes the picks) and a second spelling of them is how the teams
  * column would drift from the ranks it sits beside. The `Record` is exhaustive
  * by construction, so a new metric id breaks this compile too until it ships.
  */
@@ -143,5 +190,23 @@ export type ManagerLineupsPayload = {
    * rather than an error.
    */
   from_week: number | null;
+  /**
+   * Which KeepTradeCut market priced this answer and when it was scraped, or
+   * null where nothing could be priced at all — an unreadable board, which the
+   * route degrades to rather than failing over, exactly as it does for a failed
+   * projections span.
+   *
+   * The route echoes it for the reason the lineup-check route echoes its season
+   * and week: the reader asked for `auto`, `dynasty` or `redraft`, and only the
+   * server knows what `auto` came out as. **`"mixed"` is that answer across an
+   * account holding both kinds of league** — the honest one, since the page's
+   * leagues were then priced on two different markets and no single name is
+   * true of the column.
+   *
+   * `updated_at` rides along because these are someone else's numbers on a
+   * fifteen-minute cache, and anything showing them should be able to say how
+   * old they are.
+   */
+  ktc: { board: KtcFormat | "mixed"; updated_at: string | null } | null;
   leagues: Record<string, LeagueLineupEntry>;
 };

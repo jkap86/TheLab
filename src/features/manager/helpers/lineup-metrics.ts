@@ -34,6 +34,22 @@ export const LINEUP_METRIC_LABELS: Record<
     column: "Starter capital",
     option: "Draft capital — starters only",
   },
+  ktc_total: {
+    column: "KTC total",
+    option: "KeepTradeCut — roster and picks",
+  },
+  ktc_starters: {
+    column: "KTC starters",
+    option: "KeepTradeCut — starters only",
+  },
+  ktc_bench: {
+    column: "KTC bench",
+    option: "KeepTradeCut — bench only",
+  },
+  ktc_picks: {
+    column: "KTC picks",
+    option: "KeepTradeCut — future draft picks",
+  },
 };
 
 /**

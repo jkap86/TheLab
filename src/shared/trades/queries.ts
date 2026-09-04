@@ -1,5 +1,6 @@
 import type { ManagerLeague, Trade } from "@/shared/contract";
 import { pool } from "@/shared/db";
+import { QB_ELIGIBLE_STARTING_SLOTS } from "@/shared/ktc";
 import { LEAGUE_COLUMNS_SQL, toManagerLeague } from "@/shared/manager";
 import type { LeagueRow } from "@/shared/manager";
 
@@ -503,4 +504,61 @@ export async function getTradeManagers(
       ]),
     );
   });
+}
+
+/**
+ * The two facts a league's KeepTradeCut pricing needs that a trade row does not
+ * carry: which of KTC's two QB columns it reads, and how wide its draft board
+ * is.
+ *
+ * **Superflex is asked in SQL against the same derived list `isSuperflexLineup`
+ * reads**, bound as a parameter rather than spelled out — the arrangement
+ * `getManagerDraftAdp` already uses, so the predicate that picks a league's
+ * column here cannot drift from the one that picks it on the manager page.
+ *
+ * `total_rosters` is the width the round's thirds divide, which is what turns a
+ * traded pick's slot into one of KTC's "Early/Mid/Late" rows. The league's own
+ * size rather than a count of the draft order, because that order is read
+ * through `rosters` and loses a departed user's slot — and a board is as wide as
+ * the league, whoever is sitting in it.
+ *
+ * A league with no stored `roster_positions` is **not** superflex, which is the
+ * same fold `isSuperflexLineup` makes of a null: an unread lineup is not
+ * evidence of a second quarterback, and the 1QB column is the conservative
+ * reading of a league nobody can see.
+ */
+export type TradeLeagueMarket = { superflex: boolean; total_rosters: number };
+
+export async function getTradeLeagueMarkets(
+  leagueIds: readonly string[],
+): Promise<Record<string, TradeLeagueMarket>> {
+  if (leagueIds.length === 0) return {};
+
+  const { rows } = await pool.query<{
+    league_id: string;
+    superflex: boolean;
+    total_rosters: number | null;
+  }>(
+    `SELECT l.league_id,
+            (SELECT count(*)
+               FROM jsonb_array_elements_text(l.roster_positions) slot
+              WHERE slot = ANY($2::text[])) > 1 AS superflex,
+            l.total_rosters
+       FROM leagues l
+      WHERE l.league_id = ANY($1)`,
+    [leagueIds, [...QB_ELIGIBLE_STARTING_SLOTS]],
+  );
+
+  const out: Record<string, TradeLeagueMarket> = {};
+  for (const r of rows) {
+    out[r.league_id] = {
+      superflex: r.superflex,
+      // A zero is a row stored before the league answered, not a real size —
+      // the distinction the league filters already draw. It reads here as "no
+      // board to divide", so every pick in that league falls to the untiered
+      // lookup rather than to a tier computed against nothing.
+      total_rosters: r.total_rosters ?? 0,
+    };
+  }
+  return out;
 }

@@ -11,8 +11,13 @@
  * fetch returns — each page's entries carry *both* QB boards (see
  * {@link KtcPlayer}), which is why format is a row's identity in `ktc_values`
  * while superflex is a pair of columns.
+ *
+ * **Declared in `shared/contract` and re-exported here**, not the other way
+ * round: the client names a format too (the board keys, the payload echo) and
+ * this barrel is server-only. One spelling, on the side of the seam both can
+ * reach.
  */
-export type KtcFormat = "dynasty" | "redraft";
+export type { KtcFormat } from "@/shared/contract";
 
 /** One value block (superflex or 1QB) inside a KTC rankings entry. */
 export type KtcValueBlock = {

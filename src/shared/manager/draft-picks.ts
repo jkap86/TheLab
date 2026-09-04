@@ -466,6 +466,17 @@ function boardPickInRound(
 export function leagueRosterPicks(
   league: PickLeague,
   season: string,
+  /**
+   * What a resolved pick is worth, or null where nothing prices it.
+   *
+   * A callback rather than a board and a superflex flag, so this module keeps
+   * knowing only *which* picks a roster owns. Pricing one means reading a KTC
+   * row against the league's market and QB board and the third of the round the
+   * slot falls in, and none of that is a fact about ownership; `./league-teams`
+   * holds those three and passes the answer back in. Omitted, every pick ships
+   * unpriced, which is what the payload's `value: null` already means.
+   */
+  priceOf?: (pick: { season: string; round: number; slot: number | null }) => number | null,
 ): Map<number, RosterPick[]> {
   const grid =
     league.league_type === DYNASTY_LEAGUE_TYPE
@@ -511,17 +522,25 @@ export function leagueRosterPicks(
       picks.map((pick) => {
         const board = boardFor(pick.season);
         const slot = board?.slots.get(pick.original_roster_id);
-        return {
+        const named = {
           season: pick.season,
           round: pick.round,
           slot:
             board && slot !== undefined
               ? boardPickInRound(board, slot, pick.round)
               : null,
+        };
+        return {
+          ...named,
           from:
             pick.original_roster_id === rosterId
               ? null
               : originName(pick.original_roster_id),
+          // Priced off the *resolved* slot rather than the raw draft order,
+          // because that slot is where the pick actually falls — a snake
+          // draft's reversal turns an early 1st into a late 2nd, and KTC
+          // prices the two differently.
+          value: priceOf?.(named) ?? null,
         };
       }),
     );

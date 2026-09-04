@@ -4,9 +4,12 @@ import { type ReactNode, useMemo, useState } from "react";
 
 import {
   DEFAULT_LEAGUE_FILTERS,
+  KtcBoardKeys,
   LeagueFiltersDialog,
   activeFilterCount,
   filterSummary,
+  storeKtcBoard,
+  useKtcBoard,
   useStoredAccount,
 } from "@/features/shared";
 
@@ -68,6 +71,12 @@ export function TradesHome({
   const [filters, setFilters] = useState<TradeFilters>(DEFAULT_TRADE_FILTERS);
   const [seek, setSeek] = useState<TradeSeek>(DEFAULT_TRADE_SEEK);
   const [searchOpen, setSearchOpen] = useState(false);
+  // The KTC market this device reads. Unlike the manager page it does **not**
+  // ride the request: this board only prints the number, so putting it in
+  // `TradeRequest` would reset a scrolled keyset walk to page one to change a
+  // display unit. The payload carries both markets and the card picks — see
+  // `TradesPagePayload.assetValues`.
+  const ktcBoard = useKtcBoard();
 
   const narrowingLeagues = activeFilterCount(leagueFilters) > 0;
 
@@ -169,6 +178,11 @@ export function TradesHome({
           onChange={setLeagueFilters}
           leagues={leagues}
         />
+        {/* Beside the two filter keys rather than inside either dialog: unlike
+            the manager page's Columns panel, which owns the four columns this
+            choice gives meaning to, here it changes every number on every card
+            and belongs where they are. */}
+        <KtcBoardKeys board={ktcBoard} onChange={storeKtcBoard} />
         <button
           type="button"
           onClick={() => setSearchOpen((v) => !v)}
@@ -244,6 +258,7 @@ export function TradesHome({
         <TradesList
           data={data}
           leaguesById={byId}
+          board={ktcBoard}
           hasMore={hasMore}
           loadingMore={loadingMore}
           onLoadMore={loadMore}

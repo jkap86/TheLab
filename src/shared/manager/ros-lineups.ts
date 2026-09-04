@@ -21,6 +21,16 @@
  * What travels to the reader is the *real* pair — `points` (null when
  * unprojected, not zero) and `adp_value` — never the composite, so the payload
  * cannot leak a tiebreak epsilon into a total.
+ *
+ * **KeepTradeCut is read onto the answer and never into the question.**
+ * `ktc_value` is looked up per player and hung on the `LineupPlayer` the solve
+ * already produced; it is not in `score` and must not become a third term in
+ * it. The two that are there are a projection of what a player will *do* and,
+ * failing that, of what the room thought of him at a draft — both statements
+ * about production. A trade market is a statement about what a player is worth
+ * to acquire, which is a different question, and letting it decide a seat would
+ * bench a productive veteran under a rookie nobody can start. The KTC columns
+ * report a roster's worth; they do not set its lineup.
  */
 
 import type { LeagueLineup, LineupPlayer } from "@/shared/contract";
@@ -55,11 +65,17 @@ const ADP_TIEBREAK = 1e-7;
  * `adp` is the player → average-pick map for the board matching this league's
  * superflex setting; the caller chooses it (see the route) because which board
  * a league reads is decided once, with `isSuperflexLineup`, not per player.
+ *
+ * `ktc` is the same arrangement one market over: the player → KeepTradeCut
+ * price map for the league's resolved format and QB board, already narrowed by
+ * the caller for the same reason. An absent id is unpriced and stays null — see
+ * the module note for why it never joins the ordering.
  */
 export function solveLeagueLineup(
   league: RosLineupLeague,
   projections: RosProjections,
   adp: ReadonlyMap<string, number>,
+  ktc: ReadonlyMap<string, number> = new Map(),
 ): LeagueLineup {
   const positions = league.roster_positions ?? [];
   const pool = leagueAdpPool(league.total_rosters, league.roster_positions);
@@ -83,6 +99,7 @@ export function solveLeagueLineup(
       positions: line?.positions ?? [],
       points,
       adp_value: capital,
+      ktc_value: ktc.get(id) ?? null,
     };
     return { player, score: (points ?? 0) + (capital ?? 0) * ADP_TIEBREAK };
   });

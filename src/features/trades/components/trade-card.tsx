@@ -2,7 +2,14 @@
 
 import { memo } from "react";
 
-import type { ManagerLeague, Trade, TradeSide } from "@/shared/contract";
+import type {
+  KtcBoardChoice,
+  KtcFormat,
+  ManagerLeague,
+  Trade,
+  TradeSide,
+} from "@/shared/contract";
+import { resolveKtcFormat } from "@/shared/ktc/board-choice";
 import { pickSlotKey } from "@/shared/trades/pick-slots";
 import {
   CardPlateRow,
@@ -17,7 +24,6 @@ import {
   bundleValue,
   formatAssetValue,
   assetValue,
-  NO_ASSET_VALUES,
 } from "../asset-value";
 import {
   givenBundle,
@@ -60,12 +66,21 @@ export const TradeCard = memo(function TradeCard({
   trade,
   league,
   data,
+  board,
 }: {
   trade: Trade;
   /** Null before the leagues request lands, or if it failed. */
   league: ManagerLeague | null;
   data: TradesData;
+  /** The reader's KeepTradeCut market choice — see `useKtcBoard`. */
+  board: KtcBoardChoice;
 }) {
+  // Resolved here rather than on the server, because the payload carries both
+  // markets and only this card knows which league it is — see `asset-value`.
+  // A league whose row has not arrived reads as `auto`'s non-dynasty case,
+  // which prices nothing wrongly: both markets are on the wire, and the one it
+  // lands on is corrected the moment the leagues request answers.
+  const format = resolveKtcFormat(board, leagueType(league));
   return (
     <li className="relative">
       <article className={`${CONSOLE_CARD} font-mono`}>
@@ -92,6 +107,7 @@ export const TradeCard = memo(function TradeCard({
         <div className="grid gap-4 sm:grid-cols-2">
           {trade.sides.map((side) => (
             <SideColumn
+              format={format}
               key={side.roster_id}
               trade={trade}
               side={side}
@@ -158,10 +174,12 @@ function SideColumn({
   trade,
   side,
   data,
+  format,
 }: {
   trade: Trade;
   side: TradeSide;
   data: TradesData;
+  format: KtcFormat;
 }) {
   const manager = side.user_id ? data.managers[side.user_id] : undefined;
   const received = receivedBundle(side);
@@ -181,7 +199,9 @@ function SideColumn({
         {/* What the haul is worth, or `—` where nothing in it could be priced.
             Never `0` — see `asset-value` for why that would be a claim. */}
         <span className="ml-auto shrink-0 font-mono text-lg tabular-nums text-readout [text-shadow:var(--readout-text-glow)]">
-          {formatAssetValue(bundleValue(received, NO_ASSET_VALUES))}
+          {formatAssetValue(
+            bundleValue(trade.league_id, received, data.assetValues, format),
+          )}
         </span>
       </header>
 
@@ -191,6 +211,7 @@ function SideColumn({
         trade={trade}
         side={side}
         data={data}
+        format={format}
       />
       {given && (
         <>
@@ -204,6 +225,7 @@ function SideColumn({
             trade={trade}
             side={side}
             data={data}
+            format={format}
           />
         </>
       )}
@@ -226,12 +248,14 @@ function AssetTrack({
   trade,
   side,
   data,
+  format,
 }: {
   direction: "in" | "out";
   bundle: TradeBundle;
   trade: Trade;
   side: TradeSide;
   data: TradesData;
+  format: KtcFormat;
 }) {
   const inbound = direction === "in";
   const row = `grid grid-cols-[11px_minmax(0,1fr)_auto] items-baseline gap-2 text-[0.8125rem] ${
@@ -276,7 +300,9 @@ function AssetTrack({
               )}
             </span>
             <span className={`font-mono text-[0.78125rem] tabular-nums ${valueTone}`}>
-              {formatAssetValue(assetValue(id, NO_ASSET_VALUES))}
+              {formatAssetValue(
+                assetValue(trade.league_id, id, data.assetValues, format),
+              )}
             </span>
           </li>
         );
@@ -325,7 +351,9 @@ function AssetTrack({
               )}
             </span>
             <span className={`font-mono text-[0.78125rem] tabular-nums ${valueTone}`}>
-              {formatAssetValue(assetValue(pick, NO_ASSET_VALUES))}
+              {formatAssetValue(
+                assetValue(trade.league_id, pick, data.assetValues, format),
+              )}
             </span>
           </li>
         );
@@ -348,4 +376,18 @@ function AssetTrack({
       )}
     </ul>
   );
+}
+
+/**
+ * A league's Sleeper `settings.type`, or null where the row has not arrived.
+ *
+ * Guarded rather than cast: `settings` is the raw blob and every reader of it
+ * in this app checks the shape before trusting a value. Null falls to `auto`'s
+ * non-dynasty arm, which is the right reading of "we do not know yet" — the
+ * redraft board is the conservative one, and the card corrects itself the
+ * moment `/api/trades/leagues` answers.
+ */
+function leagueType(league: ManagerLeague | null): number | null {
+  const type = league?.settings?.type;
+  return typeof type === "number" ? type : null;
 }

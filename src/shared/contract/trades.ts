@@ -178,6 +178,29 @@ export type TradesPagePayload = {
    * roster's pick, of which a busy league has many.
    */
   pickSlots: Record<string, number>;
+  /**
+   * What KeepTradeCut prices each asset on this page at, on **both** of its
+   * markets — keyed by `assetKey`, which is league-scoped for the reason
+   * `pickSlotKey` is: one league's 2027 first is not another's.
+   *
+   * **Both markets ship and the client picks between them**, which is the one
+   * place the reader's board choice does not ride the request, and the
+   * difference from `/api/user/[username]/lineups` is what the number is *for*.
+   * There it is ranked, so the choice has to be resolved before a rank can
+   * exist. Here it is only printed — so sending it would reset a scrolled
+   * keyset walk to page one to change a display unit, which is the documented
+   * cost of this board having no `keepPreviousData`.
+   *
+   * The **superflex** axis is still resolved server-side, because that is a
+   * fact about the league rather than a reader's choice: a two-QB league reads
+   * a different column, and which one is not something anybody chooses.
+   *
+   * An asset KTC cannot price is **absent**, and an asset it prices on one
+   * market and not the other carries a null on that side — a kicker is on the
+   * redraft board and nowhere near the dynasty one. Neither is a zero. FAAB is
+   * never here at all: it is a league's own currency and no market prices it.
+   */
+  assetValues: Record<string, { dynasty: number | null; redraft: number | null }>;
 };
 
 /**

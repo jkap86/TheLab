@@ -2,13 +2,19 @@
 
 import { useRef } from "react";
 
-import type { LineupMetricId } from "@/shared/contract";
+import type {
+  KtcBoardChoice,
+  LineupMetricId,
+  ManagerLineupsPayload,
+} from "@/shared/contract";
 import {
   CONSOLE_KEY_BLOCK,
   CONSOLE_KEY_PILL,
   CONSOLE_READOUT,
+  KtcBoardKeys,
   LINEUP_METRIC_IDS,
   MAX_LINEUP_COLUMNS,
+  storeKtcBoard,
   storeLineupColumns,
 } from "@/features/shared";
 
@@ -31,12 +37,28 @@ import { LINEUP_METRIC_LABELS } from "../helpers/lineup-metrics";
  * `peer-checked`, so the keyboard behaviour, the label association and the
  * disabled semantics are the browser's rather than something re-implemented
  * with `role="checkbox"`.
+ *
+ * **The KeepTradeCut board sits at the foot of this panel** rather than out on
+ * the page, because it is not a view of the leagues — it is what four of these
+ * nine columns *mean*, and it is meaningless while none of them is chosen. It
+ * writes live like the boxes above it, which here costs a refetch (the ranks
+ * are the server's), so the numbers behind the open dialog blank and come back:
+ * that is the preview working, and the same thing the boxes do without a round
+ * trip. The scrape time rides beside it for the reason `/api/projections` sends
+ * its own: these are someone else's numbers on a fifteen-minute cache, and
+ * anything showing them should be able to say how old they are.
  */
 export function LineupColumnsDialog({
   columns,
+  board,
+  ktc,
   triggerClassName = `${CONSOLE_KEY_PILL} inline-flex items-center border-foreground/10 bg-[image:var(--key-bg)] text-foreground/80 shadow-[var(--key-shadow)] hover:text-readout`,
 }: {
   columns: readonly LineupMetricId[];
+  /** The stored KeepTradeCut market choice — see `useKtcBoard`. */
+  board: KtcBoardChoice;
+  /** Which market answered and when it was scraped; null when none could. */
+  ktc: ManagerLineupsPayload["ktc"];
   /** The trigger's shape — see `LeagueFiltersDialog`, which is shaped the same way. */
   triggerClassName?: string;
 }) {
@@ -163,6 +185,33 @@ export function LineupColumnsDialog({
             At {MAX_LINEUP_COLUMNS}, the rest grey out rather than refuse.
           </p>
 
+          <div className="mt-4 border-t border-foreground/10 pt-4">
+            <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1.5">
+              <span className="font-mono text-[0.625rem] uppercase tracking-[0.16em] text-foreground/50">
+                KTC board
+              </span>
+              {/* What answered, not what was asked for: `auto` resolves per
+                  league, and "mixed" is the honest name for an account that
+                  holds both kinds. Silent when nothing could be priced —
+                  the columns already say so with their em dashes. */}
+              {ktc && (
+                <span className="font-mono text-[0.625rem] uppercase tracking-[0.16em] text-foreground/45">
+                  {ktc.board}
+                  {ktc.updated_at && ` · ${scrapedAt(ktc.updated_at)}`}
+                </span>
+              )}
+            </div>
+            <KtcBoardKeys
+              board={board}
+              onChange={storeKtcBoard}
+              className="mt-2"
+            />
+            <p className="mt-2 font-mono text-[0.6875rem] leading-normal text-foreground/52">
+              Auto reads a dynasty league on the dynasty board and everything
+              else on redraft.
+            </p>
+          </div>
+
           <div className="mt-4 flex justify-end">
             <button
               type="button"
@@ -176,4 +225,22 @@ export function LineupColumnsDialog({
       </dialog>
     </>
   );
+}
+
+/**
+ * How long ago the board was scraped, in the coarsest unit that is still true.
+ *
+ * Relative rather than a clock time, because the question a reader has is "are
+ * these current", not "what time is it in the server's zone" — and coarse,
+ * because the sync's own TTL is fifteen minutes, so anything finer would be
+ * precision the number does not have. Rendered client-side after hydration like
+ * everything else in this dialog, so there is no server/client clock to
+ * disagree.
+ */
+function scrapedAt(iso: string): string {
+  const minutes = Math.floor((Date.now() - Date.parse(iso)) / 60_000);
+  if (!Number.isFinite(minutes) || minutes < 1) return "just now";
+  if (minutes < 60) return `${minutes}m ago`;
+  const hours = Math.floor(minutes / 60);
+  return hours < 24 ? `${hours}h ago` : `${Math.floor(hours / 24)}d ago`;
 }

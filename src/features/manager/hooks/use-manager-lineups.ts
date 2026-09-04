@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 
-import type { ManagerLineupsPayload } from "@/shared/contract";
+import type { KtcBoardChoice, ManagerLineupsPayload } from "@/shared/contract";
 import { isAbortError } from "@/features/shared";
 
 /**
@@ -20,6 +20,16 @@ import { isAbortError } from "@/features/shared";
  * false→true when it finishes, which is exactly when the rosters and drafts
  * this route reads came into existence.
  *
+ * `board` is the reader's KeepTradeCut market choice, and it rides the request
+ * rather than being applied on the client because the four KTC columns are
+ * *ranked* — a rank has to exist before it can be rendered, and only the server
+ * can compute one across a league's twelve rosters. **It therefore joins the
+ * subject key**, so a flip blanks the ranks for the one round trip instead of
+ * painting the old market's numbers under the new label. That is the same cost
+ * a season change already pays, and one request for the whole page. (The trades
+ * board resolves the same choice on the client, because there the number is
+ * only printed — see that route for the argument.)
+ *
  * A failure resolves to null and the cards simply omit the section — the
  * lineup is an enhancement beside the list, not the list, so it degrades the
  * way the refresh note does rather than replacing the page.
@@ -28,13 +38,14 @@ export function useManagerLineups(
   username: string,
   season: string | null,
   ready: boolean,
+  board: KtcBoardChoice,
 ): ManagerLineupsPayload | null {
   const [payload, setPayload] = useState<ManagerLineupsPayload | null>(null);
   const inFlight = useRef<AbortController | null>(null);
 
   // Reset during render, the way `useManagerLeagues` does: a subject change
   // must not paint one frame of the previous manager's lineups.
-  const subject = `${username} ${season ?? ""}`;
+  const subject = `${username} ${season ?? ""} ${board}`;
   const [renderedSubject, setRenderedSubject] = useState(subject);
   if (renderedSubject !== subject) {
     setRenderedSubject(subject);
@@ -50,7 +61,8 @@ export function useManagerLineups(
 
     const url =
       `/api/user/${encodeURIComponent(username)}/lineups` +
-      `?season=${encodeURIComponent(season)}`;
+      `?season=${encodeURIComponent(season)}` +
+      `&ktc_board=${encodeURIComponent(board)}`;
 
     void (async () => {
       try {
@@ -65,7 +77,7 @@ export function useManagerLineups(
     })();
 
     return () => controller.abort();
-  }, [username, season, ready]);
+  }, [username, season, ready, board]);
 
   return payload;
 }

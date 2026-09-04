@@ -1,4 +1,5 @@
 export { type UserInfo } from "./user-info";
+export { type KtcBoardChoice, type KtcFormat } from "./ktc";
 export { type ApiErrorPayload } from "./api-error-payload";
 export {
   type LeagueRecord,
