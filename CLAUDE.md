@@ -1931,16 +1931,75 @@ his **id** on the card: a visible, searchable token beats a blank.
   because its corpus is millions of crawled transactions; here `countTradeTotals`
   always counts, which is a walk of a partial index holding the trades and
   nothing else.
-- **The POST-body league scope.** It exists for >500 ids on the *shorter* list,
-  which a manager-sync-fed corpus cannot reach. What must not come back with it
-  is that threshold's older meaning, where the page gave up narrowing and
-  filtered in the browser: a first page of excluded trades renders the empty
-  state, which unmounts the list, which is what would have asked for page two.
 - **The facets memoiser.** Three aggregates over this corpus are milliseconds
   and a reader who never opens the panel never asks. The one *rule* it carried —
   count the menus **without** the selection, or each collapses to its own
   selection the moment you make one — is `facetsQuery` in `trades/params`,
   applied by `readTradeFacets` so a route cannot forget it.
+
+### The scope outgrew the request line
+
+The one thing this section listed as unported was TheLabX's **POST-body league
+scope**, on the grounds that a manager-sync-fed corpus could not reach the
+length that needs one. The crawler is what made it reach: a filtered board over
+a two-thousand-league corpus sent ~800 excluded ids, 19KB of query string, and
+Heroku's router answered **431 with an empty body** — which arrives at
+`apiFetch` as a failure naming nothing, so the board went blank the moment a
+reader narrowed it. It is ported now, as `features/trades/trade-query`'s
+`tradeHttpRequest` and `shared/trades/transport`.
+
+**The ids are still all sent, and the fix is only about how.** A cap on the
+scope would be a cap on how many leagues a reader may filter over, enforced at
+the moment they narrow — and the older reading of TheLabX's threshold, where the
+page gave up narrowing past it and filtered in the browser, is the thing this
+file has warned against since the board landed: a first page of excluded trades
+renders the empty state, which unmounts the list, which is what would have asked
+for page two.
+
+**A body is the rest of the query string, form-encoded — not a vocabulary of its
+own.** `readTradeParams` folds it back into one `URLSearchParams` before
+`parseTradeQuery` sees it, so the parser, the SQL and the payload cannot tell
+which method was used, and a parameter that grows unbounded later needs no new
+seam. It is why the two routes are `GET` and `POST` over one handler rather than
+two shapes. Three rules keep the fold honest: the **body wins** on a key both
+carry (`list()` reads repeated keys as one list, so joining them would *widen* a
+scope a stale line parameter had narrowed — a filter failing open); a body that
+is **not** form-encoded is refused **415** rather than read, since
+`new URLSearchParams('{"leagues":["a"]}')` parses happily into a key nobody
+reads and would arrive as no narrowing at all; and the cap is applied to the
+**stream** rather than to the declared length, past which the answer is a 413 —
+never a truncated list.
+
+**The threshold is 2,000 characters of query, far below the 8KB a router
+carries.** That budget covers the request line *and* every header beside it, so
+what is left is ~6KB for cookies and the rest; 2,000 characters is around ninety
+league ids at 22 encoded characters each. It is deliberately conservative
+because what sits on the other side is not a slower board but a bodiless 431.
+**Only the league scope moves**, because only the league scope is unbounded — a
+reader cannot select their way past a request line — and a long request with
+nothing movable in it stays a GET rather than being declined here.
+
+**How a request travelled is not part of what it is.** `tradeQueryKey` is built
+from the parameters and never from the transport, so the paging hook's subject
+does not change on the beat a scope crosses the threshold. The one real cost is
+that a POST forfeits the page route's `Cache-Control: private, max-age=30` — no
+browser caches one — which is why only the long scopes pay it.
+
+#### Verified
+
+Against a throwaway Postgres 16 cluster seeded with 2,000 leagues, one trade
+each, since the failure is a property of corpus size rather than of any stored
+row. The old shape reproduces exactly: 1,999 excluded ids is a 40,006-character
+query string and **431** — locally, from Node's own header limit, the same
+status Heroku returned. The same request through `tradeHttpRequest` is a
+19-character line and a 39,986-byte body, **200**, and the narrowing is exact:
+one trade, from the one league not excluded, `total` and `scopeTotal` both 1.
+`/api/trades/facets` took the identical scope and answered its menus. The keyset
+walk holds over POST — 1,990 excluded, `limit=4`, three pages of 4/4/2 covering
+exactly the ten leagues left, `total` on the first page only and null after,
+`nextCursor` null at the end. A JSON body 415s, a body past the cap 413s, a
+malformed `?season=` still 400s, and a scope short enough to fit is still a
+plain GET.
 
 ### KeepTradeCut prices landed here
 

@@ -58,3 +58,5 @@ export type {
   TradeTotals,
   TradesPage,
 } from "./queries";
+export { MAX_TRADE_BODY_BYTES, readTradeParams } from "./transport";
+export type { TradeParams } from "./transport";

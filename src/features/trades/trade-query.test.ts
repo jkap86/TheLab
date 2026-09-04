@@ -7,7 +7,9 @@ import { DEFAULT_LEAGUE_FILTERS } from "../shared/league-filters/defaults.ts";
 import { DEFAULT_TRADE_FILTERS, EMPTY_SIDE } from "./filters.ts";
 import type { TradeFilters, TradeSideFilter } from "./filters.ts";
 import {
+  MAX_TRADE_QUERY_CHARS,
   resolveLeagueScope,
+  tradeHttpRequest,
   tradeQueryKey,
   tradeQueryParams,
 } from "./trade-query.ts";
@@ -306,5 +308,98 @@ describe("tradeQueryKey", () => {
       tradeQueryKey(request({ filters: { circle: "mine" }, user: "u9" })),
       tradeQueryKey(request({ filters: { circle: "mine" }, user: "u8" })),
     );
+  });
+});
+
+/**
+ * How a request travels, which is the half that has to survive a corpus the
+ * crawler keeps growing. Every case here is about the same rule: the parameters
+ * are the request, and moving some of them into a body may not change what is
+ * being asked for.
+ */
+describe("tradeHttpRequest", () => {
+  /** A scope long enough that its ids cannot fit on a request line. */
+  const wide = (kind: "include" | "exclude") => ({
+    kind,
+    ids: Array.from({ length: 400 }, (_, i) => `13920404781${String(i).padStart(6, "0")}`),
+  });
+
+  test("a request that fits stays a GET, whole", () => {
+    const params = tradeQueryParams(
+      request({ scope: { kind: "include", ids: ["a", "b"] } }),
+    );
+    const sent = tradeHttpRequest(params);
+    assert.equal(sent.method, "GET");
+    assert.equal(sent.body, null);
+    assert.equal(String(sent.search), String(params));
+  });
+
+  test("a scope too long for the line moves into the body, in full", () => {
+    const scope = wide("include");
+    const params = tradeQueryParams(request({ scope }));
+    const sent = tradeHttpRequest(params);
+
+    assert.equal(sent.method, "POST");
+    assert.ok(sent.search.toString().length <= MAX_TRADE_QUERY_CHARS);
+    // The season stays on the line: what moves is the one parameter the reader
+    // did not size, so a request is still legible in a log.
+    assert.equal(sent.search.get("season"), "2026");
+    assert.equal(sent.search.get("leagues"), null);
+
+    // Nothing is dropped or truncated on the way — a narrowing quietly cut
+    // short is a board showing trades the reader filtered out.
+    const body = new URLSearchParams(sent.body ?? "");
+    assert.deepEqual(body.get("leagues")?.split(","), [...scope.ids].sort());
+  });
+
+  test("the exclude form moves on the same terms", () => {
+    const sent = tradeHttpRequest(tradeQueryParams(request({ scope: wide("exclude") })));
+    assert.equal(sent.method, "POST");
+    assert.equal(sent.search.get("xleagues"), null);
+    assert.ok(new URLSearchParams(sent.body ?? "").get("xleagues"));
+  });
+
+  test("the line and the body together are the parameters they came from", () => {
+    // The route folds them back into one `URLSearchParams` before anything
+    // reads it, so what has to hold is that the two halves are the whole.
+    const params = tradeQueryParams(
+      request({
+        scope: wide("exclude"),
+        filters: { sides: [side({ manager: "u1", players: ["p1"] }), EMPTY_SIDE] },
+        bounds: { from: 100, to: 200 },
+      }),
+    );
+    const sent = tradeHttpRequest(params);
+
+    const merged = new URLSearchParams(sent.search);
+    for (const [key, value] of new URLSearchParams(sent.body ?? "")) {
+      merged.set(key, value);
+    }
+    assert.deepEqual(
+      [...merged.entries()].sort(),
+      [...params.entries()].sort(),
+    );
+  });
+
+  test("how a request travelled is not part of what it is", () => {
+    // The key is the paging hook's subject. If the transport reached it, a
+    // board would restart on the beat a scope crossed the threshold.
+    const scope = wide("include");
+    const key = tradeQueryKey(request({ scope }));
+    assert.ok(key.includes("leagues="));
+    assert.equal(tradeHttpRequest(tradeQueryParams(request({ scope }))).method, "POST");
+    assert.equal(key, tradeQueryKey(request({ scope })));
+  });
+
+  test("a long request with nothing movable in it stays a GET", () => {
+    // What is left is a reader's own selection, which a person cannot make long
+    // enough to matter. Refusing it here would be this module declining to ask
+    // for a board; leaving it is the router's honest failure if it ever happens.
+    const players = Array.from({ length: 500 }, (_, i) => `player-${i}`);
+    const params = tradeQueryParams(
+      request({ filters: { sides: [side({ players }), EMPTY_SIDE] } }),
+    );
+    assert.ok(params.toString().length > MAX_TRADE_QUERY_CHARS);
+    assert.equal(tradeHttpRequest(params).method, "GET");
   });
 });

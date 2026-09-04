@@ -91,7 +91,9 @@ export type Trade = {
 };
 
 /**
- * `GET /api/trades` — one page of the trades board, newest first.
+ * `GET /api/trades` — one page of the trades board, newest first. (`POST`
+ * answers the same question with the league ids in a form-encoded body, for the
+ * scopes too long to put on a request line; see `shared/trades/transport`.)
  *
  * Not a manager route, and that is the shape of it: the trades worth reading
  * are the market's, not one account's, so this reads every league this database
@@ -110,7 +112,8 @@ export type Trade = {
  *   second copy in SQL would drift invisibly — the symptom being a filter
  *   quietly returning the wrong leagues rather than an error.
  *   {@link TradeLeaguesPayload} hands the page every league of the season once;
- *   it evaluates the rules and sends back ids.
+ *   it evaluates the rules and sends back ids — every one of them, however many
+ *   that is, which is the whole reason there is a body form.
  * - **The filter menus are their own route.** {@link TradeFacetsPayload} is the
  *   option lists and their counts over the same population, asked for only when
  *   the search panel is open.
@@ -230,7 +233,8 @@ export type TradeFacet = {
 
 /**
  * `GET /api/trades/facets` — the search panel's three menus, and how many
- * trades each option would leave.
+ * trades each option would leave. (`POST` on the same terms as the board: it
+ * takes the same query string, so it takes the same body form.)
  *
  * **The menus are read off the trades**, not from a fixed list: a fixed list
  * would offer players nobody traded while hiding the one someone wants, so the

@@ -25,6 +25,7 @@ import {
   lookupPlayers,
   parseTradeQuery,
   pickSlotKey,
+  readTradeParams,
 } from "@/shared/trades";
 import type { TradeLeagueMarket, TradeQuery } from "@/shared/trades";
 
@@ -62,22 +63,40 @@ export const dynamic = "force-dynamic";
  * the neutral form of a narrowing is not narrowing, so an unreadable one is
  * ignored rather than turning a stale bookmark into an error page.
  *
- * GET only. TheLabX also answers a POST carrying the league scope in a body,
- * for a filter set too long for a request line; that threshold is ~500 league
- * ids on the *shorter* of the include and exclude lists, which a corpus fed by
- * manager lookups does not reach. See {@link TradeQuery.leagues}.
+ * **GET and POST answer the same question**, and the second exists only because
+ * the first has a length. A league scope is one id per league the reader's
+ * rules did *not* settle (see `features/trades/league-scope`), so a corpus the
+ * crawler keeps growing puts the shorter of those lists past what a router will
+ * carry on a request line — Heroku answers that with a 431 and an empty body.
+ * `readTradeParams` folds a POST's form-encoded body back into the line's
+ * parameters, so everything below this reads one `URLSearchParams` and neither
+ * the parser nor the SQL knows which method was used. See
+ * {@link TradeQuery.leagues}.
  */
 export async function GET(request: Request) {
-  const url = new URL(request.url);
+  return readTradesPage(request);
+}
 
-  const requested = parseRequestedSeason(url.searchParams.get("season"));
+export async function POST(request: Request) {
+  return readTradesPage(request);
+}
+
+async function readTradesPage(request: Request) {
+  const read = await readTradeParams(request);
+  if (!read.ok) {
+    const error: ApiErrorPayload = { error: read.error };
+    return NextResponse.json(error, { status: read.status });
+  }
+  const { params } = read;
+
+  const requested = parseRequestedSeason(params.get("season"));
   if (requested && !requested.ok) {
     const error: ApiErrorPayload = { error: requested.error };
     return NextResponse.json(error, { status: 400 });
   }
   const season = requested?.season ?? (await getActiveSeason());
 
-  const query = parseTradeQuery(url.searchParams, season);
+  const query = parseTradeQuery(params, season);
 
   try {
     const page = await listTrades(query);
@@ -102,7 +121,9 @@ export async function GET(request: Request) {
     return NextResponse.json(payload, {
       headers: {
         // Private and short: the board moves at the sync's pace, and what this
-        // buys is the back button and a double-mount in development.
+        // buys is the back button and a double-mount in development. A POST
+        // forfeits it — no browser caches one — which is the price of a scope
+        // too long to put on the line, and is why only the long ones pay it.
         "Cache-Control": "private, max-age=30",
       },
     });
