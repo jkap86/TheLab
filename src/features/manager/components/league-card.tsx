@@ -11,6 +11,7 @@ import {
   CardRule,
   CONSOLE_CARD,
   CONSOLE_WINDOW,
+  LeagueConfigWindow,
   LeaguePlate,
   ordinal,
   PlateDivider,
@@ -26,7 +27,6 @@ import {
   rankFill,
   rankPercentile,
 } from "../helpers/lineup-metrics";
-import { LeagueConfigWindow } from "./league-config-window";
 import { LeagueTeams } from "./league-teams";
 
 /**
@@ -182,7 +182,10 @@ export function LeagueCard({
               that used to sit here. The team name and the status went with it —
               see `LeagueConfigWindow` — and the team count moved into the
               window, where it is the scale the slot ladders are read against. */}
-          <LeagueConfigWindow league={league} />
+          <LeagueConfigWindow
+            league={league}
+            className="mt-3.5 pointer-fine:[transform:translateZ(18px)]"
+          />
 
           {/* The ranks get the row to themselves, under the configuration
               rather than beside it — so the tiles stay a direct child of the

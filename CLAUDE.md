@@ -1722,7 +1722,12 @@ lineup mode, superflex, teams, starters, the QB+SF and TE slot counts as
 countable pips, and the TE premium. The line it replaces was one fact about the
 manager and two about the league, none of them acted on; the team count moved
 *into* the window, where it is the scale every slot count beside it is read
-against. `league-config-window.tsx`.
+against. `features/shared/ui/league-config-window.tsx`.
+
+**It lives in `features/shared` because a trade card reads it too** — see The
+trades board's own note below. It moved there from `features/manager/components`
+on the line that moved `CONSOLE_KEY`, `ManagerPlate` and `card-plate.tsx`: a
+second reader.
 
 **Nothing in it is derived twice, and that is the whole of the module.** Every
 rule already has exactly one spelling in `features/shared/league-filters`, so
@@ -1748,9 +1753,17 @@ one of the two this board could have, so the superflex league beside it is
 visibly different without anyone reading a number. Past two the ladder is exact.
 
 **The divider is a line on glass, not `--groove`.** A groove is a channel milled
-into the housing, and there is no metal inside a lit window to cut. The window
-sits at `translateZ(18px)`, between the tiles' 22px and the plates, so the
-planes still read front-to-back.
+into the housing, and there is no metal inside a lit window to cut.
+
+**Where it sits and what plane it sits on are the caller's**, which is the one
+thing the second reader changed: they arrive as a `className`, the arrangement
+`LeagueFiltersDialog` already takes its `triggerClassName` by, and for the same
+reason — two cards mount this and only the card knows its own surroundings. A
+manager card is a 3D context and gives it `translateZ(18px)`, between the tiles'
+22px and the plates, so the planes still read front-to-back; a trade card is
+flat, and a `translateZ` there buys nothing but a composited layer per card on a
+board that appends a hundred at a time and never unmounts one — the
+`pointer-fine:` budget argument, one grain down.
 
 The one thing a render at 390 changed: nothing, but it is worth knowing that the
 row wraps there rather than truncating, and a divider can land at the end of a
@@ -2080,6 +2093,44 @@ league avatar and a much larger league name on its plate, a timestamp where the
 plate carried a scoring week, and the housing-and-windows surface the other two
 tools' cards now share. The three narrowings, the keyset walk and the circle
 are untouched.
+
+**And it now carries the manager card's configuration window**, under the plate
+that names the league and above the hauls it prices — format, lineup mode,
+superflex, teams, starters, the QB+SF and TE ladders, the TE premium. It is the
+same component read from the same rules rather than a second derivation (see The
+configuration window, which moved to `features/shared` for this), so a league
+described one way on `/manager` cannot be described another here. What it
+answers is the thing a value on this board could not say on its own: the same
+two players are a different trade in a dynasty superflex league than in a
+redraft one, and until this landed the two printed under the same numbers with
+nothing on the card saying which game was being played.
+
+**It is drawn only once the league row has arrived**, which is this card's own
+rule rather than the window's. Every rule the window reads treats an absent blob
+as its own default — an absent `type` is redraft, an absent `best_ball` is
+managed — which is right for a league that *answered* and said nothing, and a
+claim for one that has not answered yet: the card would state "Redraft ·
+Managed" over a dynasty league for as long as `/api/trades/leagues` took, then
+silently correct itself. Nothing is the honest reading, and it is the same beat
+the league's name already spends showing its id. The KTC market resolution
+opposite is deliberately *not* gated the same way — see the local `leagueType`'s
+own note: a price on the conservative board is corrected by the same request,
+and both markets are already on the wire.
+
+*Verified* the way the console-card pass was, since there is no Sleeper access
+from where this was built: a temporary `/preview` route rendering the **real**
+`TradesList` and `LeagueCard` against fixture leagues — dynasty superflex,
+redraft best ball, a keeper league whose `roster_positions` never synced and
+whose `total_rosters` is 0, a chopped league, and a trade whose league row is
+absent — screenshotted over CDP at 1280 and 390 in both schemes, then deleted.
+Every arm landed: the unsynced league drew `—` for both counts, both ladders and
+the premium with **no pips at all**, the absent-row trade drew no window, and
+the redraft league's one-QB ladder drew one lit pip of two. The two cards'
+windows are identical in the DOM but for their placement classes — the manager's
+`mt-3.5` + `translateZ(18px)`, the trade card's `mb-4` and no transform — which
+is the one thing the shared move was allowed to change.
+`document.documentElement.scrollWidth === 390` at phone width, where the row
+wraps as it already does on a manager card, and still exactly one `<h1>`.
 
 **The three narrowings are three different kinds of thing, and the split is the
 whole design.**

@@ -1,22 +1,33 @@
 import type { ManagerLeague } from "@/shared/contract";
+
+import { CONSOLE_WINDOW } from "../console-chrome";
 import {
-  CONSOLE_WINDOW,
   isBestBall,
   leagueType,
-  Scanlines,
   scoringValue,
   slotCount,
   TYPE_OPTIONS,
-} from "@/features/shared";
+} from "../league-filters";
+import { Scanlines } from "./card-plate";
 
 /**
  * What game this league is playing, as one lit window across the card.
  *
- * It replaces the identity line that used to sit here — `team name · N-team ·
- * status`. The team name went because the card is about the league rather than
- * about what the manager called their team in it, the status went because it
- * was a word nobody acted on, and the team count moved *into* the window where
- * it is the scale every slot count beside it is read against.
+ * On `/manager` it replaces the identity line that used to sit here —
+ * `team name · N-team · status`. The team name went because the card is about
+ * the league rather than about what the manager called their team in it, the
+ * status went because it was a word nobody acted on, and the team count moved
+ * *into* the window where it is the scale every slot count beside it is read
+ * against.
+ *
+ * **It lives in `features/shared` because a trade card reads it too**, on the
+ * line that moved `CONSOLE_KEY`, `ManagerPlate` and `card-plate.tsx` here: a
+ * second reader. What it answers is the question `/trades` could not otherwise
+ * ask of a card — a haul is worth a different thing in a dynasty superflex
+ * league than in a redraft one, and until this landed the board printed both
+ * under the same numbers with nothing on the card saying which game it was.
+ * Since the two cards read the same rules, a league described one way on
+ * `/manager` cannot be described another on `/trades`.
  *
  * **Nothing here is derived twice.** Every rule already has exactly one
  * spelling in `features/shared/league-filters`, and this reads them:
@@ -36,8 +47,16 @@ import {
  * An absent *scoring* key is a real 0, which is why TE premium is asked as a
  * value rather than as a flag — see {@link scoringValue}.
  *
- * The window sits at `translateZ(18px)`: between the tiles' 22px and the
- * plates' rule, so the planes read front-to-back rather than as one surface.
+ * **Where it sits and what plane it sits on are the caller's**, which is why
+ * they arrive as a `className` rather than being written in here — the same
+ * arrangement `LeagueFiltersDialog` takes its `triggerClassName` by, and for
+ * the same reason: two cards mount this and only the card knows its own
+ * surroundings. A manager card is a 3D context and gives the window
+ * `translateZ(18px)`, between the tiles' 22px and the plates, so its planes
+ * read front-to-back; a trade card is flat, and a `translateZ` there would buy
+ * a composited layer per card on a board that appends a hundred at a time and
+ * never unmounts one.
+ *
  * Like every lit surface on the card it carries its own scanlines, and like
  * every one of them the layer is a child rather than a second background,
  * because CSS has no way to spell the overlay on an element that already has
@@ -52,7 +71,14 @@ const TYPE_LABELS = new Map(
   ]),
 );
 
-export function LeagueConfigWindow({ league }: { league: ManagerLeague }) {
+export function LeagueConfigWindow({
+  league,
+  className = "",
+}: {
+  league: ManagerLeague;
+  /** Placement and plane — see the module note. */
+  className?: string;
+}) {
   const qb = slotCount(league, "QB+SF");
   const te = slotCount(league, "TE");
   const starters = slotCount(league, "STARTERS");
@@ -61,7 +87,7 @@ export function LeagueConfigWindow({ league }: { league: ManagerLeague }) {
 
   return (
     <div
-      className={`${CONSOLE_WINDOW} mt-3.5 flex flex-wrap items-center gap-x-3.5 gap-y-3 rounded-[0.625rem] px-3.5 py-2.5 pointer-fine:[transform:translateZ(18px)]`}
+      className={`${CONSOLE_WINDOW} flex flex-wrap items-center gap-x-3.5 gap-y-3 rounded-[0.625rem] px-3.5 py-2.5 ${className}`}
     >
       <Scanlines />
 

@@ -15,6 +15,7 @@ import {
   CardPlateRow,
   CONSOLE_CARD,
   CONSOLE_WINDOW,
+  LeagueConfigWindow,
   LeaguePlate,
   ReadingPlate,
   Scanlines,
@@ -103,6 +104,23 @@ export const TradeCard = memo(function TradeCard({
             </span>
           </ReadingPlate>
         </CardPlateRow>
+
+        {/* What game this league is playing, between the plate that names it
+            and the hauls it prices. It is the manager card's own window, read
+            from the same rules rather than re-derived — see
+            `LeagueConfigWindow` — and it is what a value on this board could
+            not say on its own: the same two players are a different trade in a
+            dynasty superflex league than in a redraft one.
+
+            **Drawn only once the league row has arrived.** Every rule it reads
+            treats an absent blob as its own default — an absent `type` is
+            redraft, an absent `best_ball` is managed — which is right for a
+            league that answered and said nothing, and a claim for one that has
+            not answered yet. The card would state "Redraft · Managed" over a
+            dynasty league for as long as `/api/trades/leagues` took, then
+            silently correct itself. Nothing is the honest reading, and it is
+            the same beat the league's name spends showing its id. */}
+        {league && <LeagueConfigWindow league={league} className="mb-4" />}
 
         <div className="grid gap-4 sm:grid-cols-2">
           {trade.sides.map((side) => (
