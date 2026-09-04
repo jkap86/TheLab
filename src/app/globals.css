@@ -77,6 +77,31 @@
   --bezel-bg: linear-gradient(180deg, #2b3a3f, #0d1618);
   --bezel-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.3), inset 0 -2px 4px rgba(0, 0, 0, 0.85),
     0 6px 14px -6px #000, 0 0 20px -4px rgba(0, 255, 229, 0.4);
+  /*
+   * The card as an *instrument housing*, which is what the console cards
+   * became: a bezel with lit windows set into it, rather than a pane of glass
+   * with tiles floating on it.
+   *
+   * Its own token rather than `--bezel-bg`, and the reason is light mode. The
+   * bezel is the small raised mount the flask sits on, where light mode can
+   * afford to draw it near-white; a *card* drawn near-white has almost no
+   * separation from the pale-mint readouts set into it, so the light housing
+   * is a mid slate and the two tokens part company. In dark they are the same
+   * surface, and that is a coincidence worth keeping visible rather than
+   * aliasing.
+   */
+  --housing-bg: linear-gradient(180deg, #2b3a3f, #0d1618);
+  --housing-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.3),
+    inset 0 -2px 4px rgba(0, 0, 0, 0.85), 0 8px 18px -8px #000, 0 40px 70px -44px #000,
+    0 0 26px -10px rgba(0, 255, 229, 0.35);
+  /*
+   * The plate that straddles a housing's top edge. Lighter than `--key-bg`,
+   * because it is mounted *on* the housing rather than cut into the console —
+   * a key is pressed into a panel, a plate is screwed onto one.
+   */
+  --plate-raised-bg: linear-gradient(180deg, #3f5055, #182529);
+  --plate-raised-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.32),
+    inset 0 -2px 4px rgba(0, 0, 0, 0.8), 0 10px 20px -12px #000;
   --key-bg: linear-gradient(180deg, #2a383e, #111b1e);
   --key-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.28), 0 3px 0 rgba(0, 0, 0, 0.7),
     0 7px 14px -7px #000;
@@ -102,6 +127,34 @@
   --readout-scanlines: repeating-linear-gradient(to bottom, rgba(0, 255, 229, 0.07) 0 1px, transparent 1px 3px);
   --readout-text: #9ffff2;
   --readout-text-glow: 0 0 11px rgba(0, 255, 229, 0.75);
+  /*
+   * A readout set *into* a housing: `--readout-shadow` plus the lit bottom lip
+   * that closes the recess against the bezel around it. On a flat panel there
+   * is nothing for that lip to catch, which is why the card windows take this
+   * and the account readout keeps the other.
+   */
+  --window-shadow: inset 0 3px 8px rgba(0, 0, 0, 0.95), inset 0 0 24px rgba(0, 255, 229, 0.1),
+    0 1px 0 rgba(255, 255, 255, 0.09);
+  /*
+   * Type on lit glass, in the three weights a window uses: a row of content, a
+   * label or note beside it, and the dimmer half of a pair (a trade's give
+   * track against its take track).
+   *
+   * They are tokens rather than alphas over `--color-readout` for the reason
+   * the accent is never drawn with an alpha: light mode's readout text is a
+   * teal that is already near its contrast floor, and `text-readout/45` on a
+   * pale mint window is ~2:1. The dark values are the alphas the handoff
+   * specifies; the light ones are solid colours measured against
+   * `--readout-bg` (11:1, 5.2:1, 4.8:1).
+   *
+   * The give track's three shades (0.45 name, 0.4 value, 0.3 sign) collapse
+   * into `--readout-muted` alone: a light counterpart cannot carry an alpha,
+   * and 0.05 of the same mint is below the threshold at which anybody could
+   * tell the halves apart anyway.
+   */
+  --readout-line: rgba(214, 255, 250, 0.92);
+  --readout-label: rgba(159, 255, 242, 0.55);
+  --readout-muted: rgba(159, 255, 242, 0.45);
   --groove: linear-gradient(to bottom, transparent, rgba(0, 0, 0, 0.9), transparent);
   --groove-highlight: 1px 0 0 rgba(255, 255, 255, 0.07);
 
@@ -222,6 +275,24 @@
   --bezel-bg: linear-gradient(180deg, #ffffff, #dbe4e7);
   --bezel-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.9), inset 0 -2px 4px rgba(15, 23, 42, 0.14),
     0 6px 14px -6px rgba(15, 23, 42, 0.3), 0 0 20px -4px rgba(13, 148, 136, 0.35);
+  /*
+   * The housing, darkened rather than mirrored — the one place the light
+   * scheme is not the dark one inverted.
+   *
+   * A card here holds pale-mint windows (`--readout-bg`), and the bezel's own
+   * light value (#ffffff → #dbe4e7) sits within a few percent of them: the
+   * windows stop reading as set *into* anything. A mid slate is what a machined
+   * housing looks like under a light, and it gives the windows ~2 stops of
+   * separation to sit in. The plate on top stays near-white, because a plate
+   * mounted on a housing is the surface catching the light.
+   */
+  --housing-bg: linear-gradient(180deg, #c8d4d8, #a4b5ba);
+  --housing-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.75),
+    inset 0 -2px 4px rgba(15, 23, 42, 0.2), 0 8px 18px -8px rgba(15, 23, 42, 0.35),
+    0 40px 70px -44px rgba(15, 23, 42, 0.5), 0 0 26px -10px rgba(13, 148, 136, 0.35);
+  --plate-raised-bg: linear-gradient(180deg, #ffffff, #dde6e9);
+  --plate-raised-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.95),
+    inset 0 -2px 4px rgba(15, 23, 42, 0.16), 0 10px 20px -12px rgba(15, 23, 42, 0.45);
   --key-bg: linear-gradient(180deg, #ffffff, #e3eaed);
   --key-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.9), 0 3px 0 rgba(15, 23, 42, 0.14),
     0 7px 14px -7px rgba(15, 23, 42, 0.3);
@@ -237,6 +308,13 @@
   --readout-scanlines: repeating-linear-gradient(to bottom, rgba(13, 148, 136, 0.07) 0 1px, transparent 1px 3px);
   --readout-text: #0b6d63;
   --readout-text-glow: none;
+  --window-shadow: inset 0 3px 8px rgba(15, 23, 42, 0.2), inset 0 0 24px rgba(13, 148, 136, 0.12),
+    0 1px 0 rgba(255, 255, 255, 0.75);
+  /* Solid, not alpha — see the note on the dark values. Measured against
+     `--readout-bg`: 11:1, 5.2:1 and 4.8:1. */
+  --readout-line: #123c39;
+  --readout-label: #2f6f69;
+  --readout-muted: #45746f;
   /* The milled groove between a readout and its key. */
   --groove: linear-gradient(to bottom, transparent, rgba(15, 23, 42, 0.28), transparent);
   --groove-highlight: 1px 0 0 rgba(255, 255, 255, 0.9);
@@ -281,6 +359,10 @@
   --color-active: var(--accent);
   --color-error: var(--error);
   --color-readout: var(--readout-text);
+  /* The three weights of type a lit window uses — see the note on the tokens. */
+  --color-readout-line: var(--readout-line);
+  --color-readout-label: var(--readout-label);
+  --color-readout-muted: var(--readout-muted);
 
   --font-display: var(--font-geist-sans), ui-sans-serif, system-ui,
     "Helvetica Neue", Arial, sans-serif;

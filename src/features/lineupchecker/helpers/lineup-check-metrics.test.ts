@@ -15,6 +15,7 @@ function league(over: Partial<LineupCheckLeague> = {}): LineupCheckLeague {
     best_ball: false,
     as_of: "week",
     current_points: 120,
+    opponent_points: null,
     optimal_points: 120,
     points_left: 0,
     start: [],

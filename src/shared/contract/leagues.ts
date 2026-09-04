@@ -38,6 +38,25 @@ export type ManagerLeague = {
   team_name: string | null;
   record: LeagueRecord | null;
   /**
+   * Where the manager sits in the league's standings, and where their
+   * points-for sits among the same rosters.
+   *
+   * Standard competition ranking, on Sleeper's own order: wins first, points
+   * for as the tiebreak. Derived from the stored roster settings rather than
+   * from the matchup rows, because those settings *are* Sleeper's running
+   * standings — the same numbers {@link ManagerLeague.record} is read from —
+   * and recomputing them from the weekly rows is how a rank could come to
+   * disagree with the record printed beside it on the same plate.
+   *
+   * **Null is not "1st", and the cases it covers are three.** No roster of
+   * theirs stored (they were chopped out, or left); a league where nobody has
+   * played a game yet, where a standings position among all-zero records is a
+   * claim — the same rule the lineup ranks answer null by; and, for
+   * `points_rank` alone, a league where nobody has scored.
+   */
+  standings_rank: number | null;
+  points_rank: number | null;
+  /**
    * The league's lineup slots, `["QB","RB",…,"BN"]`.
    *
    * **Null and `[]` are different answers and readers must keep them apart.** A

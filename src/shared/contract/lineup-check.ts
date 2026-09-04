@@ -77,6 +77,18 @@ export type LineupCheckLeague = {
   /** What the lineup as set projects. */
   current_points: number;
   /**
+   * What this week's opponent's lineup as set projects, or **null where there
+   * is no answer** — a week with no stored matchup rows (every future week, by
+   * construction), a week Sleeper filed without a `matchup_id`, or an opponent
+   * whose roster is not stored.
+   *
+   * Never zero for any of those: a zero is a roster genuinely projected to
+   * score nothing, and the card draws a projected *win* from the comparison.
+   * Solved through the same `compareLineup` the manager's own total comes from,
+   * so the two figures on the plate are the same measurement twice.
+   */
+  opponent_points: number | null;
+  /**
    * What the best lineup **still reachable** projects — seats held by a player
    * whose game has kicked off stay as they are, the rest are solved. Part-way
    * through a week that is a different number from the best lineup outright,

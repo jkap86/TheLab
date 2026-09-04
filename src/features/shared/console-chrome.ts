@@ -67,6 +67,49 @@ export const CONSOLE_WELL =
   "shadow-[var(--well-shadow)]";
 
 /**
+ * A card as an *instrument housing*: a bezel with lit windows set into it.
+ *
+ * The console cards used to be glass — `--card-bg` with readout tiles floating
+ * on it — and this inverts that relationship: the card body is the housing and
+ * everything carrying a reading is a window cut into it. Shared because all
+ * three league cards (trades, manager, lineup checker) are the same object seen
+ * three times, and a housing that drifted between them would read as three
+ * different instruments.
+ *
+ * The 18px radius and the `30px 18px 18px` padding are part of it: the top
+ * padding is what the plate straddling the edge needs to clear.
+ */
+export const CONSOLE_CARD =
+  "relative rounded-[1.125rem] border border-foreground/10 " +
+  "bg-[image:var(--housing-bg)] px-[1.125rem] pb-[1.125rem] pt-[1.875rem] " +
+  "shadow-[var(--housing-shadow)]";
+
+/**
+ * A readout set *into* a housing, as opposed to sitting on a panel.
+ *
+ * {@link CONSOLE_READOUT} with the lit bottom lip that closes the recess
+ * against the bezel around it — see `--window-shadow`. Same `relative
+ * overflow-hidden` contract: the scanlines are an absolutely-positioned child,
+ * so every window carries one.
+ */
+export const CONSOLE_WINDOW =
+  "relative overflow-hidden border border-black/85 bg-[image:var(--readout-bg)] " +
+  "shadow-[var(--window-shadow)]";
+
+/**
+ * The plate that straddles a housing's top edge — the league name, the record,
+ * the week's projection.
+ *
+ * Colourless in the same sense {@link CONSOLE_KEY_PILL} is not: a plate has one
+ * state, so its border travels with it. What it does *not* carry is layout —
+ * the row it sits in, and whether it is the left plate or the right one, belong
+ * to the card.
+ */
+export const CONSOLE_PLATE =
+  "rounded-full border border-foreground/14 bg-[image:var(--plate-raised-bg)] " +
+  "shadow-[var(--plate-raised-shadow)]";
+
+/**
  * Lit glass: the surface a *number* is drawn on, as opposed to a label.
  *
  * `relative` and `overflow-hidden` are part of it because the scanlines are an

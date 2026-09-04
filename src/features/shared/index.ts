@@ -11,16 +11,20 @@ export { storeAccount, useStoredAccount } from "./account";
 export { apiFetch, isAbortError } from "./api";
 export { Avatar } from "./avatar";
 export {
+  CONSOLE_CARD,
   CONSOLE_HOUSING,
   CONSOLE_KEY,
   CONSOLE_KEY_BLOCK,
   CONSOLE_KEY_PILL,
+  CONSOLE_PLATE,
   CONSOLE_READOUT,
   CONSOLE_TRACK,
   CONSOLE_WELL,
+  CONSOLE_WINDOW,
 } from "./console-chrome";
 export { errorMessage } from "./error-message";
 export { ordinal } from "./format";
+export { rankColor } from "./rank-ramp";
 export * from "./league-filters";
 // The dialog those rules are built in. It moved here from `features/manager`
 // when the trades board became a second reader — the line `CONSOLE_KEY` and
@@ -45,5 +49,15 @@ export { useManagerLeagues } from "./use-manager-leagues";
 export type { ManagerLeaguesState } from "./use-manager-leagues";
 export { ThemeToggle } from "./theme-toggle";
 export { ManagerPlate } from "./ui/manager-plate";
+// The console card's header, shared by all three league cards — see the module.
+export {
+  CardPlateRow,
+  CardRule,
+  LeaguePlate,
+  PlateDivider,
+  PlateField,
+  ReadingPlate,
+  Scanlines,
+} from "./ui/card-plate";
 export { ConsoleGround } from "./ui/console-ground";
 export { PageShell } from "./ui/page-shell";

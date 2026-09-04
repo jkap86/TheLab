@@ -10,6 +10,7 @@ import type {
 } from "./draft-picks";
 import type { RankLeague } from "./league-ranks";
 import type { ManagerSyncState } from "./sync-freshness";
+import type { WeekLineupOpponent } from "./week-lineups";
 
 /*
  * The reads behind the leagues route.
@@ -180,6 +181,77 @@ const FIELDED_A_TEAM_SQL = `(
 const MANAGER_LEAGUE_SQL = `${LIVE_LEAGUE_SQL} AND ${FIELDED_A_TEAM_SQL}`;
 
 /**
+ * A roster's standings inputs, read off Sleeper's settings blob.
+ *
+ * Guarded the way every other read of that blob is — the values are strings in
+ * JSONB and a league carrying a non-numeric one must not fail the whole query —
+ * and taking the alias as an argument because the ranks below compare two
+ * rosters of the same league to each other.
+ *
+ * Points are `fpts` plus `fpts_decimal` hundredths: Sleeper splits a decimal
+ * score across two integer fields, and dropping the second is what makes two
+ * teams a tenth of a point apart tie for a place they do not share.
+ */
+const rosterWinsSql = (a: string) => `
+  (CASE WHEN ${a}.settings->>'wins' ~ '^[0-9]+$'
+        THEN (${a}.settings->>'wins')::int ELSE 0 END)`;
+
+const rosterGamesSql = (a: string) => `
+  (${rosterWinsSql(a)}
+   + (CASE WHEN ${a}.settings->>'losses' ~ '^[0-9]+$'
+           THEN (${a}.settings->>'losses')::int ELSE 0 END)
+   + (CASE WHEN ${a}.settings->>'ties' ~ '^[0-9]+$'
+           THEN (${a}.settings->>'ties')::int ELSE 0 END))`;
+
+const rosterPointsSql = (a: string) => `
+  ((CASE WHEN ${a}.settings->>'fpts' ~ '^-?[0-9]+([.][0-9]+)?$'
+         THEN (${a}.settings->>'fpts')::numeric ELSE 0 END)
+   + (CASE WHEN ${a}.settings->>'fpts_decimal' ~ '^[0-9]+$'
+           THEN (${a}.settings->>'fpts_decimal')::numeric / 100 ELSE 0 END))`;
+
+/**
+ * Where the manager's roster sits among the league's, twice over.
+ *
+ * **Standard competition ranking, counted rather than windowed**: a roster's
+ * place is one more than the number of rosters strictly ahead of it, so ties
+ * share the better rank and the next distinct total skips — the same convention
+ * `league-ranks.ts` ranks lineups by, and the one Sleeper's own standings page
+ * uses.
+ *
+ * The standings comparison is a **row comparison**, which Postgres evaluates
+ * lexicographically: wins first, points for as the tiebreak. That is Sleeper's
+ * order, and spelling it as one comparison rather than two is what keeps it
+ * from drifting into `wins > wins OR (wins = wins AND pts > pts)` and back.
+ *
+ * `league_played` and `league_scored` are the two guards that keep a rank from
+ * being a claim. A league where nobody has played a game has no standings —
+ * every roster is 0-0 and "1st of 12" among them says something that is not
+ * true — and a league where nobody has scored has no points rank. They are two
+ * booleans rather than one because the pre-season states differ: a league can
+ * have played no games *and* carry no points, but a scoring quirk that leaves
+ * points on the board with no result recorded should still not invent a
+ * standings position.
+ *
+ * Written as a LATERAL so it runs once per league row against that league's
+ * rosters — a dozen rows behind the `rosters` primary key.
+ */
+const MANAGER_RANKS_SQL = `
+  LEFT JOIN LATERAL (
+    SELECT
+      1 + count(*) FILTER (
+        WHERE (${rosterWinsSql("o")}, ${rosterPointsSql("o")})
+            > (${rosterWinsSql("mr")}, ${rosterPointsSql("mr")})
+      ) AS standings_rank,
+      1 + count(*) FILTER (
+        WHERE ${rosterPointsSql("o")} > ${rosterPointsSql("mr")}
+      ) AS points_rank,
+      bool_or(${rosterGamesSql("o")} > 0)  AS league_played,
+      bool_or(${rosterPointsSql("o")} > 0) AS league_scored
+    FROM rosters o
+    WHERE o.league_id = l.league_id
+  ) rk ON true`;
+
+/**
  * The league columns every reader of a {@link ManagerLeague} selects.
  *
  * Shared rather than written out per query because two questions now ask it —
@@ -212,6 +284,13 @@ type ManagerLeagueRowShape = LeagueRow & {
   wins: string | null;
   losses: string | null;
   ties: string | null;
+  /** Null where no roster of theirs is stored — see {@link toRanks}. */
+  manager_roster_id: number | null;
+  standings_rank: string | null;
+  points_rank: string | null;
+  /** Whether *anyone* in the league has played, and whether anyone has scored. */
+  league_played: boolean | null;
+  league_scored: boolean | null;
 };
 
 /**
@@ -227,6 +306,8 @@ export function toManagerLeague(
   manager: {
     team_name?: string | null;
     record?: ManagerLeague["record"];
+    standings_rank?: number | null;
+    points_rank?: number | null;
   } = {},
 ): ManagerLeague {
   return {
@@ -240,6 +321,8 @@ export function toManagerLeague(
     avatar_url: sleeperAvatarUrl(r.avatar, "thumb"),
     team_name: manager.team_name ?? null,
     record: manager.record ?? null,
+    standings_rank: manager.standings_rank ?? null,
+    points_rank: manager.points_rank ?? null,
     // Sleeper's own blobs, forwarded rather than reduced — see `ManagerLeague`
     // for why the league filters need the keys and not a set of flags.
     roster_positions: r.roster_positions,
@@ -268,14 +351,17 @@ export async function getManagerLeagues(
   const { rows } = await pool.query<ManagerLeagueRowShape>(
     `SELECT ${LEAGUE_COLUMNS_SQL},
         lu.team_name,
+        mr.roster_id           AS manager_roster_id,
         mr.settings->>'wins'   AS wins,
         mr.settings->>'losses' AS losses,
-        mr.settings->>'ties'   AS ties
+        mr.settings->>'ties'   AS ties,
+        rk.standings_rank, rk.points_rank, rk.league_played, rk.league_scored
      FROM leagues l
      JOIN league_users lu
        ON lu.league_id = l.league_id AND lu.user_id = $1
      LEFT JOIN rosters mr
        ON mr.league_id = l.league_id AND mr.owner_id = $1
+     ${MANAGER_RANKS_SQL}
      LEFT JOIN manager_league_order mo
        ON mo.league_id = l.league_id AND mo.user_id = $1 AND mo.season = $2
      WHERE l.season = $2
@@ -285,8 +371,38 @@ export async function getManagerLeagues(
   );
 
   return rows.map((r) =>
-    toManagerLeague(r, { team_name: r.team_name, record: toRecord(r) }),
+    toManagerLeague(r, {
+      team_name: r.team_name,
+      record: toRecord(r),
+      ...toRanks(r),
+    }),
   );
+}
+
+/**
+ * The manager's two ranks, or nulls where ranking them would be a claim.
+ *
+ * **The roster gate is the one that is easy to lose.** `mr` is a LEFT JOIN and
+ * the SQL reads its settings through the same regex guard every other roster
+ * goes through, so a manager with *no* stored roster compares as 0-0-0 and
+ * comes back ranked — last, but ranked, and drawn on the plate as a real
+ * position. A league is on this list when the manager fielded a team *or* was
+ * chopped out of a chopped one, and the second of those has no roster left to
+ * rank. So the row carries `manager_roster_id` for no other purpose than this.
+ */
+function toRanks(r: ManagerLeagueRowShape): {
+  standings_rank: number | null;
+  points_rank: number | null;
+} {
+  if (r.manager_roster_id === null) {
+    return { standings_rank: null, points_rank: null };
+  }
+  return {
+    standings_rank:
+      r.league_played && r.standings_rank != null ? Number(r.standings_rank) : null,
+    points_rank:
+      r.league_scored && r.points_rank != null ? Number(r.points_rank) : null,
+  };
 }
 
 /**
@@ -580,12 +696,32 @@ export type ManagerWeekLineupRow = {
    * is never shown today's lineup under another week's heading.
    */
   as_of: "week" | "current";
+  /**
+   * Who they play this week, and what that roster is starting — or null where
+   * the week has no scheduled opponent for them.
+   *
+   * **Null covers three real states and none of them is a bye**: a week the
+   * sync has no `matchups` rows for at all (every future week, by
+   * construction), a week Sleeper filed without a `matchup_id` (the offseason,
+   * and some playoff formats), and a league whose opponent's roster is not
+   * stored. All three are "no answer", which is why the plate that reads this
+   * draws a dash rather than a projected win.
+   */
+  opponent: WeekLineupOpponent | null;
 };
 
-type ManagerWeekLineupSqlRow = Omit<ManagerWeekLineupRow, "best_ball" | "as_of"> & {
+type ManagerWeekLineupSqlRow = Omit<
+  ManagerWeekLineupRow,
+  "best_ball" | "as_of" | "opponent"
+> & {
   best_ball: boolean | null;
   week_starters: string[] | null;
   week_players: string[] | null;
+  opponent_roster_id: number | null;
+  opponent_starters: string[] | null;
+  opponent_players: string[] | null;
+  opponent_week_starters: string[] | null;
+  opponent_week_players: string[] | null;
 };
 
 /**
@@ -626,12 +762,26 @@ export async function getManagerWeekLineups(
             r.starters AS starters,
             r.players  AS players,
             m.starters AS week_starters,
-            m.players  AS week_players
+            m.players  AS week_players,
+            om.roster_id AS opponent_roster_id,
+            oor.starters AS opponent_starters,
+            oor.players  AS opponent_players,
+            om.starters  AS opponent_week_starters,
+            om.players   AS opponent_week_players
        FROM leagues l
        JOIN rosters r
          ON r.league_id = l.league_id AND r.owner_id = $1
        LEFT JOIN matchups m
          ON m.league_id = l.league_id AND m.roster_id = r.roster_id AND m.week = $3
+       -- The other side of the same game, off the pairing index. matchup_id is
+       -- nullable — Sleeper files offseason and some playoff weeks without one
+       -- — and a null never equals a null, so those rows simply find no
+       -- opponent rather than pairing with every unpaired roster in the league.
+       LEFT JOIN matchups om
+         ON om.league_id = l.league_id AND om.week = $3
+        AND om.matchup_id = m.matchup_id AND om.roster_id <> r.roster_id
+       LEFT JOIN rosters oor
+         ON oor.league_id = l.league_id AND oor.roster_id = om.roster_id
       WHERE l.season = $2
         AND ${MANAGER_LEAGUE_SQL}
       ORDER BY l.league_id`,
@@ -654,6 +804,34 @@ export async function getManagerWeekLineups(
       // still who that lineup was chosen from.
       players: stored ? (row.week_players ?? row.players) : row.players,
       as_of: stored ? "week" : "current",
+      opponent: toOpponent(row),
     };
   });
+}
+
+/**
+ * The opponent's half of the row, read on the same rule the manager's half is.
+ *
+ * **A stored-but-empty `starters` counts as absent here too**, and it has to:
+ * Sleeper writes an empty array for a week a league never scheduled, so a
+ * bare `COALESCE` would prefer that to the live lineup and project the
+ * opponent at zero — which the plate would then draw as a win.
+ *
+ * The opponent is dropped entirely where no roster of theirs is stored. There
+ * is nothing to project, and an opponent projected from nothing is a claim.
+ */
+function toOpponent(row: ManagerWeekLineupSqlRow): WeekLineupOpponent | null {
+  if (row.opponent_roster_id === null) return null;
+  const stored =
+    Array.isArray(row.opponent_week_starters) &&
+    row.opponent_week_starters.length > 0;
+  const starters = stored ? row.opponent_week_starters : row.opponent_starters;
+  if (!starters || starters.length === 0) return null;
+  return {
+    roster_id: row.opponent_roster_id,
+    starters,
+    players: stored
+      ? (row.opponent_week_players ?? row.opponent_players)
+      : row.opponent_players,
+  };
 }

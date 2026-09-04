@@ -43,6 +43,8 @@ function league(over: Partial<ManagerLeague> = {}): ManagerLeague {
     avatar_url: null,
     team_name: null,
     record: null,
+    standings_rank: null,
+    points_rank: null,
     roster_positions: ["QB", "RB", "WR", "TE", "FLEX", "BN"],
     settings: {},
     scoring_settings: {},

@@ -868,7 +868,14 @@ copy is `aria-hidden`), the readout's live state announced by `sr-only`
 `/manager/[username]` is the tools page's instrument language applied to the
 leagues list: one bevelled panel holding an engraved identity plate, a season
 summary housing, and a grid of league cards that tilt and rise. Applied from a
-design handoff. The information architecture, the five stream states, the
+design handoff.
+
+**The card itself has since been redrawn — see The console card below.** Its
+body is an instrument housing rather than glass, its engraved 1.75rem league
+name is a plate straddling the top edge, and the status word and record moved
+onto a second plate opposite with two new ranks beside them. Everything below
+about the tiles, the rank ramp, the `pointer-fine:` budget and the three
+`preserve-3d` constraints still holds; the surface under them changed. The information architecture, the five stream states, the
 filters and the columns dialog are all unchanged — this was a visual pass —
 and four things about it are structural rather than cosmetic.
 
@@ -1031,7 +1038,9 @@ contrast, with the figure itself at 5.2:1.
 
 `/lineupchecker` answers two questions per league for one NFL week: **what the
 lineup as set projects against the best one still reachable from it**, and
-**whether its starters are seated in the order they lock best in**. It reads the
+**whether its starters are seated in the order they lock best in**. Its card
+has since been redrawn and gained a third answer — the week's projected outcome
+against the opponent's own lineup; see The console card below. It reads the
 stored account rather than a username in its URL — which is what the tool
 registry already declared for it (no `hrefFor`, not `accountless`), so
 `constants/tools.ts` is untouched.
@@ -1153,6 +1162,13 @@ narrowed three ways. **A trade is not a table**: it is a `transactions` row with
 mirroring since the graph landed and nothing read until now. The tool card was
 declared from the start (`accountless`, no `hrefFor`) and this is what arrived
 behind it.
+
+**The card has since been redrawn — see The console card below.** It gained a
+value per asset and a side total (both `—` until the KTC matcher ports), a
+league avatar and a much larger league name on its plate, a timestamp where the
+plate carried a scoring week, and the housing-and-windows surface the other two
+tools' cards now share. The three narrowings, the keyset walk and the circle
+are untouched.
 
 **The three narrowings are three different kinds of thing, and the split is the
 whole design.**
@@ -1459,6 +1475,143 @@ pages still draw their own panel** on `--background` rather than on the ground �
 they are unchanged apart from losing their theme key, and giving them the
 full-bleed treatment is a redesign of three pages this bundle does not cover.
 
+## The console card
+
+One card carries a league across three tools — `/trades`, `/manager` and
+`/lineupchecker` — and this pass applied one idea to all three: **the card
+stops being a pane of glass and becomes a bezel housing with lit windows set
+into it.** The body was `--card-bg` with `--readout-bg` tiles floating on it;
+it is `--housing-bg` now, and everything carrying a reading is a window. Type
+inside a card is all `--font-mono`. Applied from a design handoff.
+
+**The league moved from a headline into a plate**, and that is the change the
+rest follows from. On `/manager` and `/lineupchecker` the name was a 1.75rem
+`--chrome-face` engraving; it is a mono plate straddling the card's top edge
+with the league's avatar lit in its bezel, and a second plate opposite carries
+the figures the card is read for — record and two ranks, or the week's
+projected outcome, or the trade's timestamp. A trade card already had that
+construction, so the other two adopting it is what makes the three read as one
+instrument seen from three tools rather than three cards that happen to hold a
+league.
+
+`features/shared/ui/card-plate.tsx` is the shared header — `CardPlateRow`,
+`LeaguePlate`, `ReadingPlate`, `PlateField`, `PlateDivider`, `CardRule`,
+`Scanlines` — on `CONSOLE_KEY`'s own line: a second feature reads it.
+`console-chrome.ts` gained `CONSOLE_CARD` (the housing), `CONSOLE_WINDOW` (a
+readout set *into* one) and `CONSOLE_PLATE`. **The plate row is one flex row,
+never two absolutely-positioned spans**, which `trade-card.tsx` found at 390
+and every card now inherits: laid out independently the two plates overlap and
+the league name runs under the date.
+
+### The three data dependencies, and where each landed
+
+**KTC values on a trade's assets: still blocked, and the `—` is the design.**
+`shared/ktc` scrapes both markets but `ktc_values.sleeper_id` is nullable and
+never written — the Sleeper↔KTC matcher is one of the deliberately unported
+pieces — so nothing here can price a player, a pick needs `ktc/picks.ts`
+beside it, and FAAB has no market value and never will. What landed is
+`features/trades/asset-value.ts`: the value column, the side total, and **the
+rule that outlives the gap** — a side with nothing priced totals `—`, never
+`0`, because a zero there is a claim in the sense this file uses the word
+about `DEFAULT now()`. `NO_ASSET_VALUES` is the single reference the matcher
+replaces; `asset-value.test.ts` pins the summing rule with fixtures today.
+
+**The league avatar needed nothing.** `ManagerLeague.avatar_url` already
+carries it, resolved server-side by `sleeperAvatarUrl`, so the trades board
+gets it free through `TradeLeaguesPayload`.
+
+**Standings rank and points rank are new, and they come off `rosters`, not
+`matchups`.** The handoff named the matchup rows; the roster settings blob is
+where Sleeper keeps its *own* running standings — the same `wins`/`losses`
+`league.record` is read from, plus `fpts` and `fpts_decimal` — so deriving the
+ranks from anywhere else is how a rank could disagree with the record printed
+beside it on the same plate. `MANAGER_RANKS_SQL` in `manager/queries.ts` is a
+LATERAL counting the rosters strictly ahead: standard competition ranking, and
+a **row comparison** so wins-then-points is one expression rather than two that
+can drift. Three guards keep a rank from being a claim — `manager_roster_id`
+(a chopped-out manager has no roster to rank and would otherwise compare as
+0-0-0 and come back ranked, last), `league_played` (a league where nobody has
+played has no standings) and `league_scored`.
+
+**The lineup checker's projected outcome is the opponent's own lineup, solved.**
+`getManagerWeekLineups` now joins the other side of the same `matchups` pairing
+— `matchup_id` is nullable and a null never equals a null, so an unpaired week
+finds no opponent rather than pairing with every unpaired roster — and
+`solveWeekLineup` prices it through **the same `compareLineup`** the manager's
+own total comes from. That is not waste: the comparison drops slots this build
+doesn't recognise from both lineups, where a bare sum over the opponent's
+starters would leave theirs whole and read as a loss caused by an unfamiliar
+slot name. `opponent_points` is null — never zero — for a future week, an
+unpaired week, or an opponent whose roster is not stored, and the plate is not
+drawn at all in those cases rather than showing `128.4–0` and a W.
+
+### Tokens, and light mode
+
+Three new tokens the handoff named (`--housing-shadow`, `--plate-raised-bg`,
+`--plate-raised-shadow`) plus five it implied, each with a light counterpart:
+
+- **`--housing-bg` is its own token rather than `--bezel-bg`**, and light mode
+  is why. The bezel is the small raised mount the flask sits on and light mode
+  draws it near-white; a *card* drawn near-white has almost no separation from
+  the pale-mint readouts set into it. The light housing is a **mid slate** —
+  the handoff's own instruction to darken rather than mirror — and the plate on
+  top stays near-white, because a plate mounted on a housing is the surface
+  catching the light.
+- `--window-shadow` is `--readout-shadow` plus the lit bottom lip that closes
+  the recess against the bezel around it. A readout on a flat panel has nothing
+  for that lip to catch, which is why the account readout keeps the other.
+- `--readout-line`, `--readout-label` and `--readout-muted` are type on lit
+  glass. **Tokens rather than alphas over `--color-readout`**, for the reason
+  the accent is never drawn with an alpha: light mode's readout text is a teal
+  already near its contrast floor, and `text-readout/45` on a pale mint window
+  is ~2:1. The light values are solid and measured — 11:1, 5.2:1, 4.8:1. The
+  give track's three shades collapse into `--readout-muted` alone, since a
+  light counterpart cannot carry an alpha and 0.05 of the same mint is below
+  the threshold at which anyone could tell the halves apart.
+
+`rankColor` moved to `features/shared/rank-ramp.ts` — the checker's win/loss
+pip draws from the same red→green ramp the manager card's rank tiles run on,
+rather than a second red — and `lineup-metrics.ts` re-exports it, so its own
+readers and its test did not move.
+
+### Changed against the handoff, each because a render showed it
+
+- **`min-w-0` on the `<details>`**, on both cards. The `<li>` is a row flex
+  container, so its item takes `min-width: auto` and refuses to go below its
+  own min-content — and the expanded half's two panes sit side by side at every
+  width by design, which puts that min-content above 390. Without it the card
+  is wider than the viewport and the whole page scrolls sideways. **This was
+  true before the pass** (the old wrapper's wider padding made it 412px against
+  404) and is fixed here because the pass was in the file.
+- **The manager plate drops its points rank below `sm`.** Three fields and
+  their dividers are ~225px of a 322px row at 390, leaving the league plate
+  four characters — "D…" where the league name is the card's whole subject.
+  Dropping the third gives it nine, and the points rank is the one of the three
+  a reader can most nearly infer from the other two.
+- **The trade date drops its year below `sm`**, for the same 322px: the board
+  answers one season by construction, so the year is the most redundant token
+  on the plate. Two spans switched by the cascade, not by state — a client
+  component must not have to hydrate to learn a breakpoint.
+- `--card-specular` is gone with the glass. It was a white wash over a
+  translucent card, and the housing draws its own top highlight in
+  `--housing-shadow`'s first inset; two of them is a bezel with a second,
+  brighter bezel painted on it. The sheen, floor, glow and edge light stay, and
+  so does the whole `pointer-fine:` gate — the handoff is explicit that nothing
+  in the redesign argues against the tilt, and its per-device budget is
+  unchanged.
+
+### Verified
+
+Rendered through a temporary `/preview` route against the real components,
+tokens and Tailwind build (there is no Sleeper access from a sandbox, so the
+props were fixtures), and screenshotted over CDP at 1280 and 390 in both
+schemes with every disclosure open. What that turned up is the three changes
+above; the 390 pass now has **no horizontal page overflow** (`main.scrollWidth
+=== 390`), where it had 28px before. A phone-width viewport has to come from
+`Emulation.setDeviceMetricsOverride` rather than `--window-size`, which headless
+Chrome clamps to a ~485px minimum — a `--window-size=390` run silently lays out
+at 485 and crops. The route was deleted afterwards.
+
 ## Theme
 
 Two schemes, one set of markup, and `globals.css` is nearly the whole of it:
@@ -1510,6 +1663,12 @@ Two rules for adding to it:
   ramp took its only consumer — see the leagues console. The console pass added
   `--track-shadow` and `--well-shadow` in its place, plus the ramp's own
   `--rank-l` / `--rank-l-mid` / `--rank-c`.
+- The console-card pass added eight more, and one of them is the exception to
+  the rule above: `--housing-bg` exists **because a light counterpart cannot be
+  a mirror**. See The console card for that argument, for why
+  `--window-shadow` is not `--readout-shadow`, and for why the three lit-glass
+  type colours (`--readout-line`, `--readout-label`, `--readout-muted`) are
+  tokens rather than alphas over `--color-readout`.
 
 ### The toggle
 

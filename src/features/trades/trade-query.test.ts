@@ -28,6 +28,8 @@ const league = (id: string, over: Partial<ManagerLeague> = {}): ManagerLeague =>
   avatar_url: null,
   team_name: null,
   record: null,
+  standings_rank: null,
+  points_rank: null,
   settings: { type: 2 },
   roster_positions: ["QB", "RB", "WR", "BN"],
   scoring_settings: { rec: 1 },

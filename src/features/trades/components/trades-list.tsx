@@ -56,7 +56,7 @@ export function TradesList({
 
   return (
     <>
-      <ul className="space-y-6">
+      <ul className="space-y-[1.875rem]">
         {data.trades.map((trade) => (
           <TradeCard
             key={trade.transaction_id}

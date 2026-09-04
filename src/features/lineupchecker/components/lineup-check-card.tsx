@@ -1,4 +1,15 @@
 import type { LineupCheckLeague, ManagerLeague } from "@/shared/contract";
+import {
+  CardPlateRow,
+  CardRule,
+  CONSOLE_CARD,
+  CONSOLE_WINDOW,
+  LeaguePlate,
+  PlateField,
+  rankColor,
+  ReadingPlate,
+  Scanlines,
+} from "@/features/shared";
 
 import {
   gapCell,
@@ -8,12 +19,15 @@ import {
 } from "../helpers/lineup-check-metrics";
 
 /**
- * One league's week, as a card that rises toward the viewer.
+ * One league's week, as an instrument housing that rises toward the viewer.
  *
  * The leagues console's card with a different pair of numbers in it, and
  * deliberately the same object: a reader arriving here from `/manager` is
  * looking at the same leagues, and two cards drawn to hold a league would be
- * two chances for one of them to drift.
+ * two chances for one of them to drift. So it carries the same housing, the
+ * same league plate with the avatar lit in its bezel, and the same identity
+ * line — with the week's projected outcome on the plate opposite, where the
+ * manager card puts the record and the ranks.
  *
  * Three constraints are inherited and every one is silent when broken:
  *
@@ -31,9 +45,9 @@ import {
  * Hook-free, like `LeagueCard`: the only interaction it owns is the disclosure.
  *
  * A fourth constraint travels with the card: the depth chrome rides
- * `pointer-fine:`, because one card per league times ~6 composited planes each
- * is what kills an iOS Safari tab when a card opens. `LeagueCard` carries the
- * argument in full; the gate must stay on both, since this page renders the
+ * `pointer-fine:`, because one card per league times several composited planes
+ * each is what kills an iOS Safari tab when a card opens. `LeagueCard` carries
+ * the argument in full; the gate must stay on both, since this page renders the
  * same card over the same league list.
  */
 
@@ -61,20 +75,24 @@ export function LineupCheckCard({
 
   return (
     <li className="relative flex pointer-fine:[perspective:2400px] hover:z-10 has-[details[open]]:z-10">
-      <details className="group/card flex flex-1 flex-col">
+      {/* `min-w-0` is what lets the card shrink to a phone. The `<li>` is a
+          row flex container, so its item takes `min-width: auto` and refuses
+          to go below its own min-content — and the expanded half's two panes
+          sit side by side at every width by design, which puts that
+          min-content above 390. Without this the card is wider than the
+          viewport and the whole page scrolls sideways. */}
+      <details className="group/card flex min-w-0 flex-1 flex-col">
         <summary
           className={
-            "lab-card-3d relative flex flex-1 cursor-pointer list-none flex-col rounded-[1.125rem] " +
-            "border border-foreground/12 bg-[image:var(--card-bg)] px-[1.375rem] pb-[1.625rem] pt-7 " +
-            "shadow-[var(--card-bevel),var(--card-lift)] " +
+            `lab-card-3d ${CONSOLE_CARD} flex flex-1 cursor-pointer list-none flex-col font-mono ` +
             "pointer-fine:[transform-style:preserve-3d] [transform-origin:center_bottom] " +
             "pointer-fine:[transform:translateZ(0)_rotateX(3deg)] " +
             "pointer-fine:hover:[transform:translateZ(30px)_rotateX(0deg)] " +
             "pointer-fine:group-open/card:[transform:translateZ(20px)_rotateX(0deg)] " +
             "transition-[transform,box-shadow,border-color] duration-[450ms] ease-[cubic-bezier(0.2,0.8,0.2,1)] " +
             "hover:border-active/45 group-open/card:border-active/45 " +
-            "pointer-fine:hover:shadow-[var(--card-bevel),var(--card-lift-hover),var(--card-halo-hover)] " +
-            "pointer-fine:group-open/card:shadow-[var(--card-bevel),var(--card-lift-hover),var(--card-halo-hover)] " +
+            "pointer-fine:hover:shadow-[var(--housing-shadow),var(--card-lift-hover),var(--card-halo-hover)] " +
+            "pointer-fine:group-open/card:shadow-[var(--housing-shadow),var(--card-lift-hover),var(--card-halo-hover)] " +
             "focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-active/60"
           }
         >
@@ -83,23 +101,22 @@ export function LineupCheckCard({
             aria-hidden
             className="pointer-events-none absolute inset-0 overflow-hidden rounded-[inherit]"
           >
-            <span className="absolute inset-x-0 top-0 h-[45%] bg-[image:var(--card-specular)]" />
             <span className="lab-anim absolute inset-y-0 left-0 hidden w-[55%] -translate-x-[180%] -skew-x-12 bg-[image:var(--card-sheen)] transition-transform duration-[900ms] ease-out group-hover/card:translate-x-[450%] pointer-fine:block" />
             <span className="absolute -inset-x-1/4 -bottom-[8%] hidden h-[62%] origin-bottom bg-[image:var(--card-floor)] opacity-40 transition-opacity duration-[450ms] [mask-image:linear-gradient(to_top,#000,transparent_72%)] [transform:perspective(320px)_rotateX(66deg)] group-hover/card:opacity-100 group-open/card:opacity-100 pointer-fine:block" />
             <span className="absolute -bottom-[45%] left-1/2 h-[85%] w-[120%] -translate-x-1/2 bg-[radial-gradient(closest-side,var(--accent-glow),transparent_75%)] opacity-30 transition-opacity duration-[450ms] group-hover/card:opacity-80 group-open/card:opacity-80" />
             <span className="absolute inset-x-[18%] top-0 h-px bg-[image:var(--card-edge-light)] opacity-0 transition-opacity duration-[450ms] group-hover/card:opacity-100 group-open/card:opacity-100" />
           </span>
 
-          <span className="relative text-balance bg-[image:var(--chrome-face)] bg-clip-text font-display text-[1.75rem] font-semibold leading-[1.06] tracking-[-0.04em] text-transparent transition-[filter] duration-[450ms] pointer-fine:[filter:var(--card-title-depth)] pointer-fine:[transform:translateZ(44px)] pointer-fine:group-hover/card:[filter:var(--card-title-depth-hover)]">
-            {league.name}
-          </span>
+          {/* Outside the clipping layer: the plates straddle the top edge, and
+              a clip is exactly what would cut them off. */}
+          <CardPlateRow>
+            <LeaguePlate name={league.name} avatarUrl={league.avatar_url} />
+            <ProjectionPlate entry={entry} />
+          </CardPlateRow>
 
-          <span
-            aria-hidden
-            className="relative mt-3.5 block h-px w-9 bg-gradient-to-r from-active/50 to-transparent transition-[width] duration-[450ms] group-hover/card:w-[5.75rem] group-hover/card:from-active group-open/card:w-[5.75rem] group-open/card:from-active pointer-fine:[transform:translateZ(36px)]"
-          />
+          <CardRule />
 
-          <p className="relative mt-[0.9375rem] font-mono text-[0.6875rem] uppercase tracking-[0.16em] text-foreground/60 pointer-fine:[transform:translateZ(14px)]">
+          <p className="relative mt-3.5 font-mono text-[0.6875rem] uppercase tracking-[0.16em] text-foreground/60 pointer-fine:[transform:translateZ(14px)]">
             {league.team_name?.trim() || "—"}
             {` · ${league.total_rosters}-team`}
             {/* A lineup graded off the roster's *live* starters rather than the
@@ -114,7 +131,7 @@ export function LineupCheckCard({
           {/* A direct child of the summary, so the `translateZ` survives: a
               plain wrapper here is a flat rendering context and the depth would
               go with no error to say so. */}
-          <div className="relative mt-5 grid grid-cols-2 gap-2.5 pointer-fine:[transform:translateZ(22px)]">
+          <div className="relative mt-4 grid grid-cols-2 gap-2.5 pointer-fine:[transform:translateZ(22px)]">
             <MetricTile label="Vs optimal" cell={gap} />
             <MetricTile label="Kickoff" cell={kickoff} />
           </div>
@@ -123,11 +140,12 @@ export function LineupCheckCard({
         {/* Outside the 3D context on purpose: a lineup table inside a
             `preserve-3d` subtree pays for a composited layer per row and gains
             nothing, since none of it is tilted. */}
-        <div className="mt-3 rounded-[1.125rem] border border-foreground/10 bg-[image:var(--card-bg)] px-[1.375rem] pb-[1.375rem] pt-4 shadow-[var(--card-bevel)]">
+        <div className={`${CONSOLE_WINDOW} mt-3 rounded-xl px-3.5 py-0.5`}>
+          <Scanlines />
           {entry ? (
             <LineupDetail entry={entry} />
           ) : (
-            <p className="m-0 font-mono text-[0.6875rem] uppercase tracking-[0.16em] text-foreground/60">
+            <p className="relative m-0 py-2.5 font-mono text-[0.6875rem] uppercase tracking-[0.16em] text-readout-label">
               No lineup read for this league this week
             </p>
           )}
@@ -137,25 +155,79 @@ export function LineupCheckCard({
   );
 }
 
+/**
+ * The week's projected outcome: this lineup against the one it plays.
+ *
+ * **Two figures and a pip, or nothing at all.** There is no opponent for a
+ * future week (the sync fetches matchups only up to the week being played), for
+ * a week Sleeper filed without a pairing, or where the opponent's roster is not
+ * stored — and the honest answer to all three is no plate, not `128.4–0` and a
+ * W. `opponent_points` is null in every one of them and never zero, which is
+ * what makes the distinction drawable at all.
+ *
+ * The pip takes its colour from `rankColor`, the same red→green ramp the
+ * manager card's rank tiles run on, rather than from a second green and a
+ * second red — one ramp, so a good outcome is the same green everywhere and
+ * both ends invert for light mode together.
+ *
+ * **A dead heat draws a neutral pip rather than no pip.** Two lineups
+ * projecting to the hundredth of a point is vanishingly rare and a real answer
+ * when it happens; leaving the pip off would spell it the same way as "no
+ * opponent", which is the one thing this plate is careful about.
+ */
+function ProjectionPlate({ entry }: { entry?: LineupCheckLeague | null }) {
+  if (!entry || entry.opponent_points === null) return null;
+
+  const mine = entry.current_points;
+  const theirs = entry.opponent_points;
+  // 1 for a win, 0 for a loss, 0.5 for a tie — the ramp's own ends and middle.
+  const outcome = mine > theirs ? 1 : mine < theirs ? 0 : 0.5;
+  const letter = outcome === 1 ? "W" : outcome === 0 ? "L" : "T";
+  const tone = rankColor(outcome * 100);
+
+  return (
+    <ReadingPlate tight>
+      <PlateField label="Proj">
+        {mine.toFixed(1)}–{theirs.toFixed(1)}
+      </PlateField>
+      <span
+        className="inline-flex h-[22px] w-[22px] items-center justify-center rounded-full border border-active/45 bg-[image:var(--readout-bg)] font-mono text-[0.8125rem] font-medium shadow-[inset_0_0_12px_var(--accent-glow)]"
+        style={{ color: tone, textShadow: `0 0 10px ${rankColor(outcome * 100, 0.6)}` }}
+      >
+        <span className="sr-only">
+          {letter === "W"
+            ? "Projected win"
+            : letter === "L"
+              ? "Projected loss"
+              : "Projected tie"}
+        </span>
+        <span aria-hidden>{letter}</span>
+      </span>
+    </ReadingPlate>
+  );
+}
+
 /** One reading, as a lit window — the same surface as the console's readouts. */
 function MetricTile({ label, cell }: { label: string; cell: MetricCell }) {
   return (
     <div
-      className="relative min-w-0 overflow-hidden rounded-[0.625rem] border border-black/85 bg-[image:var(--readout-bg)] px-3 py-2.5 shadow-[var(--readout-shadow)]"
+      className={`${CONSOLE_WINDOW} min-w-0 rounded-[0.625rem] px-3 py-2.5`}
       title={cell.title}
     >
-      <span
-        aria-hidden
-        className="pointer-events-none absolute inset-0 bg-[image:var(--readout-scanlines)]"
-      />
-      <p className="relative m-0 truncate font-mono text-[0.6875rem] uppercase tracking-[0.14em] text-foreground/60">
+      <Scanlines />
+      {/* Teal rather than the housing's foreground: on a housing the windows
+          are the only lit surface, so a label in the metal's own colour would
+          read as belonging to the metal rather than to the glass. */}
+      <p className="relative m-0 truncate font-mono text-[0.625rem] uppercase tracking-[0.14em] text-readout-label">
         {label}
       </p>
       {/* Full opacity on either tone: the light-mode teal is only ~5:1 against
           the page, and an alpha drops it below AA. */}
       <p
-        className={`relative m-0 mt-2 truncate font-mono text-base leading-none tabular-nums ${
-          cell.alert ? "text-error" : "text-readout"
+        className={`relative m-0 mt-2 truncate font-mono text-[1.0625rem] leading-none tabular-nums ${
+          cell.alert
+            ? "text-error [text-shadow:0_0_12px_rgba(252,165,165,0.45)]"
+            : "text-readout [text-shadow:var(--readout-text-glow)]"
         }`}
       >
         {cell.text}
@@ -168,12 +240,7 @@ function MetricTile({ label, cell }: { label: string; cell: MetricCell }) {
 /** The lineup as set, seat by seat, then the bench. */
 function LineupDetail({ entry }: { entry: LineupCheckLeague }) {
   return (
-    <div className="relative overflow-hidden rounded-xl border border-black/85 bg-[image:var(--readout-bg)] px-3.5 py-1 shadow-[var(--readout-shadow)]">
-      <span
-        aria-hidden
-        className="pointer-events-none absolute inset-0 bg-[image:var(--readout-scanlines)]"
-      />
-
+    <>
       <ul className="relative m-0 list-none p-0">
         {entry.lineup.map((seat, i) => (
           <SeatRow
@@ -188,14 +255,14 @@ function LineupDetail({ entry }: { entry: LineupCheckLeague }) {
 
       {entry.unknown_slots.length > 0 && (
         // A partial lineup must say so — see `unknown_slots` on the contract.
-        <p className="relative m-0 py-2 font-mono text-[0.6875rem] uppercase tracking-[0.14em] text-foreground/60">
+        <p className="relative m-0 py-2 font-mono text-[0.6875rem] uppercase tracking-[0.14em] text-readout-label">
           Not shown: {entry.unknown_slots.join(", ")}
         </p>
       )}
 
       {entry.bench.length > 0 && (
         <details className="group/bench relative">
-          <summary className="flex h-9 cursor-pointer list-none items-center font-mono text-[0.6875rem] uppercase tracking-[0.14em] text-foreground/60 transition-colors hover:text-readout">
+          <summary className="flex h-[34px] cursor-pointer list-none items-center font-mono text-[0.6875rem] uppercase tracking-[0.14em] text-readout-label transition-colors hover:text-readout">
             <span className="group-open/bench:hidden">
               Bench ({entry.bench.length}) ▸
             </span>
@@ -203,7 +270,7 @@ function LineupDetail({ entry }: { entry: LineupCheckLeague }) {
               Bench ({entry.bench.length}) ▾
             </span>
           </summary>
-          <ul className="m-0 list-none border-t border-active/8 p-0">
+          <ul className="m-0 list-none border-t border-active/9 p-0">
             {entry.bench.map((player) => (
               <SeatRow
                 key={player.player_id}
@@ -214,7 +281,7 @@ function LineupDetail({ entry }: { entry: LineupCheckLeague }) {
           </ul>
         </details>
       )}
-    </div>
+    </>
   );
 }
 
@@ -236,18 +303,18 @@ function SeatRow({
   const kickoff = player ? kickoffTime(player.kickoff) : null;
 
   return (
-    <li className="relative flex h-8 items-center gap-2.5 border-b border-active/8 last:border-b-0">
+    <li className="relative flex h-[34px] items-center gap-2.5 border-b border-active/9 last:border-b-0">
       {slot !== undefined && (
-        <span className="w-9 shrink-0 font-mono text-[0.6875rem] tracking-[0.12em] text-readout/60">
+        <span className="w-[34px] shrink-0 font-mono text-[0.6875rem] tracking-[0.12em] text-readout-label">
           {slotLabel(slot)}
         </span>
       )}
-      <span className="min-w-0 flex-1 truncate text-[0.8125rem] text-foreground/85">
+      <span className="min-w-0 flex-1 truncate font-mono text-[0.8125rem] text-readout-line">
         {player ? (player.name ?? player.player_id) : "Empty"}
         {/* A played game is not a recommendation the reader can act on, so it
             is marked rather than left to look like an oversight. */}
         {player?.locked && (
-          <span className="ml-1.5 font-mono text-[0.625rem] uppercase tracking-[0.12em] text-foreground/45">
+          <span className="ml-1.5 font-mono text-[0.625rem] uppercase tracking-[0.12em] text-readout-muted">
             <span className="sr-only">Locked — </span>
             <span aria-hidden>locked</span>
           </span>
@@ -261,7 +328,7 @@ function SeatRow({
           from, so the badge and these marks cannot disagree. */}
       {moveTo && (
         <span
-          className="shrink-0 font-mono text-[0.6875rem] font-bold tracking-[0.04em] text-active"
+          className="shrink-0 font-mono text-[0.6875rem] font-medium tracking-[0.04em] text-active"
           title={`Kickoff order — seat him at ${slotLabel(moveTo)} and the more flexible slot stays open for the later game`}
         >
           <span className="sr-only">Re-seat at </span>
@@ -271,11 +338,11 @@ function SeatRow({
       )}
 
       {kickoff && (
-        <span className="hidden shrink-0 font-mono text-[0.625rem] uppercase tracking-[0.1em] text-foreground/60 sm:inline">
+        <span className="hidden shrink-0 font-mono text-[0.625rem] uppercase tracking-[0.1em] text-readout-muted sm:inline">
           {kickoff}
         </span>
       )}
-      <span className="w-11 shrink-0 text-right font-mono text-[0.6875rem] tabular-nums text-readout">
+      <span className="w-[46px] shrink-0 text-right font-mono text-xs tabular-nums text-readout">
         {/* Null is "the feed has no row for him" and reads as nothing; a real
             projected zero reads as `0.0`. */}
         {player?.points == null ? "—" : player.points.toFixed(1)}

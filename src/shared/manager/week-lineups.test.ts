@@ -18,6 +18,7 @@ function league(over: Partial<WeekLineupLeague> = {}): WeekLineupLeague {
     starters: ["qb", "rb", "wr", "flexlow"],
     players: ["qb", "rb", "wr", "flexlow", "flexhigh", "nobody"],
     as_of: "week",
+    opponent: null,
     ...over,
   };
 }
@@ -50,6 +51,13 @@ function board(): WeekProjections {
 }
 
 const NO_LOCKS = new Set<string>();
+
+/** The other side of the same game, starting the two best players on the board. */
+const OPPONENT = {
+  roster_id: 2,
+  starters: ["qb", "rb", "wr", "flexhigh"],
+  players: ["qb", "rb", "wr", "flexhigh"],
+};
 
 describe("solveWeekLineup", () => {
   test("reports the gap between the lineup set and the best one reachable", () => {
@@ -225,5 +233,64 @@ describe("solveWeekLineup in a best-ball league", () => {
     assert.equal(solved?.kickoff_moves, null);
     assert.deepEqual(solved?.start, []);
     assert.deepEqual(solved?.sit, []);
+  });
+});
+
+describe("solveWeekLineup against a scheduled opponent", () => {
+  test("projects the opponent's lineup as set, on this league's scoring", () => {
+    const solved = solveWeekLineup(
+      league({ opponent: OPPONENT }),
+      board(),
+      NO_LOCKS,
+      null,
+    );
+    // 10 + 10 + 10 + 20: what the other roster is actually starting, not the
+    // best it could start.
+    assert.equal(solved?.opponent_points, 50);
+    assert.equal(solved?.current_points, 35);
+  });
+
+  test("answers null with no opponent, never a zero", () => {
+    // A zero here is a roster projected to score nothing, which the card would
+    // draw as a win. No opponent is no answer.
+    const solved = solveWeekLineup(league(), board(), NO_LOCKS, null);
+    assert.equal(solved?.opponent_points, null);
+  });
+
+  test("prices both sides through the same recognised slots", () => {
+    // A slot this build doesn't know is dropped from the manager's lineup by
+    // `compareLineup`. Summing the opponent's starters instead would leave
+    // theirs whole and read as a loss caused by the slot name alone.
+    const solved = solveWeekLineup(
+      league({
+        roster_positions: ["QB", "RB", "WR", "WEIRD_SLOT", "BN"],
+        starters: ["qb", "rb", "wr", "flexlow"],
+        opponent: { ...OPPONENT, starters: ["qb", "rb", "wr", "flexhigh"] },
+      }),
+      board(),
+      NO_LOCKS,
+      null,
+    );
+    assert.deepEqual(solved?.unknown_slots, ["WEIRD_SLOT"]);
+    // Three seats each, the fourth dropped from both.
+    assert.equal(solved?.current_points, 30);
+    assert.equal(solved?.opponent_points, 30);
+  });
+
+  test("a best-ball opponent is projected on the lineup Sleeper will seat", () => {
+    // Sleeper seats a best-ball lineup after the games, so the opponent's real
+    // projection is their optimal one — the same rule that makes the manager's
+    // own gap zero.
+    const solved = solveWeekLineup(
+      league({
+        best_ball: true,
+        opponent: { ...OPPONENT, starters: ["qb", "rb", "wr", "flexlow"], players: ["qb", "rb", "wr", "flexlow", "flexhigh"] },
+      }),
+      board(),
+      NO_LOCKS,
+      null,
+    );
+    // flexhigh (20) is seated over the flexlow (5) that was nominally started.
+    assert.equal(solved?.opponent_points, 50);
   });
 });

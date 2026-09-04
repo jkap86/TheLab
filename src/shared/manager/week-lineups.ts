@@ -43,6 +43,26 @@ export type WeekLineupLeague = {
   /** The roster, Sleeper's padded entries included. */
   players: string[] | null;
   as_of: "week" | "current";
+  /**
+   * Who they play this week and what that roster is starting, or null where the
+   * week has no scheduled opponent — see `getManagerWeekLineups`, which reads
+   * the other half of the same `matchups` pairing.
+   */
+  opponent: WeekLineupOpponent | null;
+};
+
+/**
+ * The other half of a scheduled game.
+ *
+ * Declared here rather than beside the query for the reason `RankLeague` is:
+ * this module is the one that *consumes* it, and it is pure, so the shape it
+ * needs is the shape a caller has to hand it — a test included.
+ */
+export type WeekLineupOpponent = {
+  roster_id: number;
+  /** The week's own lineup where one is stored, else the roster's live one. */
+  starters: string[] | null;
+  players: string[] | null;
 };
 
 /**
@@ -165,6 +185,9 @@ export function solveWeekLineup(
     best_ball: league.best_ball,
     as_of: league.as_of,
     current_points: comparison.current_points,
+    opponent_points: league.opponent
+      ? currentLineupPoints(league, league.opponent, board)
+      : null,
     optimal_points: comparison.optimal_points,
     points_left: comparison.points_left,
     start: comparison.start,
@@ -174,6 +197,52 @@ export function solveWeekLineup(
     bench,
     unknown_slots: comparison.unknown_slots,
   };
+}
+
+/**
+ * What another roster's lineup as set projects, on this league's own scoring.
+ *
+ * **The whole comparison rather than a sum over the starters**, which looks
+ * like waste and is not: `compareLineup` drops slots this build doesn't
+ * recognise from both lineups, so a bare sum would price the opponent's whole
+ * lineup against a manager's that had a seat taken out of it — and the plate
+ * would read as a loss caused by nothing but an unfamiliar slot name. One
+ * function, two rosters, one set of rules.
+ *
+ * It is the *current* lineup and never the optimal one, except in best ball,
+ * where Sleeper seats after the games and the optimal lineup is what the
+ * opponent will actually score — which is what `compareLineup` already answers
+ * there for both sides.
+ *
+ * An unprojected player is a real zero here, exactly as he is above: he can
+ * only fill a seat nobody else wanted, and dropping him would understate what
+ * the opponent is fielding.
+ */
+function currentLineupPoints(
+  league: WeekLineupLeague,
+  opponent: WeekLineupOpponent,
+  board: WeekProjections,
+): number {
+  const starters = opponent.starters ?? [];
+  const rostered = [
+    ...new Set([...(opponent.players ?? []), ...starters]),
+  ].filter((id) => id && id !== "0");
+
+  const pool: RosterPlayer[] = rostered.map((id) => {
+    const line = board[id];
+    return {
+      player_id: id,
+      positions: line?.positions ?? [],
+      points: line ? scoreStatLine(line.stats, league.scoring_settings) : 0,
+    };
+  });
+
+  return compareLineup({
+    rosterPositions: league.roster_positions ?? [],
+    starters,
+    players: pool,
+    bestBall: league.best_ball,
+  }).current_points;
 }
 
 /** A player's kickoff, or null where his team or the week's schedule is unknown. */
