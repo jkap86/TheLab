@@ -4,6 +4,7 @@ import { describe, test } from "node:test";
 import { solveLeagueLineup } from "./ros-lineups.ts";
 import type { RosLineupLeague } from "./ros-lineups.ts";
 import type { RosProjections } from "../projections/ros.ts";
+import type { AdpEntry } from "./adp-value.ts";
 
 /** A 2-team league starting QB/RB/FLEX, so pools and seats stay countable. */
 function league(players: string[], overrides: Partial<RosLineupLeague> = {}): RosLineupLeague {
@@ -29,7 +30,10 @@ function unprojected(id: string, positions: string[]): RosProjections[string] {
   return { player_id: id, stats: {}, weeks: [], name: `Name ${id}`, positions };
 }
 
-const NO_ADP = new Map<string, number>();
+const NO_ADP = new Map<string, AdpEntry>();
+
+/** An average pick off a full draft — the board a startup or a redraft measures. */
+const full = (adp: number): AdpEntry => ({ board: "full", adp });
 
 describe("solveLeagueLineup", () => {
   test("seats by projected points under the league's own scoring", () => {
@@ -74,8 +78,8 @@ describe("solveLeagueLineup", () => {
       proj: projected("proj", ["RB"], { rec: 0.5 }), // 0.5 pts
     };
     const adp = new Map([
-      ["early", 1],
-      ["late", 30],
+      ["early", full(1)],
+      ["late", full(30)],
     ]);
     const result = solveLeagueLineup(
       league(["early", "late", "proj"], { roster_positions: ["RB", "FLEX", "BN"] }),
@@ -104,8 +108,8 @@ describe("solveLeagueLineup", () => {
         b: unprojected("b", ["WR"]),
       },
       new Map([
-        ["a", 40],
-        ["b", 2],
+        ["a", full(40)],
+        ["b", full(2)],
       ]),
     );
     assert.equal(result.starters[0].player?.player_id, "b");
@@ -116,7 +120,7 @@ describe("solveLeagueLineup", () => {
     const result = solveLeagueLineup(
       league(["a"], { roster_positions: ["FLEX", "BN"] }),
       { a: unprojected("a", ["WR"]) },
-      new Map([["a", 1]]),
+      new Map([["a", full(1)]]),
     );
     const seated = result.starters[0].player!;
     // adp 1 is the peak; the tiebreak epsilon must not leak into either field.
@@ -160,8 +164,8 @@ describe("solveLeagueLineup", () => {
       league(["b3", "b2", "b1", "s1"], { roster_positions: ["FLEX", "BN"] }),
       board,
       new Map([
-        ["b2", 5],
-        ["b3", 90],
+        ["b2", full(5)],
+        ["b3", full(90)],
       ]),
     );
     assert.deepEqual(

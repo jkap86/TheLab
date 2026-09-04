@@ -4,11 +4,15 @@ import { describe, test } from "node:test";
 import {
   ADP_PEAK,
   DEFAULT_STEEPNESS,
+  ROOKIE_PICK_STRIDE,
+  ROOKIE_TOP_OVERALL_PICK,
   STEEPNESS_RANGE,
   TYPICAL_STARTING_SLOTS,
+  adpEntryValue,
   adpValue,
   leagueAdpPool,
   parseSteepness,
+  rookieOverallPick,
   rosterAdpValue,
   startingSlotCount,
 } from "./adp-value.ts";
@@ -88,6 +92,90 @@ describe("startingSlotCount", () => {
   test("no slots on file is zero, not a guess", () => {
     assert.equal(startingSlotCount(null), 0);
     assert.equal(startingSlotCount([]), 0);
+  });
+});
+
+describe("rookieOverallPick", () => {
+  test("the 1.01 lands on the anchor, not on pick 1", () => {
+    // The whole point of the map. A rookie draft's 1.01 is `pick_no` 1, which
+    // read as an overall pick is the best player in the game.
+    assert.equal(rookieOverallPick(1), ROOKIE_TOP_OVERALL_PICK);
+    assert.ok(rookieOverallPick(1) > 1);
+  });
+
+  test("each rookie pick is a stride of overall picks", () => {
+    assert.equal(
+      rookieOverallPick(5),
+      ROOKIE_TOP_OVERALL_PICK + 4 * ROOKIE_PICK_STRIDE,
+    );
+    // Fractional, because a board average is an average of several drafts.
+    assert.equal(
+      rookieOverallPick(2.5),
+      ROOKIE_TOP_OVERALL_PICK + 1.5 * ROOKIE_PICK_STRIDE,
+    );
+  });
+
+  test("junk and sub-1 averages floor at the anchor rather than running off it", () => {
+    assert.equal(rookieOverallPick(Number.NaN), ROOKIE_TOP_OVERALL_PICK);
+    assert.equal(rookieOverallPick(0), ROOKIE_TOP_OVERALL_PICK);
+    assert.equal(rookieOverallPick(-5), ROOKIE_TOP_OVERALL_PICK);
+  });
+});
+
+describe("adpEntryValue", () => {
+  test("a full-board entry prices exactly as the bare curve does", () => {
+    assert.equal(
+      adpEntryValue({ board: "full", adp: 30 }, POOL, HALVINGS),
+      adpValue(30, POOL, HALVINGS),
+    );
+  });
+
+  test("a rookie 1.01 is worth less than the overall first pick", () => {
+    // The bug this split exists to fix: pooled into one average, a rookie 1.01
+    // arrived as adp 1 and priced at the peak — the same number the best player
+    // in the game gets.
+    const rookie = adpEntryValue({ board: "rookie", adp: 1 }, POOL, HALVINGS);
+    assert.ok(rookie < ADP_PEAK);
+    assert.equal(rookie, adpValue(ROOKIE_TOP_OVERALL_PICK, POOL, HALVINGS));
+  });
+
+  test("a mid-board rookie pick falls below a full-board pick of the same number", () => {
+    // Rookie pick 24 is a second-rounder; overall pick 24 is a startable
+    // starter. Before the split these were one number.
+    assert.ok(
+      adpEntryValue({ board: "rookie", adp: 24 }, POOL, HALVINGS) <
+        adpEntryValue({ board: "full", adp: 24 }, POOL, HALVINGS),
+    );
+  });
+
+  test("a rookie board stays monotonic and bounded by the peak", () => {
+    let previous = ADP_PEAK;
+    for (const pick of [1, 2, 6, 12, 24, 36, 48, 60]) {
+      const value = adpEntryValue({ board: "rookie", adp: pick }, POOL, HALVINGS);
+      assert.ok(value <= previous, `rookie ${pick} should not rise`);
+      assert.ok(value <= ADP_PEAK && value >= 0);
+      previous = value;
+    }
+  });
+
+  test("a deeper-starting league carries a rookie pick further, as it does any pick", () => {
+    // League size reaches a rookie pick only through `pool` — the map itself is
+    // size-free, because a rookie's board position is his rank in the class.
+    assert.ok(
+      adpEntryValue({ board: "rookie", adp: 12 }, 132, HALVINGS) >
+        adpEntryValue({ board: "rookie", adp: 12 }, 72, HALVINGS),
+    );
+  });
+
+  test("a whole rookie class no longer outranks the top of a startup board", () => {
+    // The symptom on the page: at the default steepness every pick of a
+    // four-round rookie draft used to price above the 60th player off a
+    // startup board. A late rookie pick must now sit below one.
+    const startupSixty = adpEntryValue({ board: "full", adp: 60 }, POOL, DEFAULT_STEEPNESS);
+    assert.ok(
+      adpEntryValue({ board: "rookie", adp: 36 }, POOL, DEFAULT_STEEPNESS) <
+        startupSixty,
+    );
   });
 });
 

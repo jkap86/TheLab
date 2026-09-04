@@ -3,11 +3,13 @@ import type { LeagueRecord, ManagerLeague } from "@/shared/contract";
 import { QB_ELIGIBLE_STARTING_SLOTS } from "@/shared/ktc";
 import { sleeperAvatarUrl } from "@/shared/sleeper";
 
+import { DYNASTY_LEAGUE_TYPE } from "./draft-picks";
 import type {
   LeagueDraftRow,
   LeagueUserName,
   TradedPick,
 } from "./draft-picks";
+import type { AdpEntry } from "./adp-value";
 import type { RankLeague } from "./league-ranks";
 import type { ManagerSyncState } from "./sync-freshness";
 import type { WeekLineupOpponent } from "./week-lineups";
@@ -74,6 +76,31 @@ const CHOPPED_LEAGUE_TYPE = 3;
 
 /** Whether the league is a chopped one, read off its settings blob. */
 const CHOPPED_LEAGUE_SQL = `(${LEAGUE_TYPE_SQL} = ${CHOPPED_LEAGUE_TYPE})`;
+
+/**
+ * Whether the league is a dynasty one — the only format whose ordinary draft is
+ * a *rookie* draft, and therefore the gate on {@link getManagerDraftAdp}'s board
+ * split.
+ *
+ * {@link DYNASTY_LEAGUE_TYPE}'s own doc predicted this fragment and said the
+ * constant would move back beside it. It stays in `draft-picks` instead, and the
+ * fragment comes to the constant: `draft-picks` is pure and unit-tested under
+ * Node's runner, so it must not import a module that pulls in `pg`. The
+ * dependency points the one legal way.
+ */
+const DYNASTY_LEAGUE_SQL = `(${LEAGUE_TYPE_SQL} = ${DYNASTY_LEAGUE_TYPE})`;
+
+/**
+ * Whether the league is in its first year — no season before it to inherit
+ * rosters from, and so the one kind of league that runs a startup draft of its
+ * own.
+ *
+ * The three spellings mirror `draft-picks`' `isInaugural` exactly: Sleeper says
+ * "no previous season" as null, `''` and `'0'` depending on vintage, and reading
+ * only the null would make every older league look like a fresh one.
+ */
+const INAUGURAL_LEAGUE_SQL = `
+  (l.previous_league_id IS NULL OR l.previous_league_id IN ('', '0'))`;
 
 /**
  * True where Sleeper still serves the league.
@@ -680,16 +707,39 @@ export async function getManagerLeagueRosters(
 
 /**
  * Average draft position over the drafts already synced for this manager's
- * leagues, split into the two board populations the superflex predicate
- * defines — pooling ADP across the two games would price a quarterback off the
- * wrong market at every position (see `adp-value.ts`).
+ * leagues, split into the boards that can legitimately be pooled — the
+ * superflex predicate's two populations, and rookie drafts apart from full ones.
  *
- * This is deliberately the fallback's ADP, not TheLabX's crawled boards: the
- * population is whatever drafts ride along with the manager's own league graph,
- * which for a dynasty league is its rookie draft. Coverage follows the data —
- * a player those drafts never took has no number here, and the lineup solve
- * treats that as "nothing to say" rather than zero. The real board machinery
- * arrives with `/api/adp`.
+ * **A rookie draft is not a short startup draft, and its `pick_no` is not an
+ * overall pick.** It runs three to five rounds over the incoming class alone, so
+ * its 1.01 is `pick_no` 1 — the number a startup gives the best player in the
+ * game. This read used to `AVG` the two together and hand the result to
+ * {@link adpValue} against a startup-scale pool, which priced a 1.01 at the full
+ * {@link ADP_PEAK} and put an entire third round of rookies above the sixtieth
+ * player off a startup board. The boards are separate here and
+ * {@link adpEntryValue} is what makes them summable again; see `adp-value.ts`
+ * for the map.
+ *
+ * **A rookie draft is exactly a dynasty league's non-startup draft**, which is
+ * the same rule `dynastyPickGrid` reads and is spelled from the same two facts:
+ * only dynasty drafts a class rather than a pool, and only an *inaugural* league
+ * holds a startup of its own — its earliest draft, since it runs a startup and a
+ * rookie draft under one season label. A keeper league's draft is a full draft
+ * with some picks pre-spent, not a rookie one.
+ *
+ * **Two drafts are excluded outright.** An auction's `pick_no` is nomination
+ * order, which is not a pick order — the rule `leagueRosterPicks` already lives
+ * by, and averaging it in was pricing players off the order they happened to be
+ * called in. And a draft that is not `complete` has only its earliest picks
+ * stored, so every player taken so far reads as a first-rounder while the rest
+ * of the board has nothing at all; a half-finished rookie draft is the case that
+ * makes it worst.
+ *
+ * This is deliberately still the fallback's ADP, not TheLabX's crawled boards:
+ * the population is whatever drafts ride along with the manager's own league
+ * graph. Coverage follows the data — a player those drafts never took has no
+ * number here, and the lineup solve treats that as "nothing to say" rather than
+ * zero. The real board machinery arrives with `/api/adp`.
  *
  * The superflex test is {@link QB_ELIGIBLE_STARTING_SLOTS} counted in SQL —
  * the same derived list `isSuperflexLineup` reads, bound rather than spelled,
@@ -698,35 +748,79 @@ export async function getManagerLeagueRosters(
 export async function getManagerDraftAdp(
   userId: string,
   season: string,
-): Promise<{ superflex: Map<string, number>; standard: Map<string, number> }> {
+): Promise<{ superflex: Map<string, AdpEntry>; standard: Map<string, AdpEntry> }> {
   const { rows } = await pool.query<{
     player_id: string;
     adp: number;
     superflex: boolean;
+    rookie: boolean;
   }>(
-    `SELECT p.player_id,
-            AVG(p.pick_no)::float8 AS adp,
-            sf.superflex
+    `WITH manager_leagues AS (
+       SELECT l.league_id,
+              ${DYNASTY_LEAGUE_SQL} AS dynasty,
+              ${INAUGURAL_LEAGUE_SQL} AS inaugural,
+              (SELECT count(*)
+                 FROM jsonb_array_elements_text(l.roster_positions) slot
+                WHERE slot = ANY($3::text[])) > 1 AS superflex
+         FROM leagues l
+         JOIN league_users lu
+           ON lu.league_id = l.league_id AND lu.user_id = $1
+        WHERE l.season = $2
+          AND ${LIVE_LEAGUE_SQL}
+     ),
+     league_drafts AS (
+       -- Sequenced over the league's drafts WHOLE, before the two exclusions
+       -- below: the startup is the earliest draft that exists, not the earliest
+       -- one that survived a filter. Ordered exactly as \`draft-picks\` sorts —
+       -- start_time ascending with an undated stray last, ties on draft_id.
+       SELECT d.draft_id,
+              d.status,
+              d.type,
+              ml.dynasty,
+              ml.inaugural,
+              ml.superflex,
+              row_number() OVER (PARTITION BY d.league_id
+                                 ORDER BY d.start_time ASC NULLS LAST, d.draft_id) AS seq
+         FROM drafts d
+         JOIN manager_leagues ml ON ml.league_id = d.league_id
+     ),
+     boards AS (
+       SELECT draft_id,
+              superflex,
+              (dynasty AND NOT (inaugural AND seq = 1)) AS rookie
+         FROM league_drafts
+        WHERE status = 'complete'
+          -- IS DISTINCT FROM, because a null type is an unknown format rather
+          -- than a known auction and must not be swept out with them.
+          AND type IS DISTINCT FROM 'auction'
+     )
+     SELECT p.player_id,
+            b.superflex,
+            b.rookie,
+            AVG(p.pick_no)::float8 AS adp
        FROM draft_picks p
-       JOIN drafts d ON d.draft_id = p.draft_id
-       JOIN leagues l ON l.league_id = d.league_id
-       JOIN league_users lu
-         ON lu.league_id = l.league_id AND lu.user_id = $1
-      CROSS JOIN LATERAL (
-        SELECT (SELECT count(*)
-                  FROM jsonb_array_elements_text(l.roster_positions) slot
-                 WHERE slot = ANY($3::text[])) > 1 AS superflex
-      ) sf
-      WHERE l.season = $2
-        AND p.player_id IS NOT NULL
-        AND ${LIVE_LEAGUE_SQL}
-      GROUP BY p.player_id, sf.superflex`,
+       JOIN boards b ON b.draft_id = p.draft_id
+      WHERE p.player_id IS NOT NULL
+      GROUP BY p.player_id, b.superflex, b.rookie`,
     [userId, season, [...QB_ELIGIBLE_STARTING_SLOTS]],
   );
 
-  const superflex = new Map<string, number>();
-  const standard = new Map<string, number>();
-  for (const r of rows) (r.superflex ? superflex : standard).set(r.player_id, r.adp);
+  const superflex = new Map<string, AdpEntry>();
+  const standard = new Map<string, AdpEntry>();
+  for (const r of rows) {
+    const board = r.superflex ? superflex : standard;
+    // A first-year rookie can sit on both boards — taken in a rookie draft here
+    // and in a redraft league's full draft there — and the full board wins.
+    // It prices him against the whole pool, which is the scale `leagueAdpPool`
+    // anchors to and the map only approximates; the rookie board is here to
+    // answer where there is no full-draft number at all, which on a
+    // dynasty-only account is every rookie. Order-independent on purpose: a
+    // full row overwrites a rookie one, a rookie row defers to a full one.
+    if (!r.rookie) board.set(r.player_id, { board: "full", adp: r.adp });
+    else if (!board.has(r.player_id)) {
+      board.set(r.player_id, { board: "rookie", adp: r.adp });
+    }
+  }
   return { superflex, standard };
 }
 

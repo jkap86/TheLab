@@ -21,6 +21,12 @@
  * chooses *which crawled drafts* a roster is priced against, and it is not here
  * because nothing crawls drafts here yet. It arrives with `/api/adp` and the
  * ADP filters it parses through.
+ *
+ * One board question is answered here anyway, because it is not a preference:
+ * {@link AdpBoard} splits rookie drafts from full ones, and
+ * {@link adpEntryValue} maps the first onto the second. That is not a lens a
+ * reader chooses — a rookie draft's `pick_no` and a startup's are different
+ * units, so a total that pools them is wrong rather than differently weighted.
  */
 
 import { NON_STARTING_SLOTS, SLOT_POSITIONS } from "../projections/slots.ts";
@@ -165,6 +171,104 @@ export function adpValue(adp: number, pool: number, halvings: number): number {
   if (!Number.isFinite(adp) || adp <= 1) return ADP_PEAK;
   const p = pool > 0 ? pool : 1;
   return Math.round(ADP_PEAK * 2 ** ((-halvings * (adp - 1)) / p));
+}
+
+/**
+ * Which board a player's average pick was measured on.
+ *
+ * **A rookie draft and a full draft are two different markets, and their pick
+ * numbers are not the same unit.** A rookie draft runs three to five rounds and
+ * every player in it is a rookie, so its 1.01 is `pick_no` 1 — the same number a
+ * startup gives the best player in the game. Pooling the two into one average
+ * (which is what the board read did until they were split) priced a 1.01 at the
+ * full {@link ADP_PEAK} and put an entire third round of rookies above the 60th
+ * player off a startup board. So the board a number came from has to travel
+ * with the number.
+ *
+ * Only two boards, and the split is by *what was drafted* rather than by league
+ * format: a keeper league's draft is a full draft with some picks pre-spent, and
+ * an inaugural dynasty's startup is a full draft too. `rookie` is exactly a
+ * dynasty league's non-startup draft.
+ */
+export type AdpBoard = "full" | "rookie";
+
+/** One player's average draft position, and which board measured it. */
+export type AdpEntry = {
+  board: AdpBoard;
+  /**
+   * The average `pick_no` on that board — an overall pick on `full`, a rookie
+   * pick on `rookie`. {@link adpEntryValue} is the only thing that should read
+   * it, because the two are not comparable until it has mapped them.
+   */
+  adp: number;
+};
+
+/**
+ * Where a rookie draft's 1.01 sits on the overall board.
+ *
+ * This and {@link ROOKIE_PICK_STRIDE} are the affine map that makes a rookie
+ * pick summable beside a startup pick — `overall = ANCHOR + (k − 1) · STRIDE`.
+ * A map is needed at all because {@link rosterAdpValue} totals both: a dynasty
+ * roster is veterans priced off full drafts and rookies priced off rookie
+ * drafts, and a sum across two scales is not a number.
+ *
+ * **Both are chosen rather than measured** — the state
+ * {@link DEFAULT_STEEPNESS} was in before `scripts/fit-adp-curve.ts` replaced
+ * it with a reading, and they are spelled out here so the same thing can happen
+ * to them. The anchor says a 1.01 is worth about the twelfth player off an
+ * overall board, which is roughly where the dynasty market has it in 1QB and a
+ * little conservative in superflex; the stride stretches a ~48-pick rookie
+ * board across the ~170 overall picks that carry any value at all, so a
+ * fourth-round rookie pick lands where a late flier does rather than beside a
+ * startable starter.
+ *
+ * **The measurement is available in this data, and is what should replace
+ * them.** A first-year rookie appears on *both* boards in the same season — the
+ * rookie drafts of the dynasty leagues and the full drafts of the redraft ones —
+ * so the players in that overlap are a two-column fit of exactly this line. It
+ * wants an account holding both formats and a corpus rather than one manager's
+ * leagues, which is why it is not done inline: it is `/api/adp`'s work, beside
+ * the board machinery this module's head already names as missing.
+ */
+export const ROOKIE_TOP_OVERALL_PICK = 12;
+
+/**
+ * How many overall picks of separation one rookie pick is worth. The second
+ * half of the map; see {@link ROOKIE_TOP_OVERALL_PICK} for both.
+ */
+export const ROOKIE_PICK_STRIDE = 3.5;
+
+/**
+ * A rookie-board pick read as an overall-board pick, so one curve prices both.
+ *
+ * Guarded rather than trusted, the way {@link adpValue} guards its own input: an
+ * average below 1 is not a pick, and the anchor is the floor a 1.01 sits at.
+ */
+export function rookieOverallPick(pick: number): number {
+  if (!Number.isFinite(pick) || pick <= 1) return ROOKIE_TOP_OVERALL_PICK;
+  return ROOKIE_TOP_OVERALL_PICK + (pick - 1) * ROOKIE_PICK_STRIDE;
+}
+
+/**
+ * One entry's draft capital, whichever board measured it.
+ *
+ * A rookie entry is mapped onto the overall board first and then priced by the
+ * same {@link adpValue}, which is what keeps one curve — and one `pool`
+ * anchoring — behind every number a roster sums.
+ *
+ * Note what the map is *not*: it does not scale with league size. A rookie's
+ * pick number on a rookie board is his rank in the incoming class rather than a
+ * depth into a board, and a class rank means the same thing in a 10- and a
+ * 14-team league. League size enters exactly where it does for every other
+ * player, through `pool`.
+ */
+export function adpEntryValue(
+  entry: AdpEntry,
+  pool: number,
+  halvings: number,
+): number {
+  const pick = entry.board === "rookie" ? rookieOverallPick(entry.adp) : entry.adp;
+  return adpValue(pick, pool, halvings);
 }
 
 /** One roster's ADP-derived value, whole and split across its lineup. */

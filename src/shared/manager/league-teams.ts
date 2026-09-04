@@ -12,6 +12,7 @@
 import type { LeagueLineupEntry, LeagueTeam } from "@/shared/contract";
 
 import type { RosProjections } from "../projections/ros.ts";
+import type { AdpEntry } from "./adp-value.ts";
 import { leagueRosterPicks } from "./draft-picks.ts";
 import type { PickLeague } from "./draft-picks.ts";
 import { rankLeagueLineups } from "./league-ranks.ts";
@@ -56,7 +57,7 @@ export function solveLeagueEntry(
   managerUserId: string,
   season: string,
   projections: RosProjections,
-  adp: ReadonlyMap<string, number>,
+  adp: ReadonlyMap<string, AdpEntry>,
 ): LeagueLineupEntry | null {
   const { lineup, ranks, rosters } = rankLeagueLineups(
     league,

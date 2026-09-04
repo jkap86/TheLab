@@ -30,6 +30,7 @@ import type {
 
 import { round } from "../projections/optimal.ts";
 import type { RosProjections } from "../projections/ros.ts";
+import type { AdpEntry } from "./adp-value.ts";
 import { solveLeagueLineup } from "./ros-lineups.ts";
 import type { RosLineupLeague } from "./ros-lineups.ts";
 
@@ -101,7 +102,7 @@ export function rankLeagueLineups(
   league: RankLeague,
   managerUserId: string,
   projections: RosProjections,
-  adp: ReadonlyMap<string, number>,
+  adp: ReadonlyMap<string, AdpEntry>,
 ): {
   lineup: LeagueLineup | null;
   ranks: LineupRanks;

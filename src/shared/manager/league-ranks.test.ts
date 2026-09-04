@@ -6,6 +6,7 @@ import type { LeagueLineup } from "@/shared/contract";
 import { lineupMetricTotals, rankLeagueLineups } from "./league-ranks.ts";
 import type { LeagueRosterRow, RankLeague } from "./league-ranks.ts";
 import type { RosProjections } from "../projections/ros.ts";
+import type { AdpEntry } from "./adp-value.ts";
 
 /** A one-starter league, so a roster's total is its best player's points. */
 function league(
@@ -42,7 +43,10 @@ function unprojected(id: string, positions: string[]): RosProjections[string] {
   return { player_id: id, stats: {}, weeks: [], name: `Name ${id}`, positions };
 }
 
-const NO_ADP = new Map<string, number>();
+const NO_ADP = new Map<string, AdpEntry>();
+
+/** An average pick off a full draft — the board a startup or a redraft measures. */
+const full = (adp: number): AdpEntry => ({ board: "full", adp });
 const NO_PROJECTIONS: RosProjections = {};
 
 describe("lineupMetricTotals", () => {
@@ -138,8 +142,8 @@ describe("rankLeagueLineups", () => {
 
   test("capital ranks read the same whether or not the players have points", () => {
     const adp = new Map([
-      ["a", 1],
-      ["b", 30],
+      ["a", full(1)],
+      ["b", full(30)],
     ]);
     // Same identities both times; only the points differ. The truly absent
     // feed ({}) is a different degradation — see the next test.
@@ -164,8 +168,8 @@ describe("rankLeagueLineups", () => {
 
   test("with no feed at all, capital_total still answers but the split cannot", () => {
     const adp = new Map([
-      ["a", 1],
-      ["b", 30],
+      ["a", full(1)],
+      ["b", full(30)],
     ]);
     const l = league([roster(1, "me", ["a"]), roster(2, "t2", ["b"])]);
     // An empty feed knows no positions, so nobody can be seated: the whole

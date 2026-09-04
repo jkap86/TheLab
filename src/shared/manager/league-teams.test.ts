@@ -5,6 +5,7 @@ import { leagueTeamName, solveLeagueEntry } from "./league-teams.ts";
 import type { LineupLeagueRow } from "./league-teams.ts";
 import type { LeagueRosterRow } from "./league-ranks.ts";
 import type { RosProjections } from "../projections/ros.ts";
+import type { AdpEntry } from "./adp-value.ts";
 
 // Annotated at the wider of LineupLeagueRow's two rosters widths — a bare
 // literal trips the excess-property check against the intersection.
@@ -39,7 +40,7 @@ const PROJECTIONS: RosProjections = {
   w2: { player_id: "w2", stats: { rec: 10 }, weeks: [1], name: "W Two", positions: ["WR"] },
 };
 
-const NO_ADP = new Map<string, number>();
+const NO_ADP = new Map<string, AdpEntry>();
 
 describe("leagueTeamName", () => {
   const users = row().users;
