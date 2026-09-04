@@ -6,18 +6,19 @@ import { useMemo } from "react";
 
 import {
   ThemeToggle,
-  useRackReadout,
+  useRackControls,
   useStoredAccount,
 } from "@/features/shared";
 
 import { tools } from "../constants/tools";
 import { toolHref } from "../helpers/tool-href";
 import { FlaskMark } from "./flask-mark";
+import { RackControlsKeys } from "./rack-controls-keys";
 import { ToolsMenu } from "./tools-menu";
 
 /**
- * The app rack: a floating housing carrying the wordmark, the tool menu, the
- * season readout and the theme key.
+ * The app rack: a pinned housing carrying the wordmark, the tool menu, the
+ * page's own controls and the theme key.
  *
  * The app had no navigation at all before this — every page was reached from
  * the tool grid or from a typed URL — so the rack is the one genuinely new
@@ -26,12 +27,24 @@ import { ToolsMenu } from "./tools-menu";
  * rack unit sitting *on* the ground, which is what the full-bleed background
  * under it is for.
  *
+ * **It is `fixed` now, and the whole of that is the outer wrapper.** `mt-6`
+ * became `top-6`, so the same 24px gap that framed it in flow frames it against
+ * the viewport. What that buys is the reason the controls could move up here at
+ * all: on a hundred-league page the header scrolls away after two cards, and a
+ * Filters key that has scrolled away is a Filters key you have to scroll back
+ * for. Being out of flow, it leaves nothing behind — the shell's top padding
+ * carries its height, as `--rack-clear` in `globals.css`, which is one number
+ * rather than two spellings that drift the first time a key's padding changes.
+ *
  * **It lives in `features/tools` rather than `features/shared`**, which is the
  * one placement worth explaining. Everything it is made of is this folder's
  * own — the tool registry, `toolHref`, the flask mark, the engraved wordmark
  * treatment — and `features/tools` may import `features/shared` where the
  * reverse would invert the layering. Mounting it in `layout.tsx` is `app/`
- * reaching for a feature, which is the direction routes already import in.
+ * reaching for a feature, which is the direction routes already import in. It
+ * is also why `LineupColumnsDialog` moved into `features/shared`: a rack that
+ * reached into `features/manager` for it would be one sibling feature importing
+ * another.
  *
  * Two things it deliberately does not do:
  *
@@ -39,14 +52,17 @@ import { ToolsMenu } from "./tools-menu";
  *    `LabWordmark` engraves the same string into a plate around a heading. A
  *    rack on every page would otherwise put a second `<h1>` above each page's
  *    own — the manager name, the tools headline — and the pages are right.
- * 2. **It holds no manager state.** The season readout comes from
- *    `useRackReadout`, which a page publishes into; a page that publishes
- *    nothing simply has no pill.
+ * 2. **It holds no page state.** The controls come from `useRackControls`,
+ *    which a page publishes into; a page that publishes nothing simply has no
+ *    controls. That is the same rule the lit account pill used to live by —
+ *    which is gone, because the identity plate names the manager and the season
+ *    now and the pill was a second answer to a question already answered. Its
+ *    ~185px is what the two control tracks took.
  */
 export function AppRack() {
   const pathname = usePathname();
   const account = useStoredAccount();
-  const readout = useRackReadout();
+  const controls = useRackControls();
 
   // `base` is what lights the key and `href` is where it goes, and they differ
   // for exactly the tools that take an account: Manager points at
@@ -79,7 +95,9 @@ export function AppRack() {
   const showMenu = currentBase !== "/tools";
 
   return (
-    <div className="mx-auto mt-6 w-full max-w-6xl px-3.5 md:px-4">
+    // Pinned, and the gap is the same on all four sides — 24px against the
+    // viewport rather than 24px under whatever preceded it.
+    <div className="fixed inset-x-0 top-6 z-50 mx-auto w-full max-w-6xl px-3.5 md:px-4">
       {/*
         Below `md` the rack is two stacked objects — a brand pill and the nav
         track under it — and above it they are one row. Rather than render two
@@ -89,8 +107,13 @@ export function AppRack() {
         why the pill chrome is on *this* element above `md` and on the row
         below it beneath — there is only ever one box painting it.
       */}
-      <div className="flex flex-wrap items-center gap-y-2.5 md:gap-x-4 md:rounded-full md:border md:border-foreground/8 md:bg-[image:var(--key-bg)] md:p-2 md:shadow-[var(--key-shadow),var(--plate-shadow)]">
-        <div className="flex w-full items-center gap-3 rounded-full border border-foreground/8 bg-[image:var(--key-bg)] py-1.5 pl-1.5 pr-2 shadow-[var(--key-shadow),var(--plate-shadow)] md:contents">
+      <div className="flex flex-wrap items-center gap-y-2.5 md:gap-x-4 md:rounded-full md:border md:border-foreground/8 md:bg-[image:var(--key-bg)] md:p-2 md:shadow-[var(--key-shadow),var(--plate-shadow),var(--rack-cast)]">
+        {/* The third shadow is new with the pinning: content now passes *under*
+            the rack, and a housing with no cast shadow reads as printed on the
+            page rather than standing over it. A token, not an `rgba()` in the
+            class string, for `globals.css`'s reason — a shadow written for the
+            dark ground only smears on the light one. */}
+        <div className="flex w-full items-center gap-3 rounded-full border border-foreground/8 bg-[image:var(--key-bg)] py-1.5 pl-1.5 pr-2 shadow-[var(--key-shadow),var(--plate-shadow),var(--rack-cast)] md:contents">
           <Link
             href="/tools"
             className="inline-flex shrink-0 items-center gap-3 rounded-full focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-active/60 md:order-1"
@@ -130,19 +153,18 @@ export function AppRack() {
             </div>
           )}
 
+          {/* This page's own controls, published upward by whatever is under
+              the rack — see `RackControlsKeys`, which also owns the answer to
+              what four keys do below `md`. */}
+          {controls && <RackControlsKeys controls={controls} />}
+
           {/* The theme key, in a recessed pad of its own. Icon-only at a
               phone's width, where the legend is the first thing to go.
 
-              The auto-margin is unchanged below `md` (the menu sits between
-              the brand and this, and neither takes the slack). Above `md` the
-              readout's own `ml-auto` normally does the work — except on the
-              tools page, which has no menu *and* publishes no readout, so
-              there the key has to take the row's slack itself. */}
-          <div
-            className={`ml-auto shrink-0 rounded-full bg-[image:var(--key-bg)] p-1 shadow-[var(--track-shadow)] md:order-5 ${
-              showMenu ? "md:ml-0" : "md:ml-auto"
-            }`}
-          >
+              `ml-auto` unconditionally now, at both widths: the lit account
+              pill used to take the row's slack above `md`, and with it gone
+              there is nothing to the key's right for the slack to sit under. */}
+          <div className="ml-auto shrink-0 rounded-full bg-[image:var(--key-bg)] p-1 shadow-[var(--track-shadow)] md:order-6">
             <ThemeToggle
               className={
                 "inline-flex items-center gap-2 rounded-full bg-[image:var(--key-bg)] p-[0.4375rem] " +
@@ -162,26 +184,6 @@ export function AppRack() {
             aria-hidden
             className="hidden w-px self-stretch bg-[image:var(--groove)] shadow-[var(--groove-highlight)] md:order-2 md:my-1 md:block"
           />
-        )}
-
-        {/* Whose page this is. Hidden below `md`, where row one has room for
-            the brand, the menu and the theme key and nothing more. */}
-        {readout && (
-          <span className="relative ml-auto hidden shrink-0 items-center gap-2.5 overflow-hidden rounded-full border border-black/85 bg-[image:var(--readout-bg)] px-3.5 py-[0.4375rem] shadow-[var(--readout-shadow)] md:order-4 md:inline-flex">
-            <span
-              aria-hidden
-              className="pointer-events-none absolute inset-0 bg-[image:var(--readout-scanlines)]"
-            />
-            <span
-              aria-hidden
-              className="lab-anim relative size-[0.4375rem] shrink-0 rounded-full bg-active shadow-[0_0_10px_var(--accent-glow)]"
-              style={{ animation: "tools-pulse 2.4s ease-out infinite" }}
-            />
-            <span className="relative font-mono text-[0.6875rem] uppercase tracking-[0.14em] text-readout [text-shadow:var(--readout-text-glow)]">
-              {readout.username}
-              {readout.season && ` · ${readout.season}`}
-            </span>
-          </span>
         )}
       </div>
     </div>

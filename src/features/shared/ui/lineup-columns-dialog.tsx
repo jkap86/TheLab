@@ -7,18 +7,23 @@ import type {
   LineupMetricId,
   ManagerLineupsPayload,
 } from "@/shared/contract";
+
+// Relative rather than through this folder's own barrel — the rule
+// `league-filters-dialog.tsx` beside it already lives by: a module inside
+// `features/shared` reaches its siblings directly.
 import {
   CONSOLE_KEY_BLOCK,
   CONSOLE_KEY_PILL,
   CONSOLE_READOUT,
-  KtcBoardKeys,
+} from "../console-chrome";
+import { storeKtcBoard } from "../ktc-board";
+import {
   LINEUP_METRIC_IDS,
+  LINEUP_METRIC_LABELS,
   MAX_LINEUP_COLUMNS,
-  storeKtcBoard,
   storeLineupColumns,
-} from "@/features/shared";
-
-import { LINEUP_METRIC_LABELS } from "../helpers/lineup-metrics";
+} from "../lineup-columns";
+import { KtcBoardKeys } from "./ktc-board-keys";
 
 /**
  * The column picker: a trigger key and a native `<dialog>`, which is the whole
@@ -47,6 +52,14 @@ import { LINEUP_METRIC_LABELS } from "../helpers/lineup-metrics";
  * trip. The scrape time rides beside it for the reason `/api/projections` sends
  * its own: these are someone else's numbers on a fifteen-minute cache, and
  * anything showing them should be able to say how old they are.
+ *
+ * **It moved here from `features/manager/components` when the app rack became a
+ * second reader** — the line `CONSOLE_KEY`, `ManagerPlate`, `LeagueFiltersDialog`
+ * and `LeagueConfigWindow` all moved on. The rack lives in `features/tools`, and
+ * a rack that reached into `features/manager` for this picker would be one
+ * sibling feature importing another; the sibling it can legally read is this
+ * folder. `LINEUP_METRIC_LABELS` came with it, to `lineup-columns.ts`, beside
+ * the metric order it is the other half of.
  */
 export function LineupColumnsDialog({
   columns,

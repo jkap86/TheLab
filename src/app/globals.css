@@ -45,6 +45,42 @@
 
   --surface-shadow: rgba(0, 0, 0, 0.7);
 
+  /* ---- The pinned rack --------------------------------------------- */
+
+  /*
+   * How far the first thing on a console page starts below the viewport's top.
+   *
+   * The rack is `fixed`, so it is out of flow and leaves nothing behind it: the
+   * shell's own top padding is the only thing holding content clear of it. That
+   * makes the rack's height and the shell's clearance **one number**, which is
+   * why it is a token rather than two padding values spelled into
+   * `page-shell.tsx` — the second spelling drifts the first time a key's
+   * padding changes, and the symptom is a rack sitting on top of a page's
+   * first row.
+   *
+   * Measured rather than guessed, at each of the three widths the rack has:
+   *
+   * - base — a 52.5px brand pill (a 36px bezel in 6px of padding, plus its
+   *   border). `24 + 52.5 + 24`, rounded to 100px, reproduces the gap a phone
+   *   had when the rack was in flow at `mt-6` above a shell at `pt-6`.
+   * - `sm` — the same rack, and the shell's own `pt-11` under it.
+   * - `md` — a 62px rack (a 44px bezel in 8px of padding, plus its border).
+   *   The gap under it is the design's own 28px, and 62px is the height the
+   *   handoff predicted to the pixel.
+   *
+   * The rack is one row at every width, which is a constraint rather than an
+   * observation: the two control tracks fold behind a single key below `lg`
+   * precisely so this number stays three values rather than five. See
+   * `rack-controls-keys.tsx`.
+   */
+  --rack-clear: 6.25rem;
+
+  /*
+   * The shadow a pinned rack casts on the page passing under it. It did not
+   * need one in flow, where nothing ever went behind it.
+   */
+  --rack-cast: 0 18px 40px -18px #000;
+
   /* ---- Instrument chrome (dark) ------------------------------------ */
 
   --panel-bg: radial-gradient(120% 80% at 50% -20%, #16303c 0%, #0b1418 38%, #08090a 72%);
@@ -238,6 +274,11 @@
 
   --surface-shadow: rgba(15, 23, 42, 0.22);
 
+  /* On the light ground the cast is a slate tint: pure black over a near-white
+     page reads as dirt rather than as shadow. `--rack-clear` does not move —
+     it is a length, and the rack is the same size in both schemes. */
+  --rack-cast: 0 18px 40px -20px rgba(15, 23, 42, 0.32);
+
   /* ---- Instrument chrome (light) ------------------------------------- */
 
   /* The console the whole page sits on. */
@@ -374,6 +415,29 @@
 body {
   background: var(--background);
   color: var(--foreground);
+}
+
+/*
+ * The rack's two other heights. Declared here rather than beside the token
+ * because Tailwind's `@theme` block sits between them and a media query cannot
+ * live inside it; the breakpoints are `sm` (40rem) and `md` (48rem), spelled to
+ * match the utilities `page-shell.tsx` uses on the same element.
+ *
+ * `sm` is taller than `md` and that is not a mistake: below `md` the rack is
+ * still the small brand pill, and what changes at `sm` is the *shell*, which
+ * used to open on `pt-11` there. Preserving that is what keeps every page but
+ * the manager one looking exactly as it did.
+ */
+@media (min-width: 40rem) {
+  :root {
+    --rack-clear: 7.5rem;
+  }
+}
+
+@media (min-width: 48rem) {
+  :root {
+    --rack-clear: 7.125rem;
+  }
 }
 
 /*

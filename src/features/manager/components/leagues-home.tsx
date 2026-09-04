@@ -1,26 +1,15 @@
 "use client";
 
-import { type ReactNode, useMemo, useState } from "react";
-
-import type {
-  KtcBoardChoice,
-  LineupMetricId,
-  ManagerLeague,
-  ManagerLineupsPayload,
-} from "@/shared/contract";
+import { type ReactNode, useCallback, useMemo, useState } from "react";
 
 import {
   activeFilterCount,
   DEFAULT_LEAGUE_FILTERS,
   filterSummary,
   CONSOLE_KEY,
-  CONSOLE_KEY_BLOCK,
-  CONSOLE_READOUT,
-  type LeagueFilters,
-  LeagueFiltersDialog,
   ManagerPlate,
   matchesFilters,
-  usePublishRackReadout,
+  usePublishRackControls,
   useKtcBoard,
   useLineupColumns,
   useManagerLeagues,
@@ -41,7 +30,6 @@ import {
 } from "../hooks/use-manager-shares";
 import { LeagueCard } from "./league-card";
 import { LeaguemateSharesDrawer } from "./leaguemate-shares-drawer";
-import { LineupColumnsDialog } from "./lineup-columns-dialog";
 import { PlayerSharesDrawer } from "./player-shares-drawer";
 import { SeasonSummary } from "./season-summary";
 import { SubjectTokens } from "./subject-tokens";
@@ -58,21 +46,27 @@ import { SubjectTokens } from "./subject-tokens";
  * warm one shows its stored leagues immediately and puts the same sync's
  * progress in a pill above them. Both are the same stream.
  *
- * The header is a plate, a summary housing and a View housing on one row, and
- * `items-stretch` rather than `items-center` is what makes that row read as a
- * rack: three instruments of one height, not three objects floating on a
- * midline.
+ * **The header is one plate.** It was four instruments on a row — the identity
+ * plate, a season housing, a Browse housing and a View housing — and every one
+ * of them was a box saying something about the same person. The season is
+ * engraved onto the plate itself now (see {@link SeasonSummary}), and the four
+ * control keys have gone up into the app rack, where they are reachable at any
+ * scroll depth rather than only at the top of a hundred-league page.
+ *
+ * **The rack is mounted in `layout.tsx`, so it cannot see this component's
+ * state — and that is the real cost of putting the controls up there.** The
+ * state stays here, because everything else on the page reads it: `filters` and
+ * `subjects` are the two narrowing passes, `drawer` and `opened` are what the
+ * drawers below are mounted and opened by, and the per-subject reset during
+ * render owns all four. What crosses the seam is one published object —
+ * {@link usePublishRackControls} — and the rule that comes with it is the one
+ * the tools menu already lives by: a page that publishes nothing renders no
+ * controls.
  *
  * **The panel is gone.** The page used to draw a rounded, bordered panel with
  * `--background` showing around it; the ground in `layout.tsx` is that surface
  * now and runs to the viewport edges. With the rack floating above, a second
  * bounded rectangle inside the viewport read as a panel inside a panel.
- *
- * What went with it: the trim rule that carried the two dialog triggers and
- * the theme key, and the accent line above it that said what the list had been
- * narrowed to. The triggers moved into the View housing and the sentence
- * became the readout at the foot of it; the theme key belongs to the rack now,
- * because a page-level copy would be a second control over one setting.
  */
 export function LeaguesHome({
   username,
@@ -192,17 +186,32 @@ export function LeaguesHome({
   // everywhere this pair is shown.
   const name = user ? user.display_name || user.username : username;
 
-  // The rack's lit pill names whoever's page this is. Published rather than
-  // read up there, because the season is the *stream's* answer and the URL
-  // does not carry it — see `usePublishRackReadout`.
-  usePublishRackReadout(username, state.season);
+  // Latch and open in one handler — never during render. It is a `useCallback`
+  // because it crosses the rack seam below, where a new identity every render
+  // would re-publish on every render and set an ancestor's state in a loop; see
+  // `usePublishRackControls`.
+  const openDrawer = useCallback((kind: Subject["kind"]) => {
+    setOpened((prev) => (prev.has(kind) ? prev : new Set(prev).add(kind)));
+    setDrawer(kind);
+  }, []);
+
+  // The four control keys the rack draws for this page. `leagues` is the
+  // unfiltered list deliberately — it is the population the Filters dialog
+  // counts every one of its options over.
+  usePublishRackControls({
+    filters,
+    onFilters: setFilters,
+    leagues,
+    columns,
+    board: ktcBoard,
+    ktc: lineups?.ktc ?? null,
+    drawer,
+    onOpenDrawer: openDrawer,
+  });
 
   return (
     <div className="relative">
-      {/* Stretch, not centre: the three instruments are one rack, so they take
-          one height and their internal grooves and bezels stretch with it.
-          They stack at a phone's width, where a row of three cannot. */}
-      <header className="relative flex flex-col gap-3.5 sm:flex-row sm:flex-wrap sm:items-stretch sm:gap-5">
+      <header className="relative">
         <ManagerPlate
           name={name}
           avatarUrl={user?.avatar_url ?? null}
@@ -216,31 +225,34 @@ export function LeaguesHome({
               )}
             </span>
           }
-        />
+        >
+          {/* The season is engraved on the plate rather than standing beside it
+              — and only once there is an account's worth of leagues to sum. It
+              reads off `visible`, the list as narrowed, with `leagues.length`
+              beside it as the denominator; see {@link SeasonSummary}. */}
+          {leagues.length > 0 ? (
+            <SeasonSummary
+              leagues={visible}
+              total={leagues.length}
+              narrowing={narrowing}
+            />
+          ) : undefined}
+        </ManagerPlate>
 
-        {/* The summary is about the account, so it only appears once there is
-            an account's worth of leagues to summarise. */}
-        {leagues.length > 0 && <SeasonSummary leagues={leagues} />}
-
-        <BrowseHousing
-          open={drawer}
-          onOpen={(kind) => {
-            // Latch and open in the same handler — never during render.
-            setOpened((prev) => (prev.has(kind) ? prev : new Set(prev).add(kind)));
-            setDrawer(kind);
-          }}
-        />
-
-        <ViewHousing
-          filters={filters}
-          onChange={setFilters}
-          leagues={leagues}
-          columns={columns}
-          board={ktcBoard}
-          ktc={lineups?.ktc ?? null}
-          matched={visible.length}
-          narrowing={narrowing}
-        />
+        {/*
+          The filter summary in words, which the View housing's readout used to
+          carry under its count. With that housing in the rack the sentence has
+          no home up there — a pinned rack has no room for a line of prose — so
+          it lands here, directly under the figure it explains. It is the same
+          line `lineup-checker-home.tsx` draws under its own plate, and it says
+          the *filters* only: the subject selection has the token tray below,
+          where it can be undone.
+        */}
+        {leagueNarrowing && (
+          <p className="relative mt-3.5 truncate font-mono text-[0.6875rem] uppercase tracking-[0.16em] text-active">
+            {leagueNarrowing}
+          </p>
+        )}
       </header>
 
       {/* One rule as the boundary before the grid. It used to carry the
@@ -387,142 +399,6 @@ export function LeaguesHome({
           onToggle={(s) => setSubjects((prev) => toggleSubject(prev, s))}
         />
       )}
-    </div>
-  );
-}
-
-/**
- * The fourth instrument on the header row: the two doors onto the shares
- * drawers.
- *
- * A housing of its own rather than two more keys in `ViewHousing`, because they
- * are a different job. View narrows the grid from what a league *is*; Browse
- * opens a list of who is *in* it — and the narrowing that comes back from one
- * lands in the token tray under the rule, not in View's readout.
- *
- * **No count on either key.** The data behind them is fetched on first press,
- * so a figure would be absent exactly until you no longer needed it. The
- * drawer's own readout says how many it holds.
- */
-function BrowseHousing({
-  open,
-  onOpen,
-}: {
-  open: Subject["kind"] | null;
-  onOpen: (kind: Subject["kind"]) => void;
-}) {
-  const key = `${CONSOLE_KEY_BLOCK} justify-between gap-3 bg-[image:var(--key-bg)] shadow-[var(--key-shadow)] sm:w-full`;
-  const state = (on: boolean) =>
-    on
-      ? "border-active/45 text-readout"
-      : "border-foreground/10 text-foreground/80 hover:text-readout";
-
-  return (
-    <div className="flex flex-col gap-2 rounded-2xl border border-foreground/8 bg-[image:var(--key-bg)] p-2.5 shadow-[var(--plate-shadow)] sm:min-w-44">
-      <span className="px-1 font-mono text-[0.625rem] uppercase tracking-[0.16em] text-foreground/50">
-        Browse
-      </span>
-      <div className="flex flex-1 flex-wrap items-start gap-2 sm:flex-col sm:flex-nowrap sm:items-stretch">
-        <button
-          type="button"
-          onClick={() => onOpen("player")}
-          aria-haspopup="dialog"
-          aria-expanded={open === "player"}
-          // Shape and state composed rather than concatenated onto a string
-          // that already names a border colour — same specificity, and which
-          // one wins is decided by Tailwind's emit order.
-          className={`${key} ${state(open === "player")}`}
-        >
-          Players
-        </button>
-        <button
-          type="button"
-          onClick={() => onOpen("leaguemate")}
-          aria-haspopup="dialog"
-          aria-expanded={open === "leaguemate"}
-          className={`${key} ${state(open === "leaguemate")}`}
-        >
-          Leaguemates
-        </button>
-      </div>
-    </div>
-  );
-}
-
-/**
- * The third instrument on the header row: the two dialog triggers, stacked,
- * over a readout of what they have left.
- *
- * It replaces a trim rule with three bordered buttons hanging off it, and the
- * readout replaces the accent sentence that used to sit above that rule. Both
- * dialogs hide their own state, so something on the page has to say what the
- * grid below has been narrowed to — `{matched} / {total}` is that, with the
- * filter summary under it.
- *
- * `mt-auto` on the readout is what makes the row's heights agree: the housing
- * stretches to the tallest instrument beside it, and the readout takes up the
- * slack at the bottom rather than leaving a gap under the keys.
- *
- * At a phone's width the three go on one line and the summary line drops — the
- * figure is the half that cannot be got anywhere else.
- */
-function ViewHousing({
-  filters,
-  onChange,
-  leagues,
-  columns,
-  board,
-  ktc,
-  matched,
-  narrowing,
-}: {
-  filters: LeagueFilters;
-  onChange: (filters: LeagueFilters) => void;
-  leagues: readonly ManagerLeague[];
-  columns: readonly LineupMetricId[];
-  board: KtcBoardChoice;
-  ktc: ManagerLineupsPayload["ktc"];
-  matched: number;
-  narrowing: boolean;
-}) {
-  const key = `${CONSOLE_KEY_BLOCK} justify-between gap-3 sm:w-full`;
-
-  return (
-    <div className="flex flex-col gap-2 rounded-2xl border border-foreground/8 bg-[image:var(--key-bg)] p-2.5 shadow-[var(--plate-shadow)] sm:ml-auto sm:min-w-60">
-      <span className="px-1 font-mono text-[0.625rem] uppercase tracking-[0.16em] text-foreground/50">
-        View
-      </span>
-      <div className="flex flex-1 flex-wrap items-center gap-2 sm:flex-col sm:flex-nowrap sm:items-stretch">
-        <LeagueFiltersDialog
-          filters={filters}
-          onChange={onChange}
-          leagues={leagues}
-          triggerClassName={key}
-        />
-        <LineupColumnsDialog
-          columns={columns}
-          board={board}
-          ktc={ktc}
-          triggerClassName={key}
-        />
-
-        <span
-          className={`${CONSOLE_READOUT} ml-auto flex flex-col rounded-[0.625rem] px-3 py-2 sm:ml-0 sm:mt-auto`}
-        >
-          <span
-            aria-hidden
-            className="pointer-events-none absolute inset-0 bg-[image:var(--readout-scanlines)]"
-          />
-          <span className="relative font-mono text-[1.0625rem] leading-none tabular-nums text-readout [text-shadow:var(--readout-text-glow)]">
-            {matched} / {leagues.length}
-          </span>
-          {narrowing && (
-            <span className="relative mt-1.5 hidden truncate font-mono text-[0.625rem] uppercase tracking-[0.14em] text-readout/60 sm:block">
-              {filterSummary(filters)}
-            </span>
-          )}
-        </span>
-      </div>
     </div>
   );
 }

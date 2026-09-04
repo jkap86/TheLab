@@ -79,7 +79,12 @@ export function LeagueConfigWindow({
   /** Placement and plane — see the module note. */
   className?: string;
 }) {
-  const qb = slotCount(league, "QB+SF");
+  // Two exact groups rather than the union, so the window *states* the lineup's
+  // QB shape instead of naming it. `qbEligible` is still read, for the one case
+  // two ladders cannot state — see the tag below.
+  const qb = slotCount(league, "QB");
+  const sf = slotCount(league, "SUPER_FLEX");
+  const qbEligible = slotCount(league, "QB+SF");
   const te = slotCount(league, "TE");
   const starters = slotCount(league, "STARTERS");
   const teams = league.total_rosters > 0 ? league.total_rosters : null;
@@ -98,11 +103,27 @@ export function LeagueConfigWindow({
             reader to infer the common case from an absence. It is unlit because
             it is the one of the three that is usually the default. */}
         <Tag>{isBestBall(league) ? "Best ball" : "Managed"}</Tag>
-        {/* Superflex is the same reading `SLOT_GROUPS`' hint states and
-            `shared/ktc/roster` prices on: two or more QB-eligible starting
-            slots. Absent rather than negated — "not superflex" is what every
-            other league on the page already looks like. */}
-        {qb !== null && qb >= 2 && <Tag lit>Superflex</Tag>}
+        {/*
+          The Superflex tag used to appear on every league the `QB+SF ≥ 2` rule
+          matched, and the two ladders below say that outright for the ordinary
+          shape: `QB 1 · SF 1` is a superflex lineup and reads as one. What they
+          cannot say is the *other* shape the union matches — a league starting
+          two bare `QB` slots and no `SUPER_FLEX` at all, which prices exactly
+          like a superflex league and looks, on the ladders, like a league that
+          simply starts two quarterbacks. So the tag survives narrowed to
+          precisely that disagreement.
+
+          Whether the shape exists in this corpus is the open question the
+          handoff raised and could not be answered here (no database is reachable
+          from where this was built). Narrowing rather than deleting is the arm
+          that is correct under both answers: if no such league exists the tag
+          never renders and the window is the design as drawn, and if one does,
+          the reader is not left to infer superflex from two ladders that never
+          name it. It stays until the query is run.
+        */}
+        {qbEligible !== null && qbEligible >= 2 && (sf ?? 0) < 1 && (
+          <Tag lit>Superflex</Tag>
+        )}
       </span>
 
       <Divider />
@@ -112,7 +133,11 @@ export function LeagueConfigWindow({
 
       <Divider />
 
-      <Ladder label="QB+SF" slots={qb} />
+      {/* `SF 0` on a one-QB league is the statement to want, and the two-pip
+          floor is what makes it one: none of the one this board could have. A
+          null count still draws no ladder — see {@link Ladder}. */}
+      <Ladder label="QB" slots={qb} />
+      <Ladder label="SF" slots={sf} />
       <Ladder label="TE" slots={te} />
 
       {/* After the TE ladder deliberately: the premium is a fact about the slot

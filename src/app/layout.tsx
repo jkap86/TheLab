@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
-import { RackReadoutProvider, THEME_BOOT_SCRIPT } from "@/features/shared";
+import { RackControlsProvider, THEME_BOOT_SCRIPT } from "@/features/shared";
 import { AppRack } from "@/features/tools";
 
 import "./globals.css";
@@ -42,13 +42,13 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
         <script dangerouslySetInnerHTML={{ __html: THEME_BOOT_SCRIPT }} />
       </head>
       <body className="min-h-full flex flex-col">
-        {/* The rack reads the readout; the pages publish into it. Both have to
-            sit under one provider, which is why it wraps here rather than
+        {/* The rack reads the controls; the pages publish into them. Both have
+            to sit under one provider, which is why it wraps here rather than
             inside either. */}
-        <RackReadoutProvider>
+        <RackControlsProvider>
           <AppRack />
           {children}
-        </RackReadoutProvider>
+        </RackControlsProvider>
       </body>
     </html>
   );
