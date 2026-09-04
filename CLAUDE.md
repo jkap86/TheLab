@@ -3129,6 +3129,24 @@ dialog instance as one set from the rack on a desktop. The menu is not a
 `<dialog>`, for `ToolsMenu`'s reason, so its dismissal is spelled out: a
 capture-phase `pointerdown` and an Escape that returns focus to the key.
 
+**And the menu must not dismiss on the press that opens one of its own two
+dialogs**, which is the rule it shipped without and the one whose failure
+nobody can see. Both dialogs are mounted *inside* the menu, and a modal
+`<dialog>` is in the top layer only for as long as it still generates a box: a
+blanket `onClick` that hid the panel took the modal off screen with it, so
+pressing Filters or Columns produced a backdrop over an inert page with nothing
+on it — a key that reads as dead. Above `lg` the panel is `display: contents`
+and there is no menu to close, so it was invisible on a desktop and broken at
+**every width under 1024px**, which is a laptop window as readily as a phone.
+The two Browse keys still dismiss on the press, because a shares drawer is the
+*page's* dialog and nowhere near this box; the two that are mounted here close
+the menu when *they* close, through a capture-phase `close` listener on the
+menu's own root. `close` does not bubble, but the capture phase runs on every
+ancestor regardless — which is what lets the menu hear its own dialogs without
+either of them growing a callback for it. Escape is deferred to the same path
+whenever a `dialog[open]` is inside the menu, or the panel would be hidden on
+the very keystroke that closes the dialog inside it.
+
 #### The header became one plate
 
 `ManagerPlate` and `SeasonSummary` merged. The plate carries the avatar bezel,
