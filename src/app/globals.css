@@ -382,6 +382,26 @@ body {
  * `<span>` inside a flex row. The manager page reuses it on the refresh pill,
  * where it means the same thing: a live stream.
  */
+/*
+ * The shares drawers slide in from the edge they are pinned to.
+ *
+ * There is no exit half, and there does not need to be: a native `<dialog>` is
+ * out of the top layer in the frame `close()` is called, so an out-animation
+ * would have nothing left to run on. The panel carries `.lab-anim`, which is
+ * what the reduced-motion rule below stops.
+ */
+@keyframes drawer-in-left {
+  from {
+    transform: translateX(-100%);
+  }
+}
+
+@keyframes drawer-in-right {
+  from {
+    transform: translateX(100%);
+  }
+}
+
 @keyframes tools-pulse {
   0% {
     box-shadow: 0 0 0 0 var(--accent-glow);

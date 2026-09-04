@@ -479,6 +479,115 @@ export async function getLeaguemateIds(
 }
 
 /**
+ * Every roster the manager holds this season, as league id → the player ids on
+ * it.
+ *
+ * The shares drawer's whole input, and it ships **raw**: Sleeper's array
+ * verbatim, IR and taxi included, its `""` / `"0"` slot padding not stripped.
+ * Counting happens on the client because the manager page narrows its league
+ * list five ways and a share has to be counted over the leagues left — see
+ * `ManagerPlayersPayload`.
+ *
+ * **`LIVE_LEAGUE_SQL` is required and `FIELDED_A_TEAM_SQL` is not**, which looks
+ * backwards until you take them one at a time. The `owner_id` predicate below
+ * *is* that fragment's roster half, so applying it too would only restate the
+ * join. The tombstone is not implied by anything: a deleted league's roster rows
+ * are frozen rather than cleared, so without the guard a league nobody can open
+ * would keep contributing shares forever.
+ *
+ * Concatenating rather than assigning, in case Sleeper ever answers with two
+ * rosters for one owner in one league — a co-owned team read twice would
+ * otherwise silently drop one of them.
+ */
+export async function getManagerRosters(
+  userId: string,
+  season: string,
+): Promise<Record<string, string[]>> {
+  const { rows } = await pool.query<{
+    league_id: string;
+    players: string[] | null;
+  }>(
+    `SELECT r.league_id, r.players
+       FROM rosters r
+       JOIN leagues l ON l.league_id = r.league_id
+      WHERE r.owner_id = $1 AND l.season = $2
+        AND ${LIVE_LEAGUE_SQL}`,
+    [userId, season],
+  );
+
+  const out: Record<string, string[]> = {};
+  for (const row of rows) {
+    // The column is nullable and untyped — null is Sleeper's own spelling of an
+    // empty roster, and a non-array must read as "no players" rather than throw
+    // halfway through the fold.
+    const players = Array.isArray(row.players) ? row.players : [];
+    const held = out[row.league_id];
+    if (held) held.push(...players);
+    else out[row.league_id] = [...players];
+  }
+  return out;
+}
+
+/** One `league_users` row as {@link getManagerLeaguemates} reads it. */
+export type LeaguemateRow = {
+  user_id: string;
+  display_name: string | null;
+  avatar: string | null;
+};
+
+/**
+ * Everyone in the manager's leagues this season: who is in each league, and
+ * what to call them.
+ *
+ * The same two opposing rules {@link getLeaguemateIds} states — *which* leagues
+ * count is {@link FIELDED_A_TEAM_SQL}, and *who* counts inside one is bare
+ * membership, because someone chopped out of a guillotine league is still
+ * someone you know.
+ *
+ * **The manager's own row is kept**, which is the one place this diverges from
+ * that function, and deliberately: there the id list *is* the answer, so
+ * listing a manager as their own leaguemate would be a claim. Here `members` is
+ * a population to count over, and the manager's presence in a league is the
+ * only thing separating "this league is stored and they share it with nobody"
+ * from "this league has no member rows at all". The fold drops them.
+ *
+ * `ORDER BY lu.updated_at` so the newest spelling wins where one person was
+ * synced under different display names across leagues — the same reading
+ * `getTradeManagers` takes of the same table.
+ */
+export async function getManagerLeaguemates(
+  userId: string,
+  season: string,
+): Promise<{
+  members: Record<string, string[]>;
+  users: Record<string, LeaguemateRow>;
+}> {
+  const { rows } = await pool.query<LeaguemateRow & { league_id: string }>(
+    `SELECT lu.league_id, lu.user_id, lu.display_name, lu.avatar
+       FROM league_users lu
+       JOIN league_users me
+         ON me.league_id = lu.league_id AND me.user_id = $1
+       JOIN leagues l ON l.league_id = lu.league_id
+      WHERE l.season = $2
+        AND ${MANAGER_LEAGUE_SQL}
+      ORDER BY lu.updated_at`,
+    [userId, season],
+  );
+
+  const members: Record<string, string[]> = {};
+  const users: Record<string, LeaguemateRow> = {};
+  for (const row of rows) {
+    (members[row.league_id] ??= []).push(row.user_id);
+    users[row.user_id] = {
+      user_id: row.user_id,
+      display_name: row.display_name,
+      avatar: row.avatar,
+    };
+  }
+  return { members, users };
+}
+
+/**
  * One league as the lineups route reads it: {@link RankLeague} for the solve,
  * plus everything `leagueRosterPicks` resolves the pick portfolios from. One
  * row type rather than two queries, so the ranks and the picks cannot be

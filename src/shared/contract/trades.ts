@@ -11,6 +11,11 @@
  */
 
 import type { ManagerLeague } from "./leagues";
+// Moved to `names.ts` when the shares drawers became their second reader.
+// Re-exported so this module stays a complete surface for a trades caller.
+import type { LeaguematePayload, PlayerSummary } from "./names";
+
+export type { LeaguematePayload, PlayerSummary };
 
 /** A future draft pick as it moves in a trade. */
 export type TradePickAsset = {
@@ -83,31 +88,6 @@ export type Trade = {
    * every trade, more for the three-way ones some leagues run.
    */
   sides: TradeSide[];
-};
-
-/**
- * A player as anything that names one renders them.
- *
- * Declared here rather than in `shared/players` for the folder's own reason:
- * the trade card is a client module and needs the shape, and `shared/players`
- * reaches Postgres. `players/summary.ts` imports it back.
- *
- * `name` is never null — an unnamed row falls back to the id, which is a
- * visible, searchable token rather than an empty cell, and is what a reader can
- * act on when the players table is behind Sleeper's map.
- */
-export type PlayerSummary = {
-  player_id: string;
-  name: string;
-  position: string | null;
-  team: string | null;
-};
-
-/** A league member as sent to the client (avatar id resolved to a URL). */
-export type LeaguematePayload = {
-  user_id: string;
-  display_name: string | null;
-  avatar_url: string | null;
 };
 
 /**

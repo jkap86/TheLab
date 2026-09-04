@@ -34,12 +34,15 @@ export {
   type LeagueSyncStatus,
   type LeagueSyncPayload,
 } from "./league-sync";
+export { type PlayerSummary, type LeaguematePayload } from "./names";
+export {
+  type ManagerPlayersPayload,
+  type ManagerLeaguematesPayload,
+} from "./shares";
 export {
   type TradePickAsset,
   type TradeSide,
   type Trade,
-  type PlayerSummary,
-  type LeaguematePayload,
   type TradesPagePayload,
   type TradeLeaguesPayload,
   type TradeFacet,

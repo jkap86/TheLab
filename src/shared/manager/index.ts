@@ -46,13 +46,15 @@ export {
   LEAGUE_COLUMNS_SQL,
   getLeaguemateIds,
   getManagerDraftAdp,
+  getManagerLeaguemates,
   getManagerLeagueIds,
   getManagerLeagues,
   getManagerLeagueRosters,
+  getManagerRosters,
   getManagerSyncState,
   toManagerLeague,
 } from "./queries";
-export type { LeagueRow, ManagerLeagueRow } from "./queries";
+export type { LeagueRow, LeaguemateRow, ManagerLeagueRow } from "./queries";
 export { solveLeagueLineup } from "./ros-lineups";
 export type { RosLineupLeague } from "./ros-lineups";
 export { lineupMetricTotals, rankLeagueLineups } from "./league-ranks";

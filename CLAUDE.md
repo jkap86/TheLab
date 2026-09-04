@@ -710,6 +710,189 @@ which is ~2:1 on light mode's teal. Here an added preset is drawn *lit* instead
 — the same treatment the rails give a chosen option, which is also a no-op to
 press again, and which has the advantage of being true.
 
+## Shares and leaguemates
+
+Two drawers on the manager page answer the question the league grid cannot:
+across a whole account, **which players does this manager roster in how many
+leagues**, and **who do they keep running into**. `GET /api/user/[username]/players`
+and `.../leaguemates` back them. TheLabX's feature ported, minus its metric
+catalogue and its virtualizer.
+
+**It needed no migration**, and that is the schema's doing rather than luck:
+`rosters.players` and the `rosters_owner_league_idx` on `(owner_id, league_id)`
+have carried the first question since the league-graph migration, and
+`league_users` with its `user_id` index has carried the second. `npm run migrate:up`
+reported "No migrations to run" on the day this landed.
+
+**The routes ship raw membership and count nothing, which is the whole design.**
+`/players` answers `Record<league_id, player_id[]>` and `/leaguemates`
+`Record<league_id, user_id[]>`; `manager/helpers/shares.ts` and
+`leaguemates.ts` fold them on the client. The reason is that this page already
+narrows its league list five ways, and **a share has to be counted over the
+leagues left** — a reader who has narrowed to dynasty wants dynasty shares. A
+`GROUP BY` on the server would answer a different question and could not be
+re-asked without a round trip per filter press. The maps are what make that
+affordable: 66KB and 150KB uncompressed on the 113-league account, against
+471 distinct players and 719 leaguemates.
+
+**Two populations, and confusing them is the bug that has no symptom.** The fold
+is handed `leagueFiltered` — the league-filtered list, **before** any subject
+selection — and never `visible`. Counted over the selection, every row would
+collapse to the row you just picked the moment you picked it, and could not be
+widened again without clearing first. It is the rule `facetsQuery` already
+enforces for the trades board's own menus, one page over. Verified live: with
+Dynasty selected the drawer's denominator falls 113 → 79 and its rows 471 → 449,
+and then picking a subject leaves both figures exactly where they are while the
+grid falls to 32.
+
+**A league that contributed no roster is skipped, not counted as one holding
+nobody.** `league_count` is the leagues that *answered*, so a partly-synced
+account reports its shares over fewer leagues than the count beside it. Zeroing
+it would deflate every share on the page, silently. The same rule runs on the
+member lists.
+
+**The manager's own id rides `members` on purpose, and the fold drops it.** It
+is the sentinel that separates "this league is stored and they share it with
+nobody" from "this league has no member rows at all" — the distinction the
+denominator above is built on. `getLeaguemateIds` excludes them instead, and the
+asymmetry is right for the reason its doc gives: there the id list *is* the
+answer, so a manager listed as their own leaguemate would be a claim. Here it is
+a population. Checked live: self appears in 113 of 113 member lists, and 720
+distinct users minus self is the 719 the drawer lists.
+
+**`getManagerRosters` applies `LIVE_LEAGUE_SQL` and not `FIELDED_A_TEAM_SQL`**,
+which looks backwards until the two are taken separately. The `owner_id`
+predicate *is* that fragment's roster half, so applying it too would only
+restate the join. The tombstone is implied by nothing: a deleted league's roster
+rows are frozen rather than cleared, so without the guard a league nobody can
+open would keep contributing shares forever. It answers 124 rows against the
+page's 113 leagues, and the 11 extra are all `pre_draft`/`drafting` rows with a
+null or empty `players` — never looked up, because the fold only ever indexes
+the leagues it was handed.
+
+### The subjects are a second narrowing
+
+Picking a row narrows the grid behind the glass. `helpers/league-subjects.ts` is
+that predicate, and it composes with the league filters as a second pass:
+`leagues → matchesFilters → matchesSubjects`, cheapest first, so a league
+rejected on its type never has its roster walked.
+
+**`cold` and the `useManagerLineups` gate still read the unfiltered `leagues`**,
+as they always have — a subject matching nothing would otherwise put the cold
+sync bar back on screen and suppress the solve for the whole account. So does
+`SeasonSummary`, which is about the account rather than the selection.
+
+**A subject whose map has not arrived is ignored rather than failed.** Both
+alternatives lie: failing it closed empties the grid while a payload is in
+flight, and failing the whole predicate open leaves a lit token above a list it
+did not narrow. It is reachable for a frame at most anyway — the drawer that
+picks a subject is what fetches the map, and all four pieces of state reset
+*during render* when the manager changes, the idiom `useManagerLeagues`
+documents.
+
+**`all` and `any` are two questions, and the toggle only appears above one
+subject** — with one picked they agree, and a control with no effect is worse
+than no control. Verified live, and the arithmetic is the check worth keeping:
+18 leagues ∩ 45 leagues = 8 under `all` and 55 under `any`, with 18 + 45 − 8 = 55.
+
+**The token tray under the rule exists because a closed drawer says nothing.**
+That is the same problem `ViewHousing`'s readout solves for the two dialogs, and
+a subject narrowing needs more room than that readout has, because it names
+people rather than a count. `ViewHousing`'s `matched / total` picks the subject
+half up for free, since `visible` composes both.
+
+**`opened` is a latch, not the open flag.** A picked subject keeps narrowing the
+grid after its drawer closes and the predicate still needs the map, so the read
+stays enabled once a drawer has been opened. An unopened drawer costs no request
+at all — `/api/trades/facets`' bargain, one page over.
+
+### The drawer
+
+A native `<dialog>` + `showModal()`, which is why there is no dependency: focus
+trap, Esc and `::backdrop` come free, and `:modal` confirms it. What makes it a
+drawer is three lines of margin and a full-height box; everything else is
+`LeagueFiltersDialog`'s shell — panel tokens, grain span, title bar with an Esc
+pill, `min-h-0 flex-1 overflow-y-auto` well.
+
+**Write the margins as explicit sides, never `m-0` plus an `auto`.** A `<dialog>`
+is centred by the UA's own `margin: auto`, and Tailwind emits the `m-*` shorthand
+before the `ml-*`/`mr-*` longhands — so `m-0 ml-auto` is a coin flip decided by
+emit order, exactly the trap `CONSOLE_KEY_PILL` exists to keep a lit key out of.
+Players open left, leaguemates right.
+
+**A row is two sibling buttons and cannot be a `<details>`.** A `<summary>` maps
+to a leaf `button`, so a control nested inside one is unreliably reachable — the
+rule the lineup checker's Sync key already lives by. The two jobs here are
+genuinely two: the chevron says *which leagues*, the body says *narrow the grid
+to them*.
+
+**The rows are flat, and that is a budget rather than a style.** The league grid
+pays ~6 composited planes and a filter buffer per card and gates all of it behind
+`pointer-fine:` because iOS Safari's per-tab GPU budget dies on 113 of them. This
+list is longer — 471 players on that same account, 719 leaguemates — so it spends
+nothing: no perspective, no `translateZ`, no `drop-shadow`. There is nothing here
+to gate, which is what makes `@tanstack/react-virtual` unnecessary and keeps the
+runtime dependencies at React, Next and `pg`.
+
+**The share meter is deliberately not the rank ramp.** `rankColor` says how
+*good* a position is; a share has no good — nine leagues is not a better result
+than one, it is a different fact. So the fill is the accent at one weight and the
+number carries the meaning. A held row is never drawn empty, because at 1 of 113
+a true-width bar reads as "none" rather than as "one".
+
+**Focus on open follows the pointer**: the search field on a fine one, the
+`tabIndex={-1}` panel on a coarse one, so opening the drawer on a phone does not
+raise the software keyboard over the list it just showed. Both branches verified.
+
+**`loading` is derived, not stored.** Writing it from inside the effect is a
+synchronous `setState` in an effect body — the cascading render the lint rule
+exists to stop — and it is redundant: a read that has been asked for and has
+neither answered nor failed *is* loading. Derived, it cannot be left true by a
+path that forgot to clear it. The hooks otherwise copy `useManagerLineups`, with
+one deliberate divergence: they **report** their failures, because lineups is an
+enhancement beside a list where a drawer is only this data, and a silent failure
+there is a panel that opens empty with nothing saying why.
+
+### Deliberately not ported
+
+- **TheLabX's metric catalogue** — `ColumnsBar`, `MetricColumns`, `SubjectRail`,
+  four pickable columns from ten with presets and a persistence key. The lineup
+  checker's section already recorded that catalogue as unported and two fixed
+  tiles as not earning it; the same holds here, and four of its ten metrics are
+  ADP, which has no source in this repo.
+- **The windowing** — `@tanstack/react-virtual` and the `SharesScrollProvider`
+  seating that switches between plain and virtual rows. See the flat-rows note
+  above for why the budget does not call for it.
+- **`draft_classes` and the draft-class chips.** There is no `getNflDraftClasses`
+  here; `players.years_exp` is stored and the chip arrives with a reader for it.
+  The position chips did port — they are read off `PlayerSummary`, which is
+  already on the wire, and 471 rows want them.
+- **The tab pages** (`/manager/[searched]/players` and `/leaguemates`). The same
+  lists behind two doors; the drawers are the door this app has.
+
+### Verified
+
+Run against the live database on the day it landed. `npm run migrate:up`
+reported "No migrations to run", which is the claim above and why this port is
+code only. Both routes answered 200 with the numbers a hand-run of their SQL
+predicted — 124 roster rows over 113 listed leagues, 471 distinct players all
+471 named, 113 member lists, 719 leaguemates, avatars resolved on 710 of 720.
+`?season=abc` 400s on both, an unknown user 404s, `?season=2024` answers empty
+and deterministically without a resolver round trip.
+
+End to end at 1280 and 390 in both schemes, over CDP: picking a player held in 6
+leagues left exactly 6 cards and `6 / 113`, the drawer's own 471 rows unmoved;
+Esc closed the drawer and the narrowing survived under a token naming him; Clear
+restored 113. A leaguemate in 18 leagues narrowed to 18 and expanded to exactly
+18 league rows. Two subjects gave 8 under `all` and 55 under `any` against 18 and
+45. The drawer is 32rem at 1280 and `100vw − 2.5rem` at 390, the header's four
+instruments stack without overflow, and no page or drawer takes horizontal
+scroll. In the DOM: still exactly one `<h1>`, `aria-expanded` on both triggers
+flipping with the drawer and back on a backdrop click, `aria-labelledby` naming
+the panel, `:modal` true, one `role="status"`. Under
+`prefers-reduced-motion: reduce` the panel's `animation-name` computes to `none`,
+which is `.lab-anim` doing its job.
+
 ## KeepTradeCut values
 
 `shared/ktc` scrapes both of KTC's markets — dynasty (`/dynasty-rankings`) and

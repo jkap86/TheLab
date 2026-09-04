@@ -20,10 +20,25 @@ import {
   useManagerLeagues,
 } from "@/features/shared";
 
+import {
+  type LeagueSubjects,
+  matchesSubjects,
+  NO_SUBJECTS,
+  removeSubject,
+  type Subject,
+  toggleSubject,
+} from "../helpers/league-subjects";
 import { useManagerLineups } from "../hooks/use-manager-lineups";
+import {
+  useManagerLeaguemates,
+  useManagerPlayers,
+} from "../hooks/use-manager-shares";
 import { LeagueCard } from "./league-card";
+import { LeaguemateSharesDrawer } from "./leaguemate-shares-drawer";
 import { LineupColumnsDialog } from "./lineup-columns-dialog";
+import { PlayerSharesDrawer } from "./player-shares-drawer";
 import { SeasonSummary } from "./season-summary";
+import { SubjectTokens } from "./subject-tokens";
 
 /**
  * A manager's leagues for a season, as one console.
@@ -78,18 +93,65 @@ export function LeaguesHome({
   // paint one frame of the new manager's leagues under the old manager's
   // filters.
   const [filters, setFilters] = useState(DEFAULT_LEAGUE_FILTERS);
+  // The drawers' half of the narrowing, on the same terms. `opened` is a latch
+  // rather than the open flag: a picked subject keeps narrowing the grid after
+  // its drawer closes, and the predicate still needs the map behind it.
+  const [subjects, setSubjects] = useState<LeagueSubjects>(NO_SUBJECTS);
+  const [drawer, setDrawer] = useState<Subject["kind"] | null>(null);
+  const [opened, setOpened] = useState<ReadonlySet<Subject["kind"]>>(new Set());
+
   const subject = `${username} ${season ?? ""}`;
   const [renderedSubject, setRenderedSubject] = useState(subject);
   if (renderedSubject !== subject) {
     setRenderedSubject(subject);
     setFilters(DEFAULT_LEAGUE_FILTERS);
+    // All four reset together: a subject picked for one manager narrows nothing
+    // on the next, and a latch carried over would fetch the new manager's maps
+    // before anyone asked to see them.
+    setSubjects(NO_SUBJECTS);
+    setDrawer(null);
+    setOpened(new Set());
   }
 
-  const narrowing = activeFilterCount(filters) > 0;
-  const visible = useMemo(
+  // Read once, by both drawers and by the predicate below — see the hook for
+  // why the latch rather than `drawer !== null`.
+  const players = useManagerPlayers(username, state.season, opened.has("player"));
+  const leaguemates = useManagerLeaguemates(
+    username,
+    state.season,
+    opened.has("leaguemate"),
+  );
+
+  const narrowing =
+    activeFilterCount(filters) > 0 || subjects.subjects.length > 0;
+
+  // **The two narrowings are two passes and the order is the cheap one.** A
+  // league rejected on its type never has its roster walked — and the drawers
+  // count over exactly this intermediate list, never over the one below it.
+  const leagueFiltered = useMemo(
     () => leagues.filter((league) => matchesFilters(league, filters)),
     [leagues, filters],
   );
+  const visible = useMemo(
+    () =>
+      leagueFiltered.filter((league) =>
+        matchesSubjects(
+          league.league_id,
+          subjects,
+          players.data?.rosters ?? null,
+          leaguemates.data?.members ?? null,
+        ),
+      ),
+    [leagueFiltered, subjects, players.data, leaguemates.data],
+  );
+
+  // A token names what the reader picked. The maps are the only place those
+  // names live, so an id that outlives its payload falls back to itself rather
+  // than to a blank chip.
+  const subjectName = (s: Subject) =>
+    s.kind === "player"
+      ? (players.data?.players[s.id]?.name ?? s.id)
+      : (leaguemates.data?.users[s.id]?.display_name ?? s.id);
 
   // Fetched once the leagues settle — `!refreshing` flipping true is also what
   // refetches after a cold sync, when the rosters this read solves from were
@@ -135,6 +197,15 @@ export function LeaguesHome({
             an account's worth of leagues to summarise. */}
         {leagues.length > 0 && <SeasonSummary leagues={leagues} />}
 
+        <BrowseHousing
+          open={drawer}
+          onOpen={(kind) => {
+            // Latch and open in the same handler — never during render.
+            setOpened((prev) => (prev.has(kind) ? prev : new Set(prev).add(kind)));
+            setDrawer(kind);
+          }}
+        />
+
         <ViewHousing
           filters={filters}
           onChange={setFilters}
@@ -150,6 +221,16 @@ export function LeaguesHome({
       <div
         aria-hidden
         className="relative my-9 h-px bg-gradient-to-r from-active/35 via-foreground/5 to-transparent"
+      />
+
+      {/* The drawers hide their own state once closed, so the narrowing they
+          applied has to be named somewhere the reader can see and undo it. */}
+      <SubjectTokens
+        subjects={subjects}
+        names={subjectName}
+        onRemove={(s) => setSubjects((prev) => removeSubject(prev, s))}
+        onMatch={(match) => setSubjects((prev) => ({ ...prev, match }))}
+        onClear={() => setSubjects(NO_SUBJECTS)}
       />
 
       {error ? (
@@ -248,6 +329,91 @@ export function LeaguesHome({
           )}
         </>
       )}
+
+      {/* Mounted once each kind has been opened, and kept: a closed drawer is
+          `open={false}`, which is what lets its search state and its scroll
+          position survive a second press. Both count over `leagueFiltered` —
+          the population a selection is made *against*, never the one it
+          leaves. */}
+      {opened.has("player") && (
+        <PlayerSharesDrawer
+          open={drawer === "player"}
+          onClose={() => setDrawer(null)}
+          leagues={leagueFiltered}
+          read={players}
+          subjects={subjects}
+          onToggle={(s) => setSubjects((prev) => toggleSubject(prev, s))}
+        />
+      )}
+      {opened.has("leaguemate") && (
+        <LeaguemateSharesDrawer
+          open={drawer === "leaguemate"}
+          onClose={() => setDrawer(null)}
+          leagues={leagueFiltered}
+          read={leaguemates}
+          selfId={user?.user_id ?? null}
+          subjects={subjects}
+          onToggle={(s) => setSubjects((prev) => toggleSubject(prev, s))}
+        />
+      )}
+    </div>
+  );
+}
+
+/**
+ * The fourth instrument on the header row: the two doors onto the shares
+ * drawers.
+ *
+ * A housing of its own rather than two more keys in `ViewHousing`, because they
+ * are a different job. View narrows the grid from what a league *is*; Browse
+ * opens a list of who is *in* it — and the narrowing that comes back from one
+ * lands in the token tray under the rule, not in View's readout.
+ *
+ * **No count on either key.** The data behind them is fetched on first press,
+ * so a figure would be absent exactly until you no longer needed it. The
+ * drawer's own readout says how many it holds.
+ */
+function BrowseHousing({
+  open,
+  onOpen,
+}: {
+  open: Subject["kind"] | null;
+  onOpen: (kind: Subject["kind"]) => void;
+}) {
+  const key = `${CONSOLE_KEY_BLOCK} justify-between gap-3 bg-[image:var(--key-bg)] shadow-[var(--key-shadow)] sm:w-full`;
+  const state = (on: boolean) =>
+    on
+      ? "border-active/45 text-readout"
+      : "border-foreground/10 text-foreground/80 hover:text-readout";
+
+  return (
+    <div className="flex flex-col gap-2 rounded-2xl border border-foreground/8 bg-[image:var(--key-bg)] p-2.5 shadow-[var(--plate-shadow)] sm:min-w-44">
+      <span className="px-1 font-mono text-[0.625rem] uppercase tracking-[0.16em] text-foreground/50">
+        Browse
+      </span>
+      <div className="flex flex-1 flex-wrap items-start gap-2 sm:flex-col sm:flex-nowrap sm:items-stretch">
+        <button
+          type="button"
+          onClick={() => onOpen("player")}
+          aria-haspopup="dialog"
+          aria-expanded={open === "player"}
+          // Shape and state composed rather than concatenated onto a string
+          // that already names a border colour — same specificity, and which
+          // one wins is decided by Tailwind's emit order.
+          className={`${key} ${state(open === "player")}`}
+        >
+          Players
+        </button>
+        <button
+          type="button"
+          onClick={() => onOpen("leaguemate")}
+          aria-haspopup="dialog"
+          aria-expanded={open === "leaguemate"}
+          className={`${key} ${state(open === "leaguemate")}`}
+        >
+          Leaguemates
+        </button>
+      </div>
     </div>
   );
 }
