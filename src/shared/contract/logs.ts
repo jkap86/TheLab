@@ -1,11 +1,16 @@
 /**
  * The visit log's wire shape.
  *
- * A visit is stored as its raw path plus the one fact a path cannot carry — who
- * was looking — and everything else the page shows (which tool, whose page,
- * which league) is derived on the client from `route`. So this file is small on
- * purpose: adding a tool changes a pure helper in `features/logs`, not a type
- * here and not a column.
+ * A visit is stored as its raw path and nothing else, and everything the page
+ * shows (which tool, whose page, which league) is derived on the client from
+ * `route`. So this file is small on purpose: adding a tool changes a pure
+ * helper in `features/logs`, not a type here and not a column.
+ *
+ * It carried a `viewer` — the browser's stored account, meant to say who was
+ * *looking* as opposed to who was being looked at. It named the last account
+ * that browser had looked up instead, which on a page built for looking other
+ * people up is usually somebody else; the migration that drops the column
+ * carries the argument.
  */
 
 /** One request the proxy saw. */
@@ -23,13 +28,6 @@ export type VisitorLogEntry = {
   ip: string | null;
   /** The pathname. Query strings are not stored. */
   route: string;
-  /**
-   * The stored Sleeper account of whoever was *looking*, or null before one is
-   * resolved on that browser. Distinct from whoever the page is *about*, which
-   * is in `route` — on `/manager/[username]` those are two different people
-   * whenever anyone looks somebody else up.
-   */
-  viewer: string | null;
 };
 
 /** `GET /api/logs` — recent visits, newest first. */

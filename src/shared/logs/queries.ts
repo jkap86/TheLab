@@ -17,7 +17,6 @@ type VisitorLogRow = {
   seen_at: Date;
   ip: string | null;
   route: string;
-  viewer: string | null;
 };
 
 /**
@@ -35,7 +34,7 @@ export async function getVisitorLogs(
   cap: number = VISITOR_LOG_CAP,
 ): Promise<{ entries: VisitorLogEntry[]; truncated: boolean }> {
   const { rows } = await pool.query<VisitorLogRow>(
-    `SELECT id, seen_at, host(ip) AS ip, route, viewer
+    `SELECT id, seen_at, host(ip) AS ip, route
        FROM visitor_logs
       WHERE seen_at > now() - $1::interval
       ORDER BY seen_at DESC, id DESC
@@ -50,7 +49,6 @@ export async function getVisitorLogs(
       seen_at: row.seen_at.toISOString(),
       ip: row.ip,
       route: row.route,
-      viewer: row.viewer,
     })),
     truncated,
   };

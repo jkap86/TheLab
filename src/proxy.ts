@@ -24,7 +24,6 @@ export function proxy(request: NextRequest, event: NextFetchEvent) {
       recordVisit({
         ip: clientIp(request.headers),
         route: request.nextUrl.pathname,
-        viewer: viewerOf(request),
       }),
     );
   }
@@ -73,24 +72,22 @@ function isPageView(request: NextRequest): boolean {
 }
 
 /**
- * The Sleeper account stored on this browser, if there is one.
+ * There is deliberately no `viewer` here, and there was.
  *
- * Written by `storeAccount` alongside the `localStorage` copy the app itself
- * reads; see that module for why there are two. It is a claim by the browser
- * like any other cookie — nothing authenticates it, and nothing downstream
- * treats it as identity.
+ * A `thelab_viewer` cookie mirrored the stored Sleeper account so a visit could
+ * name whoever was looking — the one fact `route` cannot carry. It did not hold
+ * up: the stored account is written by the lookup form on `/tools`, which is
+ * also how anybody reaches another manager's page, so the value was the *last
+ * account this browser looked up* rather than the person doing the looking.
+ * Nothing authenticated it either. A log naming the wrong person is worse than
+ * one naming nobody, so the column, the cookie and this reader all went; see
+ * `db/migrations/1788000000005_drop_visitor_log_viewer.sql`.
+ *
+ * What would bring it back is an identity this app does not have. A random
+ * browser id would answer the question the column was standing in for — "is
+ * this the same visitor again" — without ever claiming to be a person, and is
+ * the thing to add if the log ever needs to count people rather than requests.
  */
-function viewerOf(request: NextRequest): string | null {
-  const raw = request.cookies.get(VIEWER_COOKIE)?.value?.trim();
-  if (!raw) return null;
-  // Sleeper usernames are short; the column is VARCHAR(255) and a cookie is
-  // whatever the client says it is, so the length is bounded here rather than
-  // by a failed insert.
-  return raw.slice(0, 255);
-}
-
-/** Kept in step with `features/shared/account.ts`, which writes it. */
-const VIEWER_COOKIE = "thelab_viewer";
 
 /**
  * The pages worth recording.

@@ -2587,15 +2587,17 @@ size it against.
 
 ## Who has visited
 
-`/logs` is every request this app has recorded, narrowed four ways, over a
+`/logs` is every request this app has recorded, narrowed three ways, over a
 window the reader picks. Nothing here recorded a visit before it: there was no
 middleware, no analytics and no table. TheLab2026's feature ported — same
-question, same four-facet shape — with the three things that had to change
-written down below, each because this app is not that one.
+question, one facet fewer — with the three things that had to change written
+down below, each because this app is not that one.
 
 **It needed a migration, and only one table.**
 `db/migrations/1788000000004_create_visitor_logs.sql` is `(id, seen_at, ip,
-route, viewer)` plus one index on `(seen_at DESC, id DESC)`, which is the window
+route)` — it had a fifth column, `viewer`, dropped by
+`1788000000005_drop_visitor_log_viewer.sql`; see The viewer column, and why it
+went — plus one index on `(seen_at DESC, id DESC)`, which is the window
 predicate and the newest-first ordering in one read. The ported original has no
 index at all on a table it full-scans forever, and no primary key; **the identity
 column here is this repo's first synthetic key** and earns one where the other
@@ -2606,22 +2608,53 @@ The read is capped, and a cap over `seen_at` alone splits a tie arbitrarily.
 **The route is stored whole and everything about it is derived at read time.**
 Which tool, whose page, which league — all of it comes out of the path in
 `features/logs/helpers/derive-visit.ts`, so a seventh tool is a line in a pure
-helper rather than a migration. What cannot be derived is the one other column.
+helper rather than a migration. **Everything the page shows is now derived that
+way**, which is what dropping the fifth column left behind: a visit is its
+timestamp, its address and its path, and every reading of it is a pure function
+of the path.
 
-**`route` and `viewer` are two questions, and one column could not answer
-both.** `route` says who was being looked *at*; `viewer` says who was *looking*.
-On `/manager/jkap86` those are two different people whenever anybody looks
-somebody else up, and collapsing them would attribute every visit to its
-subject. It matters more here than it did in the original: **only
-`/manager/[username]` carries a name in its path**, so `/lineupchecker`,
-`/trades` and `/tools` are an address and nothing else without it. The account
-already lives in `localStorage`, which the proxy cannot see, so `storeAccount`
-mirrors the username into a `thelab_viewer` cookie — an underscore, because a
-colon is a separator in the cookie grammar and is not legal in a name. That does
-not reopen the argument `theme.ts` settles against cookies: **that** one is about
-reading a cookie *in the root layout*, which opts the app out of static
-prerendering, and the proxy runs per request regardless, so `/tools` stays
-prerendered.
+### The viewer column, and why it went
+
+The table shipped with a `viewer` beside `route`, on the argument that they are
+two questions one column cannot answer: `route` says who was being looked *at*
+and `viewer` said who was *looking*, which on `/manager/jkap86` are two
+different people whenever anybody looks somebody else up. That argument is
+still true. What was false is that the column answered the second half.
+
+**It held the last account the browser had looked up, not the person looking.**
+The cookie behind it (`thelab_viewer`, mirrored out of `localStorage` by
+`storeAccount`, which the proxy cannot read) was written by exactly one caller:
+the lookup form on `/tools`. That form is also the only way to reach somebody
+else's manager page, because the Manager card resolves to
+`/manager/<stored account>` — so looking a second person up *rewrote the value*,
+and a reader checking five managers finished the session declaring themselves
+the fifth, with every visit before each change attributed to whoever preceded
+it. Nothing authenticated it either; it was a claim by the browser.
+
+So the question went rather than the answer being patched. A column that names
+the wrong person is worse than one that names nobody, in the sense this repo
+uses about a `DEFAULT now()` on a row nothing has read: both are claims the data
+cannot support, and an undercount has exactly one true reading where a
+misattribution has none. **Every column left is either stamped by the request or
+read out of the path**, and the three readouts above the table count the same
+way — visits, addresses, subjects, none of them claiming to be a count of
+people.
+
+**What would bring it back is an identity this app does not have.** Sleeper
+publishes no OAuth and there are no accounts here, so a real viewer needs
+something this app cannot get. The cheap thing that answers what the column was standing
+in for — "is this the same visitor again" — is a random browser id cookie, which
+never names anybody; it is the first thing to add if the log ever has to count
+people rather than requests. **A user-agent column is still the first thing to
+add if it reads as noise**, and neither is here.
+
+The cookie itself outlives the column on every browser that ever resolved an
+account, with a year on its max-age and now no reader, so `storeAccount` expires
+it — the same path that wrote it, and deletable once those browsers have turned
+over. Removing it does not reopen the argument `theme.ts` settles against
+cookies: **that** one is about reading a cookie *in the root layout*, which opts
+the app out of static prerendering. The proxy runs per request regardless, so
+`/tools` was prerendered throughout and still is.
 
 **`ip` is nullable, and the sentinel it replaces is the bug worth naming.** The
 original declares it `INET NOT NULL` and writes the literal strings
@@ -2706,7 +2739,7 @@ payload says whether the cap bit, because a trimmed month presented as the whole
 month is a claim; the original has no `LIMIT` at all.
 
 **One behaviour is deliberately reversed.** The original builds all five of its
-menus from the *fully filtered* list, so choosing an IP leaves that IP as the
+menus (this has three) from the *fully filtered* list, so choosing an IP leaves that IP as the
 only option in the IP menu: the selection can be cleared but never changed, and
 the same goes for every facet in turn. That is exactly the failure `facetsQuery`
 already names for the trades board — count the menus **without** the selection —
@@ -2723,8 +2756,14 @@ Subject is the column to lose because it is the only *derived* one — the route
 printed under the tool already contains it — so dropping it removes a reading
 rather than a fact, which is the console card's own rule for the plates that drop
 the points rank and the year at that breakpoint. The clock is pinned to 24 hours
-for the same width: a meridiem is a fifth token in a quarter of 390px and wrapped
+for the same width: a meridiem is a fifth token in a third of 390px and wrapped
 onto a line of its own.
+
+**Losing the Viewer column did not buy Subject a place back**, and that was
+measured rather than assumed: shown at 390 the four columns are 79px each, the
+same width the five-column layout gave its four visible ones, so the phone table
+would be exactly as cramped as the arrangement the rule above already rejects.
+Dropped, the three left are 105px. The width goes to the columns that survived.
 
 ### Verified
 
@@ -2734,12 +2773,14 @@ disabled under `next dev` and the central decision above is invisible there.
 mirror, and the round trip down-and-up left the table and its index as declared.
 
 Four matched routes logged four rows with the address taken from the *head* of
-`x-forwarded-for` rather than the proxy hop. The viewer chain was driven end to
-end through the real lookup form rather than a planted cookie: `/tools` before
+`x-forwarded-for` rather than the proxy hop. `::ffff:198.51.100.7` stored as
+`198.51.100.7`, and `999.999.999.999` stored as **null** rather than losing the
+row. The viewer chain was driven end to end through the real lookup form rather
+than a planted cookie, and is what the removal below undid: `/tools` before
 resolving an account logged `viewer` null, `storeAccount` wrote
-`thelab_viewer=jkap86`, and `/trades` after it logged `jkap86` — a page whose path
-names nobody. `::ffff:198.51.100.7` stored as `198.51.100.7`, and
-`999.999.999.999` stored as **null** rather than losing the row.
+`thelab_viewer=jkap86`, and `/trades` after it logged `jkap86`. That last step is
+the behaviour that was correct and the reading that was not — see The viewer
+column, and why it went.
 
 The prefetch finding is the one worth repeating: before `isPageView`, one browser
 load of `/tools` wrote six rows including `/comps`; after it, one. `/logs` logged
@@ -2757,9 +2798,25 @@ one `role="status"`, every control labelled, `documentElement.scrollWidth === 39
 at phone width with zero overflowing elements, and no cell colliding with the one
 beside it (`lineupchecker` in a `table-fixed` column was the case that found
 that). The facet rule was driven in the browser: with `203.0.113.5` chosen the
-rows fell 11 → 2 and the Viewer menu to `jkap86` alone, while the Address menu
+rows fell 11 → 2 and the Subject menu to `jkap86` alone, while the Address menu
 still offered all five — and switching straight to `198.51.100.7` worked without
 clearing first, which is the move the original cannot make.
+
+**The removal was verified separately**, against a throwaway Postgres 16 cluster
+and a production build, since the live database was not reachable from where it
+was done. `migrate:up` applied `1788000000005` and left
+`(id, seen_at, ip, route)` with the index intact; `migrate:down -- 1` brought the
+column back empty and `up` dropped it again, which is the round trip that keeps
+that path honest. The proxy still records — a document request with an
+`x-forwarded-for` head *and* a planted `thelab_viewer` cookie wrote a row
+carrying the address and nothing else — and `/api/logs` ships no `viewer` key.
+The legacy cookie's expiry was driven through the real lookup form with the
+cookie planted first: one resolve and the browser holds no cookies at all. Over
+CDP at 1280 and 390 in both schemes, four column headers, three readouts, three
+facet menus, one `<h1>`, one `role="status"`, no element past the viewport and
+`documentElement.scrollWidth === 390`, with the word "viewer" absent from the
+rendered page. 1,027 unit tests pass, and `lint`, `typecheck` and `build` are
+clean.
 
 ### Deliberately not ported
 

@@ -21,13 +21,12 @@ import { pool } from "@/shared/db";
 export async function recordVisit(visit: {
   ip: string | null;
   route: string;
-  viewer: string | null;
 }): Promise<void> {
   try {
-    await pool.query(
-      `INSERT INTO visitor_logs (ip, route, viewer) VALUES ($1, $2, $3)`,
-      [visit.ip, visit.route, visit.viewer],
-    );
+    await pool.query(`INSERT INTO visitor_logs (ip, route) VALUES ($1, $2)`, [
+      visit.ip,
+      visit.route,
+    ]);
   } catch (error) {
     console.error("[logs] Failed to record a visit:", error);
   }
