@@ -106,8 +106,17 @@ export type { ManagerWeekLineupRow } from "./queries";
 export { solveWeekLineup } from "./week-lineups";
 export type { WeekLineupLeague } from "./week-lineups";
 
+// The lineup checker's per-league refresh press. Only the entry point leaves the
+// folder: the gate, the admission bound and the lock key are how it is built,
+// and nothing outside `manager/` decides when a league may be re-read.
+export { refreshLeague } from "./league-refresh";
+export type { LeagueRefreshResult } from "./league-refresh";
+export { LEAGUE_REFRESH_LIMIT_VAR } from "./league-refresh-admission";
+
 // The background crawl, on the KTC and players barrels' terms: the starter and
 // its switch, and nothing else. The tick, the queue, the tiers and the
 // discovery selection stay folder-internal — nothing outside `manager/` decides
-// what to crawl next, and `markLeaguesAccessed` is `sync.ts`'s alone.
+// what to crawl next. `markLeaguesAccessed` has two callers now — the manager
+// sync and the refresh press — and both are *observed* demand, which is the
+// rule that column keeps; the crawler still never stamps what it refreshes.
 export { LEAGUE_CRAWLER_VAR, startLeagueCrawler } from "./scheduler";

@@ -32,6 +32,14 @@ export const dynamic = "force-dynamic";
  * shared across every league, so per-card requests would refetch nothing and
  * re-enter everything.
  *
+ * **`?league=` is the one narrowing, and it is not a retreat from that.** It
+ * exists for the re-read that follows a refresh press, where exactly one card's
+ * stored lineup has changed and re-sending a hundred solved leagues to correct
+ * one row is the waste the batching argument is made of, pointed the other way.
+ * It narrows the *rows*, not the path: the season, the week, the board, the
+ * locks and the solve are all the same code, so a narrowed answer cannot drift
+ * from the batch the client merges it into.
+ *
  * **The week is resolved first and alone**, and not by oversight: which week to
  * read is the answer everything below is read *for*. `?week=` is the caller's
  * answer and skips the resolve entirely — the same relationship `?season=` has
@@ -77,6 +85,12 @@ export async function GET(
     const error: ApiErrorPayload = { error: requestedWeek.error };
     return NextResponse.json(error, { status: 400 });
   }
+  // Not validated the way the season and week are, and it does not want to be:
+  // those two are *resolved* when absent, so absent and invalid have to be told
+  // apart. A league id is only ever a filter — one this manager does not play in
+  // narrows to nothing and answers an empty `leagues`, which is the same answer
+  // a league with no slots on file already gets.
+  const requestedLeague = searchParams.get("league")?.trim() || undefined;
 
   const season = requestedSeason?.season ?? (await getActiveSeason());
 
@@ -94,7 +108,12 @@ export async function GET(
       return NextResponse.json(empty);
     }
 
-    const leagues = await getManagerWeekLineups(userId, season, week);
+    const leagues = await getManagerWeekLineups(
+      userId,
+      season,
+      week,
+      requestedLeague,
+    );
     if (leagues.length === 0) {
       const empty: ManagerLineupCheckPayload = {
         season,

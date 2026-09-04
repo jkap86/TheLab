@@ -17,6 +17,7 @@ import {
   kickoffTime,
   type MetricCell,
 } from "../helpers/lineup-check-metrics";
+import { LeagueSyncKey } from "./league-sync-key";
 
 /**
  * One league's week, as an instrument housing that rises toward the viewer.
@@ -43,6 +44,8 @@ import {
  *    the card's transform.
  *
  * Hook-free, like `LeagueCard`: the only interaction it owns is the disclosure.
+ * `onSynced` is forwarded to `LeagueSyncKey` and never called here, which is
+ * what keeps that true — the state a card needs lives below it.
  *
  * A fourth constraint travels with the card: the depth chrome rides
  * `pointer-fine:`, because one card per league times several composited planes
@@ -65,10 +68,13 @@ const slotLabel = (slot: string): string => SLOT_LABELS[slot] ?? slot;
 export function LineupCheckCard({
   league,
   entry,
+  onSynced,
 }: {
   league: ManagerLeague;
   /** This league's week, once the check lands. Undefined while it is in flight. */
   entry?: LineupCheckLeague | null;
+  /** Re-read this league after its sync key changed something. Forwarded only. */
+  onSynced?: (leagueId: string) => void;
 }) {
   const gap = gapCell(entry);
   const kickoff = kickoffCell(entry);
@@ -142,6 +148,24 @@ export function LineupCheckCard({
             nothing, since none of it is tilted. */}
         <div className={`${CONSOLE_WINDOW} mt-3 rounded-xl px-3.5 py-0.5`}>
           <Scanlines />
+          {/* Above the lineup rather than in the summary: a `<summary>` is a
+              leaf button to assistive technology, so a control nested in one is
+              unreliably reachable and a live region inside it is swallowed into
+              the disclosure's name. It also lands beside the empty state below,
+              which is the case a sync most often fixes.
+
+              It sits *inside* the lit window now rather than on the card body
+              the window replaced, so it needs `relative` to clear the
+              scanlines and a rule under it: the seat rows below draw their own
+              dividers, and a key resting straight on the first of them reads as
+              the lineup's own header row. */}
+          <div className="relative border-b border-active/9 py-1.5">
+            <LeagueSyncKey
+              leagueId={league.league_id}
+              leagueName={league.name}
+              onSynced={onSynced}
+            />
+          </div>
           {entry ? (
             <LineupDetail entry={entry} />
           ) : (

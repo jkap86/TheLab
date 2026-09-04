@@ -11,12 +11,14 @@ export type AdvisoryLockKey = readonly [number, number];
  * the pair. The ids match TheLabX's, so the two apps pointed at one database
  * contend where they should and nowhere else. Class 8675309 is that app's block
  * of fixed loop locks — {@link LOCK_KEYS}, where the KTC pair now lives — and
- * 8675311 its per-league class, which arrives with the per-league refresh
+ * 8675311 its per-league class, which arrived with the per-league refresh
  * press.
  */
 const HASHED_LOCK_CLASSES = {
   /** {@link managerSyncLockKey} — a manager's whole league graph. */
   managerSync: 8675310,
+  /** {@link leagueSyncLockKey} — one league's graph. */
+  leagueSync: 8675311,
 } as const;
 
 /**
@@ -206,4 +208,23 @@ export async function withAdvisoryLock<T>(
 /** One lock per manager, around their whole league graph's sync. */
 export function managerSyncLockKey(userId: string): AdvisoryLockKey {
   return hashedLockKey(HASHED_LOCK_CLASSES.managerSync, userId);
+}
+
+/**
+ * One lock per league, around a single league's refresh press.
+ *
+ * A **different class** from {@link managerSyncLockKey} rather than a second key
+ * in the same one, which is what keeps the two from colliding by hash: a
+ * manager's sync and a press on one of their leagues do overlap in practice —
+ * the press is made while the page the sync filled is on screen — and a
+ * collision there would serialise them for no reason.
+ *
+ * Taken with {@link withBlockingAdvisoryLock}, not the try/skip form, and that
+ * is the opposite of the crawler's choice for a reason: a loop that queued
+ * behind another tick would stack ticks, where two tabs pressing one league
+ * both *want the answer*. The loser waits and is told `fresh` by
+ * `leagueRefreshGate`'s race arm — one fan-out, two satisfied readers.
+ */
+export function leagueSyncLockKey(leagueId: string): AdvisoryLockKey {
+  return hashedLockKey(HASHED_LOCK_CLASSES.leagueSync, leagueId);
 }

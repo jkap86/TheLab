@@ -1,4 +1,5 @@
 import { sleeperGet, sleeperGetOptional, sleeperUrl } from "./client";
+import { freshUrl } from "./fresh";
 import type {
   SleeperDraft,
   SleeperDraftPick,
@@ -17,6 +18,9 @@ import type {
  * caller's own `?season=` and `getActiveSeason()`, and a default here would be
  * a third — a release note compiled into a signature. See CLAUDE.md on
  * `DEFAULT_SEASON`, which is why `state.ts` keeps that constant to itself.
+ *
+ * No `fresh` parameter, unlike the league reads below: the enumeration is the
+ * manager sync's and the crawler's, and neither is a reader pressing a key.
  */
 export function getUserLeagues(
   userId: string,
@@ -36,9 +40,12 @@ export function getUserLeagues(
  * instead left the league due forever, burning a claim slot and a Sleeper
  * request on every rotation.
  */
-export function getLeague(leagueId: string): Promise<SleeperLeague | null> {
+export function getLeague(
+  leagueId: string,
+  fresh?: string,
+): Promise<SleeperLeague | null> {
   return sleeperGetOptional<SleeperLeague | null>(
-    sleeperUrl("league", leagueId),
+    freshUrl(sleeperUrl("league", leagueId), fresh),
     null,
   );
 }
@@ -60,33 +67,56 @@ export function getLeague(leagueId: string): Promise<SleeperLeague | null> {
  * and says so, while traded picks, transactions and matchups empty
  * legitimately and are replaced.
  *
- * TheLabX threads an optional cache-busting `fresh` token through each of
- * these, for the one path a *reader* drives — a per-league refresh press,
- * which is asking precisely because something changed a moment ago. That route
- * is not ported, and every caller here is the manager sync, which passes none;
- * the parameter arrives with the press that needs it.
+ * **Each takes an optional `fresh` token as its last argument**, for the one
+ * path a *reader* drives: the per-league refresh press, which is asking
+ * precisely because something changed a moment ago and for which a CDN copy is
+ * the whole problem (see `./fresh`). It is last and optional because every
+ * other caller — the manager sync, the crawler — wants the cached copy and
+ * passes nothing, and `freshUrl` hands an untokened URL straight back.
  */
 
 /** All rosters (teams) in a league. */
-export function getLeagueRosters(leagueId: string): Promise<SleeperRoster[]> {
-  return sleeperGetOptional(sleeperUrl("league", leagueId, "rosters"), []);
+export function getLeagueRosters(
+  leagueId: string,
+  fresh?: string,
+): Promise<SleeperRoster[]> {
+  return sleeperGetOptional(
+    freshUrl(sleeperUrl("league", leagueId, "rosters"), fresh),
+    [],
+  );
 }
 
 /** All members of a league. */
-export function getLeagueUsers(leagueId: string): Promise<SleeperLeagueUser[]> {
-  return sleeperGetOptional(sleeperUrl("league", leagueId, "users"), []);
+export function getLeagueUsers(
+  leagueId: string,
+  fresh?: string,
+): Promise<SleeperLeagueUser[]> {
+  return sleeperGetOptional(
+    freshUrl(sleeperUrl("league", leagueId, "users"), fresh),
+    [],
+  );
 }
 
 /** Traded future draft-pick assets in a league. */
 export function getLeagueTradedPicks(
   leagueId: string,
+  fresh?: string,
 ): Promise<SleeperTradedPick[]> {
-  return sleeperGetOptional(sleeperUrl("league", leagueId, "traded_picks"), []);
+  return sleeperGetOptional(
+    freshUrl(sleeperUrl("league", leagueId, "traded_picks"), fresh),
+    [],
+  );
 }
 
 /** Drafts belonging to a league (usually one). */
-export function getLeagueDrafts(leagueId: string): Promise<SleeperDraft[]> {
-  return sleeperGetOptional(sleeperUrl("league", leagueId, "drafts"), []);
+export function getLeagueDrafts(
+  leagueId: string,
+  fresh?: string,
+): Promise<SleeperDraft[]> {
+  return sleeperGetOptional(
+    freshUrl(sleeperUrl("league", leagueId, "drafts"), fresh),
+    [],
+  );
 }
 
 /**
@@ -98,8 +128,14 @@ export function getLeagueDrafts(leagueId: string): Promise<SleeperDraft[]> {
  * whole graph down with it otherwise. An empty answer clears nothing — picks
  * are replaced only for the drafts that returned some.
  */
-export function getDraftPicks(draftId: string): Promise<SleeperDraftPick[]> {
-  return sleeperGetOptional(sleeperUrl("draft", draftId, "picks"), []);
+export function getDraftPicks(
+  draftId: string,
+  fresh?: string,
+): Promise<SleeperDraftPick[]> {
+  return sleeperGetOptional(
+    freshUrl(sleeperUrl("draft", draftId, "picks"), fresh),
+    [],
+  );
 }
 
 /**
@@ -110,9 +146,10 @@ export function getDraftPicks(draftId: string): Promise<SleeperDraftPick[]> {
 export function getLeagueTransactions(
   leagueId: string,
   week: number,
+  fresh?: string,
 ): Promise<SleeperTransaction[]> {
   return sleeperGetOptional(
-    sleeperUrl("league", leagueId, "transactions", week),
+    freshUrl(sleeperUrl("league", leagueId, "transactions", week), fresh),
     [],
   );
 }
@@ -131,6 +168,10 @@ export function getLeagueTransactions(
 export function getLeagueMatchups(
   leagueId: string,
   week: number,
+  fresh?: string,
 ): Promise<SleeperMatchup[]> {
-  return sleeperGetOptional(sleeperUrl("league", leagueId, "matchups", week), []);
+  return sleeperGetOptional(
+    freshUrl(sleeperUrl("league", leagueId, "matchups", week), fresh),
+    [],
+  );
 }

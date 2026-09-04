@@ -2,13 +2,17 @@ import assert from "node:assert/strict";
 import { describe, test } from "node:test";
 
 import {
+  LEAGUE_REFRESH_ATTEMPT_SQL,
+  LEAGUE_REFRESH_COOLDOWN_MS,
   MANAGER_SYNC_STAMP_SQL,
   SETTLED_SYNC_TTL_MS,
   SYNC_ATTEMPT_TTL_MS,
   SYNC_TTL_MS,
+  leagueRefreshGate,
   managerSyncGate,
   seasonSyncTier,
   syncTtlMsFor,
+  type LeagueRefreshState,
   type ManagerSyncState,
   type SeasonSyncTier,
 } from "./sync-freshness.ts";
@@ -300,5 +304,99 @@ describe("a past season's gate", () => {
       managerSyncGate(at, { now: NOW, requestedAt: NOW }),
       gateAt(at, "active"),
     );
+  });
+});
+
+describe("leagueRefreshGate", () => {
+  const league = (over: Partial<LeagueRefreshState> = {}): LeagueRefreshState => ({
+    updatedAt: null,
+    attemptAt: null,
+    ...over,
+  });
+
+  /** The gate as `refreshLeague` asks it: the press queued for the lock at NOW. */
+  const press = (s: LeagueRefreshState | null, requestedAt = NOW) =>
+    leagueRefreshGate(s, { now: NOW, requestedAt });
+
+  test("a league nobody has ever pressed or crawled is due", () => {
+    assert.deepEqual(press(league()), {
+      run: true,
+      reason: "due",
+      retryAfterMs: 0,
+    });
+    // A row that has never been read at all answers the same way, which is what
+    // lets a first press fill it.
+    assert.equal(press(null).run, true);
+  });
+
+  test("inside the cooldown it refuses and says exactly how long is left", () => {
+    const gate = press(league({ attemptAt: ago(4_000) }));
+    assert.equal(gate.run, false);
+    assert.equal(gate.reason, "cooldown");
+    assert.equal(gate.retryAfterMs, LEAGUE_REFRESH_COOLDOWN_MS - 4_000);
+  });
+
+  test("past the cooldown it is due again", () => {
+    assert.equal(
+      press(league({ attemptAt: ago(LEAGUE_REFRESH_COOLDOWN_MS + 1) })).run,
+      true,
+    );
+  });
+
+  test("a failed attempt buys the same quiet as a successful one", () => {
+    // `updatedAt` is untouched — the graph was never written — and the gate
+    // still refuses, which is what stops a reader hammering a failing Sleeper.
+    const gate = press(league({ updatedAt: null, attemptAt: ago(1_000) }));
+    assert.equal(gate.reason, "cooldown");
+  });
+
+  test("a race is not a cooldown, and never reports a wait", () => {
+    // Somebody else's fan-out landed while this caller queued on the lock. That
+    // is the work this press wanted, already done: the reader gets the data
+    // rather than a fifteen-second apology for it.
+    const requestedAt = NOW - 30_000;
+    const gate = press(league({ attemptAt: new Date(NOW - 1) }), requestedAt);
+    assert.equal(gate.run, false);
+    assert.equal(gate.reason, "raced");
+    assert.equal(gate.retryAfterMs, 0);
+  });
+
+  test("the race arm wins even where the cooldown would also have caught it", () => {
+    // Both are true of an attempt one millisecond old under a caller that
+    // queued long ago. Reporting `cooldown` would hide a completed refresh
+    // behind a wait, which is the one refusal with nothing behind it.
+    assert.equal(
+      press(league({ attemptAt: new Date(NOW) }), NOW - 60_000).reason,
+      "raced",
+    );
+  });
+
+  test("an attempt exactly at requestedAt counts as the race", () => {
+    // `>=`, not `>`: the winner stamped at the instant we asked, and re-running
+    // is the fan-out we queued to avoid.
+    assert.equal(press(league({ attemptAt: new Date(NOW) }), NOW).reason, "raced");
+  });
+
+  test("a clock that stepped backwards never reports a negative wait", () => {
+    const gate = leagueRefreshGate(league({ attemptAt: new Date(NOW + 5_000) }), {
+      now: NOW,
+      requestedAt: NOW + 10_000,
+    });
+    assert.ok(gate.retryAfterMs >= 0);
+  });
+
+  test("the cooldown stays a hammer bound rather than a freshness TTL", () => {
+    // The press exists to be believed by a reader who changed something in
+    // Sleeper a moment ago. A window long enough to be a staleness policy would
+    // refuse exactly the press the key is for.
+    assert.ok(LEAGUE_REFRESH_COOLDOWN_MS < SYNC_TTL_MS / 10);
+  });
+
+  test("the attempt stamp names only sync_attempt_at", () => {
+    // `updated_at` means "this graph was written whole" and is
+    // `persistLeagueGraph`'s alone. A press that moved it would have a league
+    // nobody managed to read claim it was refreshed this second.
+    assert.match(LEAGUE_REFRESH_ATTEMPT_SQL, /sync_attempt_at = now\(\)/);
+    assert.doesNotMatch(LEAGUE_REFRESH_ATTEMPT_SQL, /updated_at/);
   });
 });

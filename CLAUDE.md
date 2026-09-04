@@ -205,7 +205,7 @@ budget produced; the crawler port is what makes a derivation earn its place
 again, and the call sites do not move when it does.
 
 **What is deliberately not ported**, each with the route it arrives with: the
-per-league refresh press, its cooldown gate and the cache-busting token; the in-process read caches and
+in-process read caches and
 therefore `persistLeagueGraph`'s `affectedOwnerIds`; the request budget and its
 503 taxonomy; and projections *storage* — the pure projections core (solver,
 scorer, aggregation) arrived with the lineups route below, but the Postgres
@@ -335,8 +335,7 @@ mode gate, `src/worker.ts` and the Procfile — one instance, so `LEAGUE_CRAWLER
 is the switch, on `KTC_SYNC`'s exact terms; the advisory lock already makes a
 second instance correct, and what a mode gate adds is *which process*, which
 arrives with a second one. TheLabX's `refreshStaleTradeStats` piggyback (no
-`trade_market_stats` here — `countTradeTotals` always counts). `leagueRefreshGate`
-and the per-league press, which `sync-freshness.ts` already says arrive together.
+`trade_market_stats` here — `countTradeTotals` always counts).
 And the request budget: CLAUDE.md said the crawler port was what would make
 deriving `DEFAULT_POOL_MAX`, the pool timeouts, `ADVISORY_LOCK_WAIT_MS` and
 `DEFAULT_MANAGER_SYNC_LIMIT` from a budget earn its place again. **It did not** —
@@ -1154,6 +1153,194 @@ is exactly what half an hour of staleness would hide.
 Checked at 1280 and 390 in both schemes. Light mode is derived rather than
 designed, as everywhere else on the console.
 
+### Syncing one league
+
+Every card carries a `Sync` key that re-reads **that league** from Sleeper. It
+exists because this tool is the one thing in the app a reader is meant to *act
+on*, and until it landed the app could not see the action: the manager-grain
+refresh buys ten minutes of quiet (`SYNC_TTL_MS`) and the crawler's live tier
+fifteen, so somebody who moved a player and came back was shown the lineup they
+had just changed. `POST /api/league/[leagueId]/sync` -> `shared/manager/league-refresh.ts`.
+
+**It needed no migration**, and that is the schema's doing rather than luck:
+`leagues.sync_attempt_at` and `leagues.updated_at` have carried exactly the two
+meanings this reads since the league-graph migration, and `db/lock.ts` had
+already reserved class `8675311` for the per-league lock this takes. The three
+file headers that promised this port — `sync-freshness.ts`, `db/lock.ts`,
+`graph.ts` — now describe it instead.
+
+**Four bounds, and none of them is redundant**, which is worth stating because
+any one read alone looks like it covers the next. The league must **already be
+stored** (a press cannot grow the corpus — a route that fetched arbitrary ids
+into the database is an open write endpoint wearing a refresh button); a
+process-wide `leagueRefreshAdmission` bounds how many of these sessions exist at
+once; a **per-league advisory lock** is the only one of the four that survives a
+second instance; and `leagueRefreshGate` is what stops one intention becoming
+several fan-outs. The admission is **its own limiter rather than a share of
+`managerSyncAdmission`'s**: the two are different weights (~11 requests against
+~11-per-league times a hundred), and sharing would let a burst of key presses
+shed the leagues route's *cold* path, which has nothing cached to fall back on
+and answers 503.
+
+**A race is a success, not a refusal**, and that is the whole ordering of
+`leagueRefreshGate`'s two arms. An attempt at or after `requestedAt` means
+another caller's fan-out landed while this one waited on the lock — which is the
+work this press wanted, already done — so it reports `raced`, `refreshLeague`
+turns that into `fresh`, and the reader gets the data rather than a
+fifteen-second apology for it. `requestedAt` is captured **before** the lock is
+taken, which is the single line that makes the arm mean anything. Otherwise the
+cooldown, measured from the last attempt **of any outcome**: a failed attempt
+buys the same quiet, because a key that looks broken is precisely a key that
+gets pressed again.
+
+**`LEAGUE_REFRESH_COOLDOWN_MS` is fifteen seconds and is a hammer bound, not a
+freshness TTL.** The press exists to be believed by somebody who changed
+something a moment ago, so a window long enough to be a staleness policy would
+refuse exactly the press the key is for; what it is sized against is a
+double-click, a keyboard repeat and two tabs. `sync-freshness.test.ts` pins
+`LEAGUE_REFRESH_COOLDOWN_MS < SYNC_TTL_MS / 10` so a later edit reaching for a
+"sensible" ten minutes has to argue with a failure.
+
+**`sync_attempt_at` is stamped before the fetch and `updated_at` is never
+written here**, which is the two-columns rule at the league grain: a press
+Sleeper fails must still hold its own cooldown and still rotate the league to the
+back of the crawler's queue, while "this graph was written whole" stays
+`persistLeagueGraph`'s alone. A **refused** press stamps nothing at all — the
+gate returns above the write — which is both honest (it asked Sleeper nothing)
+and load-bearing: stamping there would make the cooldown a *rolling* window, so
+a reader mashing the key would push their own next press away forever. A press also stamps `last_accessed_at` — a manual
+sync is *observed* demand, which is what that column means; the rule it must not
+break is the crawler's, that a refresh pass never stamps what it refreshes, and
+this is not that.
+
+**`refreshedLeagues(result) !== 1` answers `failed`, carrying the previous
+`updated_at`.** A graph missing a mandatory collection kept its stored rows
+rather than being wiped — the right write — and reporting that as a success
+would have the card redraw the numbers it already had under a key claiming
+Sleeper had just confirmed them.
+
+**The cache-busting token is load-bearing, not decoration.**
+`sleeper/fresh.ts` appends `_=<mint time>` to every request one press makes, and
+without it Sleeper's CDN can serve the pre-change roster — the key looking broken
+while the app behaves exactly as written, which is the one failure this feature
+cannot have. A `Cache-Control: no-cache` request header is deliberately *not* the
+alternative: the major CDNs ignore it from anonymous clients, so it would read as
+a fix and change nothing. **One token per press**, shared by all ~11 requests, so
+the graph is read from one instant rather than eleven; `freshUrl` returns an
+untokened URL untouched, which is what lets every getter offer the parameter
+while the manager sync and the crawler keep hitting the cacheable copy.
+
+**Every answer but `unknown` is a 200.** A cooldown and a race are *outcomes*,
+not failures, and a 4xx would put a red note against a league in perfectly good
+order. `unknown` is 404 because there is genuinely no such league here. GET is an
+explicit 405 carrying the app's error shape: a re-read plus a rewrite is a state
+change whatever method it wears.
+
+**The re-read is narrowed, and `?league=` on the lineup-check route is what
+narrows it.** That route's own doc argues *for* batching — the projections board
+and the week's schedule are shared, so per-card requests refetch nothing and
+re-enter everything — and this is that argument pointed the other way: exactly
+one card's stored lineup changed, and re-sending a hundred solved leagues to
+correct one row is the same waste. Measured on the 113-league account, 4.9KB in
+34ms against 516KB in 815ms. It narrows the **rows** and not the path — same
+season, same week, same board, same locks, same solve — so a narrowed answer
+cannot drift from the batch it is merged into, and `MANAGER_LEAGUE_SQL` still
+applies, so it can never answer for a league the batch would have left out.
+
+**A success says nothing.** `syncStatusNote` is silent for `synced` *and*
+`fresh` — read off the payload's own `synced` field, the same one the re-read is
+gated on, so the note and the re-read cannot reach different conclusions about
+one press. The numbers changing on the card are the answer; a badge on top of
+that is the key congratulating itself, a hundred times over on a full page.
+Every press that fetched **nothing** speaks, because those leave the screen
+exactly as the reader found it and are otherwise indistinguishable from a dead
+key. Cooldown seconds are `Math.ceil` floored at 1 — never "wait 0 seconds"
+under a key that is actively refusing.
+
+**The key is disabled while a press is in flight and at no other time**, and in
+particular there is no client-side countdown. `retry_after_ms` is measured
+against the server's clock and a background tab throttles timers to about once a
+minute, so a countdown would re-enable a key the server still refuses; it would
+be one interval *per card* on a page with no virtualization, which is the
+per-device budget argument the card's `pointer-fine:` gate is built from; and
+pressing during a cooldown is a cheap 200 that answers with a fresh number,
+where a key greyed out on a stale one cannot correct itself. It uses
+`aria-disabled` rather than the `disabled` attribute, because browsers **blur an
+element that becomes disabled while focused** and this one toggles for a round
+trip inside a list of a hundred cards — a keyboard reader would be dumped to
+`<body>`. `WeekStepper` keeps real `disabled`: its states are stable facts about
+the week bounds rather than a momentary one about a request.
+
+**The key lives in the disclosure body, not in the `<summary>`**, and that is an
+accessibility decision rather than a layout one: a `<summary>` maps to a leaf
+`button`, so a nested control is unreliably reachable and a live region inside
+one is folded into the disclosure's accessible name instead of announced. Two
+things fall out in the codebase's favour — the body is already outside the card's
+3D context, so this needs no `translateZ`, no direct-child discipline and no
+`pointer-fine:` gate; and it lands beside "No lineup read for this league this
+week", which is the case a sync most often fixes and was otherwise a dead end.
+The cost is that a reader opens the card to sync it.
+
+**The hook is the one place the house's abort lineage is deliberately not
+followed.** `useLeagueRefresh` mints no `AbortController`: the sync fills
+*shared Postgres state* rather than this component's answer, so cancelling
+because a card was collapsed throws away Sleeper budget already spent — the
+leagues route's `closed` argument, one grain down. Unmount safety is a flag, and
+the promise still resolves, which is what lets the parent's re-read land even
+when the card that pressed is gone. The double-press guard is a **ref, not
+`pending`**, since `pending` is a value the render closed over. And every
+ordinary refusal lands in `result`, never `error` — `error` means the press never
+reached an answer, and re-inventing the refusals as errors would undo the reason
+the route answers 200 to them.
+
+**`useLineupCheck` returns `{ payload, reread }`, and its subject is unchanged.**
+A league id or a refresh nonce in that subject would fire the render-time reset
+and blank all hundred cards — and the "needs a look" count with them — to correct
+one row. `reread` is `useCallback([])`-stable with what it needs on a ref, so a
+handler a card captured resolves against the subject current *then*; it sends the
+season and week **off the payload** rather than off the props, since `week` is
+null until the reader steps and an unpinned re-read would let the route resolve
+`display_week` for itself and answer a different week under the same card. The
+merge guard compares the response's echoed season and week against the payload's,
+reusing the route's existing promise rather than inventing a second token, and
+leaves `projections` alone — that is a claim about the *account's* read of the
+board, which one league can neither make nor unmake.
+
+#### Verified
+
+Run against the live database on the day it landed. `npm run migrate:up`
+reported "No migrations to run", which is the claim above. A first press
+answered `synced` in 730ms and left the three columns in exactly the designed
+order: `sync_attempt_at` at `.559` — matching the minted token `_=1788481247559`
+to the millisecond — `last_accessed_at` at `.561`, and `updated_at` at `.193` a
+second later, once the graph was written. A second press answered `cooldown`
+with a real `retry_after_ms` and no Sleeper traffic (8ms), an unknown id 404'd in
+3ms on the pre-permit state read, and GET returned 405 with `Allow: POST`.
+
+The end-to-end claim was tested by scrambling the stored week-1 lineup so the
+card was visibly wrong — `Vs optimal −17.4`, `Kickoff 2 to move` — and pressing:
+the tiles came back `Set` and `In order` within a second, the stored `starters`
+were Sleeper's again, and the header count fell 8 -> 7, which is what proves the
+merge landed in the shared payload rather than in card-local state. The press
+caused **exactly two requests** — the POST and the narrowed GET — and no other
+card's tiles moved. In the DOM: 113 keys for 113 leagues, none inside a
+`<summary>`, one `role="status"` region per card empty at rest, no `disabled`
+attribute, and still exactly one `<h1>`. Checked at 1280 and 390 in both schemes;
+at 390 the key and its note share a row without overflowing and the page takes no
+horizontal scroll.
+
+#### Deliberately not ported
+
+TheLabX's key lives on a shared league-detail panel and invalidates two query
+keys through react-query; there is no such panel and no query library here, so
+the press re-reads through the hook that owns the payload. Its
+`invalidateLeagueDetail` — a server-side read cache evicted inside
+`persistLeagueGraph` — has nothing to evict here, because this app stores no
+league-detail cache; it arrives with one. And there is no **sync all**: on the
+113-league account that is ~1,200 Sleeper requests behind one press, which wants
+its own admission bound and a progress stream, and arrives with a reason to want
+them.
+
 ## The trades board
 
 `/trades` is every trade this database has stored for a season, newest first,
@@ -1568,6 +1755,13 @@ Three new tokens the handoff named (`--housing-shadow`, `--plate-raised-bg`,
   give track's three shades collapse into `--readout-muted` alone, since a
   light counterpart cannot carry an alpha and 0.05 of the same mint is below
   the threshold at which anyone could tell the halves apart.
+
+**The lineup checker's refresh key sits inside the window now.** The disclosure
+body it lives in stopped being a second slab of card and became lit glass, so
+the key takes a `relative` wrapper to clear the scanlines and a hairline under
+it: the seat rows below draw their own dividers, and a key resting straight on
+the first of them reads as the lineup's own header row. Where it lives is
+unchanged and is an accessibility decision — see Syncing one league.
 
 `rankColor` moved to `features/shared/rank-ramp.ts` — the checker's win/loss
 pip draws from the same red→green ramp the manager card's rank tiles run on,

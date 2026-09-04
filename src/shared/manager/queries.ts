@@ -748,11 +748,20 @@ type ManagerWeekLineupSqlRow = Omit<
  * One row per league rather than every roster in it: this tool answers for the
  * manager's own lineup, where `getManagerLeagueRosters` has to solve all twelve
  * to rank one among them.
+ *
+ * `leagueId` narrows to one league, for the re-read that follows a refresh
+ * press. It is an extra predicate on the *same* query rather than a second
+ * function, which is the whole point: the narrowed answer is merged into the
+ * batched one on the client, so the two must be solved from identically
+ * qualified rows. In particular {@link MANAGER_LEAGUE_SQL} still applies, so a
+ * narrowed read can never answer for a league the unnarrowed one would have
+ * left out.
  */
 export async function getManagerWeekLineups(
   userId: string,
   season: string,
   week: number,
+  leagueId?: string,
 ): Promise<ManagerWeekLineupRow[]> {
   const { rows } = await pool.query<ManagerWeekLineupSqlRow>(
     `SELECT l.league_id, l.total_rosters, l.roster_positions, l.scoring_settings,
@@ -783,9 +792,10 @@ export async function getManagerWeekLineups(
        LEFT JOIN rosters oor
          ON oor.league_id = l.league_id AND oor.roster_id = om.roster_id
       WHERE l.season = $2
+        AND ($4::varchar IS NULL OR l.league_id = $4)
         AND ${MANAGER_LEAGUE_SQL}
       ORDER BY l.league_id`,
-    [userId, season, week],
+    [userId, season, week, leagueId ?? null],
   );
 
   return rows.map((row) => {
