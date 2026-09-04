@@ -3,9 +3,29 @@
 import { type ReactNode, useEffect, useId, useMemo, useRef, useState } from "react";
 
 import type { ManagerLeague } from "@/shared/contract";
-import { CONSOLE_KEY_PILL, CONSOLE_READOUT } from "@/features/shared";
+import {
+  CONSOLE_KEY_PILL,
+  CONSOLE_TRACK,
+  CONSOLE_WELL,
+  CONSOLE_WINDOW,
+  MAX_SHARES_COLUMNS,
+  mergeSharesColumns,
+  Scanlines,
+  SHARES_COLUMN_WIDTHS,
+  SHARES_COLUMNS_BY_KIND,
+  type SharesColumnId,
+  sharesColumnLabel,
+  sharesColumns,
+  storeSharesColumns,
+  useSharesColumns,
+} from "@/features/shared";
 
 import type { Subject, SubjectKind } from "../helpers/league-subjects";
+import {
+  formatCombinedRecord,
+  formatWinPct,
+  seasonSummary,
+} from "../helpers/season-summary";
 
 /**
  * The shares drawer: a native `<dialog>` pinned to one edge of the viewport,
@@ -14,8 +34,7 @@ import type { Subject, SubjectKind } from "../helpers/league-subjects";
  *
  * **It is the native element for the reason both dialogs are** — `showModal()`
  * brings the focus trap, the Esc-to-close and the `::backdrop` with it, and no
- * dependency. What makes it a drawer rather than a panel is three lines of
- * margin and a full-height box; everything else is `LeagueFiltersDialog`'s shell.
+ * dependency.
  *
  * **Write the margins as explicit sides, never `m-0` plus an `auto`.** A
  * `<dialog>` is centred by the UA's own `margin: auto`, and Tailwind emits the
@@ -23,24 +42,48 @@ import type { Subject, SubjectKind } from "../helpers/league-subjects";
  * coin flip decided by emit order, exactly the trap `CONSOLE_KEY_PILL` exists to
  * keep a lit key out of.
  *
- * **The rows are flat, and that is a budget rather than a style.** The league
- * grid pays ~6 composited planes and a filter buffer per card and gates all of
- * it behind `pointer-fine:` because iOS Safari's per-tab GPU budget dies on 113
- * of them. This list is longer — ~1,500 players on that same account — so it
- * spends nothing: no perspective, no `translateZ`, no `drop-shadow` filter.
- * There is nothing here to gate.
+ * **The panel is a machined unit rather than a page pinned to an edge**: a
+ * raised control deck (`--plate-raised-*`) over a recessed list tray, in a
+ * `--housing-bg` frame with a gap on its three free sides — which is what makes
+ * it read as a rack slid out rather than welded to the viewport. The frame is
+ * the housing and not `--panel-bg`, because the panel gradient is the ground a
+ * page stands on and this is an instrument standing on it.
+ *
+ * **The rows are raised keys, and they are still flat.** The lift on hover is a
+ * `translateY` and a box-shadow — one composited layer at a time — and nothing
+ * here spends a `perspective`, a `preserve-3d`, a per-row `translateZ` or a
+ * `drop-shadow` filter. That is a budget rather than a style: the league grid
+ * pays ~6 composited planes per card and gates all of it behind `pointer-fine:`
+ * because iOS Safari's per-tab GPU budget dies on 113 of them, and this list is
+ * an order of magnitude longer — ~1,500 players on that same account. Do not
+ * promote it to `preserve-3d` to match the cards.
+ *
+ * **A row is one button, and it used to be two.** The chevron that expanded a
+ * row into the leagues holding it is gone: pressing the row narrows the league
+ * grid behind the drawer to exactly those leagues, and the grid is the better
+ * answer — the same leagues, with their cards, one press earlier. The
+ * constraint that shaped the old row is worth keeping written down, because it
+ * is *why* the row is a `<button>` and not a `<details>`: a `<summary>` maps to
+ * a leaf `button`, so a control nested inside one is unreliably reachable, and
+ * a row with two jobs could not have been a disclosure. With one job it could
+ * — and it still is not, because there is nothing left to disclose.
+ *
+ * The row's leagues are still *data*: the record column and the share are both
+ * folded out of them.
  */
 
 const SIDES = {
   left: {
-    // Explicit sides, never `m-0` — see the note above.
-    dialog: "my-0 ml-0 mr-auto",
-    panel: "rounded-r-3xl border-r border-foreground/12",
+    // Explicit sides, never `m-0` — see the note above. The padding is on the
+    // three free sides only; the docked one has none, so the frame runs off the
+    // edge it is hinged on.
+    dialog: "my-0 ml-0 mr-auto py-3 pl-0 pr-3",
+    panel: "rounded-r-3xl",
     animation: "drawer-in-left",
   },
   right: {
-    dialog: "my-0 mr-0 ml-auto",
-    panel: "rounded-l-3xl border-l border-foreground/12",
+    dialog: "my-0 mr-0 ml-auto py-3 pl-3 pr-0",
+    panel: "rounded-l-3xl",
     animation: "drawer-in-right",
   },
 } as const;
@@ -50,16 +93,68 @@ export type SharesDrawerRow = {
   key: string;
   id: string;
   name: string;
-  /** The position badge or the avatar. */
-  icon: ReactNode;
-  /** A short trailing fact — a team, say. Absent is fine. */
+  /** The bezel's ink and shape; the bezel itself is the drawer's. */
+  badge: {
+    /** Round for a person, square for a position. */
+    round?: boolean;
+    /** A stored avatar, where the row has one. */
+    imageUrl?: string | null;
+    /** What to draw when there is no image — a position, or an initial. */
+    label: string;
+  };
+  /** A short trailing fact — a team, say. Absent is fine, and is on a person. */
   note?: string | null;
   /** How many of the counted leagues hold this row. */
   held: number;
-  /** Which ones, for the disclosure. */
+  /**
+   * Which ones — **data, not markup.** The record column and the win rate are
+   * folded out of this list, over the same aggregate the header housing on the
+   * page behind uses, so the two cannot be computed different ways.
+   */
   leagues: ManagerLeague[];
-  /** An extra figure or two beside the share, in the caller's vocabulary. */
-  extra?: ReactNode;
+  /** The player columns. Absent on a leaguemate row, which cannot offer them. */
+  value?: number | null;
+  age?: number | null;
+  draftClass?: number | null;
+};
+
+/**
+ * Which way each metric reads when it is the sort key, and it is fixed per
+ * metric rather than a direction the reader flips.
+ *
+ * A press is one press: nobody wants oldest-player-first or the leagues they
+ * hold a player in *fewest* of, and a toggle would put a second meaning on a
+ * key whose first meaning is "order by this". Age is the one that ascends —
+ * younger first is what a dynasty reader means by sorting on it.
+ */
+const SORT_ASCENDING: Record<SharesColumnId, boolean> = {
+  value: false,
+  // Younger first, which is what a dynasty reader means by sorting on age.
+  age: true,
+  class: false,
+  record: false,
+  share: false,
+};
+
+/** The main figure's size, per metric — a record and a share carry two lines. */
+const CELL_TEXT: Record<SharesColumnId, string> = {
+  value: "text-[0.8125rem]",
+  age: "text-[0.8125rem]",
+  class: "text-[0.8125rem]",
+  record: "text-[0.6875rem]",
+  share: "text-[0.6875rem]",
+};
+
+/** A row with its folded figures, ready to be sorted and drawn. */
+type Prepared = {
+  row: SharesDrawerRow;
+  pct: number;
+  /** `33–32`, or null where no league in the set has played. */
+  record: string | null;
+  /** The same set's win rate, for the sort. Null wherever `record` is. */
+  winPct: number | null;
+  /** `50.8%`, already spelled — the cell must not re-derive it. */
+  winPctLabel: string | null;
 };
 
 export function SharesDrawer({
@@ -71,6 +166,8 @@ export function SharesDrawer({
   noun,
   rows,
   leagueCount,
+  leagueTotal,
+  filterSummary,
   loading,
   error,
   emptyMessage,
@@ -90,11 +187,15 @@ export function SharesDrawer({
   rows: SharesDrawerRow[];
   /** The denominator: leagues that contributed a roster or a member list. */
   leagueCount: number;
+  /** Every league on the page, unfiltered — the readout's "of 113". */
+  leagueTotal: number;
+  /** What the league filters have been narrowed to, or null for nothing. */
+  filterSummary: string | null;
   loading: boolean;
   error: string | null;
   /** What to say when there is genuinely nothing, as opposed to nothing matching. */
   emptyMessage: string;
-  /** The players drawer's position filter; absent on the leaguemates one. */
+  /** The players drawer's position chips; absent on the leaguemates one. */
   chips?: ReactNode;
   chipsActive?: boolean;
   onClearChips?: () => void;
@@ -108,9 +209,20 @@ export function SharesDrawer({
   const titleId = useId();
 
   const [query, setQuery] = useState("");
-  // Expansion is held above the rows so a row is not re-collapsed by anything
-  // that re-orders the list beneath it.
-  const [expanded, setExpanded] = useState<ReadonlySet<string>>(new Set());
+  // A way of reading this list rather than a device preference, so it is
+  // `useState` — the same call `LeagueTeams` makes about its metric select.
+  // The *columns* are persisted, because those are a preference.
+  const [sort, setSort] = useState<SharesColumnId | "name">("share");
+  const [dragCol, setDragCol] = useState<SharesColumnId | null>(null);
+
+  const stored = useSharesColumns();
+  const cols = useMemo(() => sharesColumns(stored, kind), [stored, kind]);
+  // A stored sort key naming a column this reader has since dropped falls back
+  // to their own **rightmost** column rather than to a fixed default: the last
+  // column is the one nearest the eye, and a fixed fallback would be a fourth
+  // opinion about what this list is ordered by.
+  const sortKey =
+    sort === "name" || cols.includes(sort) ? sort : cols[cols.length - 1];
 
   useEffect(() => {
     const dialog = ref.current;
@@ -141,16 +253,57 @@ export function SharesDrawer({
   };
 
   const needle = query.trim().toLowerCase();
-  const shown = useMemo(
-    () =>
-      needle ? rows.filter((r) => r.name.toLowerCase().includes(needle)) : rows,
-    [rows, needle],
-  );
+  const shown = useMemo(() => {
+    const kept = needle
+      ? rows.filter((r) => r.name.toLowerCase().includes(needle))
+      : rows;
+
+    const prepared: Prepared[] = kept.map((row) => {
+      // The app's own aggregate, so the record in a row and the record in the
+      // header housing cannot be computed two different ways — and a league
+      // with no stored record is skipped rather than counted `0–0`.
+      const summary = seasonSummary(row.leagues);
+      // `formatCombinedRecord` always spells a string, so the gate is the game
+      // count: a set of leagues that has played nothing shows no record rather
+      // than an `0–0` claiming they went winless.
+      const played = summary.games > 0;
+      return {
+        row,
+        pct: leagueCount > 0 ? Math.round((row.held / leagueCount) * 100) : 0,
+        record: played ? formatCombinedRecord(summary) : null,
+        winPct: played ? summary.winPct : null,
+        winPctLabel: played ? formatWinPct(summary) : null,
+      };
+    });
+
+    if (sortKey === "name") {
+      return prepared.sort((a, b) => a.row.name.localeCompare(b.row.name));
+    }
+
+    const ascending = SORT_ASCENDING[sortKey];
+    return prepared.sort((a, b) => {
+      const wa = weightOf(sortKey, a);
+      const wb = weightOf(sortKey, b);
+      // **A row with no value for the sorted metric sorts last**, in either
+      // direction: an unpriced player is not the cheapest one and a player with
+      // no recorded age is not the youngest. Falling back to a zero would put
+      // every absence at one end of the scale as if it were an answer.
+      if (wa === null || wb === null) {
+        if (wa !== wb) return wa === null ? 1 : -1;
+      } else if (wa !== wb) {
+        return ascending ? wa - wb : wb - wa;
+      }
+      return a.row.name.localeCompare(b.row.name);
+    });
+  }, [rows, needle, leagueCount, sortKey]);
 
   // A narrowed list scrolled halfway down reads as an empty one.
   useEffect(() => {
     if (listRef.current) listRef.current.scrollTop = 0;
-  }, [needle]);
+  }, [needle, sortKey]);
+
+  const writeCols = (next: readonly SharesColumnId[]) =>
+    storeSharesColumns(mergeSharesColumns(stored, kind, next));
 
   return (
     <dialog
@@ -167,7 +320,7 @@ export function SharesDrawer({
         // landed outside the panel.
         if (e.target === e.currentTarget) close();
       }}
-      className={`${SIDES[side].dialog} h-dvh max-h-dvh w-[min(32rem,calc(100vw-2.5rem))] max-w-full overflow-hidden bg-transparent p-0 text-foreground backdrop:bg-black/60`}
+      className={`${SIDES[side].dialog} h-dvh max-h-dvh w-[min(34rem,calc(100vw-1.5rem))] max-w-full overflow-hidden bg-transparent text-foreground backdrop:bg-[radial-gradient(130%_100%_at_50%_0%,rgba(0,0,0,0.5),rgba(0,0,0,0.78))] backdrop:backdrop-blur-[2.5px]`}
     >
       <div
         ref={panelRef}
@@ -176,291 +329,692 @@ export function SharesDrawer({
         // the `prefers-reduced-motion` rule in globals.css stops all of it at
         // once. There is no exit animation — a native dialog is gone in the
         // frame it closes.
-        className={`@container lab-anim relative flex h-full flex-col overflow-hidden bg-background bg-[image:var(--panel-bg)] shadow-[var(--panel-shadow)] outline-none ${SIDES[side].panel}`}
+        className={`@container lab-anim relative flex h-full flex-col overflow-hidden border border-foreground/12 bg-[image:var(--housing-bg)] shadow-[var(--housing-shadow),0_60px_120px_-40px_rgba(0,0,0,0.85)] outline-none ${SIDES[side].panel}`}
         style={{
-          animation: `${SIDES[side].animation} 0.2s cubic-bezier(0.2,0.9,0.3,1)`,
+          animation: `${SIDES[side].animation} 0.24s cubic-bezier(0.2,0.9,0.3,1)`,
         }}
       >
         <span
           aria-hidden
           className="pointer-events-none absolute inset-0 bg-[image:var(--panel-grain)]"
         />
+        <span
+          aria-hidden
+          className="pointer-events-none absolute inset-x-[12%] top-0 h-px bg-[image:var(--panel-specular)]"
+        />
 
-        <div className="relative flex shrink-0 items-center gap-3 border-b border-foreground/9 px-5 py-3.5">
-          <span
-            id={titleId}
-            className="font-mono text-[0.625rem] uppercase tracking-[0.16em] text-active"
-          >
-            {title}
-          </span>
-          <span
-            aria-hidden
-            className="h-px flex-1 bg-gradient-to-r from-active/30 via-foreground/[0.06] to-transparent shadow-[0_1px_0_rgba(0,0,0,0.6)]"
-          />
-          <button
-            type="button"
-            aria-label="Close"
-            onClick={close}
-            className={`${CONSOLE_KEY_PILL} border-foreground/10 bg-[image:var(--key-bg)] px-2.5 py-[0.3125rem] normal-case tracking-normal text-foreground/80 shadow-[var(--key-shadow)] hover:text-readout`}
-          >
-            Esc
-          </button>
-        </div>
+        {/* The control deck: one raised plate carrying four bands. Kept tight,
+            because the list is what the panel is for. */}
+        <div className="relative shrink-0 bg-[image:var(--plate-raised-bg)] shadow-[var(--plate-raised-shadow)]">
+          {/* **The readout takes its own line below `@md`**, which a render at
+              390 forced rather than the handoff asking for it: the engraved
+              title and the Esc key are ~235px of a 354px panel, so inline the
+              readout gets four characters — "ACRO…" — and the one thing on
+              screen that says what the panel is counting over says nothing.
+              Wrapped, it has the row to itself. One element either way, ordered
+              by the cascade: a client component must not have to hydrate to
+              learn a breakpoint. */}
+          <div className="flex flex-wrap items-center gap-x-3 gap-y-2 px-3.5 py-2.5">
+            <EngravedTitle id={titleId}>{title}</EngravedTitle>
 
-        <div className="relative flex shrink-0 flex-col gap-2.5 px-4 pb-3 pt-3.5">
-          <div className="flex items-center gap-2">
-            <input
-              ref={inputRef}
-              type="search"
-              value={query}
-              onChange={(e) => setQuery(e.target.value)}
-              placeholder={`Search ${noun}`}
-              aria-label={`Search ${noun}`}
-              // 16px or iOS Safari zooms the page on focus.
-              className="min-w-0 flex-1 rounded-[0.625rem] border border-black/70 bg-[image:var(--key-bg)] px-3 py-2 text-[16px] text-foreground/85 shadow-[var(--track-shadow)] placeholder:text-foreground/45 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-active/60 @md:text-[0.8125rem]"
-            />
+            {/* **A closed dialog says nothing**, which is the whole reason this
+                readout exists: the league filters already narrow the shares —
+                `LeaguesHome` hands both drawers the filtered list and the folds
+                count over exactly it — but nothing in here said so. */}
             <span
-              className={`${CONSOLE_READOUT} inline-flex shrink-0 items-center rounded-[0.625rem] px-3 py-2`}
-              role="status"
+              className={`${CONSOLE_WINDOW} order-last flex min-w-0 basis-full items-center rounded-lg px-2.5 py-[0.3125rem] @md:order-none @md:basis-auto @md:flex-1`}
             >
-              <span
-                aria-hidden
-                className="pointer-events-none absolute inset-0 bg-[image:var(--readout-scanlines)]"
-              />
-              <span className="relative font-mono text-[0.8125rem] tabular-nums text-readout [text-shadow:var(--readout-text-glow)]">
-                {shown.length}
+              <Scanlines />
+              <span className="relative truncate font-mono text-[0.5625rem] uppercase tracking-[0.14em] text-readout-line">
+                {population(leagueCount, leagueTotal, filterSummary)}
               </span>
             </span>
+
+            <button
+              type="button"
+              aria-label="Close"
+              onClick={close}
+              className={`${CONSOLE_KEY_PILL} ml-auto border-foreground/12 bg-[image:var(--key-bg)] px-3 py-1.5 text-[0.625rem] text-foreground/78 shadow-[var(--key-shadow)] hover:text-readout @md:ml-0`}
+            >
+              Esc
+            </button>
           </div>
 
-          {chips}
+          <div className="flex flex-col gap-[0.4375rem] px-3.5 pb-[0.6875rem]">
+            <div className="flex items-center gap-2">
+              <input
+                ref={inputRef}
+                type="search"
+                value={query}
+                onChange={(e) => setQuery(e.target.value)}
+                placeholder={`Search ${noun}`}
+                aria-label={`Search ${noun}`}
+                // 16px or iOS Safari zooms the page on focus.
+                className="min-w-0 flex-1 rounded-xl border border-black/60 bg-[image:var(--key-bg)] px-3 py-[0.4375rem] text-[16px] text-foreground/88 shadow-[var(--track-shadow)] placeholder:text-foreground/45 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-active/60 @md:text-[0.8125rem]"
+              />
+              <span
+                className={`${CONSOLE_WINDOW} inline-flex shrink-0 items-center rounded-xl px-[0.6875rem] py-[0.4375rem]`}
+                role="status"
+              >
+                <Scanlines />
+                <span className="relative font-mono text-[0.8125rem] tabular-nums text-readout [text-shadow:var(--readout-text-glow)]">
+                  {shown.length}
+                </span>
+              </span>
+            </div>
 
-          <p className="m-0 font-mono text-[0.625rem] uppercase tracking-[0.16em] text-foreground/50">
-            {/* The denominator is named in words because it is not the league
-                count on the page: a league whose roster was never stored
-                contributes nothing and is not counted. */}
-            Across {leagueCount} league{leagueCount === 1 ? "" : "s"}
-          </p>
+            {chips && (
+              <div className={`${CONSOLE_WELL} flex flex-wrap items-center gap-1.5 p-1.5`}>
+                <span className="px-1 font-mono text-[0.5625rem] uppercase tracking-[0.16em] text-foreground/48">
+                  Pos
+                </span>
+                {chips}
+              </div>
+            )}
+
+            <div className="flex flex-wrap items-center gap-2">
+              <SortTrack
+                cols={cols}
+                active={sortKey}
+                onPick={(key) => setSort(key)}
+              />
+              <ColumnsStrip
+                cols={cols}
+                kind={kind}
+                dragging={dragCol}
+                onDrag={setDragCol}
+                onChange={writeCols}
+              />
+            </div>
+          </div>
         </div>
 
-        <div
-          ref={listRef}
-          className="relative min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 pb-4"
-        >
-          {loading ? (
-            <Message>Reading {noun}…</Message>
-          ) : error ? (
-            <p
-              role="alert"
-              className="m-0 py-6 font-mono text-[0.8125rem] text-error"
-            >
-              {error}
-            </p>
-          ) : shown.length === 0 ? (
-            // Two different claims, and the second is the reader's to undo.
-            rows.length === 0 ? (
-              <Message>{emptyMessage}</Message>
-            ) : (
-              <div className="flex flex-wrap items-center justify-between gap-3 py-6">
-                <Message>
-                  {chipsActive
-                    ? `No ${noun} match these filters.`
-                    : `Nobody by that name.`}
-                </Message>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setQuery("");
-                    onClearChips?.();
-                  }}
-                  className={`${CONSOLE_KEY_PILL} border-foreground/10 bg-[image:var(--key-bg)] text-foreground/80 shadow-[var(--key-shadow)] hover:text-readout`}
-                >
-                  Clear
-                </button>
+        {/* The list tray, recessed into the deck above it. A recess has to be
+            **darker than its surround in both themes**, which a black alpha is
+            and a `--foreground` alpha is not — the latter inverts with the
+            theme and would light the tray up in light mode. */}
+        <div className="relative m-2 flex min-h-0 flex-1 flex-col rounded-[0.875rem] bg-black/[0.16] shadow-[var(--well-shadow)]">
+          {shown.length > 0 && (
+            <>
+              {/* The header is laid out from the same widths the cells are, so
+                  a label sits over the readout it names. The right padding is
+                  the row padding plus the scroll padding plus the 11px gutter
+                  `.lab-scroll` reserves. */}
+              <div
+                aria-hidden
+                className="hidden shrink-0 items-center gap-2 pb-[0.3125rem] pl-5 pr-[calc(1.125rem+11px)] pt-2 @md:flex"
+              >
+                <span className="flex-1" />
+                {cols.map((id) => (
+                  <span
+                    key={id}
+                    style={{ width: SHARES_COLUMN_WIDTHS[id] }}
+                    className={`shrink-0 whitespace-nowrap font-mono text-[0.5rem] uppercase tracking-[0.18em] ${
+                      sortKey === id ? "text-active" : "text-foreground/40"
+                    }`}
+                  >
+                    {sharesColumnLabel(id)}
+                    {sortKey === id ? " ▼" : ""}
+                  </span>
+                ))}
               </div>
-            )
-          ) : (
-            <ul className="m-0 flex list-none flex-col gap-1 p-0">
-              {shown.map((row) => (
-                <ShareRow
-                  key={row.key}
-                  row={row}
-                  leagueCount={leagueCount}
-                  selected={selected({ kind, id: row.id })}
-                  onSelect={() => onToggle({ kind, id: row.id })}
-                  expanded={expanded.has(row.key)}
-                  onExpand={() =>
-                    setExpanded((prev) => {
-                      const next = new Set(prev);
-                      if (!next.delete(row.key)) next.add(row.key);
-                      return next;
-                    })
-                  }
-                />
-              ))}
-            </ul>
+              <div
+                aria-hidden
+                className="mx-[0.6875rem] h-px shrink-0 bg-[linear-gradient(to_right,transparent,rgba(0,0,0,0.55),transparent)] shadow-[0_1px_0_color-mix(in_srgb,var(--foreground)_6%,transparent)]"
+              />
+            </>
           )}
+
+          {/* The scroller is a flex child rather than absolutely positioned at
+              the handoff's `top-[2.0625rem]`. Same pixels, and one fewer number
+              that has to keep agreeing with a rendered height it cannot see —
+              a header row a hair taller than the offset would overlap the first
+              row silently, and a hair shorter would leave a gap. */}
+          <div
+            ref={listRef}
+            className="lab-scroll relative min-h-0 flex-1 overflow-y-auto overscroll-contain pb-3 pl-[0.6875rem] pr-[0.4375rem] pt-2 [mask-image:linear-gradient(to_bottom,transparent_0,#000_0.625rem,#000_calc(100%-0.75rem),transparent_100%)]"
+          >
+            {loading ? (
+              <Message>Reading {noun}…</Message>
+            ) : error ? (
+              <p
+                role="alert"
+                className="m-0 py-6 font-mono text-[0.8125rem] text-error"
+              >
+                {error}
+              </p>
+            ) : shown.length === 0 ? (
+              // Two different claims, and the second is the reader's to undo.
+              rows.length === 0 ? (
+                <Message>{emptyMessage}</Message>
+              ) : (
+                <div className="flex flex-wrap items-center justify-between gap-3 py-6 pr-3">
+                  <Message>
+                    {chipsActive
+                      ? `No ${noun} match these filters.`
+                      : `Nobody by that name.`}
+                  </Message>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setQuery("");
+                      onClearChips?.();
+                    }}
+                    className={`${CONSOLE_KEY_PILL} border-foreground/10 bg-[image:var(--key-bg)] text-foreground/80 shadow-[var(--key-shadow)] hover:text-readout`}
+                  >
+                    Clear
+                  </button>
+                </div>
+              )
+            ) : (
+              <ul className="m-0 flex list-none flex-col gap-1.5 p-0">
+                {shown.map((prepared) => (
+                  <ShareRow
+                    key={prepared.row.key}
+                    prepared={prepared}
+                    cols={cols}
+                    leagueCount={leagueCount}
+                    selected={selected({ kind, id: prepared.row.id })}
+                    onSelect={() => onToggle({ kind, id: prepared.row.id })}
+                  />
+                ))}
+              </ul>
+            )}
+          </div>
         </div>
       </div>
     </dialog>
   );
 }
 
+/**
+ * What the panel is counting over, in the title bar.
+ *
+ * **The denominator is leagues that contributed a roster or a member list**,
+ * not the league count on the page: a league whose roster was never stored
+ * contributes nothing and must not be counted, which is the same rule
+ * `PlayerShares.league_count` is written by.
+ *
+ * The handoff spells the narrowed form as `Across 79 dynasty leagues of 113`,
+ * with the summary inline. That reads well for its own one-word example and
+ * badly for the ones this app actually produces — `filterSummary` joins its
+ * parts with `·` and its labels include rule spellings like `QB+SF ≥ 2`, so the
+ * summary lands between the count and the noun as `Across 79 Dynasty · QB+SF ≥
+ * 2 leagues of 113`. The figures go first instead, which also puts them on the
+ * side of the truncation that survives.
+ */
+function population(
+  counted: number,
+  total: number,
+  summary: string | null,
+): string {
+  if (!summary) {
+    return `Across all ${counted} league${counted === 1 ? "" : "s"}`;
+  }
+  return `Across ${counted} of ${total} leagues · ${summary}`;
+}
+
+/** The metric's own number for a row, or null where it has none. */
+function weightOf(id: SharesColumnId, prepared: Prepared): number | null {
+  switch (id) {
+    case "value":
+      return prepared.row.value ?? null;
+    case "age":
+      return prepared.row.age ?? null;
+    case "class":
+      return prepared.row.draftClass ?? null;
+    case "record":
+      return prepared.winPct;
+    case "share":
+      return prepared.row.held;
+  }
+}
+
+/**
+ * The panel's name, engraved.
+ *
+ * Two layers, the treatment `ManagerPlate` and `LabWordmark` share: an
+ * `aria-hidden` extrusion copy under a face that is a gradient clipped to the
+ * glyphs. **The depth has to be a `drop-shadow()` filter and never a
+ * `text-shadow`** — the face's own colour is `transparent`, so a text-shadow
+ * renders straight through the letterforms instead of under them.
+ */
+function EngravedTitle({ id, children }: { id: string; children: string }) {
+  return (
+    <span
+      id={id}
+      className="relative inline-block shrink-0 whitespace-nowrap text-[0.8125rem] font-bold uppercase leading-none tracking-[0.16em]"
+    >
+      <span
+        aria-hidden
+        className="absolute left-0 top-0 text-[var(--chrome-extrude)] [text-shadow:var(--chrome-extrude-shadow)]"
+      >
+        {children}
+      </span>
+      <span className="relative inline-block bg-[image:var(--chrome-face)] bg-clip-text text-transparent [filter:var(--wordmark-depth)]">
+        {children}
+      </span>
+    </span>
+  );
+}
+
+/**
+ * The Sort track: one travelling key in a tight channel.
+ *
+ * **It offers exactly the columns on screen, plus Name** — not a fixed list.
+ * The order and the number a reader is comparing have to come off one list, or
+ * the sort can name a column that is not being shown.
+ *
+ * There is deliberately **no sort by position**: position is the `Pos` facet
+ * above, which filters, and a control that both filters and orders on one axis
+ * is two answers to one question.
+ */
+function SortTrack({
+  cols,
+  active,
+  onPick,
+}: {
+  cols: readonly SharesColumnId[];
+  active: SharesColumnId | "name";
+  onPick: (key: SharesColumnId | "name") => void;
+}) {
+  const keys: { key: SharesColumnId | "name"; label: string }[] = [
+    ...cols.map((id) => ({ key: id, label: sharesColumnLabel(id) })),
+    { key: "name" as const, label: "Name" },
+  ];
+
+  return (
+    <span className="inline-flex items-center gap-[0.4375rem]">
+      <span className="shrink-0 font-mono text-[0.5rem] uppercase tracking-[0.18em] text-foreground/42">
+        Sort
+      </span>
+      <span className={`${CONSOLE_TRACK} inline-flex items-center gap-1 p-1`}>
+        {keys.map(({ key, label }) => {
+          const on = active === key;
+          return (
+            <button
+              key={key}
+              type="button"
+              onClick={() => onPick(key)}
+              aria-pressed={on}
+              className={
+                "inline-flex shrink-0 items-center gap-[0.3125rem] rounded-full border px-2.5 py-[0.3125rem] font-mono text-[0.625rem] uppercase tracking-[0.14em] transition-colors duration-150 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-active/60 " +
+                (on
+                  ? "border-active/55 bg-[image:var(--key-bg)] text-readout [text-shadow:var(--readout-text-glow)] shadow-[var(--key-shadow),inset_0_0_14px_color-mix(in_srgb,var(--accent)_16%,transparent)]"
+                  : "border-transparent text-foreground/58 hover:text-readout")
+              }
+            >
+              {label}
+              {on && (
+                <span aria-hidden className="text-[0.5rem] text-active">
+                  {key === "name" ? "▲" : "▼"}
+                </span>
+              )}
+            </button>
+          );
+        })}
+      </span>
+    </span>
+  );
+}
+
+/**
+ * The Columns strip: what is on screen, in the reader's order, then the spares.
+ *
+ * **A well and slabs, not a track and pills**, which is the console's own rule
+ * rather than a style choice: a track holds one travelling key and a well holds
+ * a panel of controls, and that shape difference is what stops the two adjacent
+ * control groups from reading as one row of eight buttons.
+ *
+ * **The bounds are enforced by disabling, never by correcting** —
+ * `lineup-columns-dialog.tsx`'s rule. The spare keys grey out at
+ * {@link MAX_SHARES_COLUMNS} and the last chosen slab's drop control disables
+ * at one, so an invalid set cannot be made in the first place.
+ *
+ * **Reordering happens on `dragenter`, not on drop.** The strip is three keys
+ * wide, so the move is visible while it is being made and there is no drop
+ * target to miss.
+ *
+ * The order is mouse-only, and that is a recorded choice rather than an
+ * oversight: the *set* is fully keyboard-reachable (every slab's label drops it
+ * and every spare key adds it, and an add appends), so a keyboard reader can
+ * reach any order by dropping and re-adding. A `◀ ▶` pair per slab is what
+ * would make the order directly reachable, and it is four more controls in a
+ * strip that already has up to eight.
+ */
+function ColumnsStrip({
+  cols,
+  kind,
+  dragging,
+  onDrag,
+  onChange,
+}: {
+  cols: readonly SharesColumnId[];
+  kind: SubjectKind;
+  dragging: SharesColumnId | null;
+  onDrag: (id: SharesColumnId | null) => void;
+  onChange: (next: readonly SharesColumnId[]) => void;
+}) {
+  const spares = SHARES_COLUMNS_BY_KIND[kind].filter((id) => !cols.includes(id));
+  const locked = cols.length === 1;
+  const full = cols.length >= MAX_SHARES_COLUMNS;
+
+  const reorder = (from: SharesColumnId, target: SharesColumnId) => {
+    // **Decide the insert side from the pre-move positions.** Removing the
+    // dragged key shifts every key after it down one, so a key dragged
+    // rightward lands on the index it just vacated — inserting "before the
+    // target" then reproduces the order it started in and the drag visibly does
+    // nothing.
+    const fromIdx = cols.indexOf(from);
+    const toIdx = cols.indexOf(target);
+    const next = cols.filter((id) => id !== from);
+    const at = next.indexOf(target);
+    next.splice(fromIdx < toIdx ? at + 1 : at, 0, from);
+    onChange(next);
+  };
+
+  return (
+    <span className="inline-flex min-w-0 items-center gap-[0.4375rem]">
+      <span className="shrink-0 font-mono text-[0.5rem] uppercase tracking-[0.18em] text-foreground/42">
+        Columns
+      </span>
+      {/* `CONSOLE_WELL`'s surface at this strip's own radius, spelled rather
+          than composed: two `rounded-*` utilities on one element is the
+          specificity coin flip `CONSOLE_KEY_PILL` exists to keep colours out
+          of, and a radius is not worth taking it for. */}
+      <span className="inline-flex min-w-0 flex-wrap items-center gap-1 rounded-xl border border-foreground/8 bg-[image:var(--key-bg)] p-1 shadow-[var(--well-shadow)]">
+        {cols.map((id) => (
+          <span
+            key={id}
+            draggable
+            onDragStart={() => onDrag(id)}
+            onDragEnter={() => {
+              if (dragging && dragging !== id) reorder(dragging, id);
+            }}
+            onDragOver={(e) => e.preventDefault()}
+            onDragEnd={() => onDrag(null)}
+            className={
+              "inline-flex shrink-0 cursor-grab items-center gap-[0.3125rem] rounded-lg border bg-[image:var(--plate-raised-bg)] py-1 pl-[0.3125rem] pr-1.5 " +
+              (dragging === id
+                ? "border-active/80 opacity-45 shadow-[var(--key-shadow-pressed)]"
+                : "border-active/55 shadow-[var(--plate-raised-shadow)]")
+            }
+          >
+            <span
+              aria-hidden
+              className="font-mono text-[0.5rem] leading-[0.8] tracking-[-0.06em] text-foreground/38"
+            >
+              ⣿
+            </span>
+            <button
+              type="button"
+              disabled={locked}
+              title={locked ? "At least one column" : `Remove ${sharesColumnLabel(id)}`}
+              onClick={() => onChange(cols.filter((k) => k !== id))}
+              className={`whitespace-nowrap font-mono text-[0.625rem] uppercase tracking-[0.14em] text-readout [text-shadow:var(--readout-text-glow)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-active/60 ${
+                locked ? "cursor-default" : "cursor-pointer"
+              }`}
+            >
+              {sharesColumnLabel(id)}
+            </button>
+          </span>
+        ))}
+
+        {spares.length > 0 && (
+          <span
+            aria-hidden
+            className="mx-0.5 h-[1.0625rem] w-px bg-[image:var(--groove)] shadow-[var(--groove-highlight)]"
+          />
+        )}
+
+        {spares.map((id) => (
+          <button
+            key={id}
+            type="button"
+            disabled={full}
+            title={
+              full
+                ? `${MAX_SHARES_COLUMNS} columns at most — drop one first`
+                : `Add ${sharesColumnLabel(id)}`
+            }
+            onClick={() => onChange([...cols, id])}
+            className={`shrink-0 whitespace-nowrap rounded-lg border border-foreground/9 px-[0.5625rem] py-[0.3125rem] font-mono text-[0.625rem] uppercase tracking-[0.14em] transition-colors duration-150 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-active/60 ${
+              full
+                ? "cursor-not-allowed text-foreground/26"
+                : "text-foreground/58 hover:text-readout"
+            }`}
+          >
+            {sharesColumnLabel(id)}
+          </button>
+        ))}
+      </span>
+    </span>
+  );
+}
+
 function Message({ children }: { children: ReactNode }) {
   return (
-    <p className="m-0 py-6 font-mono text-[0.8125rem] text-foreground/60">
+    <p className="m-0 py-6 pl-2 font-mono text-[0.8125rem] text-foreground/60">
       {children}
     </p>
   );
 }
 
 /**
- * One row: a chevron that expands, and a body that selects.
+ * One row, as a key that can be held down.
  *
- * **It cannot be a `<details>`, and that is an accessibility constraint rather
- * than a layout preference.** A `<summary>` maps to a leaf `button`, so a second
- * control nested inside one is unreliably reachable — the same rule that put the
- * lineup checker's Sync key in the disclosure *body* rather than its summary.
- * The two jobs here are genuinely two controls: the chevron says "which
- * leagues", and the body says "narrow the grid to them".
+ * **Selected reads as pressed and lit rather than as a tinted stripe**, which
+ * is also true of what it does: pressing it again clears the narrowing.
+ *
+ * The lift is a `translateY` under `motion-safe:`, not just under `.lab-anim` —
+ * that rule clears `transition` and `animation`, so a lift written without the
+ * variant would still jump instantly under reduced motion, which is the thing
+ * the preference is about.
+ *
+ * **Below `@md` the cells wrap onto a line of their own**, which a render at
+ * 390 forced rather than the handoff asking for it. Three cells are 13rem of a
+ * 288px row once the badge and the gaps are paid for, which leaves the name
+ * about eighteen pixels — every player read as a single initial and a full
+ * stop. The alternative was the manager card's own answer, dropping the third
+ * field below `sm`; it is wrong here because the column a reader put last is
+ * usually Share, which is what the panel is for. Wrapping costs a taller row
+ * and the column headers, which `@md:flex` takes off the tray at the same
+ * width — and nothing is lost by that either, because the Columns strip in the
+ * deck above names the same three in the same order, and the Sort track says
+ * which one the list is ordered by.
  */
 function ShareRow({
-  row,
+  prepared,
+  cols,
   leagueCount,
   selected,
   onSelect,
-  expanded,
-  onExpand,
 }: {
-  row: SharesDrawerRow;
+  prepared: Prepared;
+  cols: readonly SharesColumnId[];
   leagueCount: number;
   selected: boolean;
   onSelect: () => void;
-  expanded: boolean;
-  onExpand: () => void;
 }) {
-  const panelId = useId();
-  const pct = leagueCount > 0 ? Math.round((row.held / leagueCount) * 100) : 0;
+  const { row } = prepared;
 
   return (
     <li
-      className={`rounded-[0.625rem] border transition-colors ${
-        selected
-          ? "border-active/45 bg-active/[0.08]"
-          : "border-transparent hover:bg-foreground/[0.04]"
-      }`}
+      className={
+        "lab-anim rounded-xl border bg-[image:var(--key-bg)] transition-[transform,box-shadow,border-color] duration-200 ease-[cubic-bezier(0.2,0.8,0.2,1)] " +
+        "motion-safe:hover:-translate-y-0.5 hover:border-active/40 hover:shadow-[var(--key-shadow),0_16px_26px_-14px_rgba(0,0,0,0.9),0_0_26px_-10px_var(--accent-glow)] " +
+        (selected
+          ? "border-active/50 shadow-[var(--key-shadow-pressed),inset_0_0_22px_color-mix(in_srgb,var(--accent)_14%,transparent),0_0_24px_-10px_var(--accent-glow)]"
+          : "border-foreground/9 shadow-[var(--key-shadow)]")
+      }
     >
-      <div className="flex items-center gap-1">
-        <button
-          type="button"
-          onClick={onExpand}
-          aria-expanded={expanded}
-          aria-controls={expanded ? panelId : undefined}
-          aria-label={`Show the leagues holding ${row.name}`}
-          className="shrink-0 rounded-md px-1.5 py-2 text-[0.5rem] leading-none text-foreground/45 transition-[transform,color] duration-150 hover:text-active focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-active/60"
-        >
+      <button
+        type="button"
+        onClick={onSelect}
+        aria-pressed={selected}
+        className="flex w-full min-w-0 flex-wrap items-center gap-2 rounded-xl px-[0.6875rem] py-2 text-left focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-active/60 @md:flex-nowrap"
+      >
+        <Badge badge={row.badge} selected={selected} />
+
+        {/* `basis` is the row minus the badge and its gap, so three cells
+            cannot fit beside it and wrap to a line of their own — see the note
+            on `ShareRow`. Above `@md` it is `auto` and the row is one line. */}
+        <span className="min-w-0 flex-1 basis-[calc(100%-2.375rem)] @md:basis-auto">
+          {/* Full opacity on the accent as text, per the theme rule: an alpha
+              on it drops light mode's teal below AA. */}
           <span
-            aria-hidden
-            className={`inline-block transition-transform duration-150 ${expanded ? "rotate-90" : ""}`}
+            className={`block truncate text-[0.8125rem] tracking-[-0.005em] ${
+              selected ? "font-semibold text-readout" : "text-foreground/85"
+            }`}
           >
-            ▶
+            {row.name}
           </span>
-        </button>
-
-        <button
-          type="button"
-          onClick={onSelect}
-          aria-pressed={selected}
-          className="flex min-w-0 flex-1 items-center gap-2.5 rounded-[0.625rem] py-1.5 pr-2 text-left focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-active/60"
-        >
-          {row.icon}
-          <span className="min-w-0 flex-1 truncate">
-            {/* Full opacity on the accent as text, per the theme rule: an alpha
-                on it drops light mode's teal below AA. */}
-            <span
-              className={`block truncate text-[0.8125rem] ${selected ? "font-semibold text-readout" : "text-foreground/85"}`}
-            >
-              {row.name}
+          {row.note && (
+            <span className="block truncate font-mono text-[0.5625rem] uppercase tracking-[0.16em] text-foreground/46">
+              {row.note}
             </span>
-            {row.note && (
-              <span className="block truncate font-mono text-[0.625rem] uppercase tracking-[0.14em] text-foreground/50">
-                {row.note}
-              </span>
-            )}
-          </span>
+          )}
+        </span>
 
-          {row.extra}
-
-          <ShareMeter held={row.held} of={leagueCount} pct={pct} />
-        </button>
-      </div>
-
-      {expanded && (
-        <ul
-          id={panelId}
-          className="m-0 list-none border-t border-foreground/8 px-3 py-1.5 pl-9"
-        >
-          {row.leagues.map((league) => (
-            <li
-              key={league.league_id}
-              className="grid grid-cols-[minmax(0,1fr)_auto] items-baseline gap-x-3 py-1"
-            >
-              <span className="min-w-0 truncate text-[0.8125rem] text-foreground/70">
-                {league.name}
-              </span>
-              <span className="shrink-0 whitespace-nowrap font-mono text-[0.625rem] tabular-nums text-foreground/45">
-                {league.total_rosters} teams
-              </span>
-            </li>
-          ))}
-        </ul>
-      )}
+        {cols.map((id) => (
+          <Cell
+            key={id}
+            id={id}
+            prepared={prepared}
+            leagueCount={leagueCount}
+          />
+        ))}
+      </button>
     </li>
   );
 }
 
 /**
- * The share, as a figure on lit glass with a bar under it.
+ * The badge: a lit bezel with a position, an initial or an avatar in it.
  *
- * Deliberately **not** the rank ramp: `rankColor` says how *good* a position is,
- * and a share has no good — owning a player in nine leagues is not a better
- * result than owning him in one, it is a different fact. So the fill is the
- * accent at one weight, and the number carries the meaning.
+ * **The drawer owns it rather than taking a node from the caller**, which is a
+ * change from the shape this component used to have. Two reasons, and the
+ * second is the load-bearing one: the bezel is the drawer's surface, and the
+ * ink is a *selected* state only the row knows. An `<Avatar>` mounted here
+ * would also be the wrong size — its `md` grows to 2.25rem inside an
+ * `@container` this wide, and the bezel is a fixed 1.875rem — so the stored
+ * avatar rides through as a url and the bezel frames it.
  */
-function ShareMeter({
-  held,
-  of,
-  pct,
+function Badge({
+  badge,
+  selected,
 }: {
-  held: number;
-  of: number;
-  pct: number;
+  badge: SharesDrawerRow["badge"];
+  selected: boolean;
 }) {
+  const shape = badge.round ? "rounded-full" : "rounded-[0.375rem]";
+
   return (
     <span
-      className={`${CONSOLE_READOUT} flex w-[4.5rem] shrink-0 flex-col gap-1 rounded-[0.375rem] px-2 py-1.5`}
+      aria-hidden
+      className={`inline-flex size-[1.875rem] shrink-0 items-center justify-center overflow-hidden border border-foreground/12 bg-[image:var(--bezel-bg)] shadow-[var(--bezel-shadow)] ${shape} ${
+        badge.round
+          ? "text-[0.75rem] font-semibold"
+          : "font-mono text-[0.5625rem] uppercase tracking-[0.06em]"
+      } ${selected ? "text-readout" : "text-foreground/68"}`}
     >
-      <span
-        aria-hidden
-        className="pointer-events-none absolute inset-0 bg-[image:var(--readout-scanlines)]"
-      />
-      <span className="relative flex items-baseline justify-between gap-1 font-mono text-[0.6875rem] tabular-nums text-readout [text-shadow:var(--readout-text-glow)]">
-        <span>
-          {held}/{of}
-        </span>
-        <span className="text-readout/60">{pct}%</span>
-      </span>
-      <span
-        aria-hidden
-        className="relative block h-1 rounded-full bg-[var(--meter-track)] shadow-[inset_0_1px_3px_rgba(0,0,0,0.95)]"
-      >
-        <span
-          className="block h-1 rounded-full bg-active shadow-[0_0_8px_var(--accent-glow)]"
-          // A held row is never drawn empty: at 1 of 113 a true-width bar is
-          // invisible and reads as "none" rather than as "one".
-          style={{ width: `${Math.max(pct, held > 0 ? 6 : 0)}%` }}
+      {badge.imageUrl ? (
+        /* eslint-disable-next-line @next/next/no-img-element */
+        <img
+          src={badge.imageUrl}
+          alt=""
+          className="size-full object-cover"
         />
+      ) : (
+        badge.label
+      )}
+    </span>
+  );
+}
+
+/**
+ * One readout cell — one shape, five metrics.
+ *
+ * **Missing values render an em dash, never a zero**, in every one of them: an
+ * unpriced player is off KTC's board rather than worthless, a player with no
+ * stored age has no age rather than an age of nothing, and a set of leagues
+ * that has played nothing has no record rather than an `0–0`.
+ *
+ * **None of them is coloured**, which is `ShareMeter`'s reasoning generalised:
+ * `rankColor` says how *good* a position is, and none of these five has a good.
+ * Holding a player in nine leagues is a different fact from holding him in one,
+ * not a better result — and the same goes for a price, an age and a class. So
+ * the figure is the readout's own ink and the meaning is in the number.
+ */
+function Cell({
+  id,
+  prepared,
+  leagueCount,
+}: {
+  id: SharesColumnId;
+  prepared: Prepared;
+  leagueCount: number;
+}) {
+  const { row, pct } = prepared;
+
+  let main = "—";
+  let trail: string | null = null;
+  let sub: string | null = null;
+  let bar = false;
+
+  switch (id) {
+    case "value":
+      if (row.value != null) main = row.value.toLocaleString();
+      break;
+    case "age":
+      if (row.age != null) main = String(row.age);
+      break;
+    case "class":
+      if (row.draftClass != null) main = String(row.draftClass);
+      break;
+    case "record":
+      if (prepared.record) {
+        main = prepared.record;
+        sub = prepared.winPctLabel;
+      }
+      break;
+    case "share":
+      main = `${row.held}/${leagueCount}`;
+      trail = `${pct}%`;
+      bar = true;
+      break;
+  }
+
+  return (
+    <span
+      style={{ width: SHARES_COLUMN_WIDTHS[id] }}
+      className={`${CONSOLE_WINDOW} flex shrink-0 flex-col justify-center gap-0.5 self-stretch rounded-[0.4375rem] px-2 py-1.5`}
+    >
+      <Scanlines />
+      <span
+        className={`relative flex items-baseline justify-between gap-1 whitespace-nowrap font-mono leading-[1.2] tabular-nums text-readout [text-shadow:var(--readout-text-glow)] ${CELL_TEXT[id]}`}
+      >
+        <span>{main}</span>
+        {trail && <span className="text-[0.5625rem] text-readout-label">{trail}</span>}
       </span>
+      {sub && (
+        <span className="relative font-mono text-[0.5625rem] leading-[1.2] tabular-nums text-readout-label">
+          {sub}
+        </span>
+      )}
+      {bar && (
+        <span
+          aria-hidden
+          className="relative mt-0.5 block h-1 rounded-full bg-[var(--meter-track)] shadow-[inset_0_1px_3px_rgba(0,0,0,0.95)]"
+        >
+          <span
+            className="block h-1 rounded-full bg-active shadow-[0_0_8px_var(--accent-glow)]"
+            // A held row is never drawn empty: at 1 of 113 a true-width bar is
+            // invisible and reads as "none" rather than as "one".
+            style={{ width: `${Math.max(pct, row.held > 0 ? 6 : 0)}%` }}
+          />
+        </span>
+      )}
     </span>
   );
 }

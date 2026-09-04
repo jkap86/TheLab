@@ -1065,35 +1065,64 @@ at all — `/api/trades/facets`' bargain, one page over.
 
 A native `<dialog>` + `showModal()`, which is why there is no dependency: focus
 trap, Esc and `::backdrop` come free, and `:modal` confirms it. What makes it a
-drawer is three lines of margin and a full-height box; everything else is
-`LeagueFiltersDialog`'s shell — panel tokens, grain span, title bar with an Esc
-pill, `min-h-0 flex-1 overflow-y-auto` well.
+drawer is the margins and a full-height box.
+
+**It is a machined unit now rather than a page pinned to an edge**: a raised
+control deck (`--plate-raised-*`) over a recessed list tray, in a `--housing-bg`
+frame with a 12px gap on its three free sides and none on the docked one — which
+is what makes it read as a rack slid out rather than welded to the viewport. The
+frame is the housing and **not `--panel-bg`**, because the panel gradient is the
+ground a page stands on and this is an instrument standing on it. The tray's
+recess is `bg-black/[0.16]`: a recess has to be darker than its surround in
+*both* themes, which a black alpha is and a `--foreground` alpha is not.
 
 **Write the margins as explicit sides, never `m-0` plus an `auto`.** A `<dialog>`
 is centred by the UA's own `margin: auto`, and Tailwind emits the `m-*` shorthand
 before the `ml-*`/`mr-*` longhands — so `m-0 ml-auto` is a coin flip decided by
 emit order, exactly the trap `CONSOLE_KEY_PILL` exists to keep a lit key out of.
-Players open left, leaguemates right.
+The same goes for the padding now that there is any. Players open left,
+leaguemates right.
 
-**A row is two sibling buttons and cannot be a `<details>`.** A `<summary>` maps
-to a leaf `button`, so a control nested inside one is unreliably reachable — the
-rule the lineup checker's Sync key already lives by. The two jobs here are
-genuinely two: the chevron says *which leagues*, the body says *narrow the grid
-to them*.
+**A row is one button, and it used to be two.** The chevron that expanded a row
+into the leagues holding it is gone: pressing the row narrows the league grid
+behind the drawer to exactly those leagues, and the grid is the better answer —
+the same leagues, with their cards, one press earlier. The constraint that
+shaped the old row is kept written down rather than deleted, because it is *why*
+the row is a `<button>` and not a `<details>`: a `<summary>` maps to a leaf
+`button`, so a control nested inside one is unreliably reachable, and a row with
+two jobs could not have been a disclosure. With one job it could be — and it
+still is not, because there is nothing left to disclose. The row's leagues are
+still **data**: the record column and the share are both folded out of them.
 
-**The rows are flat, and that is a budget rather than a style.** The league grid
-pays ~6 composited planes and a filter buffer per card and gates all of it behind
-`pointer-fine:` because iOS Safari's per-tab GPU budget dies on 113 of them. This
-list is longer — 471 players on that same account, 719 leaguemates — so it spends
-nothing: no perspective, no `translateZ`, no `drop-shadow`. There is nothing here
-to gate, which is what makes `@tanstack/react-virtual` unnecessary and keeps the
-runtime dependencies at React, Next and `pg`.
+**The rows are raised keys, and they are still flat.** The lift on hover is a
+`translateY` and a box-shadow — one composited layer at a time — and nothing
+here spends a `perspective`, a `preserve-3d`, a per-row `translateZ` or a
+`drop-shadow` filter. That is a budget rather than a style: the league grid pays
+~6 composited planes and a filter buffer per card and gates all of it behind
+`pointer-fine:` because iOS Safari's per-tab GPU budget dies on 113 of them, and
+this list is an order of magnitude longer — 471 players on that same account,
+719 leaguemates. Do not promote it to `preserve-3d` to match the cards. The lift
+rides `motion-safe:` **as well as** `.lab-anim`, because that rule clears
+`transition` and `animation` and a lift written without the variant would still
+jump instantly under reduced motion, which is the thing the preference is about.
 
-**The share meter is deliberately not the rank ramp.** `rankColor` says how
-*good* a position is; a share has no good — nine leagues is not a better result
-than one, it is a different fact. So the fill is the accent at one weight and the
-number carries the meaning. A held row is never drawn empty, because at 1 of 113
-a true-width bar reads as "none" rather than as "one".
+**The share meter is deliberately not the rank ramp, and neither is anything
+else in a cell.** `rankColor` says how *good* a position is; a share has no good
+— nine leagues is not a better result than one, it is a different fact — and the
+same holds for a price, an age and a class. So every cell is the readout's own
+ink and the meaning is in the number. A held row is never drawn empty, because
+at 1 of 113 a true-width bar reads as "none" rather than as "one". **A missing
+value is an em dash, never a zero**, in all five.
+
+**A closed dialog says nothing, which is what the title-bar readout is for.**
+The league filters already narrowed these shares — `LeaguesHome` hands both
+drawers `leagueFiltered` and the folds count over exactly that list, which is
+today's behaviour rather than a change — but nothing in the panel said so. It
+names the counted leagues, the account total and the filter summary. The
+denominator stays **leagues that contributed a roster or a member list**, not
+the count on the page. It is the *league* filters only and never the subject
+selection: the subjects are picked in these drawers, so naming them here would
+have the panel describe a narrowing it is itself the source of.
 
 **Focus on open follows the pointer**: the search field on a fine one, the
 `tabIndex={-1}` panel on a coarse one, so opening the drawer on a phone does not
@@ -1108,18 +1137,129 @@ one deliberate divergence: they **report** their failures, because lineups is an
 enhancement beside a list where a drawer is only this data, and a silent failure
 there is a panel that opens empty with nothing saying why.
 
+### The columns are chosen, ordered, and shared between the panels
+
+Five metrics — Value, Age, Class, Rec · Win, Share — of which a row carries at
+most three, **in the reader's own order**. `features/shared/shares-columns.ts`
+holds the table and the persistence (`thelab:shares-columns`), on
+`lineup-columns.ts`'s terms.
+
+**A sequence, not a set, and that is the one thing it does not share with the
+lineup columns.** Those are stored as a set and rendered in canonical metric
+order, because a card's tile row is a strip of equals; these are stored *as
+ordered*, because the strip is three keys wide and the reader drags them. So
+`normalize` dedupes and validates but never sorts.
+
+**It does not cap on write.** `MAX_SHARES_COLUMNS` bounds what a *panel shows*,
+not what a reader has chosen across both — the leaguemate panel offers two of
+the five, so a sequence carrying three player metrics and two of its own is a
+valid record of one reader's choices. The cap is applied in `sharesColumns`,
+where it means something, and enforced in the strip by **disabling rather than
+correcting**, which is `lineup-columns-dialog.tsx`'s rule.
+
+**`mergeSharesColumns` is the reason the two panels can share one key**, and the
+bug it exists to stop has no symptom: storing what the leaguemate panel shows
+would store two ids, and the player panel would come back with Value, Age and
+Class gone with nobody having edited them. So the ids a panel cannot offer are
+kept, and kept *where they sat* — the new order is spliced in at the position of
+the first offered id. That, the cap and the fallback are what
+`shares-columns.test.ts` pins.
+
+**The Sort track offers exactly the columns on screen, plus Name.** Not a fixed
+list: the order and the number a reader is comparing must come off one list, or
+the sort can name a column that is not being shown. There is deliberately **no
+sort by position** — position is the `Pos` facet above, which filters, and a
+control that both filters and orders on one axis is two answers to one question.
+Directions are fixed per metric (Age ascends, the rest descend), ties break on
+name, and **a row with no value for the sorted metric sorts last in either
+direction**: an unpriced player is not the cheapest one. If the sorted column is
+dropped, the fallback is the reader's own **rightmost** column, not a fixed one.
+
+**The strip is a well and slabs where the Sort track is a track and pills**,
+which is the console's own rule rather than a style choice: a track holds one
+travelling key and a well holds a panel of controls, and that shape difference
+is what stops the two adjacent control groups from reading as one row of eight
+buttons. **Reordering happens on `dragenter`, not on drop** — the strip is three
+keys wide, so the move is visible while it is being made and there is no drop
+target to miss — and the insert side is decided from the **pre-move** positions,
+because removing the dragged key shifts every key after it down one and a key
+dragged rightward would otherwise land on the index it just vacated and appear
+to do nothing.
+
+**The order is mouse-only and that is a recorded choice**, the one the handoff
+asks be recorded either way: the *set* stays fully keyboard-reachable, since
+every slab's label drops it and every spare key appends it, so any order is
+reachable by dropping and re-adding. A `◀ ▶` pair per slab is what would make
+the order directly reachable, and it is four more controls in a strip that
+already has up to eight.
+
+### What Value, Age and Class cost on the server
+
+Three of the five columns are not computable from what the client already has,
+so `/api/user/[username]/players` grew them. **It needed no migration** —
+`players.data` is Sleeper's raw blob and has carried both dated fields since the
+map first synced; `npm run migrate:up` reported "No migrations to run".
+
+**A sibling type rather than three more fields on `PlayerSummary`.** The trades
+board is that type's other reader and asks for none of the three — a trade names
+players who have since retired, and shipping an age and a price for each would
+be wire weight nothing on that page renders. `PlayerShareSummary` extends it and
+`ManagerPlayersPayload` is the one payload that carries it; `getPlayerShareRows`
+is a second statement beside `getPlayersByIds` for the same reason, with both
+blob reads regex-guarded before their cast on `getMatchablePlayers`' house rule.
+
+**The draft class is `metadata.rookie_year` and nothing else.** The obvious
+fallback — `activeSeason - years_exp` — covers many more players and is wrong
+for anyone who went undrafted or missed a season, and the handoff asks that it
+be measured against the stored map before it is trusted. It has not been, so it
+is not shipped: a wrong year on a dynasty page is worse than an absent one, the
+same call `resolveSleeperIds` makes when it leaves an ambiguous KTC row
+unmatched. The derivation is written down rather than done, on
+`ROOKIE_PICK_STRIDE`'s terms — so the same thing can happen to it.
+
+**One board for the whole panel, and it is stated rather than assumed.** A KTC
+price is per market, and a shares row *spans* leagues, so there is no league for
+`auto` to resolve against — `resolveKtcCrossLeagueFormat` is a second rule
+beside `resolveKtcFormat` rather than a degenerate case of it, and under `auto`
+it reads **dynasty**: the board with pick rows, and the one a cross-league
+comparison implies. The payload echoes which board answered and when it was
+scraped, the way the lineups payload does. What it can never do is average the
+two: three figures on three scales never share a column, and a pooled read is
+*wrong* rather than differently weighted — the ADP board split is the same bug
+with the same shape.
+
+**The 1QB column, always.** Which of KTC's two QB numbers a league reads is a
+fact about *that league*, and a row held in a dozen of them is not one.
+Resolving it from the leagues in the counted pool was the alternative and is
+worse than it looks: the pool moves with the reader's filters, so a player's
+price would change when they narrowed to dynasty. `superflex: false` rides the
+payload so the panel can say so.
+
+**A failed board is a column of em dashes, not a failed panel.** `ktc: null` and
+every price with it — the degradation the lineups route already makes, and the
+reason the other four columns have nothing to do with KTC.
+
+**The board joins the players hook's subject key**, which blanks the map for one
+round trip rather than leaving the old market's prices under the new market's
+name. That is the cost `useManagerLineups` already pays for the same flip, and
+for the same reason: a price on the wrong board is a wrong number, not a stale
+one. It costs nothing until a drawer has been opened.
+
 ### Deliberately not ported
 
 - **TheLabX's metric catalogue** — `ColumnsBar`, `MetricColumns`, `SubjectRail`,
-  four pickable columns from ten with presets and a persistence key. The lineup
-  checker's section already recorded that catalogue as unported and two fixed
-  tiles as not earning it; the same holds here, and four of its ten metrics are
-  ADP, which has no source in this repo.
+  four pickable columns from ten with presets and a persistence key. **Half of
+  this arrived**: the five metrics above are pickable, orderable and persisted,
+  which is that catalogue's whole idea at this list's scale. What is still
+  absent is the rest of its ten — four are ADP, which has no source in this
+  repo — and its presets, which are a second vocabulary over a set of three.
 - **The windowing** — `@tanstack/react-virtual` and the `SharesScrollProvider`
   seating that switches between plain and virtual rows. See the flat-rows note
   above for why the budget does not call for it.
 - **`draft_classes` and the draft-class chips.** There is no `getNflDraftClasses`
-  here; `players.years_exp` is stored and the chip arrives with a reader for it.
+  here, and the Class *column* is not one: a chip is a facet that narrows the
+  list, where the column states a fact about a row. `players.years_exp` is
+  stored and still unread, for the reason the section above gives.
   The position chips did port — they are read off `PlayerSummary`, which is
   already on the wire, and 471 rows want them.
 - **The tab pages** (`/manager/[searched]/players` and `/leaguemates`). The same
@@ -1127,26 +1267,69 @@ there is a panel that opens empty with nothing saying why.
 
 ### Verified
 
-Run against the live database on the day it landed. `npm run migrate:up`
-reported "No migrations to run", which is the claim above and why this port is
-code only. Both routes answered 200 with the numbers a hand-run of their SQL
-predicted — 124 roster rows over 113 listed leagues, 471 distinct players all
-471 named, 113 member lists, 719 leaguemates, avatars resolved on 710 of 720.
-`?season=abc` 400s on both, an unknown user 404s, `?season=2024` answers empty
-and deterministically without a resolver round trip.
+**The original port** was run against the live database on the day it landed.
+`npm run migrate:up` reported "No migrations to run", which is the claim above
+and why that port was code only. Both routes answered 200 with the numbers a
+hand-run of their SQL predicted — 124 roster rows over 113 listed leagues, 471
+distinct players all 471 named, 113 member lists, 719 leaguemates, avatars
+resolved on 710 of 720. `?season=abc` 400s on both, an unknown user 404s,
+`?season=2024` answers empty and deterministically without a resolver round trip.
 
 End to end at 1280 and 390 in both schemes, over CDP: picking a player held in 6
 leagues left exactly 6 cards and `6 / 113`, the drawer's own 471 rows unmoved;
 Esc closed the drawer and the narrowing survived under a token naming him; Clear
 restored 113. A leaguemate in 18 leagues narrowed to 18 and expanded to exactly
 18 league rows. Two subjects gave 8 under `all` and 55 under `any` against 18 and
-45. The drawer is 32rem at 1280 and `100vw − 2.5rem` at 390, the header's four
-instruments stack without overflow, and no page or drawer takes horizontal
-scroll. In the DOM: still exactly one `<h1>`, `aria-expanded` on both triggers
-flipping with the drawer and back on a backdrop click, `aria-labelledby` naming
-the panel, `:modal` true, one `role="status"`. Under
-`prefers-reduced-motion: reduce` the panel's `animation-name` computes to `none`,
-which is `.lab-anim` doing its job.
+45.
+
+**The redesign** was verified without a database, because there is none reachable
+from where it was built — the method the console-card pass established: a
+temporary `/preview` route rendering the *real* components against fixture
+props, screenshotted over CDP at 1280 and 390 in both schemes, then deleted. A
+phone-width viewport has to come from the context's own `viewport`, and the dev
+server's chunks need `allowedDevOrigins` plus a proxy bypass for loopback or the
+page serves 200 and never hydrates. **Nothing about the payload change was
+verified against real data**, which is the gap to close first: the numbers below
+are fixtures, and what they check is arithmetic and layout rather than Sleeper.
+
+The columns machinery was driven end to end and every rule held. Dropping a
+slab, adding a spare, dragging the first slab onto the third and reloading gave
+`["share","class","record"]` stored and rendered, with the header labels and the
+row cells in that same order at every step. The cross-panel case is the one
+worth keeping: with `["share","class","record"]` stored, the leaguemates panel
+showed `Share, Rec · Win`, dropping Share there stored `["record","class"]`, and
+the players panel came back with **Class intact** — which is `mergeSharesColumns`
+doing the only thing it exists for. The sort key fell back to the reader's
+rightmost column both times a column was dropped.
+
+Layout at 390 is where three things changed against the handoff, each because a
+render showed it, and all three are in the code's own comments: the cells wrap
+onto a line of their own below `@md` (three of them left the name eighteen
+pixels — every player read as an initial and a full stop); the population
+readout takes its own line there (inline it read "ACRO…", so the one thing on
+screen that says what the panel counts over said nothing); and the Columns well
+wraps, because at 390 its last spare key was clipped by the panel and
+unreachable. `.lab-scroll` also gained `scrollbar-gutter: stable` — the tray's
+column headers sit outside the scroller and are padded by its width, and with an
+overlay scrollbar the gutter is 0, so every label landed 11px left of the readout
+it names. Measured after: header and cell rects identical to the pixel.
+
+In the DOM, at both widths and in both schemes: `:modal` true, the dialog's
+accessible name "PLAYER SHARES" (the extrusion copy `aria-hidden`, so it is not
+doubled), `aria-pressed` on every row, one `role="status"`, the search field
+labelled, two spare keys `disabled` at the cap with a title saying why, and no
+element overflowing the panel at either width. `document.scrollWidth === 390` at
+phone width. Under `prefers-reduced-motion: reduce` the panel's `animation-name`
+and the row's `transition-property` both compute to `none` — the row lift rides
+`motion-safe:` precisely because `.lab-anim` clears transitions and not
+transforms.
+
+The config window was checked on the same page: 12 pips across three synced
+leagues, exactly `Math.max(2, slots)` per ladder with three unlit, and **none at
+all** on the league whose `roster_positions` are null, which reads `—` for both
+ladders, both counts and the premium. A `bonus_rec_te` of 0 renders `0` and an
+absent `scoring_settings` renders `—`, which is the null-is-not-zero rule at its
+one visible seam.
 
 ## KeepTradeCut values
 
@@ -1261,9 +1444,16 @@ carries has nothing to guard against here; see the lineups section.
 
 ## The tools console
 
-`/tools` is one bevelled panel: the wordmark plate and the account readout on
-one row, a rule, then the tool grid. Applied from a design handoff, and three
-things about it are structural rather than cosmetic.
+`/tools` is one bevelled panel: the account readout on the top row, a rule,
+then the tool grid. Applied from a design handoff, and three things about it are
+structural rather than cosmetic.
+
+**The engraved wordmark plate that used to open that row is gone**, and so is
+the rack's tool menu above it — see The tools page carries neither, under The
+app rack. What the plate leaves behind is a visually-hidden `<h1>`, still passed
+in from the page so the copy stays on the server side of the client boundary,
+and one class: the account control no longer takes `ml-auto`, which pinned it to
+the right of an otherwise empty row.
 
 **The sticky header is gone, and nothing replaced it.** The account used to be a
 full-width card under a translucent scrim that followed the scroll; it is a
@@ -1302,14 +1492,16 @@ the glyph alpha. Both the wordmark and the tool names do this, and both take
 their filter stack from a token — see the Theme section for why the stack cannot
 be written into the class string.
 
-**Both copies of the wordmark are `whitespace-nowrap`, and the type steps down
+**Both copies of a wordmark are `whitespace-nowrap`, and the type steps down
 below `sm`.** The engraving is two stacked copies of "The Lab" — an `aria-hidden`
-extrusion under the `<h1>` face. If the face wraps and the extrusion cannot, the
+extrusion under the face. If the face wraps and the extrusion cannot, the
 extrusion's second line hangs off the plate as a ghost "LAB"; the plate is also
-wider than a phone at 2.5rem, so the two are one fix. For the same reason the
-panel's gutter steps `6 → 8 → 13` rather than going straight to the design's 13,
-and the lookup input is fluid below `sm` and `w-56` above it — a fixed-width
-input is wider than the panel's content box on a phone.
+wider than a phone at 2.5rem, so the two are one fix. The rule outlived the
+plate on this page — the rack's own wordmark and `ManagerPlate` both live by it.
+For the same reason the panel's gutter steps `6 → 8 → 13` rather than going
+straight to the design's 13, and the lookup input is fluid below `sm` and `w-56`
+above it — a fixed-width input is wider than the panel's content box on a
+phone.
 
 **Light mode is derived, not measured.** The design was approved in dark; every
 chrome token has a light counterpart reasoned out from it (bevels invert, the
@@ -1334,13 +1526,19 @@ used to have a housing beside the account's, so that below `sm` the cluster
 wrapped within itself and the lookup kept a full row; with the key gone the
 lookup has the row outright and the wrap is moot.
 
-**Only `LabWordmark` joined the barrel.** The page passes it in as `ToolsHome`'s
-heading, which is what keeps the one piece of static copy on the server side of
-the client boundary. `tools`, `toolHref` and `Tool` stay out on the folder rule:
-only this folder's own modules build on them.
+**`LabWordmark` has left the barrel with the plate.** It joined it only because
+the page passed it in as `ToolsHome`'s heading; the heading is now a
+visually-hidden `<h1>` written inline, which keeps that copy on the server side
+of the client boundary just as the plate did, and nothing outside this folder
+builds on the component any more. It is kept rather than deleted — `ManagerPlate`
+and the rack's own wordmark both cite it for decisions they take, so it is the
+`peekActiveSeason` case: a module with no caller that carries the argument a
+reader would otherwise get wrong. `tools`, `toolHref`, `Tool` and `ToolsMenu`
+stay out on the same folder rule: only this folder's own modules build on them.
 
-Accessibility that the chrome must not cost: exactly one `<h1>` (the extrusion
-copy is `aria-hidden`), the readout's live state announced by `sr-only`
+Accessibility that the chrome must not cost: exactly one `<h1>` (`sr-only` since
+the plate went — the rack renders none, so dropping the plate without it would
+leave the page with no heading at all), the readout's live state announced by `sr-only`
 "Connected" rather than by the pulsing dot alone, disabled cards keeping
 `role="link"` + `aria-disabled` + their `sr-only` reason, and nothing below
 `foreground/60` or under 11px — the mono legends sit exactly on that floor.
@@ -1515,6 +1713,49 @@ is derived rather than designed, as on `/tools`; it was checked at 1280/1440 and
 390 in both schemes, and the one number worth knowing is that the gauge's arc
 sits at 4.49:1 against its track in light against 14.6:1 in dark — decorative
 contrast, with the figure itself at 5.2:1.
+
+### The configuration window
+
+The card's identity line — `team name · N-team · status` — is gone, and a lit
+window across the card says what game the league is playing instead: format,
+lineup mode, superflex, teams, starters, the QB+SF and TE slot counts as
+countable pips, and the TE premium. The line it replaces was one fact about the
+manager and two about the league, none of them acted on; the team count moved
+*into* the window, where it is the scale every slot count beside it is read
+against. `league-config-window.tsx`.
+
+**Nothing in it is derived twice, and that is the whole of the module.** Every
+rule already has exactly one spelling in `features/shared/league-filters`, so
+the window reads them: `leagueType` for the format (an absent `type` is
+redraft), named through `TYPE_OPTIONS` so the card and the Filters dialog cannot
+come to disagree about what "Dynasty" means; `isBestBall` for the lineup mode;
+`slotCount` for both ladders and the starter count; `scoringValue` for the
+premium. A second copy of any of them is a second chance to get one of Sleeper's
+quirks wrong, and the symptom would be a card describing a league the Filters
+dialog would not return.
+
+**Null is not zero, in both directions, and the ladder is where it shows.**
+`slotCount` answers null for a league whose `roster_positions` were never
+synced, and a **null ladder draws no pips at all** — an empty two-pip ladder
+would claim the league starts no quarterback, which is a different statement
+from not knowing. `total_rosters` of 0 is `storedSetting`'s rule: a row stored
+before the league answered, rendered `—`. An absent *scoring* key is a real 0,
+which is why the premium is a value rather than a flag.
+
+**The pip floor is two, and it is what makes the window scannable.** A one-QB
+league drawn as a single lit dot reads as "one"; drawn as one of two it reads as
+one of the two this board could have, so the superflex league beside it is
+visibly different without anyone reading a number. Past two the ladder is exact.
+
+**The divider is a line on glass, not `--groove`.** A groove is a channel milled
+into the housing, and there is no metal inside a lit window to cut. The window
+sits at `translateZ(18px)`, between the tiles' 22px and the plates, so the
+planes still read front-to-back.
+
+The one thing a render at 390 changed: nothing, but it is worth knowing that the
+row wraps there rather than truncating, and a divider can land at the end of a
+wrapped line. That is the cost of one flex row over three, and three rows would
+be three at 1280 too.
 
 ## Checking a week's lineup
 
@@ -2263,9 +2504,10 @@ size it against.
 The app had no navigation. `/tools` was the only way to another tool and a
 typed URL was the only way back, so the rack is the one genuinely new object in
 this pass rather than a restyling of an old one: a floating housing carrying
-the wordmark, a recessed track of tool links, a season readout and the theme
-key. Applied from a design handoff scoped to `/manager/[username]`; five things
-about it are structural rather than cosmetic.
+the wordmark, the tool navigation, a season readout and the theme key. Applied
+from a design handoff scoped to `/manager/[username]`; five things about it are
+structural rather than cosmetic. **The tool links have since become one key that
+opens a menu** — see The track became a menu below; the five still hold.
 
 **It lives in `features/tools`, not `features/shared`.** Everything it is made
 of is that folder's own — the tool registry, `toolHref`, the flask mark, the
@@ -2284,14 +2526,15 @@ what lights a key, not the resolved `href`: Manager points at
 `/manager/<username>` once an account is stored, and matching on that would
 leave the rack unlit on somebody else's page.
 
-**Below `md` the brand row becomes `display: contents`.** The rack is two
+**Below `md` the brand row becomes `display: contents`.** The rack was two
 stacked objects at a phone's width — a brand pill, then the nav track — and one
 row above it. Rather than render two trees, the wrapper's box stops existing at
 `md`, its children join the rack's flex container directly, and `order` puts
 them back in the wide layout's reading order. That is also why the pill chrome
 is on the rack above `md` and on the row below it: there is only ever one box
-painting it. The nav track scrolls rather than wrapping, because a nav that
-reflows to two lines moves the rack's height with the route.
+painting it. The stacking is what the menu removed — one key fits in the brand
+row where six never did — but the mechanism is unchanged and still carries the
+menu, the theme key and the readout into their wide-layout order.
 
 **The season readout is published by the page, not read by the rack.** It names
 whose page this is, which is manager data in app-level chrome, and three
@@ -2312,6 +2555,72 @@ removed from `tools-home`, `leagues-home`, `trades-home` and
 the name of the theme a press switches *to* beside the glyph. That word is
 `aria-hidden` rather than being the button's name — each face already carries a
 full sentence, and a visible "Light" would only prepend a redundant token.
+
+### The track became a menu
+
+The six-key horizontal track is one key that names the page you are on and opens
+a menu of the rest — `tools-menu.tsx`, a sibling of `app-rack.tsx` and out of the
+barrel on the folder rule. Two reasons, and the second is what made it worth
+doing: the rack's width grew with the registry, which `constants/tools.ts` is
+documented as sizing for eight to ten entries, and below `md` the track was
+already an `overflow-x-auto` row, so everything past Trades was reachable only by
+a horizontal swipe nobody would guess at. **One key costs the same width at six
+tools as at ten.**
+
+**The key names the page you are on rather than saying "Tools."** That is the
+only thing the old track said besides its list — the lit key *was* the "you are
+here" — and a menu that dropped it would be a nav that reports nothing. The
+menu repeats it: the current entry is drawn raised and lit, with an accent lamp
+beside it, for the moment the open menu covers the key it came from.
+
+**The tools page carries neither the menu nor the groove.** Its grid *is* the
+tool list, and a menu of the same six names directly above it is a second copy
+of the page's own content — the same argument that took the wordmark plate off
+that page, where the rack already engraves "The Lab". The groove goes with the
+menu, since a separator with nothing on its far side is a rule. The one thing
+that has to move for it is the theme key's auto-margin: above `md` the readout's
+own `ml-auto` normally takes the row's slack, and the tools page has no menu
+*and* publishes no readout, so there the key takes it itself (`md:ml-auto`
+against `md:ml-0` everywhere else). The visible cost is that `/tools` is now the
+one route with no `aria-current="page"` and no `<nav>` at all — correct, since
+the page is the list rather than a page beside it.
+
+**It is not a `<dialog>`, where the league filters and the columns picker both
+are.** Those are modal; a nav menu that trapped focus and dimmed the page to
+offer six links would be heavier than the links are worth. So the dismissal a
+`<dialog>` gives for free is spelled out: a **capture-phase `pointerdown`**, so
+a press that starts outside dismisses before whatever it landed on acts on it,
+and Escape, which returns focus to the key it came from — the one piece of that
+behaviour that is not optional. Closing on a menu item's click is not redundant
+with the route change either: the current page's own entry navigates nowhere, so
+nothing else would dismiss it.
+
+**Below `md` the menu rides in the brand row beside the wordmark**, which is what
+removes the second stacked row a phone used to get. Measured at 390 that row
+fits exactly, with no slack: flask, wordmark, the longest tool name
+("Lineup Checker") and the icon-only theme key come to the full content width,
+and the open menu's right edge lands on the viewport's. **Below 390 it
+overflows** — at 375 the theme key spills past the rack pill's cap by 8px — which
+is a width this repo has never verified at (the bar is 1280 and 390 in both
+schemes) and which the page already overflowed at 360 for its own reasons before
+this landed. If it ever needs to hold, the cheap fix is dropping the wordmark's
+*text* below 390 and keeping the flask, on the theme key's own precedent that
+the legend is the first thing to go — with an `sr-only` name left on the link.
+
+#### Verified
+
+Against a throwaway Postgres 16 cluster and a production build, over CDP at 1280
+and 390 in both schemes. `/tools` renders no `<nav>`, no menu trigger and no
+groove, one `sr-only` `<h1>` measuring 1x1, and the theme key pinned right on an
+otherwise empty rack row; the panel's lookup sits at the row's left where
+`ml-auto` used to hold it right. On the other routes the key names the page
+("Lineup Checker", "Trades", "Manager"), the menu lists all six with `toolHref`'s
+resolved targets, and exactly one entry carries `aria-current="page"` — the
+resolved-vs-`base` rule intact, since `/manager/jkap86` lights Manager. Escape
+closes it and returns focus to the key with `aria-expanded` back to `false`; an
+outside `pointerdown` closes it; reopening works. `document.documentElement.scrollWidth`
+equals the viewport at 1280 and 390 with the menu open, and the four-instrument
+row (brand, groove, menu, readout + theme key) is unmoved at 1280.
 
 ### The ground, and why it is per-route
 
@@ -2421,7 +2730,9 @@ Checked at 1280 and 390 in both schemes against the live database, with headless
 Chrome over CDP: the rack, the ground, the View housing, the rank ramp, both
 dialogs and the expanded card's strip. The DOM checks that matter also hold —
 exactly one `<h1>` per page (the rack's wordmark is spans), one
-`aria-current="page"` matching the route, one `<nav>`, one theme control.
+`aria-current="page"` matching the route, one `<nav>`, one theme control — the
+first three re-checked after the menu landed, with `/tools` the deliberate
+exception on the last two.
 
 Two things are deliberately left. **`/picktracker` and `/comps` are in the rack
 and are 404s**, because they are in `constants/tools.ts` and the handoff names

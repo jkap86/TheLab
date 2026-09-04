@@ -1,4 +1,4 @@
-import type { PlayerSummary } from "@/shared/contract";
+import type { PlayerShareSummary, PlayerSummary } from "@/shared/contract";
 
 /**
  * The one place a `players` row becomes the shape everything that draws a
@@ -42,5 +42,38 @@ export function toPlayerSummary(row: PlayerNameRow): PlayerSummary {
     name,
     position: row.position,
     team: row.team,
+  };
+}
+
+/**
+ * The extra `players` columns a shares row is drawn from, lifted out of
+ * Sleeper's raw blob by the query.
+ *
+ * Both are already `number | null` by the time they reach here: the regex
+ * guards in `./queries` are the house rule for reading a number off that blob,
+ * so junk arrives as null rather than failing the statement.
+ */
+export type PlayerShareRow = PlayerNameRow & {
+  age: number | null;
+  draft_class: number | null;
+};
+
+/**
+ * One row plus one price → the shape the shares drawer renders.
+ *
+ * `ktc_value` is a parameter rather than a column because it is not a fact
+ * about the player: it is what one of KTC's markets said about him, and which
+ * market is the reader's own answer. The route resolves that once for the whole
+ * payload and hands the number in — see `ManagerPlayersPayload.ktc`.
+ */
+export function toPlayerShareSummary(
+  row: PlayerShareRow,
+  ktcValue: number | null,
+): PlayerShareSummary {
+  return {
+    ...toPlayerSummary(row),
+    age: row.age,
+    draft_class: row.draft_class,
+    ktc_value: ktcValue,
   };
 }

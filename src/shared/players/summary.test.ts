@@ -1,8 +1,8 @@
 import assert from "node:assert/strict";
 import { describe, test } from "node:test";
 
-import { toPlayerSummary } from "./summary.ts";
-import type { PlayerNameRow } from "./summary.ts";
+import { toPlayerShareSummary, toPlayerSummary } from "./summary.ts";
+import type { PlayerNameRow, PlayerShareRow } from "./summary.ts";
 
 /**
  * The name fallback, which is the whole reason this is a module rather than a
@@ -56,5 +56,43 @@ describe("toPlayerSummary", () => {
     });
     const free = toPlayerSummary(row({ full_name: "Someone", position: "WR" }));
     assert.equal(free.team, null);
+  });
+});
+
+describe("toPlayerShareSummary", () => {
+  const shareRow = (over: Partial<PlayerShareRow> = {}): PlayerShareRow => ({
+    ...row(),
+    age: null,
+    draft_class: null,
+    ...over,
+  });
+
+  test("is the summary plus the three dated figures", () => {
+    assert.deepEqual(
+      toPlayerShareSummary(
+        shareRow({ full_name: "Bijan Robinson", age: 23, draft_class: 2023 }),
+        7123,
+      ),
+      {
+        player_id: "4046",
+        name: "Bijan Robinson",
+        position: null,
+        team: null,
+        age: 23,
+        draft_class: 2023,
+        ktc_value: 7123,
+      },
+    );
+  });
+
+  test("an absent figure stays null and never becomes a zero", () => {
+    // The rule the whole payload is written by: an unpriced player is off KTC's
+    // board rather than worthless, and a player Sleeper has no rookie year for
+    // has no draft class rather than a class of year nothing. A zero in any of
+    // the three would sort as an answer.
+    const missing = toPlayerShareSummary(shareRow(), null);
+    assert.equal(missing.age, null);
+    assert.equal(missing.draft_class, null);
+    assert.equal(missing.ktc_value, null);
   });
 });

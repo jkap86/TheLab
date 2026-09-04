@@ -35,7 +35,11 @@ export {
   type LeagueSyncStatus,
   type LeagueSyncPayload,
 } from "./league-sync";
-export { type PlayerSummary, type LeaguematePayload } from "./names";
+export {
+  type PlayerShareSummary,
+  type PlayerSummary,
+  type LeaguematePayload,
+} from "./names";
 export {
   type ManagerPlayersPayload,
   type ManagerLeaguematesPayload,

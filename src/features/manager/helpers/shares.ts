@@ -1,4 +1,4 @@
-import type { ManagerLeague, PlayerSummary } from "@/shared/contract";
+import type { ManagerLeague, PlayerShareSummary } from "@/shared/contract";
 
 /**
  * How many of a manager's leagues roster each player.
@@ -24,6 +24,15 @@ export type PlayerShare = {
   name: string;
   position: string | null;
   team: string | null;
+  /**
+   * The drawer's three figures, carried through unchanged from the payload —
+   * **null where the answer is absent, never zero**, which is what lets a cell
+   * draw an em dash and a sort put the row last rather than at a fabricated
+   * bottom of the scale. See `PlayerShareSummary`.
+   */
+  age: number | null;
+  draft_class: number | null;
+  ktc_value: number | null;
   /** The leagues holding him, in the order they were given. */
   leagues: ManagerLeague[];
 };
@@ -55,7 +64,7 @@ function isPlayerId(id: string): boolean {
 export function playerShares(
   leagues: readonly ManagerLeague[],
   rosters: Record<string, readonly string[]>,
-  players: Record<string, PlayerSummary>,
+  players: Record<string, PlayerShareSummary>,
 ): PlayerShares {
   const held = new Map<string, ManagerLeague[]>();
   let leagueCount = 0;
@@ -85,6 +94,9 @@ export function playerShares(
       name: summary?.name ?? player_id,
       position: summary?.position ?? null,
       team: summary?.team ?? null,
+      age: summary?.age ?? null,
+      draft_class: summary?.draft_class ?? null,
+      ktc_value: summary?.ktc_value ?? null,
       leagues: inLeagues,
     });
   }

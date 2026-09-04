@@ -26,6 +26,7 @@ import {
   rankFill,
   rankPercentile,
 } from "../helpers/lineup-metrics";
+import { LeagueConfigWindow } from "./league-config-window";
 import { LeagueTeams } from "./league-teams";
 
 /**
@@ -43,6 +44,14 @@ import { LeagueTeams } from "./league-teams";
  * in its bezel, and the plate opposite carries the three figures that used to
  * be scattered through the identity line and the status word: record, standings
  * rank, points rank.
+ *
+ * **The identity line under the rule became a configuration window.** It used
+ * to read `team name · N-team · status`, which was one fact about the manager
+ * and two about the league, none of them acted on; in its place is a lit window
+ * stating what game the league is playing — format, lineup mode, superflex,
+ * teams, starters, the QB+SF and TE ladders and the TE premium. See
+ * `LeagueConfigWindow`, which reads every one of those off the rules the
+ * Filters dialog narrows by rather than deriving any of them a second time.
  *
  * The rise is real perspective, not a `translateY`: the `<li>` owns the
  * `perspective`, the card sits at `rotateX(3deg)` at rest and flattens to
@@ -79,20 +88,6 @@ import { LeagueTeams } from "./league-teams";
  * `lineup-check-card.tsx` carries the identical gate.
  */
 
-/**
- * Sleeper's `status`, as words rather than its own vocabulary.
- *
- * An unknown status falls through to the raw string rather than to a
- * placeholder: Sleeper adds them, and showing the one it sent is more use than
- * hiding it behind "unknown".
- */
-const STATUS_LABELS: Record<string, string> = {
-  pre_draft: "Pre-draft",
-  drafting: "Drafting",
-  in_season: "In season",
-  complete: "Complete",
-};
-
 /** `8–5`, or `8–5–1` where the league has ties and this manager has one. */
 function formatRecord(record: LeagueRecord): string {
   const base = `${record.wins}–${record.losses}`;
@@ -126,13 +121,6 @@ export function LeagueCard({
   /** This league's solve + ranks, once the batched lineups read lands. */
   entry?: LeagueLineupEntry | null;
 }) {
-  const status = STATUS_LABELS[league.status] ?? league.status;
-  // Sleeper stores an unset team name as an empty string about as often as it
-  // omits the key, so blank is folded in with null rather than rendered as one:
-  // `?? "—"` alone leaves those cards with a silent gap where every other card
-  // has a dash.
-  const teamName = league.team_name?.trim() || null;
-
   return (
     // The `perspective` makes each `<li>` its own stacking context, so a card
     // that rises cannot paint over the one after it in DOM order — the raise
@@ -190,21 +178,20 @@ export function LeagueCard({
 
           <CardRule />
 
-          {/* The manager's own line. A league with no team name says only what
-              it knows, rather than padding the line with a placeholder. The
-              record used to live here and is on the plate now, where the two
-              ranks beside it give it something to be read against. */}
-          <p className="relative mt-3.5 font-mono text-[0.6875rem] uppercase tracking-[0.16em] text-foreground/60 pointer-fine:[transform:translateZ(14px)]">
-            {teamName ?? "—"}
-            {` · ${league.total_rosters}-team · ${status}`}
-          </p>
+          {/* What game this league is playing, in place of the identity line
+              that used to sit here. The team name and the status went with it —
+              see `LeagueConfigWindow` — and the team count moved into the
+              window, where it is the scale the slot ladders are read against. */}
+          <LeagueConfigWindow league={league} />
 
-          {/* The ranks get the row to themselves, under the identity rather
-              than beside it — so the tiles stay a direct child of the summary,
-              which is what keeps their `translateZ` alive. A wrapper here would
-              be a flat rendering context and the depth would silently go. */}
+          {/* The ranks get the row to themselves, under the configuration
+              rather than beside it — so the tiles stay a direct child of the
+              summary, which is what keeps their `translateZ` alive. A wrapper
+              here would be a flat rendering context and the depth would
+              silently go. The margin is `mt-2.5` rather than `mt-4` because the
+              window above already carries the separation the line did not. */}
           <div
-            className={`relative mt-4 grid gap-2.5 ${GRID_COLS[columns.length] ?? GRID_COLS[2]} pointer-fine:[transform:translateZ(22px)]`}
+            className={`relative mt-2.5 grid gap-2.5 ${GRID_COLS[columns.length] ?? GRID_COLS[2]} pointer-fine:[transform:translateZ(22px)]`}
           >
             {columns.map((id) => (
               <MetricTile key={id} id={id} entry={entry} />

@@ -19,6 +19,11 @@ import { SharesDrawer, type SharesDrawerRow } from "./shares-drawer";
  * the selection instead, every row would collapse to the row you just picked and
  * could not be widened without clearing first — the rule `facetsQuery` already
  * enforces for the trades board's own menus.
+ *
+ * The three player-only columns — Value, Age, Class — ride the payload rather
+ * than being derived here, and all three are **null where absent, never zero**.
+ * Which market the value is on is the payload's own answer (`ktc`), because a
+ * row spans leagues and so cannot resolve one per league the way a card does.
  */
 
 /** Sleeper's own vocabulary, in the order a roster is usually read. */
@@ -34,6 +39,8 @@ export function PlayerSharesDrawer({
   open,
   onClose,
   leagues,
+  leagueTotal,
+  filterSummary,
   read,
   subjects,
   onToggle,
@@ -42,6 +49,10 @@ export function PlayerSharesDrawer({
   onClose: () => void;
   /** League-filtered, subject-unnarrowed — see the note above. */
   leagues: readonly ManagerLeague[];
+  /** Every league on the page, for the panel's population readout. */
+  leagueTotal: number;
+  /** What the league filters left, or null for nothing active. */
+  filterSummary: string | null;
   read: {
     data: ManagerPlayersPayload | null;
     loading: boolean;
@@ -88,7 +99,10 @@ export function PlayerSharesDrawer({
       note: player.team,
       held: player.leagues.length,
       leagues: player.leagues,
-      icon: <PositionBadge position={player.position} />,
+      value: player.ktc_value,
+      age: player.age,
+      draftClass: player.draft_class,
+      badge: { label: player.position ?? UNKNOWN_POSITION },
     }));
   }, [shares, position]);
 
@@ -107,6 +121,8 @@ export function PlayerSharesDrawer({
       noun="players"
       rows={rows}
       leagueCount={shares?.league_count ?? 0}
+      leagueTotal={leagueTotal}
+      filterSummary={filterSummary}
       loading={read.loading}
       error={read.error}
       emptyMessage="No players rostered in these leagues yet."
@@ -114,7 +130,7 @@ export function PlayerSharesDrawer({
       onClearChips={() => setPosition(null)}
       chips={
         positions.length > 1 && (
-          <div className="flex flex-wrap gap-1.5">
+          <>
             <PositionChip
               label="All"
               count={shares?.players.length ?? 0}
@@ -130,7 +146,7 @@ export function PlayerSharesDrawer({
                 onPick={() => setPosition(position === value ? null : value)}
               />
             ))}
-          </div>
+          </>
         )
       }
       selected={(subject) => chosen.has(subjectKey(subject))}
@@ -160,26 +176,14 @@ function PositionChip({
       type="button"
       onClick={onPick}
       aria-pressed={on}
-      className={`${CONSOLE_KEY_PILL} px-2.5 py-1 bg-[image:var(--key-bg)] shadow-[var(--key-shadow)] ${
+      className={`${CONSOLE_KEY_PILL} bg-[image:var(--key-bg)] px-[0.5625rem] py-1 text-[0.625rem] tracking-[0.14em] shadow-[var(--key-shadow)] ${
         on
           ? "border-active/45 text-readout"
           : "border-foreground/10 text-foreground/75 hover:text-readout"
       }`}
     >
       {label}
-      <span className="ml-1.5 tabular-nums text-foreground/50">{count}</span>
+      <span className="ml-1.5 tabular-nums text-foreground/45">{count}</span>
     </button>
-  );
-}
-
-/** The one flash of position colour; everything else on the row is chrome. */
-function PositionBadge({ position }: { position: string | null }) {
-  return (
-    <span
-      aria-hidden
-      className="inline-flex size-7 shrink-0 items-center justify-center rounded-[0.375rem] border border-foreground/10 bg-foreground/[0.05] font-mono text-[0.5625rem] uppercase tracking-[0.08em] text-foreground/65"
-    >
-      {position ?? UNKNOWN_POSITION}
-    </span>
   );
 }
