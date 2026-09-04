@@ -1,10 +1,13 @@
 "use client";
 
 import type { LeagueLineup, LineupPlayer, MetricRank } from "@/shared/contract";
-import { CONSOLE_TRACK, ordinal } from "@/features/shared";
 
-import { rankColor, rankPercentile } from "../helpers/lineup-metrics";
-import { type Lens, lensValue, type SeatCompare } from "../helpers/seat-compare";
+// Relative, not through the barrel: this folder's own modules are what a
+// module in it reaches for — the rule the move here brought with it.
+import { CONSOLE_TRACK } from "../console-chrome";
+import { ordinal } from "../format";
+import { rankColor, rankPercentile } from "../rank-ramp";
+import { type Lens, lensValue, type SeatCompare } from "../seat-compare";
 
 /**
  * A league card's rest-of-season lineup, read against another one: the optimal

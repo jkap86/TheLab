@@ -587,11 +587,14 @@ that owes the reader that distinction.
 
 On the page, each league card is the league name plus up to four rank columns
 ("2nd of 12"), with the season line, team/record and the team browser behind a
-`<details>` disclosure — `league-card.tsx` stays hook-free on purpose, and the
-state a card does need lives in `league-teams.tsx` below it. The browser is
+`<details>` disclosure — the browser standing under a history rail that redraws
+it over the rosters of any past moment, priced at today's values (The league's
+history, below). `league-card.tsx` stays hook-free on purpose, and the state a
+card does need lives in `ui/league-teams.tsx` and `ui/timeline` below it. The browser is
 two panes: the league's standings on the left, the selected team — the
 manager's by default — solved out on the right *against the manager's own
-roster*, then `DraftPicks` under both panes (see the console section: the
+roster*, then `DraftPicks` under both panes (all three in `features/shared/ui`
+since the rail became a second reader of them) (see the console section: the
 picks grid wants the full width, and they are the roster's, not the lineup's).
 See The detail is a comparison, below, for the standings table and the
 seat-level gaps. The panes sit side by side at
@@ -865,6 +868,283 @@ contaminated.
 pricing the way `adp-value.ts` was from its board half — ADP boards and lineup
 pricing both split on it and a second spelling is the drift it prevents. The
 folder's sync half arrived since; see the KeepTradeCut section below.
+
+## The league's history
+
+An open league card carries a rail over every move the league has on file, and
+dragging it redraws the card's own team browser over the rosters of that
+moment — **priced at today's values**, so a reader can see what a team would be
+worth now if it had stayed as it was. `GET /api/league/[leagueId]/timeline`
+backs it. TheLabX's feature ported, minus its trade anchor, redrawn in this
+app's console vocabulary, and answering a question that repo's version does not.
+
+**It needed no migration**, and that is the schema's doing rather than luck:
+`transactions`, `rosters`, `traded_picks` and `drafts` are exactly what the
+league-graph migration put in and what the crawler and the manager sync have
+been filling since. Nothing here writes.
+
+**Sleeper stores no history, so the rail is a reconstruction.** `rosters` is
+only ever *now* and there is no endpoint that answers "what did this team look
+like in October" — what there is, is the whole transaction log. So the state at
+any past moment is today's roster with everything since undone, walked
+newest-first. `shared/timeline/rewind.ts` is that walk, ported whole with its
+tests.
+
+**The log crosses the wire, not the answer**, which is the whole design. A stop
+is the current rosters with the moves since it reversed, and there is a stop per
+move — so an answer per stop would be the league's rosters times its
+transactions, where the log is the transactions alone and the reversal is
+arithmetic a browser does thousands of times a second. One request buys every
+stop, so scrubbing costs nothing after the first.
+
+### The metrics are kept, and they are today's
+
+The first cut of this dropped the card's nine metrics at a past stop, on the
+reasoning that a rest-of-season projection is for the season that is *left* and
+a KTC price is this morning's, so attributing either to a roster that stopped
+existing in October is a wrong number rather than an old one. **That reasoning
+is intact and the conclusion was wrong**, because it answers a question nobody
+was asking. Nothing here keeps a history of a projection, an ADP or a market —
+all three boards are only ever *now* — so "what was that team worth then" is not
+answerable at all. What *is* answerable is the thing a reader scrubbing back
+actually wants: **what would that team be worth today**, which is what makes a
+trade or a drop legible after the fact. `features/shared/timeline-entry.ts` is
+that counterfactual, and `timelineCaveat` is where it is said out loud, because
+a table of ordinary-looking figures is exactly the place a reader would assume
+the opposite.
+
+**The past is the card's own browser over different rosters**, not a second
+view of the same league. `LeagueTeams` draws both — the same metric column, the
+same Points/Capital/KTC lens, the same seat breakdown, the same pick pills —
+and `rankLeagueLineups` prices both, reached directly from the browser because
+**every module in that solve chain is pure**, which is what those files have
+said all along and what this is the first caller to depend on. So a past total
+and a present one cannot be computed two ways, and the seat order, the nine
+totals' edge rules and the all-zero rule are the ones already documented.
+
+**One element at one position, and that is a behaviour rather than a tidiness.**
+`TimelineView` renders the browser itself rather than swapping the card's for a
+second component, so React keeps the instance across a scrub: the reader's
+metric, lens and selected team all survive crossing "now". Two elements would
+reset all three on every move, which on a control whose whole purpose is to be
+dragged is the difference between a comparison and a nuisance.
+
+**The pricing inputs cross the wire, not the prices.** The payload carries
+today's projections, ADP and KTC for the union of players the timeline can name,
+plus every cell of the pick grid; the browser solves each stop. That is the same
+trade the log makes one paragraph up, for the same reason — the alternative is a
+priced answer per notch.
+
+**Three narrowing parameters, and they are the lineups route's own.**
+`?season=`, `?user=` and `?ktc_board=` decide which boards answer, and a past
+roster priced on a different board from the card in front of the rail is not a
+comparison — it is two numbers on two rulers. `?user=` is the one that looks out
+of place on a league-scoped read and is the one that matters most: the ADP
+fallback board is built from *that manager's* synced drafts, so without it the
+three capital metrics have nothing to price against and rank null. A malformed
+`?season=` is a 400 and an unreadable `?ktc_board=` falls back to `auto`, which
+is the opposite call for the opposite reason (see `parseKtcBoardChoice`); an
+unknown `?user=` is neither, because the manager is not this route's subject —
+it costs those three columns and nothing else.
+
+**Every read degrades rather than failing**, on the lineups route's exact terms:
+a missing projections span, an unreadable market and an account with no synced
+drafts each leave their own half empty, and the all-zero rule turns a wholly
+unpriced metric into dashes. A payload with **no pricing at all** still draws
+the table, every column dashed — the rosters are the answer a reader came for,
+and the numbers are the enhancement.
+
+### What the pieces are, and why they moved
+
+- **`rewind.ts` is pure and a browser is its second reader.** Its one import is
+  `shared/trades/jsonb`, which is equally pure, so it unit-tests under Node's own
+  runner and `features/shared/timeline.ts` imports it directly — the deep-import
+  exception `@/shared/ktc/roster` and `shared/projections/slots` already earn, and
+  the reason `shared/timeline`'s barrel (which drags `pg` in) is server-only.
+- **`leaguePickBoard` reads one grid three ways.** `leagueRosterPicks` is its
+  `byRoster` and nothing else now; the split exists because a rewind needs the
+  **cells** — a pick's slot comes off the draft order through the *original*
+  roster's owner and its price comes off that slot, so both are facts about the
+  cell rather than about whoever holds it. A stop moves cells between rosters and
+  changes nothing about a cell, which makes a rewound portfolio a lookup rather
+  than a second resolution of a draft order. `owned` is the third reading, and it
+  is there so the rewind starts from the *same* enumeration the price table is
+  keyed by: a dynasty league's grid is `dynastyPickGrid`'s horizon and every
+  other format's is derived from its trades, so a second call with a different
+  grid argument would rewind cells the card cannot price.
+- **`getLeagueLineupRow` is `getManagerLeagueRosters` for one league**, over the
+  extracted `LINEUP_LEAGUE_COLUMNS_SQL` so the two cannot drift.
+  `HOLDS_A_ROSTER_SQL` is deliberately absent — that predicate answers *which
+  leagues are a manager's*, and there is no manager in this question — while
+  `LIVE_LEAGUE_SQL` stays.
+- **`restOfSeasonStart` moved to `shared/projections/weeks.ts`** and takes its
+  state reader as an argument. Two routes now ask which weeks are the rest of the
+  season, and they must agree; the argument is what keeps that module free of the
+  network.
+- **`pickValue` is exported from `manager/league-teams`**, so the two pick
+  vocabularies meet in exactly one place. A second meeting is a past pick priced
+  off a different third of its round from the one the card shows.
+- **`LeagueTeams`, `LineupBreakdown` and `DraftPicks` moved to
+  `features/shared/ui`** on the line `CONSOLE_KEY`, `ManagerPlate`,
+  `LeagueFiltersDialog` and `LeagueConfigWindow` all moved on: a second reader.
+  **The timeline subtree itself deliberately stays *out* of
+  `features/shared/index.ts`** and the card names its module path — that barrel
+  is imported by every page, and from it the rail, the rewind, the solve and the
+  fetch hook would join the graph of the four that draw none. It is
+  `local-store.ts`'s exception argued from the other side.
+
+### The rest of the reconstruction
+
+**The read is behind a press, and that is a bound rather than a nicety.** A
+`<details>` hides its body rather than unmounting it, so on a 113-league account
+every card's rail is mounted at once; this is also the heaviest read the manager
+page makes — a season of one league's transactions, its whole pick grid and a
+projections board. So the seat is a `History` key and `useTimeline` is disabled
+until it is pressed. Nothing caches in front of it and nothing needs to while the
+page stands: the hook keeps its answer for as long as the card is on screen, and
+the route's own `private, max-age=60` covers a card that goes and comes back.
+**Every field of the subject is in its key**, so a season or a market flip blanks
+the payload for one round trip rather than leaving the old board's prices under
+the new board's name — the cost `useManagerLineups` already pays for the same
+flip and for the same reason.
+
+**The far end is this league id's log and no further, which is a real limit
+rather than a shortcut.** A Sleeper league id *is* one season and a dynasty
+chain links seasons through `previous_league_id`, so the obvious extension is to
+keep walking into last year. It is not sound: rosters carry over between seasons
+through no transaction at all, so there is nothing to reverse across the
+boundary and a walk that crossed it would report last season's league as though
+this season's roster had always been on it. The honest far end is the first move
+this league recorded, which is roughly the post-draft roster.
+
+**Two limits ride along and only one of them is stated to the reader**, which is
+a judgement rather than an omission. A draft is not a transaction, so a stop
+reaching back across a rookie draft leaves that class on the rosters that took
+it — visible on screen. The pick horizon is today's, so a pick in a season
+already drafted is absent unless a reversed trade names it — which shows up as
+picks quietly missing, and no wording on a note is going to make it legible. The
+caveat's four sentences already carry the moment, the date, the reconstruction
+and the pricing; a caveat that lists everything is one nobody finishes.
+
+**The order is the league's own at every stop and never the moment's** —
+`timelineRosters` returns roster-id order and `LeagueTeams` sorts by whichever
+metric its column shows, exactly as it does at "now". **The manager naming a
+block is today's**, which is the honest limit rather than an oversight: Sleeper
+stores no past ownership, so the block says "roster 4, which so-and-so holds
+today", and naming it after somebody who has since taken it over is a smaller
+error than not naming it at all. The reader's own team is marked **by roster
+id**, which the card knows and the payload does not — `user_id` is on the wire
+only as the join the solve's own manager lookup needs.
+
+**`back` rather than a stop index is the state the view holds**, and that is a
+decision rather than a spelling: the payload arrives after the card opens, so an
+index into a list that does not exist yet has to be reconciled when it does,
+where a count back from now is 0 before the request lands and 0 after it. That
+is exactly the "it opens as it always did" promise — at `back` of 0 the view
+renders the card's own entry, untouched.
+
+### What changed against TheLabX
+
+- **The past pane is priced, where theirs is not.** That repo draws a second
+  two-pane view and gates its columns per metric, allowing only board prices
+  through and dashing the rest with a note telling the reader to press `Now`.
+  Here there is no second view and no gate: the card's table is redrawn over the
+  rewound rosters with every metric answered on today's boards, and the caveat
+  says so. Its version answers "who held what"; this one also answers "and what
+  would that have been worth".
+- **No anchor.** That repo's rail has two hosts: a trades-board sheet opened
+  *from* a trade, which stops there, and a leagues card, which runs the whole
+  log. There is no such sheet here, so `RosterTimelinePayload` carries no
+  `anchor`, `timelineOrigin` collapses into the one wording the far end can
+  have, and `tradeRosterIds` — which marks the rosters that dealt so they sort
+  first — has nothing to mark. The field arrives with the sheet.
+- **No `managers` map.** That payload ships one because its view resolves a
+  pick's origin to a holder its card may never have heard of. This one carries
+  *every* roster in the league, so an origin is always a row on the list already
+  in hand — the name is resolved server-side by `leagueTeamName`, the same
+  spelling the teams pane calls the team by, so "now" and "then" cannot disagree
+  about whose roster this is.
+- **No react-query.** `use-timeline.ts` is the house idiom instead: one abort
+  controller lineage, a reset *during render* on a subject change, `loading`
+  derived rather than stored. It **reports** its failure where
+  `useManagerLineups` swallows one — that hook is an enhancement beside a list
+  that stands on its own, where this is the only thing behind the rail and a rail
+  that opened onto nothing with no word saying why is indistinguishable from a
+  league with no moves.
+- **`rewindTradeRosters` is not ported.** It emits a snapshot every time the
+  walk crosses a trade so a `trade_rosters` table can store what each side
+  brought to it. There is no such table here; it arrives with one.
+
+### The rail is the console's, not the original's
+
+TheLabX draws two rows of chips. Here it is one row of instruments, and the
+difference is where the moving line went: there the stop's own summary rides the
+rail beside the date, here it leads the caveat under the table — the line
+already explaining how those rosters are known. That leaves three fixed parts
+and lets **the seat be the same height in all five of its states**, so pressing
+`History` moves nothing under it. The 50px floor is measured, not chosen: the
+key's row is 36px and the rail's is 35.
+
+The grammar is the card's own. The slider sits in a labelled recess — the shape
+the `Rank by` control one row down already wears, and the only thing that says
+what the rail *is* once the key it replaced is gone — running in a cut channel
+with the rank tiles' meter fill behind it. The moment is a lit readout, `Now` as
+a **word** rather than today's date, because the present is not a date anybody
+scrubbed to. The two ends are one lit key in a track, which is
+`LineupLensKeys`' switch grammar: at a stop in between, neither is lit, which is
+the honest position for a switch standing off its detents. `.lab-rail` in
+`globals.css` is the one thing not expressible as utilities — a range input's
+track and thumb are pseudo-elements — and it does nothing but clear the UA track
+and make the thumb a key, both from tokens so one rule reads in both themes.
+
+**`formatInstantDate` / `formatInstantTime` moved into `features/shared/format`**
+and the trade card's plate now reads them. Its two-span responsive rule stayed
+where it is — dropping the year below `sm` is that plate's own width argument —
+but the punctuation is one spelling now, which is what stops two parts of one
+console from writing a date differently.
+
+### Verified
+
+Rendered through a temporary `/preview` route against the real components,
+tokens and Tailwind build — the method the console-card, shares and rack passes
+established, since no database is reachable from where this was built — then
+screenshotted over CDP at 1280 and 390 in both schemes and deleted. The two
+mechanics that method needs are unchanged and worth restating: Chrome must be
+launched with `--no-proxy-server`, and a phone-width viewport has to come from
+`Emulation.setDeviceMetricsOverride` rather than `--window-size`, which headless
+Chrome clamps to ~485px.
+
+**The counterfactual was driven end to end**, which is the check this pass exists
+for. Over a fixture league whose two teams swapped quarterbacks, the far stop
+read `Slim's Squad 216.0 / Dynasty Warriors 198.0` against `342.0 / 204.0` at
+"now" — the rosters from before the trade, on today's projections — and the same
+scrub on the KTC column read `45,006` then against `43,859` now, which is the
+whole point stated in one number: that team *was* worth more. The pick pills
+rewound with them, Slim's 1.09 appearing in the other portfolio still priced at
+4,870 off its own cell.
+
+**The state survives a scrub**, which is the one-element claim: switching the
+column to KTC at "now" and pressing `Start` left the select on `ktc_total` and
+the selected team on Dynasty Warriors. All five seat states were driven, four of
+them for real: the `History` key, a press producing `Reading history…` at 120ms
+and — with no database behind the route — `Failed to load the league's history`,
+which is the failure arm end to end. Both seats measured **exactly 50px**. At 390
+the rail wraps to two lines and `document.documentElement.scrollWidth === 390`,
+with one `<h1>` and `aria-pressed` on every end key and team row.
+
+`timeline-entry.test.ts` is where the arithmetic is pinned rather than rendered:
+that a stop back prices the roster they *had*, that every metric moves with it
+rather than only points, that `ktc_total` still reconciles at a past stop, that a
+rewound pick returns to its sender priced from its cell, that a manager the card
+has not named yet marks nothing and ranks nothing while every roster still
+solves, and that a payload with no pricing is a table of dashes rather than no
+table.
+
+**Not verified against real data**, which is the gap to close first: every number
+above is a fixture, and what the fixtures cannot check is the shape of a real
+league's log — how long a season's rail actually is, how heavy the trimmed
+projections board is on a full union, and whether the pick grid a stop
+reconstructs matches the one the card draws beside it at `Now`.
 
 ## Choosing a KeepTradeCut market
 
@@ -2049,14 +2329,36 @@ be three at 1280 too.
 
 ## Checking a week's lineup
 
-`/lineupchecker` answers two questions per league for one NFL week: **what the
-lineup as set projects against the best one still reachable from it**, and
-**whether its starters are seated in the order they lock best in**. Its card
-has since been redrawn and gained a third answer — the week's projected outcome
-against the opponent's own lineup; see The console card below. It reads the
-stored account rather than a username in its URL — which is what the tool
-registry already declared for it (no `hrefFor`, not `accountless`), so
-`constants/tools.ts` is untouched.
+`/lineupchecker/[username]` answers two questions per league for one NFL week:
+**what the lineup as set projects against the best one still reachable from
+it**, and **whether its starters are seated in the order they lock best in**.
+Its card has since been redrawn and gained a third answer — the week's
+projected outcome against the opponent's own lineup; see The console card
+below.
+
+**The manager is named by the route, and was not always.** It read the stored
+account off `local-store` until that changed, on the argument that a tool about
+*your* leagues has no business asking for the name again. What that argument
+missed is that the page then had exactly one URL for every manager: nobody could
+open somebody else's lineups, keep a bookmark for a second account, or send
+anyone a link to what they were looking at — and the manager page, which lists
+the same leagues, has taken a username in its path since it landed. So the route
+is `/lineupchecker/[username]` and it is `/manager/[username]`'s shape all the
+way down: the same `PageProps` unwrap, the same `useManagerLeagues(username)`
+underneath, and no bare `/lineupchecker` route, exactly as there is no bare
+`/manager` one.
+
+**The stored account is what gets a reader there in one press, and it is now a
+default rather than the only answer.** `constants/tools.ts` gained a `hrefFor`
+for Manager's reason — the tool card and the rack key resolve to
+`/lineupchecker/<stored account>` — and the tool stays *not* `accountless`,
+because there is still nothing behind "your lineups" without knowing whose. The
+`NoAccount` plate went with the change: with a username in the path it was
+unreachable. Two other files name the route and both moved with it — `proxy.ts`'s
+matcher takes `/lineupchecker/:path+` (a positive list, which is why a route
+shape is a line there as well as here), and `logs/derive-visit.ts` reads the
+second segment as a **username**, so a visit to this tool now names its subject
+in the log the way a visit to `/manager` does.
 
 **Half of it was already in the tree and had never been called.**
 `projections/optimal.ts`'s `compareLineup` — with its `locked` set and its
@@ -2163,6 +2465,24 @@ minutes against the ROS board's thirty**, which is the difference between a
 season board that moves on injury news over days and a week board read by
 somebody setting a lineup an hour before kickoff — the Sunday-morning inactive
 is exactly what half an hour of staleness would hide.
+
+**The page sits on the ground rather than on a panel of its own**, which is
+the leagues console's arrangement and arrived here later than there. It used
+to draw the rounded, bordered panel every pre-rack page drew — and drew it
+*inside* the shell the manager page had already given up, so a reader walking
+from `/manager` to `/lineupchecker` got a second bounded rectangle inside the
+viewport under a floating rack, which is the doubling `ConsoleGround` exists to
+remove.
+
+**The card width fell out of the same edit, and it is the reason to make it.**
+Both pages are one card per row at `PageShell width="console"`, so the only
+thing that ever made these cards narrower was the panel's own inset and border
+— `px-6 sm:px-13`, which measured **106px** at 1280 (1014 against `/manager`'s
+1120) and **50px** at 390 (312 against 362) — and the two cards are the same
+card over the same league. A league that read whole on `/manager` and clipped
+here would be the shell's `console` arm failing at the one thing it was widened
+for. With the panel gone the two agree by construction rather than by two
+spellings of a width.
 
 Checked at 1280 and 390 in both schemes. Light mode is derived rather than
 designed, as everywhere else on the console.
@@ -2494,8 +2814,14 @@ his **id** on the card: a visible, searchable token beats a blank.
 
 - **ADP prices.** KTC prices landed — see below — but there is still no ADP
   board in this repo, so `enrich.ts` resolves one valuation rather than two.
-- **`trade_rosters`, the rewind and the timeline** — the pre-trade roster
-  browser is its own feature.
+- **`trade_rosters` and the anchored timeline.** **The rewind and the rail have
+  since landed** — on the manager card, over a league's whole log; see The
+  league's history. What is still absent is this board's own half of it: a sheet
+  opened *from* a trade card, whose rail stops at that trade and whose far stop
+  is the two sides as they stood before it. That is one field on the payload
+  (`anchor`), one `findIndex` truncation on the read, and the snapshot walk
+  (`rewindTradeRosters`) that fills a `trade_rosters` table this repo does not
+  have. It arrives with the sheet.
 - **`trade_market_stats`.** TheLabX precomputes the unnarrowed denominator
   because its corpus is millions of crawled transactions; here `countTradeTotals`
   always counts, which is a walk of a partial index holding the trades and
@@ -3330,6 +3656,10 @@ way, so the rack is not a new claim. And **the tools, trades and lineup-checker
 pages still draw their own panel** on `--background` rather than on the ground —
 they are unchanged apart from losing their theme key, and giving them the
 full-bleed treatment is a redesign of three pages this bundle does not cover.
+**`/lineupchecker` has since taken the ground**, which cost it no redesign at
+all: it was already the leagues console's plate and cards on a panel of its
+own, so the panel was the only thing between it and `/manager`. See Checking a
+week's lineup.
 
 ### The rack is pinned, and it carries the page's controls
 

@@ -15,6 +15,8 @@ import {
   CardPlateRow,
   CONSOLE_CARD,
   CONSOLE_WINDOW,
+  formatInstantDate,
+  formatInstantTime,
   LeagueConfigWindow,
   LeaguePlate,
   ReadingPlate,
@@ -154,7 +156,6 @@ export const TradeCard = memo(function TradeCard({
  */
 function TradeDate({ at }: { at: number | null }) {
   if (at === null) return <>Undated</>;
-  const date = new Date(at);
   return (
     <>
       {/* **The year comes off the plate below `sm`**, which a render at 390
@@ -164,25 +165,14 @@ function TradeDate({ at }: { at: number | null }) {
           drawn as two spans and switched by the cascade rather than by state,
           which keeps this component free of a breakpoint it would have to
           hydrate to learn. */}
-      <span className="sm:hidden">
-        {date.toLocaleDateString(undefined, { month: "short", day: "numeric" })}
-      </span>
-      <span className="hidden sm:inline">
-        {date.toLocaleDateString(undefined, {
-          month: "short",
-          day: "numeric",
-          year: "numeric",
-        })}
-      </span>
+      <span className="sm:hidden">{formatInstantDate(at, { year: false })}</span>
+      <span className="hidden sm:inline">{formatInstantDate(at)}</span>
       {" · "}
       {/* The two halves are formatted separately and joined on the console's
           own separator rather than taken from one `toLocaleString`, which
           glues them with a second comma — `Aug 28, 2026, 9:42 PM` reads as a
           three-part list where the plate is saying two things. */}
-      {date.toLocaleTimeString(undefined, {
-        hour: "numeric",
-        minute: "2-digit",
-      })}
+      {formatInstantTime(at)}
     </>
   );
 }

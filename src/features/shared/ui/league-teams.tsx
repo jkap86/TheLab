@@ -3,20 +3,14 @@
 import { useState } from "react";
 
 import type { LeagueLineupEntry, LineupMetricId } from "@/shared/contract";
-import {
-  CONSOLE_READOUT,
-  LINEUP_METRIC_IDS,
-  LINEUP_METRIC_LABELS,
-  ordinal,
-} from "@/features/shared";
 
-import {
-  placeAmong,
-  rankColor,
-  rankFill,
-  rankPercentile,
-} from "../helpers/lineup-metrics";
-import { seatComparisons } from "../helpers/seat-compare";
+// Relative, not through the barrel: this folder's own modules are what a
+// module in it reaches for — the rule the move here brought with it.
+import { CONSOLE_READOUT } from "../console-chrome";
+import { ordinal } from "../format";
+import { LINEUP_METRIC_IDS, LINEUP_METRIC_LABELS } from "../lineup-columns";
+import { placeAmong, rankColor, rankFill, rankPercentile } from "../rank-ramp";
+import { seatComparisons } from "../seat-compare";
 import { DraftPicks } from "./draft-picks";
 import {
   type BenchReading,
@@ -73,6 +67,16 @@ import {
  * that is why the **lens lives here** rather than in `LineupBreakdown`:
  * neither pane is wide enough to carry a header, so the state has to be
  * visible to the keys and to the list at once.
+ *
+ * **It moved here from `features/manager` when the history rail became a second
+ * reader** — the line `CONSOLE_KEY`, `ManagerPlate` and `DraftPicks` all moved
+ * on. The rail draws the same browser over a *rewound* roster set priced on
+ * today's boards, which is why it is one component rather than two: the past is
+ * the present's table with different rosters in it, and a second table would be
+ * a second set of edge rules to drift. It is also why the rail renders this
+ * element itself rather than swapping it out — one element at one position keeps
+ * the metric, the lens and the selected team across a scrub, where two would
+ * reset all three every time a reader crossed "now".
  */
 
 /**

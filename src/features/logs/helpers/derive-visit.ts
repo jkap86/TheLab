@@ -33,9 +33,10 @@ export type Visit = {
  * deeper path is still visible if one ever appears.
  */
 
-/** The two routes that carry a subject, and which kind each carries. */
+/** The routes that carry a subject, and which kind each carries. */
 const SUBJECT_ROUTES: Record<string, "username" | "league"> = {
   manager: "username",
+  lineupchecker: "username",
   picktracker: "league",
 };
 

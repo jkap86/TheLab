@@ -24,10 +24,14 @@ export const tools: Tool[] = [
       "Read every trade in every crawled league, by date, players, picks or manager.",
     accountless: true,
   },
+  // `hrefFor` for Manager's reason: the tool is about one manager's leagues,
+  // and the route names which — so the card and the rack key resolve to the
+  // stored account rather than dropping a reader on a page with no subject.
   {
     href: "/lineupchecker",
     text: "Lineup Checker",
     description: "Validate that your optimal lineup is set.",
+    hrefFor: (username) => `/lineupchecker/${username}`,
   },
   {
     href: "/comps",

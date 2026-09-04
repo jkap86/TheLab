@@ -10,7 +10,6 @@ import {
   ManagerPlate,
   matchesFilters,
   useManagerLeagues,
-  useStoredAccount,
 } from "@/features/shared";
 
 import { useLineupCheck } from "../hooks/use-lineup-check";
@@ -23,10 +22,14 @@ import { WeekStepper } from "./week-stepper";
  * projected to score against the best one still reachable, and whether its
  * starters are seated in the order they lock best in.
  *
- * **It reads the stored account rather than a username in its URL.** The
- * account resolved on `/tools` is persisted, so a tool that is about *your*
- * leagues has no business asking for the name again — which is also what the
- * tool registry already declares for it (no `hrefFor`, and not `accountless`).
+ * **The manager is named by the route**, `/lineupchecker/[username]`, the way
+ * `/manager/[username]` names one. It read the stored account until this
+ * landed, which made the page unlinkable: there was one URL for every manager,
+ * so a reader could not open somebody else's lineups, keep a bookmark for a
+ * second account, or send anyone a link to what they were looking at. The tool
+ * registry's `hrefFor` is what still gets a reader there in one press from
+ * `/tools` and from the rack, so the stored account is a *default* rather than
+ * the only answer — which is exactly the arrangement Manager already has.
  *
  * **The two reads are separate on purpose.** The leagues arrive on the same
  * stream `/manager` reads, and the check is a batch read beside it — so the
@@ -34,25 +37,42 @@ import { WeekStepper } from "./week-stepper";
  * them, rather than the page waiting on the slower of the two. It is also what
  * makes a failed check cost the week's numbers and not the list.
  *
- * The panel, the plate and the card are the leagues console's, unchanged. A
- * reader arriving from `/manager` is looking at the same leagues, and a second
+ * The plate and the card are the leagues console's, unchanged. A reader
+ * arriving from `/manager` is looking at the same leagues, and a second
  * vocabulary for them would be a second chance for one to drift.
+ *
+ * **The panel is gone, for the reason it went there.** This page used to draw
+ * a rounded, bordered panel with `--background` showing around it; the ground
+ * the route renders (`ConsoleGround`) is that surface now and runs to the
+ * viewport edges, so with the rack floating above there is no second bounded
+ * rectangle inside the viewport. The cards inherit the rest of the fix: the
+ * panel's inset and border were 106px at 1280 and 50px at 390 that this page
+ * spent and `/manager` did not, so the same card over the same league was
+ * measurably narrower here — 1014 against 1120, on a shell widened to `console`
+ * precisely so a lit readout would not clip. With the panel gone both pages are
+ * one card per row at `PageShell width="console"` and a card is the same width
+ * on either, by construction rather than by two spellings of a width.
  */
-export function LineupCheckerHome({ heading }: { heading: ReactNode }) {
-  const account = useStoredAccount();
-  const username = account?.username ?? null;
-
+export function LineupCheckerHome({
+  username,
+  heading,
+}: {
+  username: string;
+  heading: ReactNode;
+}) {
   // A stepped week, or null to take the one the route resolves. Null is a real
   // opening state: which week is current is the route's answer, and the week
   // *shown* is always read back off the payload — see `WeekStepper`.
   const [week, setWeek] = useState<number | null>(null);
 
-  if (!username) return <NoAccount heading={heading} />;
   return (
     <Checker
-      // Remounting on a changed account is what keeps every piece of state
+      // Remounting on a changed manager is what keeps every piece of state
       // below — the week, the filters, the hooks' subjects — from having to
-      // each remember to reset. There is exactly one subject on this page.
+      // each remember to reset. There is exactly one subject on this page, and
+      // Next reuses this component across a param change rather than
+      // remounting it, so the key is what makes walking from one manager to
+      // another start over.
       key={username}
       username={username}
       heading={heading}
@@ -100,16 +120,7 @@ function Checker({
   const name = user ? user.display_name || user.username : username;
 
   return (
-    <div className="relative rounded-3xl border border-foreground/9 bg-[image:var(--panel-bg)] px-6 pb-14 pt-10 shadow-[var(--panel-shadow)] sm:px-13 sm:pb-[4.5rem] sm:pt-16">
-      <span
-        aria-hidden
-        className="pointer-events-none absolute inset-0 rounded-[inherit] bg-[image:var(--panel-grain)]"
-      />
-      <span
-        aria-hidden
-        className="pointer-events-none absolute inset-x-[12%] top-0 h-px bg-[image:var(--panel-specular)]"
-      />
-
+    <div className="relative">
       <header className="relative flex flex-wrap items-center gap-6">
         <ManagerPlate
           name={name}
@@ -260,33 +271,6 @@ function AttentionHousing({
           of {of} league{of === 1 ? "" : "s"} checked
         </p>
       )}
-    </div>
-  );
-}
-
-/** The state with nothing to check, because no account has been resolved. */
-function NoAccount({ heading }: { heading: ReactNode }) {
-  return (
-    <div className="relative rounded-3xl border border-foreground/9 bg-[image:var(--panel-bg)] px-6 pb-14 pt-10 shadow-[var(--panel-shadow)] sm:px-13 sm:pb-[4.5rem] sm:pt-16">
-      <span
-        aria-hidden
-        className="pointer-events-none absolute inset-0 rounded-[inherit] bg-[image:var(--panel-grain)]"
-      />
-      <span
-        aria-hidden
-        className="pointer-events-none absolute inset-x-[12%] top-0 h-px bg-[image:var(--panel-specular)]"
-      />
-      <div className="relative">
-        {heading}
-        <Plate>
-          <p className="m-0 font-mono text-[0.8125rem] text-foreground/72">
-            Connect a Sleeper account on the tools page to check your lineups.
-          </p>
-          <a href="/tools" className={`${CONSOLE_KEY} mt-4 inline-block`}>
-            Go to tools
-          </a>
-        </Plate>
-      </div>
     </div>
   );
 }
