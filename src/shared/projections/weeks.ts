@@ -77,3 +77,41 @@ export function clampWeek(week: number): number {
   if (!Number.isFinite(week)) return 1;
   return Math.min(Math.max(Math.trunc(week), 1), LAST_REGULAR_WEEK);
 }
+
+/**
+ * The first week "rest of season" means for a page, or null where the season
+ * has none left to project.
+ *
+ * Deliberately conservative about claiming a week, in three cases:
+ *
+ * - the page's season and Sleeper's current season agree → from the current
+ *   week (floored at 1: preseason is week 0, and the season ahead is whole);
+ * - the page is on an *older* season → there is no rest-of-season, and no
+ *   projections are read at all;
+ * - the state call failed or named some other future — week 1, the widest
+ *   honest window. A failed state call must not fail a page, and the
+ *   projections span has its own fallback behind it.
+ *
+ * **It takes the state reader rather than calling one**, which is what keeps
+ * this module free of the network and testable beside its neighbours — and what
+ * lets the two routes that ask this question (the lineups route and the league
+ * timeline, which must price a past roster on the same span the card in front
+ * of it reads) share one answer rather than two spellings of it.
+ */
+export async function restOfSeasonStart(
+  season: string,
+  readState: () => Promise<{ season: string; week: number } | null>,
+): Promise<number | null> {
+  const state = await readState().catch(() => null);
+  if (!state) return 1;
+
+  if (state.season === season) {
+    return Math.min(Math.max(state.week, 1), LAST_REGULAR_WEEK);
+  }
+  const requested = Number(season);
+  const current = Number(state.season);
+  if (Number.isFinite(requested) && Number.isFinite(current) && requested < current) {
+    return null;
+  }
+  return 1;
+}

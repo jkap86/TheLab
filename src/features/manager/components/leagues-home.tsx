@@ -362,6 +362,15 @@ export function LeaguesHome({
                   league={league}
                   columns={columns}
                   entry={lineups?.leagues[league.league_id] ?? null}
+                  // The three that decide which boards a *past* stop is priced
+                  // on. They are the same three the lineups read above was
+                  // asked for the present, which is the whole point: a rewound
+                  // roster measured on another season's projections or another
+                  // market is not a comparison. The resolved season, never the
+                  // page's raw query — see `parseRequestedSeason`.
+                  season={state.season}
+                  username={username}
+                  board={ktcBoard}
                 />
               ))}
             </ul>

@@ -3,12 +3,8 @@
 import { useState } from "react";
 
 import type { LeagueLineupEntry, LineupMetricId } from "@/shared/contract";
-import {
-  CONSOLE_READOUT,
-  LINEUP_METRIC_IDS,
-  LINEUP_METRIC_LABELS,
-} from "@/features/shared";
-
+import { CONSOLE_READOUT } from "../console-chrome";
+import { LINEUP_METRIC_IDS, LINEUP_METRIC_LABELS } from "../lineup-columns";
 import { DraftPicks } from "./draft-picks";
 import {
   type Lens,
@@ -39,6 +35,16 @@ import {
  * that is why the **lens lives here** rather than in `LineupBreakdown`:
  * neither pane is wide enough to carry a header, so the state has to be
  * visible to the keys and to the list at once.
+ *
+ * **It moved here from `features/manager` when the history rail became a second
+ * reader** — the line `CONSOLE_KEY`, `ManagerPlate` and `DraftPicks` all moved
+ * on. The rail draws the same browser over a *rewound* roster set priced on
+ * today's boards, which is why it is one component rather than two: the past is
+ * the present's table with different rosters in it, and a second table would be
+ * a second set of edge rules to drift. It is also why the rail renders this
+ * element itself rather than swapping it out — one element at one position keeps
+ * the metric, the lens and the selected team across a scrub, where two would
+ * reset all three every time a reader crossed "now".
  */
 
 /**

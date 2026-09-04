@@ -63,7 +63,7 @@ export async function getManagerSyncState(
  * Written against a league table aliased `l`, and parenthesised because callers
  * append their own comparison.
  */
-const LEAGUE_TYPE_SQL = `
+export const LEAGUE_TYPE_SQL = `
   (CASE WHEN l.settings->>'type' ~ '^[0-9]+$'
         THEN (l.settings->>'type')::int ELSE 0 END)`;
 
@@ -654,7 +654,29 @@ export async function getManagerLeagueRosters(
   season: string,
 ): Promise<ManagerLeagueRow[]> {
   const { rows } = await pool.query<ManagerLeagueRow>(
-    `SELECT l.league_id, l.total_rosters, l.roster_positions, l.scoring_settings,
+    `SELECT ${LINEUP_LEAGUE_COLUMNS_SQL}
+       FROM leagues l
+      WHERE l.season = $2
+        AND ${LIVE_LEAGUE_SQL}
+        AND ${HOLDS_A_ROSTER_SQL}`,
+    [userId, season],
+  );
+
+  return rows;
+}
+
+/**
+ * Everything a solve reads about one league: its shape, its rosters, its
+ * members, its traded picks and its drafts.
+ *
+ * **Extracted so the two reads of it cannot drift**, which is
+ * `LEAGUE_COLUMNS_SQL`'s own argument one grain down: `getManagerLeagueRosters`
+ * answers this for a manager's whole account and {@link getLeagueLineupRow} for
+ * one league by id, and a field added to {@link ManagerLeagueRow} now arrives on
+ * both or on neither. Written against a league table aliased `l`.
+ */
+const LINEUP_LEAGUE_COLUMNS_SQL = `
+            l.league_id, l.total_rosters, l.roster_positions, l.scoring_settings,
             l.previous_league_id,
             ${LEAGUE_TYPE_SQL} AS league_type,
             (CASE WHEN l.settings->>'draft_rounds' ~ '^[0-9]+$'
@@ -694,15 +716,33 @@ export async function getManagerLeagueRosters(
                       'display_name', u.display_name,
                       'team_name',    u.team_name)), '[]'::jsonb)
                FROM league_users u
-              WHERE u.league_id = l.league_id) AS users
-       FROM leagues l
-      WHERE l.season = $2
-        AND ${LIVE_LEAGUE_SQL}
-        AND ${HOLDS_A_ROSTER_SQL}`,
-    [userId, season],
-  );
+              WHERE u.league_id = l.league_id) AS users`;
 
-  return rows;
+/**
+ * The same row for **one league**, named by id rather than reached through a
+ * manager.
+ *
+ * The league timeline's read: it prices a rewound roster on today's boards, so
+ * it needs exactly what a solve needs and nothing about whose page it is on.
+ * `HOLDS_A_ROSTER_SQL` is deliberately absent — that predicate answers *which
+ * leagues are a manager's*, and there is no manager in this question — while
+ * `LIVE_LEAGUE_SQL` stays, since a tombstoned league's rows are frozen rather
+ * than cleared and nothing should draw a history for a league nobody can open.
+ *
+ * Null where no such league is stored, which every caller reads as "nothing to
+ * say" rather than as an error.
+ */
+export async function getLeagueLineupRow(
+  leagueId: string,
+): Promise<ManagerLeagueRow | null> {
+  const { rows } = await pool.query<ManagerLeagueRow>(
+    `SELECT ${LINEUP_LEAGUE_COLUMNS_SQL}
+       FROM leagues l
+      WHERE l.league_id = $1
+        AND ${LIVE_LEAGUE_SQL}`,
+    [leagueId],
+  );
+  return rows[0] ?? null;
 }
 
 /**

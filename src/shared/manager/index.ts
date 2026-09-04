@@ -44,6 +44,12 @@ export {
 export type { SyncClock } from "./graph-weeks";
 export {
   LEAGUE_COLUMNS_SQL,
+  // Exported for `shared/timeline`, which resolves a league's pick horizon the
+  // same way this file does and must not spell the guard a second time — a
+  // league reading as dynasty here and as redraft there is a pick grid that
+  // disagrees with the one the card beside it draws.
+  LEAGUE_TYPE_SQL,
+  getLeagueLineupRow,
   getLeaguemateIds,
   getManagerDraftAdp,
   getManagerLeaguemates,
@@ -59,18 +65,22 @@ export { solveLeagueLineup } from "./ros-lineups";
 export type { RosLineupLeague } from "./ros-lineups";
 export { lineupMetricTotals, rankLeagueLineups } from "./league-ranks";
 export type { LeagueRosterRow, RankLeague, RankedRoster } from "./league-ranks";
-export { leagueTeamName, solveLeagueEntry } from "./league-teams";
+export { leagueTeamName, pickValue, solveLeagueEntry } from "./league-teams";
 export type { KtcPricing, LineupLeagueRow } from "./league-teams";
 export {
   DYNASTY_LEAGUE_TYPE,
   DYNASTY_PICK_SEASONS,
   dynastyPickGrid,
+  leaguePickBoard,
   leagueRosterPicks,
   ownedDraftPicks,
+  pickCellKey,
 } from "./draft-picks";
 export type {
   DraftPickAsset,
   DraftPickGrid,
+  LeaguePickBoard,
+  PickCell,
   LeagueDraft,
   LeagueDraftRow,
   LeagueUserName,

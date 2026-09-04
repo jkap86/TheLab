@@ -445,6 +445,63 @@ function boardPickInRound(
 }
 
 /**
+ * One pick cell, resolved: where it falls in its draft and what it is worth.
+ *
+ * **Holder-independent, which is the whole reason it is a type of its own.**
+ * A pick's slot comes off the draft order through the *original* roster's
+ * owner, and its price comes off that slot — so both are facts about the cell
+ * rather than about whoever holds it today. Only `from` is relative to a
+ * holder, and that is the one field {@link RosterPick} adds on top.
+ *
+ * That is what lets the league timeline price a **rewound** portfolio: a past
+ * stop moves cells between rosters and changes nothing about any cell, so the
+ * client looks each one up in this table rather than re-resolving a draft order
+ * it would have to be sent anyway.
+ */
+export type PickCell = {
+  season: string;
+  round: number;
+  /** The roster the pick originally belongs to — Sleeper's own `roster_id`. */
+  roster_id: number;
+  /** Pick-in-round, snake flip included, or null — see {@link leagueRosterPicks}. */
+  slot: number | null;
+  /** The original owner's display name, for a holder that is not the origin. */
+  origin_name: string;
+  value: number | null;
+};
+
+/**
+ * A cell's key. `|` is safe as a separator because a Sleeper season is four
+ * digits and the ids are integers, so no part can carry it — the same argument
+ * `pickSlotKey` and the timeline's own rewind both make for the same character.
+ */
+export function pickCellKey(
+  season: string,
+  round: number,
+  originRosterId: number,
+): string {
+  return `${season}|${round}|${originRosterId}`;
+}
+
+/** A league's whole pick grid, read the three ways anything needs it. */
+export type LeaguePickBoard = {
+  /** Who holds what **today**, named for the card — see {@link leagueRosterPicks}. */
+  byRoster: Map<number, RosterPick[]>;
+  /** Every cell in the grid, resolved once and keyed by {@link pickCellKey}. */
+  cells: Map<string, PickCell>;
+  /**
+   * The same holdings unnamed, each pick still carrying the roster it came
+   * from — {@link ownedDraftPicks}' own answer, passed through.
+   *
+   * It is here so the league timeline can start its rewind from the grid the
+   * card is drawn from rather than laying a second one: a reversal moves cells
+   * between rosters, and the cell it moves has to be the same object the price
+   * table above is keyed by.
+   */
+  owned: Map<number, DraftPickAsset[]>;
+};
+
+/**
  * Every roster's future draft picks in one league, named for the card, keyed
  * by owning roster id.
  *
@@ -466,6 +523,23 @@ function boardPickInRound(
 export function leagueRosterPicks(
   league: PickLeague,
   season: string,
+  priceOf?: (pick: { season: string; round: number; slot: number | null }) => number | null,
+): Map<number, RosterPick[]> {
+  return leaguePickBoard(league, season, priceOf).byRoster;
+}
+
+/**
+ * The same grid, read both ways from one enumeration.
+ *
+ * {@link leagueRosterPicks} is this function's `byRoster` and nothing else; the
+ * split exists because the timeline needs the *cells* — see {@link PickCell} —
+ * and resolving them a second time is exactly the second spelling of a draft
+ * order that this module is arranged to avoid. One walk lays the grid, one
+ * resolver names each cell, and the two readings fall out of it.
+ */
+export function leaguePickBoard(
+  league: PickLeague,
+  season: string,
   /**
    * What a resolved pick is worth, or null where nothing prices it.
    *
@@ -477,7 +551,7 @@ export function leagueRosterPicks(
    * unpriced, which is what the payload's `value: null` already means.
    */
   priceOf?: (pick: { season: string; round: number; slot: number | null }) => number | null,
-): Map<number, RosterPick[]> {
+): LeaguePickBoard {
   const grid =
     league.league_type === DYNASTY_LEAGUE_TYPE
       ? dynastyPickGrid(
@@ -515,35 +589,55 @@ export function leagueRosterPicks(
     return board;
   };
 
-  const named = new Map<number, RosterPick[]>();
+  // One resolution per cell, shared by both readings below: the slot and the
+  // price are facts about the cell, so resolving them per portfolio would be
+  // the same answer computed once per holder.
+  const cells = new Map<string, PickCell>();
+  const cellFor = (pick: DraftPickAsset): PickCell => {
+    const key = pickCellKey(pick.season, pick.round, pick.original_roster_id);
+    let cell = cells.get(key);
+    if (cell) return cell;
+
+    const board = boardFor(pick.season);
+    const slot = board?.slots.get(pick.original_roster_id);
+    const placed = {
+      season: pick.season,
+      round: pick.round,
+      slot:
+        board && slot !== undefined
+          ? boardPickInRound(board, slot, pick.round)
+          : null,
+    };
+    cell = {
+      ...placed,
+      roster_id: pick.original_roster_id,
+      origin_name: originName(pick.original_roster_id),
+      // Priced off the *resolved* slot rather than the raw draft order,
+      // because that slot is where the pick actually falls — a snake
+      // draft's reversal turns an early 1st into a late 2nd, and KTC
+      // prices the two differently.
+      value: priceOf?.(placed) ?? null,
+    };
+    cells.set(key, cell);
+    return cell;
+  };
+
+  const byRoster = new Map<number, RosterPick[]>();
   for (const [rosterId, picks] of owned) {
-    named.set(
+    byRoster.set(
       rosterId,
       picks.map((pick) => {
-        const board = boardFor(pick.season);
-        const slot = board?.slots.get(pick.original_roster_id);
-        const named = {
-          season: pick.season,
-          round: pick.round,
-          slot:
-            board && slot !== undefined
-              ? boardPickInRound(board, slot, pick.round)
-              : null,
-        };
+        const cell = cellFor(pick);
         return {
-          ...named,
+          season: cell.season,
+          round: cell.round,
+          slot: cell.slot,
           from:
-            pick.original_roster_id === rosterId
-              ? null
-              : originName(pick.original_roster_id),
-          // Priced off the *resolved* slot rather than the raw draft order,
-          // because that slot is where the pick actually falls — a snake
-          // draft's reversal turns an early 1st into a late 2nd, and KTC
-          // prices the two differently.
-          value: priceOf?.(named) ?? null,
+            pick.original_roster_id === rosterId ? null : cell.origin_name,
+          value: cell.value,
         };
       }),
     );
   }
-  return named;
+  return { byRoster, cells, owned };
 }

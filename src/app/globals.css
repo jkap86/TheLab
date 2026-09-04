@@ -579,7 +579,72 @@ body {
 }
 
 /*
+ * The timeline rail's slider — the league card's history scrubber.
+ *
+ * Not `.lab-range` below, and the two must not be merged: that one is a pair of
+ * inputs stacked on one track with `pointer-events` juggled between them, where
+ * this is a single handle whose *track* is drawn by the component behind it.
+ * One class covering both would carry each other's workarounds.
+ *
+ * Not expressible as utilities: a range input's track and thumb are
+ * pseudo-elements, and a pseudo-element has no style attribute. The track is
+ * drawn *behind* the input by the component — a cut channel with a lit meter
+ * fill, the same grammar the card's rank tiles use — so what is left here is to
+ * clear the UA's own track and make the thumb a key.
+ *
+ * The thumb's `margin-top` centres it against a 24px track: (24 − 14) / 2 = 5.
+ * Chrome needs that arithmetic spelled out, where Firefox centres its own.
+ * Both colours are tokens rather than literals, so one rule reads in both
+ * themes — the rule every other named colour in this file keeps.
+ */
+.lab-rail {
+  -webkit-appearance: none;
+  appearance: none;
+  height: 1.5rem;
+  background: transparent;
+  cursor: pointer;
+}
+
+.lab-rail::-webkit-slider-runnable-track {
+  height: 1.5rem;
+  background: transparent;
+}
+
+.lab-rail::-moz-range-track {
+  height: 1.5rem;
+  background: transparent;
+}
+
+.lab-rail::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 14px;
+  height: 14px;
+  margin-top: 5px;
+  border: 1px solid var(--accent);
+  border-radius: 9999px;
+  background-image: var(--key-bg);
+  box-shadow: var(--key-shadow), 0 0 8px var(--accent-glow);
+}
+
+.lab-rail::-moz-range-thumb {
+  width: 14px;
+  height: 14px;
+  border: 1px solid var(--accent);
+  border-radius: 9999px;
+  background-image: var(--key-bg);
+  box-shadow: var(--key-shadow), 0 0 8px var(--accent-glow);
+}
+
+.lab-rail:focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--accent) 60%, transparent);
+  outline-offset: 2px;
+  border-radius: 9999px;
+}
+
+/*
  * The two-handle span rows in the players drawer's filter tray.
+ *
+ * Not `.lab-rail` above — see that rule for why the two stay apart.
  *
  * Not expressible as utilities for the same reason the scrollbar is not: a
  * range thumb is a pseudo-element, and a pseudo-element has no style attribute.

@@ -9,13 +9,12 @@ import { getKtcBoards, isSuperflexLineup, ktcBoardValue } from "@/shared/ktc";
 import type { KtcBoards } from "@/shared/ktc";
 import { parseKtcBoardChoice, resolveKtcFormat } from "@/shared/ktc/board-choice";
 import {
-  LAST_REGULAR_WEEK,
   getManagerDraftAdp,
   getManagerLeagueRosters,
   solveLeagueEntry,
 } from "@/shared/manager";
 import type { KtcPricing, ManagerLeagueRow } from "@/shared/manager";
-import { getRosProjections } from "@/shared/projections";
+import { getRosProjections, restOfSeasonStart } from "@/shared/projections";
 import type { RosProjections } from "@/shared/projections";
 import { getActiveSeason, parseRequestedSeason } from "@/shared/season";
 import { getNflState } from "@/shared/sleeper";
@@ -97,7 +96,7 @@ export async function GET(
       return NextResponse.json(empty);
     }
 
-    const fromWeek = await restOfSeasonStart(season);
+    const fromWeek = await restOfSeasonStart(season, getNflState);
     let projections: RosProjections = {};
     let coveredFrom: number | null = null;
     if (fromWeek !== null) {
@@ -142,27 +141,6 @@ export async function GET(
     const payload: ApiErrorPayload = { error: "Failed to load lineups" };
     return NextResponse.json(payload, { status: 500 });
   }
-}
-
-/**
- * The first week "rest of season" means for this page, or null when the season
- * has none left to project — see the route note for the three cases.
- */
-async function restOfSeasonStart(season: string): Promise<number | null> {
-  // A failed state call must not fail the page — week 1 is the widest honest
-  // window, and the projections span has its own fallback behind it.
-  const state = await getNflState().catch(() => null);
-  if (!state) return 1;
-
-  if (state.season === season) {
-    return Math.min(Math.max(state.week, 1), LAST_REGULAR_WEEK);
-  }
-  const requested = Number(season);
-  const current = Number(state.season);
-  if (Number.isFinite(requested) && Number.isFinite(current) && requested < current) {
-    return null;
-  }
-  return 1;
 }
 
 /**

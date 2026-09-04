@@ -1,7 +1,7 @@
 "use client";
 
 import type { LeagueLineup, LineupPlayer } from "@/shared/contract";
-import { CONSOLE_TRACK } from "@/features/shared";
+import { CONSOLE_TRACK } from "../console-chrome";
 
 /**
  * A league card's rest-of-season lineup: the optimal starters in slot order,

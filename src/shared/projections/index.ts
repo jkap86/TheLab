@@ -19,6 +19,7 @@ export {
   parseRequestedWeek,
 } from "./weeks";
 export type { RequestedWeek } from "./weeks";
+export { restOfSeasonStart } from "./weeks";
 export {
   KICKOFF_BUFFER_MS,
   kickoffMoves,

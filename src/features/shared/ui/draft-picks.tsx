@@ -1,6 +1,6 @@
 import type { RosterPick } from "@/shared/contract";
 
-import { ordinal } from "@/features/shared";
+import { ordinal } from "../format";
 
 /**
  * The roster's future draft picks, grouped by season — one plate per season,
@@ -26,6 +26,14 @@ import { ordinal } from "@/features/shared";
  * Renders nothing when the roster owns no picks — every redraft league, and
  * any dynasty whose pick market this sync can't see. There is no empty state
  * for "the pick market here is quiet". Hook-free, like the card it sits in.
+ *
+ * **It moved here from `features/manager/components` when the timeline became a
+ * second reader** — the line `CONSOLE_KEY`, `ManagerPlate` and
+ * `LeagueConfigWindow` all moved on. That reader draws a *rewound* portfolio, so
+ * two of the three fields on its pills are null by construction: see
+ * `timelinePickAssets` for why a past moment can state a round and not a slot,
+ * and why it prices nothing. Nothing here had to change for it, which is what
+ * the three-way grammar above was for.
  */
 export function DraftPicks({ picks }: { picks: readonly RosterPick[] }) {
   if (picks.length === 0) return null;
