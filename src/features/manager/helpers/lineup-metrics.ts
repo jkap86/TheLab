@@ -14,44 +14,24 @@ export function formatRank(rank: MetricRank | null): string {
   return `${ordinal(rank.rank)} of ${rank.of}`;
 }
 
-/**
- * How full a tile's meter is: 100% for 1st, 0% for last.
- *
- * **`of - 1` is the divisor, not `of`.** A meter that ran `rank / of` would
- * leave 1st of 12 sitting at 92% and last of 12 at 8%, so neither end of the
- * scale would ever be reached and the bar would read as a broken gauge rather
- * than as a position. A one-roster league (`of === 1`) has no spread to show
- * and draws empty, as does a null rank.
- */
-export function rankFill(rank: MetricRank | null): number {
-  if (!rank || rank.of <= 1) return 0;
-  return Math.round((1 - (rank.rank - 1) / (rank.of - 1)) * 100);
-}
-
-/**
- * The percentile a rank's *colour* is taken from, or null where there is no
- * position to colour.
- *
- * It exists because {@link rankFill} answers 0 to two different questions.
- * Last of twelve is 0 and so is "nothing to rank" — a null rank, or a
- * one-roster league with no spread — and the meter is right to draw both
- * empty. The ramp is not: painting an absent answer in full red claims a
- * result the page has not been given. So the degenerate cases come back as
- * null here and land on the neutral, and only a real last place is red.
- */
-export function rankPercentile(rank: MetricRank | null): number | null {
-  if (!rank || rank.of <= 1) return null;
-  return rankFill(rank);
-}
-
 /*
- * The ramp itself now lives in `features/shared`, because the lineup checker's
- * projected-outcome pip draws from it too. Re-exported here rather than moved
- * out of every caller's import: the tiles below read a rank's colour and its
- * meter's width from one place, and splitting the pair across two modules is
- * how the bar and the hue would come to disagree.
+ * The ramp and the three readings it is fed from now live in
+ * `features/shared`: the lineup checker's projected-outcome pip draws the same
+ * green and red, and the league detail's standings pane — which moved to that
+ * folder with the history rail — draws its own meters and places its own bench.
+ * A module there cannot import one from `features/manager`, so they went rather
+ * than being reached back for.
+ *
+ * Re-exported here rather than moved out of every caller's import: the tiles
+ * read a rank's colour and its meter's width from one place, and splitting the
+ * pair across two modules is how the bar and the hue would come to disagree.
  *
  * Relative with an extension, like `ordinal` above — Node's test runner
  * resolves neither the alias nor the barrel.
  */
-export { rankColor } from "../../shared/rank-ramp.ts";
+export {
+  placeAmong,
+  rankColor,
+  rankFill,
+  rankPercentile,
+} from "../../shared/rank-ramp.ts";

@@ -591,11 +591,13 @@ On the page, each league card is the league name plus up to four rank columns
 it over the rosters of any past moment, priced at today's values (The league's
 history, below). `league-card.tsx` stays hook-free on purpose, and the state a
 card does need lives in `ui/league-teams.tsx` and `ui/timeline` below it. The browser is
-two panes: every team on the left with one number column, the selected team —
-the manager's by default — solved out on the right, then `DraftPicks` under
-both panes (all three in `features/shared/ui` since the rail became a second
-reader of them) (see the console section: the picks grid wants the full width, and
-they are the roster's, not the lineup's). The panes sit side by side at
+two panes: the league's standings on the left, the selected team — the
+manager's by default — solved out on the right *against the manager's own
+roster*, then `DraftPicks` under both panes (all three in `features/shared/ui`
+since the rail became a second reader of them) (see the console section: the
+picks grid wants the full width, and they are the roster's, not the lineup's).
+See The detail is a comparison, below, for the standings table and the
+seat-level gaps. The panes sit side by side at
 *every* width, phones included — stacking put the roster below twelve teams —
 so truncation, not wrapping, is what carries a narrow card. The column's metric is a per-card
 `<select>` (default ROS starters) and the list is *sorted* by it, because it
@@ -621,6 +623,112 @@ column choice is a *set*, rendered in canonical order and persisted under
 dependency), and it enforces its bounds by disabling rather than correcting:
 the fifth box greys out at four, the last checked box at one, so an invalid
 selection cannot be made rather than being repaired after.
+
+### The detail is a comparison
+
+The expanded card's right pane used to be one roster read on its own, which
+made picking a team on the left read as "a different roster" rather than as
+"how do I stand against them". Two changes turn it into the second, and
+**nothing on the wire moved for either** — no field, no route, no query. Both
+are derived from the `LeagueLineupEntry` the page already holds, which is what
+makes them affordable at all: a rank across a league's rosters is something
+only the server can compute, but a *gap* between two of them is arithmetic.
+
+**The standings pane is a table with a gap column** — place, team, the gap to
+the reader's own total, that total, and a meter on the rank ramp. The place is
+the row's own index, so it cannot disagree with the order the metric select
+sorted by, and the meter and the hue both come off `rankPercentile` so the bar
+and the colour cannot disagree either. Under the all-zero rule the totals go to
+dashes as before, and **the meters and the ramp go with them**: a full red bar
+under a table nobody has scored in claims a last place nobody finished in,
+which is the distinction `rankPercentile` exists to draw.
+
+**The sign describes the row and the colour describes the reader**, which looks
+like an inconsistency and is the whole grammar. A team above you carries `+12.4`
+because that is their total less yours; it is drawn red because being behind is
+not a result you wanted. The seat rows opposite read the same way, and the one
+place the two orientations are actually separate values is `SeatCompare`, which
+carries `delta` (spatial, printed) and `standing` (the reader's side, coloured)
+as two fields rather than one signed number that means different things in
+different modes.
+
+**Each seat carries the reader's own figure and the gap between the two, drawn
+on the side of whoever leads.** Two tracks, only ever one of them filled: the
+left sits under the figure on screen, the right under the ghost. Its length is
+`|gap| / span × 1.4` clamped at 100, where `span` is the largest figure *any*
+team has at that seat — seat-level gaps are small beside the seat's own scale,
+and without the multiplier every bar is a sliver. Seats are matched **by index,
+not by slot name**: `roster_positions` is the league's own starting lineup and
+is identical across every roster in it, which is also what makes a league with
+two `RB` slots compare RB1 to RB1.
+
+**A seat where either side is null has no gap at all**, and this is the rule
+most likely to be got wrong. Scoring an unpriced player as zero hands the other
+side a maximal, full-length lead on a row whose own figures say there is
+nothing to compare — and, being the largest number in the column, it would set
+the span and squeeze every real gap in the pane into a sliver. `points`,
+`adp_value` and `ktc_value` are each documented "null is not zero"; this is that
+rule at seat level, and `seat-compare.test.ts` is what pins it.
+
+**The reader's own team has nothing to compare against, so the ghost becomes
+the league's best at each seat** and the pane's header says `Best in league`
+rather than naming a team. Holding that best is **level, not a lead** — no bar,
+no colour — which is the one reading a uniform "greater than" would have got
+wrong, since the best figure includes the reader's own.
+
+**The bench summary gained its total and its league place**, and the place is
+computed client-side because it moves with the lens rather than with the
+payload — `placeAmong` in `lineup-metrics.ts`, standard competition ranking,
+null where there is nothing to rank. The total is read off `LeagueTeam.totals`
+and never re-summed, per the contract's own note.
+
+**The arithmetic is a pure module under Node's runner** (`helpers/seat-compare.ts`),
+for the reason `league-filters/predicates.ts` is: a gap drawn on the wrong side,
+a bar scaled against the wrong span and a null scored as a zero all render
+perfectly and say something untrue. `Lens` and `lensValue` moved there with it,
+so "which field does this lens read" has one spelling; `lineup-breakdown.tsx`
+re-exports `Lens` and every existing caller is unchanged.
+
+**Two breakpoints on one component, and both are measured.** The column layout
+turns at **`lg`** and the control row above it at `sm`. The handoff specifies
+`sm` for both; a render at 640 is what refused it, and the failure is the
+layout at its most confident and least true — the left pane is 252px, of which
+the four figure columns take 212, so every team name renders as **one
+character** and the roster's names disappear altogether. Under `lg` the
+two-line rows carry it, as they already do at 390, and they give a name *more*
+room at 768 than the columns would. The rack made the same measurement and
+moved to the same breakpoint for it. The control row is a different question:
+three controls fit one line from `sm` up, so they take it — with the "Rank by"
+recess at design 3a's own smaller sizes below that, which is what stops it
+wrapping to a third line at 390.
+
+**Every row is one node with two layouts**, through `lg:contents` on the second
+line's wrapper — the trick the app rack's brand row already turns. Rendering
+both shapes and hiding one would put every seat in the DOM twice and read each
+of them twice to anything listening.
+
+**The colours are the ramp, not the mock's literals.** The handoff transcribes
+`oklch(0.9 0.1 150)` and `oklch(0.9 0.1 25)` for the gap column and then says
+to use `rankColor()` for the seat bars; the ramp is right for both, because it
+reads its ends from `--rank-l` and `--rank-c` and those are what invert for
+light mode. `rankColor(100)` and `rankColor(0)` are the same two hues the
+literals name.
+
+**Verified without a database**, the method the console-card and shares passes
+established: a temporary `/preview` route rendering the real `LeagueTeams` and
+`LineupBreakdown` against a fixture entry — twelve teams, a missing seat, an
+unprojected stash, and a second entry whose every total is zero — driven over
+CDP at 390, 640, 900, 1024 and 1280 in both schemes, then deleted. Every arm
+landed: an opponent selected drew red bars pointing left and green pointing
+right with the lit names on the seats the reader wins; the reader's own team
+drew `VS BEST IN LEAGUE` with no bar on the seats they hold the best of; the
+KTC lens drew em dashes and **no bars** on the two seats with no price on either
+side; the all-zero entry drew dashes, empty meters and neutral ramp throughout.
+At every width and in both schemes: `documentElement.scrollWidth` equal to the
+viewport, nothing painted outside the card's own box, one `<h1>`, one
+`aria-pressed` row, the metric select labelled, and **no console output of any
+kind**. The numbers are fixtures; what they check is the rules and the layout
+rather than Sleeper.
 
 **Every team's future draft picks ride its `LeagueTeam`**, the way Sleeper's
 own team page lists them, and the reconstruction is the part that is easy

@@ -3,6 +3,7 @@ import { describe, test } from "node:test";
 
 import {
   formatRank,
+  placeAmong,
   rankColor,
   rankFill,
   rankPercentile,
@@ -88,5 +89,25 @@ describe("rankColor", () => {
   test("alpha is opt-in, for the meter's glow", () => {
     assert.doesNotMatch(rankColor(100), / \/ /);
     assert.match(rankColor(100, 0.55), / \/ 0\.55\)$/);
+  });
+});
+
+describe("placeAmong", () => {
+  test("a figure takes its place in the field", () => {
+    assert.deepEqual(placeAmong(30, [50, 30, 10]), { rank: 2, of: 3 });
+  });
+
+  test("ties share the better rank and the next distinct one skips", () => {
+    // Standard competition ranking, the same rule the server's own ranks read.
+    assert.deepEqual(placeAmong(30, [30, 30, 10]), { rank: 1, of: 3 });
+    assert.deepEqual(placeAmong(10, [30, 30, 10]), { rank: 3, of: 3 });
+  });
+
+  test("nothing to rank comes back null rather than first", () => {
+    // A field of one has no spread, and a field of zeroes — no projections
+    // read, an unreadable board — has no result to report. "1st of 12" among
+    // all-zero totals is a claim.
+    assert.equal(placeAmong(9, [9]), null);
+    assert.equal(placeAmong(0, [0, 0, 0]), null);
   });
 });
