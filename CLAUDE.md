@@ -2076,6 +2076,19 @@ against a live league, which is the check worth keeping because agreement would
 mean the filter had failed: Sleeper's `1.04`, `2.01`, `2.04`, `2.12`, `3.01` are
 placeholder `1.01` through `1.05`.
 
+**`slots_k > 0` is the only predicate available, and it cannot be narrowed.**
+It matches any league that rosters a kicker, so an ordinary redraft league's
+kickers are renumbered into a placeholder sequence that means nothing — the tool
+will happily report six rounds of rookie picks that nobody is trading. The
+obvious narrowing is to ask whether the league *really* starts a kicker, and it
+does not work: **a league running the convention still carries `K` in its
+`roster_positions` while the draft is on**, because that slot is precisely what
+lets a kicker be drafted at all. The two cases are indistinguishable from the
+graph, which makes this a decoder a reader *aims* rather than a detector that
+finds placeholder drafts on its own — the tool is opened against a league you
+already know is running the convention. Do not re-propose a roster-shape filter;
+it would reject exactly the leagues the tool is for.
+
 Two adjacent traps ride in that file's doc comments. Teams per round is
 `settings.teams`, because `draft_order` maps only *users who claimed a slot* and
 is null before an order is set — `seasonDraftSlots` documents the same trap.

@@ -46,6 +46,17 @@ const settingNumber = (draft: SleeperDraft, key: string): number => {
  * The draft being used for placeholders: the first one with a kicker slot.
  * A league running this convention gives every team a K slot in the startup
  * draft; a league without one has nothing for this tool to track.
+ *
+ * **This is as narrow as the predicate can get, and the obvious tightening is
+ * wrong.** It also matches every ordinary league that simply rosters a kicker,
+ * whose kickers then get renumbered into a placeholder sequence nobody is
+ * trading. The tempting fix is to ask whether the league *really* starts a
+ * kicker — and it fails, because a league running the convention **still
+ * carries `K` in its `roster_positions` while the draft is on**: that slot is
+ * exactly what makes a kicker draftable in the first place. The two are
+ * indistinguishable from the graph, so this is a decoder a reader aims at a
+ * league they already know, not a detector. A roster-shape filter here would
+ * reject the leagues the tool exists for.
  */
 export function findPlaceholderDraft(
   drafts: SleeperDraft[],
