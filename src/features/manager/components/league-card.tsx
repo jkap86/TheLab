@@ -21,6 +21,14 @@ import {
   Scanlines,
 } from "@/features/shared";
 
+// Named by module path rather than through `@/features/shared`, and that is the
+// whole reason the timeline sits outside that barrel: a component file is one
+// module to the bundler, so a `TimelineView` reached through the barrel would
+// ship the rail, the rewind and the fetch hook to every page importing anything
+// shared — the trades board and the lineup checker among them, neither of which
+// draws one. Named here, the chunk belongs to this route.
+import { TimelineView } from "@/features/shared/ui/timeline";
+
 import {
   formatRank,
   rankColor,
@@ -74,8 +82,10 @@ import { LeagueTeams } from "./league-teams";
  *    percentage height cannot resolve against an auto-sized grid row.
  *
  * The card stays hook-free, as before: the one interaction it owns is the
- * disclosure, and the state a card does need (which team, which metric) lives
- * in `LeagueTeams` below it.
+ * disclosure, and the state a card does need lives below it — which team and
+ * which metric in `LeagueTeams`, and where in the league's history the reader
+ * is standing in `TimelineView`, which wraps that browser and swaps it for the
+ * same two panes at a past moment.
  *
  * All of the depth — the perspective, `preserve-3d`, every `translateZ`, the
  * open-state lift/halo shadows — rides `pointer-fine:`, because its budget is
@@ -210,13 +220,25 @@ export function LeagueCard({
         <div className={`${CONSOLE_WINDOW} mt-3 rounded-xl px-[1.125rem] pb-[1.125rem] pt-4`}>
           <Scanlines />
           <div className="relative">
-            {entry && entry.teams.length > 0 ? (
-              <LeagueTeams entry={entry} />
-            ) : (
-              <p className="m-0 font-mono text-[0.6875rem] uppercase tracking-[0.16em] text-readout-label">
-                No rosters read for this league yet
-              </p>
-            )}
+            <TimelineView
+              leagueId={league.league_id}
+              // The reader's own team, so scrubbing back answers "what did I
+              // have" without a second press. It is read off the same payload
+              // the browser below is seeded from, so the two halves open on the
+              // same team; null while the lineups read is in flight, which the
+              // rail falls back from to the head of the list.
+              seedRosterId={
+                entry?.teams.find((t) => t.is_manager)?.roster_id ?? null
+              }
+            >
+              {entry && entry.teams.length > 0 ? (
+                <LeagueTeams entry={entry} />
+              ) : (
+                <p className="m-0 font-mono text-[0.6875rem] uppercase tracking-[0.16em] text-readout-label">
+                  No rosters read for this league yet
+                </p>
+              )}
+            </TimelineView>
           </div>
         </div>
       </details>

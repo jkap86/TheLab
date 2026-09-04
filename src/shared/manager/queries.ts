@@ -63,7 +63,7 @@ export async function getManagerSyncState(
  * Written against a league table aliased `l`, and parenthesised because callers
  * append their own comparison.
  */
-const LEAGUE_TYPE_SQL = `
+export const LEAGUE_TYPE_SQL = `
   (CASE WHEN l.settings->>'type' ~ '^[0-9]+$'
         THEN (l.settings->>'type')::int ELSE 0 END)`;
 

@@ -5,11 +5,11 @@ import { useState } from "react";
 import type { LeagueLineupEntry, LineupMetricId } from "@/shared/contract";
 import {
   CONSOLE_READOUT,
+  DraftPicks,
   LINEUP_METRIC_IDS,
   LINEUP_METRIC_LABELS,
 } from "@/features/shared";
 
-import { DraftPicks } from "./draft-picks";
 import {
   type Lens,
   lensUnit,

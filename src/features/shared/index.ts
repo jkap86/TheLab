@@ -25,7 +25,7 @@ export {
 export { errorMessage } from "./error-message";
 export { storeKtcBoard, useKtcBoard } from "./ktc-board";
 export { KtcBoardKeys } from "./ui/ktc-board-keys";
-export { ordinal } from "./format";
+export { formatInstantDate, formatInstantTime, ordinal } from "./format";
 export { rankColor } from "./rank-ramp";
 export * from "./league-filters";
 // The dialog those rules are built in. It moved here from `features/manager`
@@ -80,6 +80,9 @@ export {
   Scanlines,
 } from "./ui/card-plate";
 export { ConsoleGround } from "./ui/console-ground";
+// A roster's future picks, grouped by season. It came here from
+// `features/manager` when the timeline's past half became a second reader.
+export { DraftPicks } from "./ui/draft-picks";
 // What game a league is playing, as one lit window — read by the manager card
 // and the trade card, which is what brought it here from `features/manager`.
 export { LeagueConfigWindow } from "./ui/league-config-window";

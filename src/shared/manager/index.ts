@@ -44,6 +44,11 @@ export {
 export type { SyncClock } from "./graph-weeks";
 export {
   LEAGUE_COLUMNS_SQL,
+  // Exported for `shared/timeline`, which resolves a league's pick horizon the
+  // same way this file does and must not spell the guard a second time — a
+  // league reading as dynasty here and as redraft there is a pick grid that
+  // disagrees with the one the card beside it draws.
+  LEAGUE_TYPE_SQL,
   getLeaguemateIds,
   getManagerDraftAdp,
   getManagerLeaguemates,
