@@ -1,56 +1,8 @@
-import type { LineupMetricId, MetricRank } from "@/shared/contract";
+import type { MetricRank } from "@/shared/contract";
 
 // Relative with an explicit extension: this module is read by Node's test
 // runner, which resolves neither the `@/*` aliases nor the shared barrel.
 import { ordinal } from "../../shared/format.ts";
-
-/**
- * Words for the rank metrics — the card's column headers and the dialog's
- * option lines. Imports from the contract are type-only, so this module (like
- * `ndjson.ts` beside it) resolves under Node's test runner as well as the
- * bundler.
- */
-export const LINEUP_METRIC_LABELS: Record<
-  LineupMetricId,
-  { column: string; option: string }
-> = {
-  ros_starters: {
-    column: "ROS starters",
-    option: "Projected points — starters (rest of season)",
-  },
-  ros_bench: {
-    column: "ROS bench",
-    option: "Projected points — bench (rest of season)",
-  },
-  capital_total: {
-    column: "Capital",
-    option: "Draft capital — whole roster",
-  },
-  capital_bench: {
-    column: "Bench capital",
-    option: "Draft capital — bench only",
-  },
-  capital_starters: {
-    column: "Starter capital",
-    option: "Draft capital — starters only",
-  },
-  ktc_total: {
-    column: "KTC total",
-    option: "KeepTradeCut — roster and picks",
-  },
-  ktc_starters: {
-    column: "KTC starters",
-    option: "KeepTradeCut — starters only",
-  },
-  ktc_bench: {
-    column: "KTC bench",
-    option: "KeepTradeCut — bench only",
-  },
-  ktc_picks: {
-    column: "KTC picks",
-    option: "KeepTradeCut — future draft picks",
-  },
-};
 
 /**
  * A rank cell's text. The em dash covers both "no answer yet" (the payload

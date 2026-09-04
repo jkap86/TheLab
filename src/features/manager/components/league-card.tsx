@@ -13,6 +13,7 @@ import {
   CONSOLE_WINDOW,
   LeagueConfigWindow,
   LeaguePlate,
+  LINEUP_METRIC_LABELS,
   ordinal,
   PlateDivider,
   PlateField,
@@ -22,7 +23,6 @@ import {
 
 import {
   formatRank,
-  LINEUP_METRIC_LABELS,
   rankColor,
   rankFill,
   rankPercentile,
@@ -48,8 +48,8 @@ import { LeagueTeams } from "./league-teams";
  * **The identity line under the rule became a configuration window.** It used
  * to read `team name · N-team · status`, which was one fact about the manager
  * and two about the league, none of them acted on; in its place is a lit window
- * stating what game the league is playing — format, lineup mode, superflex,
- * teams, starters, the QB+SF and TE ladders and the TE premium. See
+ * stating what game the league is playing — format, lineup mode, teams,
+ * starters, the QB, SF and TE ladders and the TE premium. See
  * `LeagueConfigWindow`, which reads every one of those off the rules the
  * Filters dialog narrows by rather than deriving any of them a second time.
  *

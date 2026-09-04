@@ -36,10 +36,15 @@ export { LeagueFiltersDialog } from "./league-filters-dialog/league-filters-dial
 export {
   DEFAULT_LINEUP_COLUMNS,
   LINEUP_METRIC_IDS,
+  LINEUP_METRIC_LABELS,
   MAX_LINEUP_COLUMNS,
   storeLineupColumns,
   useLineupColumns,
 } from "./lineup-columns";
+// The picker those columns are chosen in. It moved here from `features/manager`
+// when the app rack became a second reader — the same line the filters dialog
+// moved on, and the same folder rule: only the dialog is exported.
+export { LineupColumnsDialog } from "./ui/lineup-columns-dialog";
 export {
   DEFAULT_SHARES_COLUMNS,
   MAX_SHARES_COLUMNS,
@@ -54,11 +59,11 @@ export {
 } from "./shares-columns";
 export type { SharesColumnId, SharesPanelKind } from "./shares-columns";
 export {
-  RackReadoutProvider,
-  usePublishRackReadout,
-  useRackReadout,
-} from "./ui/rack-readout";
-export type { RackReadout } from "./ui/rack-readout";
+  RackControlsProvider,
+  usePublishRackControls,
+  useRackControls,
+} from "./ui/rack-controls";
+export type { RackControls } from "./ui/rack-controls";
 export { THEME_BOOT_SCRIPT } from "./theme";
 export { useManagerLeagues } from "./use-manager-leagues";
 export type { ManagerLeaguesState } from "./use-manager-leagues";

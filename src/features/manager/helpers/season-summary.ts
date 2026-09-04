@@ -1,13 +1,24 @@
 import type { ManagerLeague } from "@/shared/contract";
 
 /**
- * The three numbers the console's summary housing reads out: how many leagues,
- * the combined record across them, and the win rate that record implies.
+ * The three numbers the identity plate's season block reads out: how many
+ * leagues, the combined record across them, and the win rate that record
+ * implies.
  *
- * Taken over the **unfiltered** list, deliberately. The housing sits beside the
- * manager's name, above the rule, and describes the account for the season —
- * not the current selection. A filtered count already has a home: the line
- * `filterSummary` writes under the plate.
+ * Taken over the **filtered** list, which reverses what this comment used to
+ * say and is worth stating as a reversal. It was the unfiltered one while the
+ * summary was a housing of its own standing beside the plate: it described the
+ * account for the season, and the *filtered* count had a home of its own in the
+ * View housing's `{matched} / {total}` readout.
+ *
+ * The header pass took both of those away. The summary is now engraved on the
+ * identity plate itself and the View housing has moved into the rack, so there
+ * is one set of figures on the page and they have to answer the question the
+ * reader is actually asking — a reader who has narrowed to dynasty wants their
+ * dynasty record, which is the same argument the shares drawers already count
+ * by. What the unfiltered list is still needed for is the denominator beside
+ * the count, and that is passed to `SeasonSummary` separately rather than being
+ * derived here: this function sees one list and reports on it.
  *
  * `record` is null on a league whose rosters have not been read (see
  * `LeagueRecord`), and those leagues are skipped rather than counted as `0-0`:
@@ -15,7 +26,7 @@ import type { ManagerLeague } from "@/shared/contract";
  * and saying otherwise would move the win rate.
  */
 export type SeasonSummary = {
-  /** Every league on the account this season, synced or not. */
+  /** How many leagues were counted, synced or not — see the note above. */
   leagues: number;
   wins: number;
   losses: number;

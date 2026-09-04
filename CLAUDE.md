@@ -1034,8 +1034,11 @@ rejected on its type never has its roster walked.
 
 **`cold` and the `useManagerLineups` gate still read the unfiltered `leagues`**,
 as they always have — a subject matching nothing would otherwise put the cold
-sync bar back on screen and suppress the solve for the whole account. So does
-`SeasonSummary`, which is about the account rather than the selection.
+sync bar back on screen and suppress the solve for the whole account.
+`SeasonSummary` no longer does: it reads `visible`, which composes both
+narrowings, since the header pass made it the page's one set of figures. Its
+`Leagues` field is where the unfiltered total survives — see The header became
+one plate.
 
 **A subject whose map has not arrived is ignored rather than failed.** Both
 alternatives lie: failing it closed empties the grid while a payload is in
@@ -1051,10 +1054,12 @@ than no control. Verified live, and the arithmetic is the check worth keeping:
 18 leagues ∩ 45 leagues = 8 under `all` and 55 under `any`, with 18 + 45 − 8 = 55.
 
 **The token tray under the rule exists because a closed drawer says nothing.**
-That is the same problem `ViewHousing`'s readout solves for the two dialogs, and
-a subject narrowing needs more room than that readout has, because it names
-people rather than a count. `ViewHousing`'s `matched / total` picks the subject
-half up for free, since `visible` composes both.
+That is the same problem the plate's `Leagues` figure solves for the two
+dialogs — it was `ViewHousing`'s `matched / total` readout when this was
+written, and the housing has since moved into the rack while the figure moved
+onto the plate — and a subject narrowing needs more room than a figure has,
+because it names people rather than a count. The figure picks the subject half
+up for free, since `visible` composes both.
 
 **`opened` is a latch, not the open flag.** A picked subject keeps narrowing the
 grid after its drawer closes and the predicate still needs the map, so the read
@@ -1559,6 +1564,12 @@ about the tiles, the rank ramp, the `pointer-fine:` budget and the three
 filters and the columns dialog are all unchanged — this was a visual pass —
 and four things about it are structural rather than cosmetic.
 
+**The header is now one plate — see The header became one plate, below.** What
+this section describes is the four-instrument row it replaced, and the two
+paragraphs after this one still describe the plate and the summary as objects,
+which they are; what changed is that they are one object and what they count
+over.
+
 **The header is a plate and a housing, not an avatar and two lines.**
 `ManagerPlate` is `LabWordmark` with the manager's `<Avatar size="lg" />` in
 the bezel where the flask sits, and the page's static copy demoted from the
@@ -1573,9 +1584,10 @@ full size.
 
 **The summary housing is new information, derived client-side.** Nothing on the
 page aggregated before. `seasonSummary` (in `helpers/`, pure and tested) sums
-`league.record` across the **unfiltered** list — the housing describes the
-account for the season, where the filtered count already has a home in the line
-under the plate. Two decisions carry it, and both are the difference between
+`league.record` across the league list — the **unfiltered** one while the
+summary was a housing standing beside the plate, and the **filtered** one since
+it was engraved onto the plate itself; see The header became one plate for why
+that reverses. Two decisions carry it, and both are the difference between
 honest and wrong: a league whose rosters have not been read has `record: null`
 and is **skipped rather than counted `0-0`**, so a partly-synced account shows a
 combined record over fewer leagues than the count beside it; and `winPct` is
@@ -1583,11 +1595,13 @@ combined record over fewer leagues than the count beside it; and `winPct` is
 parked at the top of the dial claims the manager lost every game they played.
 Null draws an empty track, no pointer, and an em dash. The gauge is a
 `conic-gradient` with the pointer on a rotated wrapper — one angle, no
-trigonometry — and it is decorative: the figure inside it is real text and the
-ledger beside it is a `<dl>`. (The `<dl>` holds only `dt`/`dd` and the `div`s
-grouping them; the footnote sits outside it. And the record figure is
-`whitespace-nowrap`, because the en dash in `8–5` is a break opportunity and a
-record split over two lines reads as two numbers — it wrapped at 390.)
+trigonometry — and it is decorative: the figure inside it is real text and each
+count beside it is a `<dl>` of its own. (One list per field rather than one
+holding both, since the milled grooves between them are not list content and a
+`<dl>` may hold only `dt`, `dd` and the `div`s grouping them. And the record
+figure is `whitespace-nowrap`, because the en dash in `8–5` is a break
+opportunity and a record split over two lines reads as two numbers — it wrapped
+at 390.)
 
 **The rank columns became lit readout tiles with meters.** `rankFill` divides by
 `of - 1`, **not `of`** — on `rank / of`, 1st of 12 sits at 92% and last at 8%,
@@ -1718,8 +1732,8 @@ contrast, with the figure itself at 5.2:1.
 
 The card's identity line — `team name · N-team · status` — is gone, and a lit
 window across the card says what game the league is playing instead: format,
-lineup mode, superflex, teams, starters, the QB+SF and TE slot counts as
-countable pips, and the TE premium. The line it replaces was one fact about the
+lineup mode, teams, starters, the QB, SF and TE slot counts as countable pips,
+and the TE premium. The line it replaces was one fact about the
 manager and two about the league, none of them acted on; the team count moved
 *into* the window, where it is the scale every slot count beside it is read
 against. `features/shared/ui/league-config-window.tsx`.
@@ -1751,6 +1765,27 @@ which is why the premium is a value rather than a flag.
 league drawn as a single lit dot reads as "one"; drawn as one of two it reads as
 one of the two this board could have, so the superflex league beside it is
 visibly different without anyone reading a number. Past two the ladder is exact.
+
+**`QB+SF` became two exact ladders, and the Superflex tag narrowed to what they
+cannot say.** The window used to draw the *union* as one `QB+SF` ladder with a
+lit `Superflex` tag beside it; it draws `QB` and `SF` separately now, so
+`QB 1 · SF 1` states a superflex lineup outright and `SF 0` — one unlit pip of
+the two the floor draws — states a one-QB one. Nothing else that reads `QB+SF`
+moved: the Filters presets, `breakdown.ts`, `isSuperflexLineup` and
+`shared/ktc/roster` all keep the union, because the *rule* is still "two or more
+QB-eligible starting slots".
+
+The tag survives, narrowed to the one shape two ladders cannot state: a league
+starting two bare `QB` slots and **no** `SUPER_FLEX`, which the union matches
+and which prices exactly like a superflex league while looking, on the ladders,
+like a league that simply starts two quarterbacks. So it renders when
+`QB+SF ≥ 2` disagrees with `SF ≥ 1`, and not otherwise. Whether that shape
+exists in this corpus is the handoff's own open question and **could not be
+answered here** — no database was reachable from where this was built — so
+narrowing is the arm that is correct under both answers: on a corpus without it
+the tag never renders and the window is the design as drawn, and on one with it
+the reader is not left to infer superflex from ladders that never name it. Run
+the query and the tag can go.
 
 **The divider is a line on glass, not `--groove`.** A groove is a channel milled
 into the housing, and there is no metal inside a lit window to cut.
@@ -2096,7 +2131,7 @@ are untouched.
 
 **And it now carries the manager card's configuration window**, under the plate
 that names the league and above the hauls it prices — format, lineup mode,
-superflex, teams, starters, the QB+SF and TE ladders, the TE premium. It is the
+teams, starters, the QB, SF and TE ladders, the TE premium. It is the
 same component read from the same rules rather than a second derivation (see The
 configuration window, which moved to `features/shared` for this), so a league
 described one way on `/manager` cannot be described another here. What it
@@ -2558,7 +2593,10 @@ this pass rather than a restyling of an old one: a floating housing carrying
 the wordmark, the tool navigation, a season readout and the theme key. Applied
 from a design handoff scoped to `/manager/[username]`; five things about it are
 structural rather than cosmetic. **The tool links have since become one key that
-opens a menu** — see The track became a menu below; the five still hold.
+opens a menu** — see The track became a menu below — and **the rack has since
+been pinned and taken the manager page's Browse and View controls**, which
+retired the season readout; see The rack is pinned below. The five still hold,
+with the readout one now reading as the shape the controls context took.
 
 **It lives in `features/tools`, not `features/shared`.** Everything it is made
 of is that folder's own — the tool registry, `toolHref`, the flask mark, the
@@ -2587,18 +2625,20 @@ painting it. The stacking is what the menu removed — one key fits in the brand
 row where six never did — but the mechanism is unchanged and still carries the
 menu, the theme key and the readout into their wide-layout order.
 
-**The season readout is published by the page, not read by the rack.** It names
-whose page this is, which is manager data in app-level chrome, and three
-answers were possible with only one of them true: the stored account names
-whoever last logged in, which is the wrong person on `/manager/someone-else`;
-the URL names the right person but not the season, which is resolved on the
-server and arrives on the leagues stream. So `RackReadoutProvider` wraps both
-in `layout.tsx`, `LeaguesHome` publishes through `usePublishRackReadout`, and
-**a page that publishes nothing gets no pill** — which is what "only where a
-manager is resolved" has to mean. Read and write are two contexts so a
-publisher takes only the stable setter; the publish is an effect, because it
-writes to an ancestor's state, and its cleanup is the half that matters:
-without it, walking from a manager page to `/trades` leaves the old name lit.
+**The season readout was published by the page, not read by the rack** — and
+the *pill* is gone while the mechanism it established is what the controls now
+ride on. It named whose page this was, which is manager data in app-level
+chrome, and three answers were possible with only one of them true: the stored
+account names whoever last logged in, which is the wrong person on
+`/manager/someone-else`; the URL names the right person but not the season,
+which is resolved on the server and arrives on the leagues stream. So a provider
+wraps both in `layout.tsx`, `LeaguesHome` publishes into it, and **a page that
+publishes nothing gets nothing** — which is what "only where a manager is
+resolved" has to mean. Read and write are two contexts so a publisher takes only
+the stable setter; the publish is an effect, because it writes to an ancestor's
+state, and its cleanup is the half that matters: without it, walking from a
+manager page to `/trades` leaves the old page's controls in the rack, wired to a
+component that has unmounted.
 
 **There is now exactly one theme control, in the rack.** `ThemeToggle` was
 removed from `tools-home`, `leagues-home`, `trades-home` and
@@ -2700,6 +2740,12 @@ panel.
 
 ### The View housing
 
+**It has since moved into the rack, with the Browse housing beside it — see The
+rack is pinned below.** What follows is the housing it was, and the two rules
+that survived the move: the dialogs still hide their own state, so something
+still has to say what the grid has been narrowed to, and the trigger's *shape*
+is still the caller's.
+
 The trim rule with three bordered buttons hanging off it is gone. `ViewHousing`
 in `leagues-home.tsx` is the third instrument on the header row: the two dialog
 triggers stacked over a readout of what they have left. The accent sentence
@@ -2792,6 +2838,177 @@ way, so the rack is not a new claim. And **the tools, trades and lineup-checker
 pages still draw their own panel** on `--background` rather than on the ground —
 they are unchanged apart from losing their theme key, and giving them the
 full-bleed treatment is a redesign of three pages this bundle does not cover.
+
+### The rack is pinned, and it carries the page's controls
+
+The rack floated in flow at `mt-6` and scrolled away. It is `fixed` at `top-6`
+now — the same 24px gap, measured against the viewport instead of against
+whatever preceded it — and it has taken the manager page's **Browse** and
+**View** housings as two tracks of keys. Applied from a design handoff off its
+option 2a, in the order that handoff sets out.
+
+**Pinning is the whole reason the controls could move up there.** On a
+hundred-league page the header scrolls away after two cards, so a Filters key
+in the header is a key you scroll back for; in a pinned rack it is reachable at
+any scroll depth. The cost is the one the pill paid for it: the lit account
+readout — the manager's name and season — is gone, because the identity plate
+below now names both and the pill was a second answer to a question already
+answered. Its ~185px is exactly what the two tracks needed.
+
+**The rack is out of flow, so the shell's top padding is the only thing holding
+a page clear of it, and that is one number rather than two.** `--rack-clear` in
+`globals.css`, read by `PageShell` as `pt-[var(--rack-clear)]`. The rack's
+height and the shell's clearance are one fact, and two spellings of it drift the
+first time a key's padding changes — the symptom being a rack sitting on a
+page's first row. Measured rather than guessed, at each of the rack's three
+heights: 52.5px below `md` (a 36px bezel in 6px of padding, plus its border) and
+62px at `md` and up (a 44px bezel in 8px), which is the height the handoff
+predicted to the pixel. The token is `24 + rack + gap` at each: 100px, 120px at
+`sm` where the shell used to open on `pt-11`, and 114px at `md` where the gap is
+the design's own 28.
+
+**Every shell arm takes the clearance, not just `console`.** The handoff says
+only the console pages render a rack-clearing layout; they are not, because the
+rack renders above *every* route and `/tools` is on `wide`. Without it the tool
+grid's first row sat under the rack. Only the bottom padding and the gutters are
+each arm's own now. `ConsoleGround` needs nothing either way, being already
+fixed and viewport-sized.
+
+**The rack gained a third shadow, and it is a token.** `--rack-cast`: content
+passes *under* a pinned rack, and a housing with no cast shadow reads as printed
+on the page rather than standing over it. Written as a token for the reason
+`globals.css` gives about every other one — the dark ground's `#000` at 40px
+smears on the light one, which takes a slate tint instead.
+
+**The controls reach the rack through a published context, and that is the real
+cost of putting them there.** The rack is mounted in `layout.tsx` above
+`{children}`, so it cannot see the page's state — and all four keys are
+page-specific. `RackReadoutProvider` was already the right shape, so it was
+extended rather than deleted: it is `RackControlsProvider` now, carrying
+`{ filters, onFilters, leagues, columns, board, ktc, drawer, onOpenDrawer }`,
+and a page that publishes nothing renders no controls, the rule the tools menu
+already lives by. The state stays on the page, where the drawers, the two
+predicates and the lineups gate all read it.
+
+**Every field is a dependency of the publishing effect, and that is
+load-bearing.** The object handed to `usePublishRackControls` is new on every
+render, so an effect depending on the *object* would run on every render, set an
+ancestor's state, re-render the page and run again — an unbounded loop rather
+than a stale value. Depending on the fields means the effect fires only when one
+of them moves, which puts a requirement on the caller: `onOpenDrawer` is a
+`useCallback` in `LeaguesHome` for exactly this reason, and everything else it
+passes is a primitive or a piece of state. A future caller that rebuilds a
+nested object literal each render gets the loop, which is why the hook says so.
+
+**`LineupColumnsDialog` moved to `features/shared`, and `LINEUP_METRIC_LABELS`
+with it.** The rack lives in `features/tools`, and a rack reaching into
+`features/manager` for a picker would be one sibling feature importing another;
+the sibling it may read is `shared`. It is the line `CONSOLE_KEY`,
+`ManagerPlate`, `LeagueFiltersDialog` and `LeagueConfigWindow` all moved on — a
+second reader. The labels landed in `lineup-columns.ts` beside `METRIC_ORDER`,
+which they are the other exhaustive `Record<LineupMetricId, …>` of: the same
+compiler seam, twice.
+
+**Below `lg` the four keys collapse behind one icon-only key that opens a
+menu.** That is the question the handoff leaves open and asks be decided before
+shipping, and it is decided the way this folder decided it once already:
+`ToolsMenu` replaced a six-key track with one key and a menu because the track
+did not fit. Four control keys are ~470px in a 362px pill, so the same answer
+applies, and the key is icon-only for the theme key's reason — the legend is the
+first thing to go. The two alternatives were a second stacked row, which is what
+the rack was rewritten to remove and which costs ~112px of an 844px screen
+*permanently* once pinned, and leaving the controls on the page at narrow
+widths, which would mount both dialogs twice.
+
+**The breakpoint is `lg`, not the `md` the rest of the rack turns on, and it was
+measured.** With the tracks in, the rack's row is ~900px of content: at `md`
+(768px) it wrapped to a second line, 114px of pinned rack with the page's first
+row underneath it. So the tracks wait for `lg` while everything else still
+switches at `md`, and the rack is one row at every width — which is a constraint
+rather than an observation, since it is what keeps `--rack-clear` to three
+values instead of five.
+
+**The same two tracks serve both layouts and nothing is rendered twice.** The
+menu panel is `display: contents` at `lg`, so its box stops existing and the
+tracks join the rack's flex row under their own `order` — the trick the brand
+row already turns. A filter set from the menu on a phone is therefore the same
+dialog instance as one set from the rack on a desktop. The menu is not a
+`<dialog>`, for `ToolsMenu`'s reason, so its dismissal is spelled out: a
+capture-phase `pointerdown` and an Escape that returns focus to the key.
+
+#### The header became one plate
+
+`ManagerPlate` and `SeasonSummary` merged. The plate carries the avatar bezel,
+the groove, the eyebrow and the engraved name as before, and then — through a
+new optional `children` — the season's two figures and the win-rate dial on the
+same engraving. **The presence of children is what switches the box**: a plate
+carrying a season runs the shell's width and wraps below `sm`, and a plate
+carrying only a name stays `inline-flex`. That is because `ManagerPlate` is
+shared with the lineup checker, which draws it with no season and stands an
+attention housing to its right; editing the box in place would have moved that
+page's header without anyone asking.
+
+What went with the merge: the Games line (`182 games · no ties`) came off the
+plate — `summary.games` is still the win rate's denominator, it is just not a
+reading of its own — and the dial stepped down from 112px to 88px, because it
+now shares a plate with a 2rem engraved name rather than standing beside one.
+
+**`seasonSummary()` is fed the filtered list, which reverses its own doc
+comment.** It was the unfiltered one while the summary stood beside the plate
+describing the account, and the *filtered* count had a home in the View
+housing's `{matched} / {total}` readout. The merge took both away, so the one
+set of figures on the page has to answer the question the reader is actually
+asking — a reader narrowed to dynasty wants their dynasty record, the same
+argument the shares drawers already count by.
+
+**The unfiltered total lives in the Leagues figure, and only while it means
+something.** That is the handoff's own open question and its cheapest answer:
+the field reads `14` unfiltered and `9 / 14` while a narrowing is in force. Left
+as one number on a filtered page, "Leagues 9" reads as the whole account to
+anyone who did not set the filter; carried always, the denominator is noise in
+the common case. **`filterSummary(filters)` lands under the plate**, in accent,
+which is the line `lineup-checker-home.tsx` already draws under its own plate —
+a pinned rack has no room for a sentence of prose, and the subject selection
+still has the token tray below it.
+
+**The `Win rate` caption drops below `sm`.** The whole season block has to fit a
+332px plate at 390 and the caption is ~46px of it, while the lit window inside
+the dial already reads `WIN 50.0%` — it is the one thing in the block that says
+something twice. Measured after: 311px against 332, and no horizontal page
+overflow.
+
+#### Verified
+
+Rendered through a temporary `/preview` route against the real components,
+tokens and Tailwind build — the method the console-card and shares passes
+established, since no database is reachable from where this was built — then
+screenshotted over CDP at 1280 and 390 in both schemes and deleted. Two things
+about that method are worth writing down: **Chrome must be launched with
+`--no-proxy-server`** or the agent proxy swallows the dev chunks, and the page
+must be opened on **`http://localhost:3000`, not `127.0.0.1`** — `next dev`
+answers 403 to the other origin's chunk requests, and the page then serves 200,
+renders its SSR markup and never hydrates. Both failures look identical from the
+outside: a correct-looking page whose buttons do nothing.
+
+What the renders turned up is the three changes above — the `lg` breakpoint, the
+clearance on every shell arm, and the dropped caption. What holds after them:
+the rack is one row at 390, 640, 768, 900 and 1280, and `contentTop` is exactly
+`rackBottom + 28` at `md` and up on `/manager`, `/tools`, `/trades`,
+`/lineupchecker` and `/picktracker`. `document.documentElement.scrollWidth`
+equals the viewport at 390 and 1280. In the DOM: one `<h1>`, one `<nav>`, and
+**two** `<dialog>`s — one instance each, which is the `display: contents` claim
+end to end. At 1280 the panel computes `display: contents`, its two tracks carry
+`order: 4` and `5`, and the collapse key is `display: none`; at 390 the key is
+`inline-flex`, `aria-expanded` toggles, the panel opens inside the viewport
+(65–312 of 390), Escape closes it and returns focus to the key, and an outside
+`pointerdown` closes it. Filtered, the plate reads `LEAGUES 1 / 3` with the
+`DYNASTY` line under it and the Filters key lit carrying its badge. `/tools`
+still renders no `<nav>` and no controls, with its theme key pinned right.
+
+**Not verified against real data**, which is the gap to close first: every
+number above is a fixture, and the QB/SF split's one open question — whether any
+league in the corpus starts two bare `QB` slots with no `SUPER_FLEX` — needs the
+database rather than a render.
 
 ## The console card
 

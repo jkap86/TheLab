@@ -30,8 +30,8 @@ describe("seasonSummary", () => {
   });
 
   test("a league without a record is skipped, not counted 0-0", () => {
-    // The league still counts toward `leagues` — it is on the account — but a
-    // roster that has not been read has no games, and calling them losses
+    // The league still counts toward `leagues` — it was in the list handed in —
+    // but a roster that has not been read has no games, and calling them losses
     // would move the win rate.
     const summary = seasonSummary([
       league({ wins: 6, losses: 4, ties: 0 }),

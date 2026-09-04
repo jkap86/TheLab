@@ -49,6 +49,60 @@ export const LINEUP_METRIC_IDS: readonly LineupMetricId[] = (
 ).sort((a, b) => METRIC_ORDER[a] - METRIC_ORDER[b]);
 
 /**
+ * Words for the rank metrics — the card's column headers and the dialog's
+ * option lines.
+ *
+ * Beside `METRIC_ORDER` because the two are the same seam seen twice: this file
+ * already holds the client half of the contract's compiler list, and the labels
+ * are the other exhaustive `Record<LineupMetricId, …>` a new id has to be placed
+ * in. They lived in `features/manager/helpers/lineup-metrics` until the columns
+ * dialog moved here — a picker mounted in the app rack cannot read a sibling
+ * feature for its own option text, and a copy of these strings would be a
+ * second place for a metric to be renamed.
+ */
+export const LINEUP_METRIC_LABELS: Record<
+  LineupMetricId,
+  { column: string; option: string }
+> = {
+  ros_starters: {
+    column: "ROS starters",
+    option: "Projected points — starters (rest of season)",
+  },
+  ros_bench: {
+    column: "ROS bench",
+    option: "Projected points — bench (rest of season)",
+  },
+  capital_total: {
+    column: "Capital",
+    option: "Draft capital — whole roster",
+  },
+  capital_bench: {
+    column: "Bench capital",
+    option: "Draft capital — bench only",
+  },
+  capital_starters: {
+    column: "Starter capital",
+    option: "Draft capital — starters only",
+  },
+  ktc_total: {
+    column: "KTC total",
+    option: "KeepTradeCut — roster and picks",
+  },
+  ktc_starters: {
+    column: "KTC starters",
+    option: "KeepTradeCut — starters only",
+  },
+  ktc_bench: {
+    column: "KTC bench",
+    option: "KeepTradeCut — bench only",
+  },
+  ktc_picks: {
+    column: "KTC picks",
+    option: "KeepTradeCut — future draft picks",
+  },
+};
+
+/**
  * The four columns a first visit shows.
  *
  * Unchanged by the KTC metrics, so nobody's stored selection moves and a reader
