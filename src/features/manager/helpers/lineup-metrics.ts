@@ -55,3 +55,28 @@ export function rankPercentile(rank: MetricRank | null): number | null {
  * resolves neither the alias nor the barrel.
  */
 export { rankColor } from "../../shared/rank-ramp.ts";
+
+/**
+ * Where one figure sits among the league's, as a rank the meters and the ramp
+ * above can read.
+ *
+ * The server ranks the nine metrics a card's tiles show; this is the same
+ * reading taken client-side for a figure it does not rank — today the bench
+ * total under whichever lens the expanded card is on, which changes with a
+ * control rather than with the payload. It is **standard competition ranking**,
+ * the same rule `MetricRank` documents: tied figures share the better rank and
+ * the next distinct one skips.
+ *
+ * Null where there is nothing to rank, which is two cases and not one: a field
+ * of fewer than two, and a field where every figure is zero — a league with no
+ * projections read, or one whose KeepTradeCut board could not be. "1st of 12"
+ * among all-zero totals is a claim, which is exactly why `LineupRanks` ships
+ * null for it rather than a rank.
+ */
+export function placeAmong(
+  value: number,
+  all: readonly number[],
+): MetricRank | null {
+  if (all.length <= 1 || all.every((figure) => figure === 0)) return null;
+  return { rank: all.filter((figure) => figure > value).length + 1, of: all.length };
+}
