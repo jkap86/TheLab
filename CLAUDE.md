@@ -1922,6 +1922,24 @@ season board that moves on injury news over days and a week board read by
 somebody setting a lineup an hour before kickoff — the Sunday-morning inactive
 is exactly what half an hour of staleness would hide.
 
+**The page sits on the ground rather than on a panel of its own**, which is
+the leagues console's arrangement and arrived here later than there. It used
+to draw the rounded, bordered panel every pre-rack page drew — and drew it
+*inside* the shell the manager page had already given up, so a reader walking
+from `/manager` to `/lineupchecker` got a second bounded rectangle inside the
+viewport under a floating rack, which is the doubling `ConsoleGround` exists to
+remove.
+
+**The card width fell out of the same edit, and it is the reason to make it.**
+Both pages are one card per row at `PageShell width="console"`, so the only
+thing that ever made these cards narrower was the panel's own inset and border
+— `px-6 sm:px-13`, which measured **106px** at 1280 (1014 against `/manager`'s
+1120) and **50px** at 390 (312 against 362) — and the two cards are the same
+card over the same league. A league that read whole on `/manager` and clipped
+here would be the shell's `console` arm failing at the one thing it was widened
+for. With the panel gone the two agree by construction rather than by two
+spellings of a width.
+
 Checked at 1280 and 390 in both schemes. Light mode is derived rather than
 designed, as everywhere else on the console.
 
@@ -3088,6 +3106,10 @@ way, so the rack is not a new claim. And **the tools, trades and lineup-checker
 pages still draw their own panel** on `--background` rather than on the ground —
 they are unchanged apart from losing their theme key, and giving them the
 full-bleed treatment is a redesign of three pages this bundle does not cover.
+**`/lineupchecker` has since taken the ground**, which cost it no redesign at
+all: it was already the leagues console's plate and cards on a panel of its
+own, so the panel was the only thing between it and `/manager`. See Checking a
+week's lineup.
 
 ### The rack is pinned, and it carries the page's controls
 

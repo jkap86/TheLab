@@ -34,9 +34,21 @@ import { WeekStepper } from "./week-stepper";
  * them, rather than the page waiting on the slower of the two. It is also what
  * makes a failed check cost the week's numbers and not the list.
  *
- * The panel, the plate and the card are the leagues console's, unchanged. A
- * reader arriving from `/manager` is looking at the same leagues, and a second
+ * The plate and the card are the leagues console's, unchanged. A reader
+ * arriving from `/manager` is looking at the same leagues, and a second
  * vocabulary for them would be a second chance for one to drift.
+ *
+ * **The panel is gone, for the reason it went there.** This page used to draw
+ * a rounded, bordered panel with `--background` showing around it; the ground
+ * the route renders (`ConsoleGround`) is that surface now and runs to the
+ * viewport edges, so with the rack floating above there is no second bounded
+ * rectangle inside the viewport. The cards inherit the rest of the fix: the
+ * panel's inset and border were 106px at 1280 and 50px at 390 that this page
+ * spent and `/manager` did not, so the same card over the same league was
+ * measurably narrower here — 1014 against 1120, on a shell widened to `console`
+ * precisely so a lit readout would not clip. With the panel gone both pages are
+ * one card per row at `PageShell width="console"` and a card is the same width
+ * on either, by construction rather than by two spellings of a width.
  */
 export function LineupCheckerHome({ heading }: { heading: ReactNode }) {
   const account = useStoredAccount();
@@ -100,16 +112,7 @@ function Checker({
   const name = user ? user.display_name || user.username : username;
 
   return (
-    <div className="relative rounded-3xl border border-foreground/9 bg-[image:var(--panel-bg)] px-6 pb-14 pt-10 shadow-[var(--panel-shadow)] sm:px-13 sm:pb-[4.5rem] sm:pt-16">
-      <span
-        aria-hidden
-        className="pointer-events-none absolute inset-0 rounded-[inherit] bg-[image:var(--panel-grain)]"
-      />
-      <span
-        aria-hidden
-        className="pointer-events-none absolute inset-x-[12%] top-0 h-px bg-[image:var(--panel-specular)]"
-      />
-
+    <div className="relative">
       <header className="relative flex flex-wrap items-center gap-6">
         <ManagerPlate
           name={name}
@@ -267,26 +270,16 @@ function AttentionHousing({
 /** The state with nothing to check, because no account has been resolved. */
 function NoAccount({ heading }: { heading: ReactNode }) {
   return (
-    <div className="relative rounded-3xl border border-foreground/9 bg-[image:var(--panel-bg)] px-6 pb-14 pt-10 shadow-[var(--panel-shadow)] sm:px-13 sm:pb-[4.5rem] sm:pt-16">
-      <span
-        aria-hidden
-        className="pointer-events-none absolute inset-0 rounded-[inherit] bg-[image:var(--panel-grain)]"
-      />
-      <span
-        aria-hidden
-        className="pointer-events-none absolute inset-x-[12%] top-0 h-px bg-[image:var(--panel-specular)]"
-      />
-      <div className="relative">
-        {heading}
-        <Plate>
-          <p className="m-0 font-mono text-[0.8125rem] text-foreground/72">
-            Connect a Sleeper account on the tools page to check your lineups.
-          </p>
-          <a href="/tools" className={`${CONSOLE_KEY} mt-4 inline-block`}>
-            Go to tools
-          </a>
-        </Plate>
-      </div>
+    <div className="relative">
+      {heading}
+      <Plate>
+        <p className="m-0 font-mono text-[0.8125rem] text-foreground/72">
+          Connect a Sleeper account on the tools page to check your lineups.
+        </p>
+        <a href="/tools" className={`${CONSOLE_KEY} mt-4 inline-block`}>
+          Go to tools
+        </a>
+      </Plate>
     </div>
   );
 }
