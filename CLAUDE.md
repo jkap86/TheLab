@@ -2425,3 +2425,82 @@ file's presence.
 `.lab-anim` marks anything decorative that moves, so the
 `prefers-reduced-motion` rule can stop all of it at once. It uses `!important`
 because those animations are set inline.
+
+## The app icon
+
+Until this landed the tab carried Next's own default `favicon.ico` — the app had
+a mark everywhere except the one place a reader sees it before the page paints.
+The design bundle is the `FlaskMark` set on a plate, and it is five files in
+`src/app/`, all of them Next's static metadata conventions rather than anything
+this repo wires by hand.
+
+**The names are the wiring**, and two of the five had to be renamed to get it.
+`app-icons.md` in the bundled docs is the reference, and the rule that decides
+this is in `next/dist/lib/metadata/is-metadata-route.js`: the variant matcher is
+`\d?` — **one optional digit**, not a suffix. So the export's `icon-32.png` and
+`icon-512.png` match nothing and would have shipped as dead bytes in the app
+directory, silently, because an unmatched file in `app/` is not an error. They
+are `icon1.png` and `icon2.png`. The other three (`favicon.ico`, `icon.svg`,
+`apple-icon.png`) are already conventional and were copied under their own names.
+
+What that buys, read off the built HTML rather than assumed:
+
+```
+<link rel="icon" href="/favicon.ico"   sizes="48x48"   type="image/x-icon">
+<link rel="icon" href="/icon.svg"      sizes="any"     type="image/svg+xml">
+<link rel="icon" href="/icon1.png"     sizes="32x32"   type="image/png">
+<link rel="icon" href="/icon2.png"     sizes="512x512" type="image/png">
+<link rel="apple-touch-icon" href="/apple-icon.png" sizes="180x180" type="image/png">
+```
+
+**The plate is what makes the icon scheme-independent, and that is the design
+decision rather than a style.** Everything else in the app is two schemes over
+one set of markup; a favicon cannot be. It is painted onto browser chrome this
+app does not own, `data-theme` is unreachable from it, and a
+`prefers-color-scheme` media query inside an SVG favicon is honoured by Firefox
+and Safari and ignored by Chrome — so a mark that inverted would invert on some
+readers' machines and not others. The bundle answers that by carrying its own
+dark ground (a radial `#16303c → #08090a`, rounded at `rx=7`), so the same file
+is correct on a light tab strip and a dark one. `FlaskMark` on the page keeps
+drawing on `--active` with no ground, because there it *is* in a scheme.
+
+**The flask geometry is the same three paths as
+`features/tools/components/flask-mark.tsx`**, to the digit — the icon is that
+component with a plate behind it, not a second drawing of the same idea. Two
+copies of the path data now exist and cannot be made one: the component is JSX
+reading Tailwind classes off the theme, and the icon is a static file Next hashes
+at build time. The thing to know is which way a change travels — a redrawn mark
+is a redrawn *icon set*, re-exported, because nothing here regenerates the five
+files from the component.
+
+**`icon1.png` is deliberate redundancy and worth naming as such**, since the
+`.ico` already carries 16/32/48 as PNG-encoded entries and the 32 in it is the
+same image. It is the raster fallback in the conventional six-file set, and 7KB
+served only to a reader whose browser passed on the SVG. `icon2.png` at 512 is
+the large-icon slot — an Android home-screen shortcut with no manifest to read
+takes the largest declared `rel="icon"`.
+
+**No web manifest**, and that is the one thing in the bundle left unspent.
+`icon2.png`'s canonical consumer is a manifest's `icons` array, and Next has
+`app/manifest.ts` for it — but a manifest is an *installability* claim (`display`,
+`start_url`, `theme_color`, `background_color`) and none of those four is
+answerable from an icon export. `theme_color` is the sharp one: the app has two
+schemes with a persisted choice, and a manifest names one colour. It arrives with
+a decision about whether this app wants to be installed.
+
+**The files are byte-for-byte the export**, C2PA content credentials included —
+a `caBX` chunk in each PNG, a `<metadata>` block that is 7.7KB of the 8.6KB SVG.
+Stripping it would shrink the SVG tenfold and is still not worth doing silently:
+these are cached-once assets, and re-encoding a signed export to save 8KB trades
+the provenance for nothing anyone will measure.
+
+### Verified
+
+`npm run build` lists `/icon.svg`, `/icon1.png`, `/icon2.png` and
+`/apple-icon.png` as static routes and emits the five tags above into every
+prerendered page, which is the check that the rename was the whole of the wiring.
+Rendered through headless Chrome at 16, 32, 64, 128 and 512: the SVG is legible
+at tab size, and against `icon2.png` at 512 the ink measures 50.0% of the plate's
+width against 47.7% and sits centred to within 1.2% — a rasteriser's rounding,
+not two different drawings. The `.ico`'s own 16 and 32 entries were extracted and
+read at 8× and both hold the flask's neck, lip and fluid line.
