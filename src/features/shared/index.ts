@@ -75,4 +75,7 @@ export {
   Scanlines,
 } from "./ui/card-plate";
 export { ConsoleGround } from "./ui/console-ground";
+// What game a league is playing, as one lit window — read by the manager card
+// and the trade card, which is what brought it here from `features/manager`.
+export { LeagueConfigWindow } from "./ui/league-config-window";
 export { PageShell } from "./ui/page-shell";
