@@ -2550,6 +2550,199 @@ designs this does not carry: the ref-count already bounds pollers by actual
 readers, and each of those arrives with a second instance or a load problem to
 size it against.
 
+## Who has visited
+
+`/logs` is every request this app has recorded, narrowed four ways, over a
+window the reader picks. Nothing here recorded a visit before it: there was no
+middleware, no analytics and no table. TheLab2026's feature ported — same
+question, same four-facet shape — with the three things that had to change
+written down below, each because this app is not that one.
+
+**It needed a migration, and only one table.**
+`db/migrations/1788000000004_create_visitor_logs.sql` is `(id, seen_at, ip,
+route, viewer)` plus one index on `(seen_at DESC, id DESC)`, which is the window
+predicate and the newest-first ordering in one read. The ported original has no
+index at all on a table it full-scans forever, and no primary key; **the identity
+column here is this repo's first synthetic key** and earns one where the other
+ten tables have natural ones — a visit has no identity of its own, the same
+address may hit the same route twice in a millisecond, and those are two facts.
+The read is capped, and a cap over `seen_at` alone splits a tie arbitrarily.
+
+**The route is stored whole and everything about it is derived at read time.**
+Which tool, whose page, which league — all of it comes out of the path in
+`features/logs/helpers/derive-visit.ts`, so a seventh tool is a line in a pure
+helper rather than a migration. What cannot be derived is the one other column.
+
+**`route` and `viewer` are two questions, and one column could not answer
+both.** `route` says who was being looked *at*; `viewer` says who was *looking*.
+On `/manager/jkap86` those are two different people whenever anybody looks
+somebody else up, and collapsing them would attribute every visit to its
+subject. It matters more here than it did in the original: **only
+`/manager/[username]` carries a name in its path**, so `/lineupchecker`,
+`/trades` and `/tools` are an address and nothing else without it. The account
+already lives in `localStorage`, which the proxy cannot see, so `storeAccount`
+mirrors the username into a `thelab_viewer` cookie — an underscore, because a
+colon is a separator in the cookie grammar and is not legal in a name. That does
+not reopen the argument `theme.ts` settles against cookies: **that** one is about
+reading a cookie *in the root layout*, which opts the app out of static
+prerendering, and the proxy runs per request regardless, so `/tools` stays
+prerendered.
+
+**`ip` is nullable, and the sentinel it replaces is the bug worth naming.** The
+original declares it `INET NOT NULL` and writes the literal strings
+`"Unknown IP"` / `"Invalid IP"` into it whenever its sanitizer refuses a value —
+which its own IPv4 pattern (`\d{1,3}` four times) does for anything it lets
+through in range, since `999.999.999.999` passes the regex and then fails the
+cast. Neither string is castable to `INET`, the insert is fire-and-forget, and
+so the row is dropped with nothing said. `shared/logs/client-ip.ts` answers
+**null** instead, and its patterns are the stricter ones — an address we cannot
+read is absent, not a sentinel, and absent is not zero.
+
+### The proxy, and the one thing it cannot see
+
+**It is `proxy.ts`, not `middleware.ts`.** Next 16 deprecated that convention and
+renamed it; the export is `proxy` and it sits beside `app/`. The consequence that
+matters is that **Proxy now defaults to the Node.js runtime**, so it reaches
+Postgres directly. The original cannot: its middleware is on Edge, where `pg`
+does not exist, so it fires an HTTP request at its own hardcoded public hostname
+and an API route does the insert — one extra inbound request per page view,
+through an axios instance carrying three retries, so a failing log endpoint costs
+four requests a view. That hop, that hostname and those retries are all gone, and
+**the pool is genuinely shared rather than a second one**: `next-server.js` loads
+the proxy with a plain `require()` in-process, `pg` is externalized by
+`next.config.ts`, and the built bundle carries `globalThis.pgPool ??= …` — which
+is exactly what `db/pool.ts` caches it on `globalThis` for. The insert rides
+`event.waitUntil`, which the Proxy docs name for this ("background work like
+logging or analytics"), so the response is not held and the write is not cut off.
+There is also no write *endpoint*: the proxy is the only writer, where the
+original's `/api/common/logs/update` is open to anyone who wants to fill the
+table.
+
+**A row means "a browser asked for this page as a page", and that is a decision
+made by measuring rather than by reasoning.** The App Router issues two kinds of
+request that are not a page view: a *prefetch*, fired for every `<Link>` in the
+viewport the moment a page loads, and the *soft navigation* after a click. **In
+Next 16 the proxy cannot tell them apart.** Verified against a production build
+driving a real browser: the prefetch of `/trades` and the click through to
+`/trades` arrived with the same URL, the same eighteen header names, and the same
+value for every one — `RSC` and `Next-Router-Prefetch` do reach the server, but
+Next consumes them into request metadata and strips them before the proxy runs,
+and the `.rsc` pathname suffix they can arrive as is normalised away too.
+
+So the choice was never "log navigations but not prefetches"; it was between
+logging both and logging neither. Logging both is worse by a distance — one load
+of `/tools` produced **six** rows, two of them for `/trades` and one for
+`/comps`, a page nobody had opened. A log reporting visits to pages nobody
+visited has no reading that is true, where one that undercounts has exactly one.
+`isPageView` therefore takes document requests only: a hard load, a new tab, a
+bookmark, a pasted link, a refresh. In-app clicks between tools are not recorded
+and mostly could not be — a prefetched route is served from the router cache, so
+the click that follows often makes no request at all. The two conditions cover
+each other: `next-url` is the App Router's own marker and catches a stray RSC
+request with no fetch metadata, and `sec-fetch-dest` is browser-set and cannot be
+forged, with its *absence* read as a page view so a crawler or a curl still
+counts.
+
+**The matcher is a positive list and cannot be generated from
+`constants/tools.ts`**, however much it looks like it should be: Next requires
+matcher values to be static constants so they can be analysed at build time. A
+seventh tool is a line in both places. A negative pattern would avoid that and
+pay for it by logging `_next` chunks, images, every API call — and `/logs`
+itself, which this list excludes by not naming it.
+
+### Reading it back
+
+**A failed token is a 404, not a 401**, on both the page and `/api/logs`. The
+protection is that the page does not appear to exist, and a 401 confirms that it
+does — the only thing somebody guessing paths wants to learn. `logsAccess` is
+pure with the environment as an argument, in `db/config.ts`'s shape, and makes
+that file's split for its reason: an unset `LOGS_TOKEN` is **denied in production
+and allowed in development**, because a checkout with no `.env` should still
+render its pages and a deployment that forgot the variable must not publish
+everyone's address. The original gates neither its page nor its API and relies on
+not being linked to, which is not a gate. The cost taken here is that the token
+rides the query string and therefore browser history: a cookie would need a route
+handler to set it, since a server component cannot.
+
+**The whole window is fetched and narrowed in the browser**, deliberately — every
+facet menu is a cross-tab over the rows in hand, so answering them on the server
+would be an aggregate per press. The read is capped at `VISITOR_LOG_CAP` and the
+payload says whether the cap bit, because a trimmed month presented as the whole
+month is a claim; the original has no `LIMIT` at all.
+
+**One behaviour is deliberately reversed.** The original builds all five of its
+menus from the *fully filtered* list, so choosing an IP leaves that IP as the
+only option in the IP menu: the selection can be cleared but never changed, and
+the same goes for every facet in turn. That is exactly the failure `facetsQuery`
+already names for the trades board — count the menus **without** the selection —
+and `facetOptions` is that rule applied to a list held in the browser: each
+facet's options come from the rows filtered by every *other* facet. A selected
+value is kept even when nothing else matches it, so a `<select>` can never show a
+value its own options do not contain.
+
+**The Subject column is dropped below `sm`, and the table takes no minimum
+width.** Five columns in 390px is 78px each, and the alternative — a minimum
+width scrolling inside its own container — does not hold: measured at 390,
+`documentElement.scrollWidth` went to 492 and the whole page scrolled sideways.
+Subject is the column to lose because it is the only *derived* one — the route
+printed under the tool already contains it — so dropping it removes a reading
+rather than a fact, which is the console card's own rule for the plates that drop
+the points rank and the year at that breakpoint. The clock is pinned to 24 hours
+for the same width: a meridiem is a fifth token in a quarter of 390px and wrapped
+onto a line of its own.
+
+### Verified
+
+Run against the live database and a **production build**, since prefetching is
+disabled under `next dev` and the central decision above is invisible there.
+`migrate:up` applied the one migration, `migrate:down -- 1 --dry-run` printed the
+mirror, and the round trip down-and-up left the table and its index as declared.
+
+Four matched routes logged four rows with the address taken from the *head* of
+`x-forwarded-for` rather than the proxy hop. The viewer chain was driven end to
+end through the real lookup form rather than a planted cookie: `/tools` before
+resolving an account logged `viewer` null, `storeAccount` wrote
+`thelab_viewer=jkap86`, and `/trades` after it logged `jkap86` — a page whose path
+names nobody. `::ffff:198.51.100.7` stored as `198.51.100.7`, and
+`999.999.999.999` stored as **null** rather than losing the row.
+
+The prefetch finding is the one worth repeating: before `isPageView`, one browser
+load of `/tools` wrote six rows including `/comps`; after it, one. `/logs` logged
+itself zero times.
+
+The gate: `/logs` 404s with no key and with a wrong key and answers 200 with the
+right one; `/api/logs` does the same on `x-logs-key`; `?hours=abc` and
+`?hours=99999` are 400s carrying `ApiErrorPayload`. The three windows returned
+9 / 10 / 11 visits over the same seeded rows.
+
+Over CDP at 1280 and 390 in both schemes — **and the theme has to be driven by
+`data-theme`, not by `prefers-color-scheme`**, which this app ignores; emulating
+the media feature produces two identical dark screenshots. Exactly one `<h1>`,
+one `role="status"`, every control labelled, `documentElement.scrollWidth === 390`
+at phone width with zero overflowing elements, and no cell colliding with the one
+beside it (`lineupchecker` in a `table-fixed` column was the case that found
+that). The facet rule was driven in the browser: with `203.0.113.5` chosen the
+rows fell 11 → 2 and the Viewer menu to `jkap86` alone, while the Address menu
+still offered all five — and switching straight to `198.51.100.7` worked without
+clearing first, which is the move the original cannot make.
+
+### Deliberately not ported
+
+- **The open write endpoint.** `/api/common/logs/update` accepts any `ip` and
+  `route` from anyone, over both GET and POST. The proxy is the only writer here,
+  so there is nothing to call.
+- **A user-agent column, and therefore bot filtering.** Neither app has one; this
+  is named because the absence is what makes "a visit" a request rather than a
+  person, and it is the first thing to add if the log ever reads as noise.
+- **Retention.** Rows are kept, which is what the index is for. A pruning loop
+  would hook into `instrumentation.ts` beside the other three with a `LOCK_KEYS`
+  entry — `[8675309, 4]` is free.
+- **The original's combobox filters and its `Tab` facet.** The tab exists because
+  its manager page is `/manager/<user>/<tab>`; every page here keeps its state in
+  the client, so that menu would always be empty. Native `<select>`s carry the
+  keyboard behaviour and a platform list on a phone, and the Search field covers
+  what a typeahead would.
+
 ## The app rack
 
 The app had no navigation. `/tools` was the only way to another tool and a
