@@ -106,7 +106,7 @@ export const config = {
   matcher: [
     "/tools",
     "/manager/:path+",
-    "/lineupchecker",
+    "/lineupchecker/:path+",
     "/trades",
     "/picktracker",
     "/picktracker/:path+",

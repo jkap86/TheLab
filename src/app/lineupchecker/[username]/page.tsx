@@ -1,7 +1,11 @@
 import { ConsoleGround, PageShell } from "@/features/shared";
 import { LineupCheckerHome } from "@/features/lineupchecker";
 
-export default function LineupCheckerPage() {
+export default async function LineupCheckerPage({
+  params,
+}: PageProps<"/lineupchecker/[username]">) {
+  const { username } = await params;
+
   return (
     <>
       {/* The page's surface runs to the viewport edges rather than being a
@@ -22,6 +26,7 @@ export default function LineupCheckerPage() {
             not its headline — the headline is the manager's display name, which
             only exists once the stream has answered. */}
         <LineupCheckerHome
+          username={username}
           heading={
             // A `span`, not a heading: the page's one `<h1>` is the engraved name
             // inside the plate, and this sits above it as an eyebrow.

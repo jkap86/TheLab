@@ -2221,14 +2221,36 @@ be three at 1280 too.
 
 ## Checking a week's lineup
 
-`/lineupchecker` answers two questions per league for one NFL week: **what the
-lineup as set projects against the best one still reachable from it**, and
-**whether its starters are seated in the order they lock best in**. Its card
-has since been redrawn and gained a third answer — the week's projected outcome
-against the opponent's own lineup; see The console card below. It reads the
-stored account rather than a username in its URL — which is what the tool
-registry already declared for it (no `hrefFor`, not `accountless`), so
-`constants/tools.ts` is untouched.
+`/lineupchecker/[username]` answers two questions per league for one NFL week:
+**what the lineup as set projects against the best one still reachable from
+it**, and **whether its starters are seated in the order they lock best in**.
+Its card has since been redrawn and gained a third answer — the week's
+projected outcome against the opponent's own lineup; see The console card
+below.
+
+**The manager is named by the route, and was not always.** It read the stored
+account off `local-store` until that changed, on the argument that a tool about
+*your* leagues has no business asking for the name again. What that argument
+missed is that the page then had exactly one URL for every manager: nobody could
+open somebody else's lineups, keep a bookmark for a second account, or send
+anyone a link to what they were looking at — and the manager page, which lists
+the same leagues, has taken a username in its path since it landed. So the route
+is `/lineupchecker/[username]` and it is `/manager/[username]`'s shape all the
+way down: the same `PageProps` unwrap, the same `useManagerLeagues(username)`
+underneath, and no bare `/lineupchecker` route, exactly as there is no bare
+`/manager` one.
+
+**The stored account is what gets a reader there in one press, and it is now a
+default rather than the only answer.** `constants/tools.ts` gained a `hrefFor`
+for Manager's reason — the tool card and the rack key resolve to
+`/lineupchecker/<stored account>` — and the tool stays *not* `accountless`,
+because there is still nothing behind "your lineups" without knowing whose. The
+`NoAccount` plate went with the change: with a username in the path it was
+unreachable. Two other files name the route and both moved with it — `proxy.ts`'s
+matcher takes `/lineupchecker/:path+` (a positive list, which is why a route
+shape is a line there as well as here), and `logs/derive-visit.ts` reads the
+second segment as a **username**, so a visit to this tool now names its subject
+in the log the way a visit to `/manager` does.
 
 **Half of it was already in the tree and had never been called.**
 `projections/optimal.ts`'s `compareLineup` — with its `locked` set and its

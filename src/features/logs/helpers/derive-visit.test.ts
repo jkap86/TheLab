@@ -8,8 +8,8 @@ test("names the tool for a route with no subject", () => {
     tool: "trades",
     subject: null,
   });
-  assert.deepEqual(deriveVisit("/lineupchecker"), {
-    tool: "lineupchecker",
+  assert.deepEqual(deriveVisit("/comps"), {
+    tool: "comps",
     subject: null,
   });
 });
@@ -18,6 +18,19 @@ test("reads a username off /manager and folds its case", () => {
   assert.deepEqual(deriveVisit("/manager/JKap86"), {
     tool: "manager",
     subject: "jkap86",
+  });
+});
+
+test("reads a username off /lineupchecker too", () => {
+  assert.deepEqual(deriveVisit("/lineupchecker/JKap86"), {
+    tool: "lineupchecker",
+    subject: "jkap86",
+  });
+  // The bare route no longer exists, but a row stored before the username
+  // landed still reads — a tool with nothing after it names no subject.
+  assert.deepEqual(deriveVisit("/lineupchecker"), {
+    tool: "lineupchecker",
+    subject: null,
   });
 });
 
