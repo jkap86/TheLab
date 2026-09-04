@@ -25,6 +25,7 @@ import { ktcPickPrice, pickTier } from "../ktc/picks.ts";
 import type { KtcPickPrice } from "../ktc/picks.ts";
 import { ktcBoardValue } from "../ktc/roster.ts";
 import type { RosProjections } from "../projections/ros.ts";
+import type { AdpEntry } from "./adp-value.ts";
 import { leagueRosterPicks } from "./draft-picks.ts";
 import type { PickLeague } from "./draft-picks.ts";
 import { rankLeagueLineups } from "./league-ranks.ts";
@@ -69,7 +70,7 @@ export function solveLeagueEntry(
   managerUserId: string,
   season: string,
   projections: RosProjections,
-  adp: ReadonlyMap<string, number>,
+  adp: ReadonlyMap<string, AdpEntry>,
   ktc: KtcPricing = NO_KTC,
 ): LeagueLineupEntry | null {
   const picks = leagueRosterPicks(league, season, (pick) =>

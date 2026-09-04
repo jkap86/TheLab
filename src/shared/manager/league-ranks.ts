@@ -34,6 +34,7 @@ import type {
 
 import { round } from "../projections/optimal.ts";
 import type { RosProjections } from "../projections/ros.ts";
+import type { AdpEntry } from "./adp-value.ts";
 import { solveLeagueLineup } from "./ros-lineups.ts";
 import type { RosLineupLeague } from "./ros-lineups.ts";
 
@@ -136,7 +137,7 @@ export function rankLeagueLineups(
   league: RankLeague,
   managerUserId: string,
   projections: RosProjections,
-  adp: ReadonlyMap<string, number>,
+  adp: ReadonlyMap<string, AdpEntry>,
   ktc: ReadonlyMap<string, number> = new Map(),
   /**
    * Roster id → what KTC prices that roster's future picks at. Handed in rather

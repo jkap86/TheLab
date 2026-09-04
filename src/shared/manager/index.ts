@@ -94,15 +94,19 @@ export type {
 export {
   ADP_PEAK,
   DEFAULT_STEEPNESS,
+  ROOKIE_PICK_STRIDE,
+  ROOKIE_TOP_OVERALL_PICK,
   STEEPNESS_RANGE,
   TYPICAL_STARTING_SLOTS,
+  adpEntryValue,
   adpValue,
   leagueAdpPool,
   parseSteepness,
+  rookieOverallPick,
   rosterAdpValue,
   startingSlotCount,
 } from "./adp-value";
-export type { AdpRosterValue } from "./adp-value";
+export type { AdpBoard, AdpEntry, AdpRosterValue } from "./adp-value";
 export { getManagerWeekLineups } from "./queries";
 export type { ManagerWeekLineupRow } from "./queries";
 export { solveWeekLineup } from "./week-lineups";

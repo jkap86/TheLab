@@ -426,8 +426,37 @@ than its literal outputs.
 which decides *which crawled drafts* a roster is priced against, and pooling ADP
 across different games is meaningless, so that half is load-bearing wherever
 real ADP is involved. It is absent because nothing crawls drafts here yet, and
-it arrives with `/api/adp` and its filters. **There is no ADP data in this repo:
-the curve is the seam, waiting for a source.**
+it arrives with `/api/adp` and its filters. The only ADP in the repo is the
+lineups route's fallback board — see Rest-of-season lineups.
+
+**One board question is answered here anyway, because it is not a preference.**
+`AdpEntry` names the draft board a player's average came off, and `adpEntryValue`
+is what prices either: a **rookie** entry is mapped onto the overall board and
+then run through the same `adpValue`, so one curve and one `pool` anchoring sit
+behind every number a roster sums. A rookie draft runs three to five rounds over
+the incoming class alone, so its 1.01 is `pick_no` 1 — the number a startup gives
+the best player in the game — and until the boards were split the read `AVG`'d
+the two together and priced that 1.01 at the full `ADP_PEAK`, with a whole third
+round of rookies landing above the sixtieth player off a startup board. That is
+not a lens a reader chooses between: pooled, the total is *wrong* rather than
+differently weighted.
+
+**The map is affine and its two constants are chosen, not measured** —
+`ROOKIE_TOP_OVERALL_PICK` (12) and `ROOKIE_PICK_STRIDE` (3.5), so
+`overall = 12 + (k − 1) · 3.5`. That is exactly the state `DEFAULT_STEEPNESS` was
+in before the fit replaced it, and both are written down so the same thing can
+happen to them. **The measurement is available in this data**: a first-year
+rookie appears on *both* boards in the same season — the rookie drafts of the
+dynasty leagues and the full drafts of the redraft ones — so that overlap is a
+two-column fit of this very line. It wants a corpus rather than one manager's
+leagues, which is why it is `/api/adp`'s work rather than something done inline.
+
+One thing the map deliberately does **not** do is scale with league size. A
+rookie's position on a rookie board is his rank in the incoming class, not a
+depth into a board, and a class rank means the same thing in a 10- and a 14-team
+league; size enters where it does for every other player, through `pool`. The
+consequence is that the same rookie pick is worth the same in a three-round and
+a five-round rookie draft, which normalising by board width would have broken.
 
 `shared/projections/slots.ts` is the zero-runtime-import slot vocabulary,
 copied verbatim. `IDP_SLOTS` has the reader its doc comment always named — the
@@ -671,6 +700,58 @@ that data: a dynasty league's synced draft is its rookie draft, so vets there
 have no number and an unprojected vet sorts to the bench bottom with nothing to
 say. That is the fallback degrading honestly, not a bug; the real boards arrive
 with `/api/adp`.
+
+**It is split a second way, and that split is not cosmetic.** Rookie drafts are
+aggregated apart from full ones and shipped as `AdpEntry`s naming their board,
+because a rookie draft's `pick_no` and a startup's are not the same unit — see
+Valuing a roster off ADP for the map that makes them summable again, and for
+what the pooled read was doing to every rookie on the page. **A rookie draft is
+exactly a dynasty league's non-startup draft**, the same rule `dynastyPickGrid`
+reads and spelled from the same two facts: only dynasty drafts a class rather
+than a pool, and only an *inaugural* league holds a startup of its own — its
+earliest draft, since it runs a startup and a rookie draft under one season
+label. A keeper league's draft is a full draft with some picks pre-spent, and a
+continuing redraft league's is a full draft too; neither is a rookie board.
+`DYNASTY_LEAGUE_SQL` and `INAUGURAL_LEAGUE_SQL` are the fragments, and the
+sequencing runs over the league's drafts **whole**, before the two exclusions
+below — the startup is the earliest draft that exists, not the earliest one that
+survived a filter.
+
+**Where a player sits on both boards the full one wins.** It prices him against
+the whole pool, which is the scale `leagueAdpPool` anchors to and the map only
+approximates; the rookie board is there to answer where there is no full-draft
+number at all, which on a dynasty-only account is every rookie.
+
+**Two drafts are excluded outright.** An auction's `pick_no` is nomination order,
+which is not a pick order — the rule `leagueRosterPicks` already lives by, and
+averaging it in was pricing players off the order they happened to be called in
+(a nomination-1 player read as the best in the game). And a draft that is not
+`complete` has only its earliest picks stored, so everyone taken so far reads as
+a first-rounder while the rest of the board has nothing; a half-finished rookie
+draft is the case that makes it worst. The cost is that a rookie class has no
+number until its drafts finish, which is the same "coverage follows the data"
+the paragraph above already trades on.
+
+`DYNASTY_LEAGUE_TYPE`'s doc predicted this fragment and said the constant would
+move back beside it. It stayed in `draft-picks` and the fragment came to the
+constant instead: `draft-picks` is pure and unit-tested under Node's runner, so
+it must not import a module that pulls in `pg`.
+
+**Verified against a throwaway cluster rather than the live database**, since
+the classification is a statement the unit tests cannot reach: `migrate:up` onto
+an empty Postgres 16, then one fixture league per arm — continuing dynasty,
+inaugural dynasty carrying both its startup and its rookie draft, continuing
+redraft, keeper, auction, mid-draft, and a tombstoned league — driven through
+the real `getManagerDraftAdp`. Every arm landed where it should: the inaugural
+startup and the continuing redraft on `full`, the inaugural league's *later*
+draft on `rookie`, keeper on `full`, and the auction, the unfinished draft, the
+tombstoned league and a null `player_id` all absent. Running the pre-split query
+over the same rows is the contrast worth keeping — at a 108 pool a rookie 1.01
+went 10,000 (the peak itself) to 8,235 and a rookie pick 24 went 6,663 to 1,989,
+while the auction's nomination-1 and the half-drafted board's pick 1 were both
+reading 10,000 and are now gone. **Every player priced off a full draft is
+unchanged to the point**, which is the check that the split moved only what was
+contaminated.
 
 `shared/ktc/roster.ts` is the superflex predicate, trimmed from TheLabX's KTC
 pricing the way `adp-value.ts` was from its board half — ADP boards and lineup

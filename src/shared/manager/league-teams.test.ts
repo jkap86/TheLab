@@ -7,6 +7,7 @@ import { ktcPickKey } from "../ktc/picks.ts";
 import { DYNASTY_LEAGUE_TYPE } from "./draft-picks.ts";
 import type { LeagueRosterRow } from "./league-ranks.ts";
 import type { RosProjections } from "../projections/ros.ts";
+import type { AdpEntry } from "./adp-value.ts";
 
 // Annotated at the wider of LineupLeagueRow's two rosters widths — a bare
 // literal trips the excess-property check against the intersection.
@@ -47,7 +48,7 @@ const PROJECTIONS: RosProjections = {
   w2: { player_id: "w2", stats: { rec: 10 }, weeks: [1], name: "W Two", positions: ["WR"] },
 };
 
-const NO_ADP = new Map<string, number>();
+const NO_ADP = new Map<string, AdpEntry>();
 
 /**
  * A KTC market with all three tiers of a 2027 first and a price for `w1` only,

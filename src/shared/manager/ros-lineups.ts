@@ -9,7 +9,7 @@
  *
  * **The ordering is projections first, draft capital second — literally.** The
  * solver maximises a single number per player, so the fallback is folded in as
- * `points + adpValue · ADP_TIEBREAK`, with the scale chosen so the largest
+ * `points + adpEntryValue · ADP_TIEBREAK`, with the scale chosen so the largest
  * possible ADP contribution (the peak, 10,000, times 1e-7 = 0.001) sits below
  * the 0.01 granularity projected points carry. A projected point can never be
  * outbid by draft capital; draft capital only decides among players whose
@@ -39,7 +39,8 @@ import { optimalLineup, recognisedSlots, round, startingSlots } from "../project
 import type { RosterPlayer } from "../projections/optimal.ts";
 import { scoreStatLine } from "../projections/score.ts";
 import type { RosProjections } from "../projections/ros.ts";
-import { adpValue, DEFAULT_STEEPNESS, leagueAdpPool } from "./adp-value.ts";
+import { adpEntryValue, DEFAULT_STEEPNESS, leagueAdpPool } from "./adp-value.ts";
+import type { AdpEntry } from "./adp-value.ts";
 
 /** What one league contributes to the solve, for one of its rosters. */
 export type RosLineupLeague = {
@@ -62,19 +63,24 @@ const ADP_TIEBREAK = 1e-7;
  * feed that failed — and then the whole solve runs on draft capital, which is
  * the fallback working rather than a degenerate case.
  *
- * `adp` is the player → average-pick map for the board matching this league's
- * superflex setting; the caller chooses it (see the route) because which board
- * a league reads is decided once, with `isSuperflexLineup`, not per player.
+ * `adp` is the player → {@link AdpEntry} map for the board matching this
+ * league's superflex setting; the caller chooses it (see the route) because
+ * which board a league reads is decided once, with `isSuperflexLineup`, not per
+ * player. Each entry names the draft board its average came off — a rookie
+ * draft's pick numbers are not overall picks — and {@link adpEntryValue} is what
+ * puts the two on one scale.
  *
  * `ktc` is the same arrangement one market over: the player → KeepTradeCut
  * price map for the league's resolved format and QB board, already narrowed by
  * the caller for the same reason. An absent id is unpriced and stays null — see
- * the module note for why it never joins the ordering.
+ * the module note for why it never joins the ordering. It needs no equivalent
+ * of {@link adpEntryValue}, because a KTC row is already a value rather than a
+ * position on a board that has to be mapped onto another.
  */
 export function solveLeagueLineup(
   league: RosLineupLeague,
   projections: RosProjections,
-  adp: ReadonlyMap<string, number>,
+  adp: ReadonlyMap<string, AdpEntry>,
   ktc: ReadonlyMap<string, number> = new Map(),
 ): LeagueLineup {
   const positions = league.roster_positions ?? [];
@@ -90,9 +96,11 @@ export function solveLeagueLineup(
       line && line.weeks.length > 0
         ? scoreStatLine(line.stats, league.scoring_settings)
         : null;
-    const pick = adp.get(id);
+    const drafted = adp.get(id);
     const capital =
-      pick === undefined ? null : adpValue(pick, pool, DEFAULT_STEEPNESS);
+      drafted === undefined
+        ? null
+        : adpEntryValue(drafted, pool, DEFAULT_STEEPNESS);
     const player: LineupPlayer = {
       player_id: id,
       name: line?.name ?? null,
