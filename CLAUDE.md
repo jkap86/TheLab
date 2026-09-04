@@ -2488,11 +2488,19 @@ answerable from an icon export. `theme_color` is the sharp one: the app has two
 schemes with a persisted choice, and a manifest names one colour. It arrives with
 a decision about whether this app wants to be installed.
 
-**The files are byte-for-byte the export**, C2PA content credentials included —
-a `caBX` chunk in each PNG, a `<metadata>` block that is 7.7KB of the 8.6KB SVG.
-Stripping it would shrink the SVG tenfold and is still not worth doing silently:
-these are cached-once assets, and re-encoding a signed export to save 8KB trades
-the provenance for nothing anyone will measure.
+**The SVG is the export minus its C2PA manifest; the three rasters are the
+export whole.** The split is not a position on content credentials, it is where
+the arithmetic falls. In the SVG the `<metadata>` block was 7.7KB of 8.6KB — the
+provenance was ninety per cent of the asset and the drawing was the other ten —
+and it is 848 bytes now, small enough to read in a diff beside
+`flask-mark.tsx`, which is the second thing that buys: this is the one icon
+whose source a person will ever open. The `caBX` chunk in each PNG is 5758 bytes
+against a 21KB and a 105KB file, where the same edit would be re-encoding a
+signed export to shave five per cent nobody measures.
+
+Two things went, not one: the manifest and the `xmlns:c2pa` declaration that was
+its only user. Nothing else in the file was touched — not reformatted, not
+minified — so a re-export still diffs against it in one hunk.
 
 ### Verified
 
@@ -2503,4 +2511,6 @@ Rendered through headless Chrome at 16, 32, 64, 128 and 512: the SVG is legible
 at tab size, and against `icon2.png` at 512 the ink measures 50.0% of the plate's
 width against 47.7% and sits centred to within 1.2% — a rasteriser's rounding,
 not two different drawings. The `.ico`'s own 16 and 32 entries were extracted and
-read at 8× and both hold the flask's neck, lip and fluid line.
+read at 8× and both hold the flask's neck, lip and fluid line. The metadata
+strip was checked the only way worth checking it: the same 512 render before and
+after hashes to the same SHA-256.
