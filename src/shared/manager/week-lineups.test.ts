@@ -14,9 +14,13 @@ function league(over: Partial<WeekLineupLeague> = {}): WeekLineupLeague {
     // One point per receiving yard keeps the arithmetic in the tests obvious.
     scoring_settings: { rec_yd: 1 },
     best_ball: false,
+    settings: null,
     roster_id: 1,
     starters: ["qb", "rb", "wr", "flexlow"],
     players: ["qb", "rb", "wr", "flexlow", "flexhigh", "nobody"],
+    roster_players: ["qb", "rb", "wr", "flexlow", "flexhigh", "nobody"],
+    reserve: null,
+    taxi: null,
     as_of: "week",
     opponent: null,
     ...over,
@@ -292,5 +296,78 @@ describe("solveWeekLineup against a scheduled opponent", () => {
     );
     // flexhigh (20) is seated over the flexlow (5) that was nominally started.
     assert.equal(solved?.opponent_points, 50);
+  });
+});
+
+describe("solveWeekLineup and the roster census", () => {
+  test("counts the roster against its own slots, IR and taxi apart", () => {
+    // Six seats less the IR and the TAXI is four roster spots; the two parked
+    // players do not occupy any of them.
+    const solved = solveWeekLineup(
+      league({
+        roster_positions: ["QB", "RB", "WR", "FLEX", "BN", "IR", "TAXI"],
+        roster_players: ["qb", "rb", "wr", "flexlow", "flexhigh", "nobody"],
+        reserve: ["flexhigh"],
+        taxi: ["nobody"],
+      }),
+      board(),
+      NO_LOCKS,
+      null,
+    );
+    assert.equal(solved?.roster_count, 4);
+    assert.equal(solved?.roster_max, 5);
+    assert.equal(solved?.ir_count, 1);
+    assert.equal(solved?.ir_max, 1);
+    assert.equal(solved?.taxi_count, 1);
+    assert.equal(solved?.taxi_max, 1);
+  });
+
+  test("a bench spot is a roster spot", () => {
+    // `BN` counts where `IR` and `TAXI` do not: a bench player is held against
+    // the roster limit, which is exactly the arithmetic Sleeper refuses an add
+    // on.
+    const solved = solveWeekLineup(
+      league({ roster_positions: ["QB", "RB", "WR", "FLEX", "BN", "BN"] }),
+      board(),
+      NO_LOCKS,
+      null,
+    );
+    assert.equal(solved?.roster_max, 6);
+  });
+
+  test("Sleeper's slot padding is not a player", () => {
+    // The arrays are stored verbatim, `""` and `"0"` included, so a raw
+    // `.length` would report a roster two deeper than it is.
+    const solved = solveWeekLineup(
+      league({ roster_players: ["qb", "0", "rb", "", "wr"] }),
+      board(),
+      NO_LOCKS,
+      null,
+    );
+    assert.equal(solved?.roster_count, 3);
+  });
+
+  test("settings state a limit the slots do not", () => {
+    // Some leagues express the two spare squads only in settings, and some only
+    // as seats. Settings win where both are on file.
+    const solved = solveWeekLineup(
+      league({
+        roster_positions: ["QB", "RB", "WR", "FLEX", "BN", "IR"],
+        settings: { reserve_slots: 3, taxi_slots: 4 },
+      }),
+      board(),
+      NO_LOCKS,
+      null,
+    );
+    assert.equal(solved?.ir_max, 3);
+    assert.equal(solved?.taxi_max, 4);
+  });
+
+  test("a league with no taxi squad has none — a real zero, not an absence", () => {
+    // Sleeper omits the key entirely, and the seats say the same thing. Zero is
+    // the honest answer and is what lets the tile stay quiet about it.
+    const solved = solveWeekLineup(league(), board(), NO_LOCKS, null);
+    assert.equal(solved?.taxi_max, 0);
+    assert.equal(solved?.ir_max, 0);
   });
 });

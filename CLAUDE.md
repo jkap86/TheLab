@@ -2677,6 +2677,175 @@ league-detail cache; it arrives with one. And there is no **sync all**: on the
 its own admission bound and a progress stream, and arrives with a reason to want
 them.
 
+### Four checks, and a header that says which
+
+The card ran two checks — points left against the best reachable lineup, and
+kickoff seat order — and the page's summary said how many leagues wanted a
+press without saying what for. This adds two checks, turns the tile row into
+four, and rebuilds the header around the same figures the manager page's plate
+carries. Applied from a design handoff's option `1a`.
+
+**It needed no migration**, and that is the schema's doing rather than luck:
+`rosters.players`, `.reserve` and `.taxi` and `leagues.settings` have all been
+stored since the league-graph migration, and the roster census is a read of
+four columns nothing here was selecting yet.
+
+**The tile grammar went from three states to four, and the fourth is the whole
+reason.** `MetricCell.alert` was a boolean, which can say "act on this" and
+"don't" and nothing else. A cleared check now draws a **checkmark** (`clear`),
+and a figure that is real but not a problem draws the figure (`count`) — two
+open roster spots is a waiver claim to make, and a check there would delete the
+number while the error tone would send a reader to fix a league that is fine.
+`none` is still the em dash. It is a union rather than a second boolean so the
+tile's own `switch` has to place a fifth tone before it will compile, and
+**`text` survives the `clear` state as the mark's `sr-only` name**: the mark is
+the whole of what a sighted reader gets, so `Set` and `In order` have to stay
+available to everyone else.
+
+**The superflex check flags every occurrence, spare quarterback or not.** That
+is the reading it is for: a superflex seat filled by a running back says the
+roster is short a startable quarterback, which is a trade to make rather than a
+lineup to fix, and the gap tile opposite already answers the narrower question
+of whether a move available right now would score more. An **empty** superflex
+seat is not counted — empty seats belong to the gap check, and counting them
+twice would put one league on two reasons for one fault. The slots it reads are
+**derived, not spelled `"SUPER_FLEX"`**: `SLOT_POSITIONS` entries that admit a
+quarterback and something else, on `QB_ELIGIBLE_STARTING_SLOTS`' and
+`DEFENSIVE_SLOTS`' terms, so the day the solver learns Sleeper's `OP` this check
+reads the same set the solver seats from. A bare `QB` seat is excluded because a
+non-QB cannot legally sit in one.
+
+**The roster census counts three limits apart, because Sleeper enforces them
+apart.** `roster_max` is `roster_positions` less its `IR` and `TAXI` entries —
+**`BN` counts**, a bench spot being a roster spot — while IR and taxi are
+counted against their own allowances, which some leagues state in `settings`
+(`reserve_slots`, `taxi_slots`) and others only as seats; settings win where
+both are on file. Folding all three into one figure would report a legal roster
+carrying two taxi stashes as two over. Sleeper's `""`/`"0"` slot padding is
+filtered before anything is counted, which `queries.ts` has warned about since
+the graph landed: a raw `players.length` overcounts.
+
+**The census is the one figure on the card that does not move with the week
+stepper**, and it says so in the contract. Sleeper stores no historical
+`reserve` or `taxi`, so "what did your IR look like in October" is not
+answerable at all; what *is* answerable is whether Sleeper will refuse an add
+now, which is the question the check is for. So it reads the **live** roster row
+rather than the week's stored one, and `roster_players` is a field of its own
+beside `players` precisely so the two grains cannot be mixed by accident.
+
+**`null` is not zero in all six new fields.** `taxi_max: 0` is a league with no
+taxi squad, which is a real answer and is what lets the tile stay quiet about
+it; a `roster_max` of null is a league that cannot be answered for and draws an
+em dash rather than claiming the roster is empty. The solve always answers
+`roster_max` — a league with no slots on file is already dropped from the
+payload — and the field stays nullable on the wire all the same, because that is
+the state the tile draws its dash for and a client must not have to know which
+producer filled it.
+
+**`needsAttention` keeps its meaning and gains a sibling.** It still counts
+*leagues*, and the two new checks join it on their **alert** state alone — an
+open roster spot never sends anybody anywhere. `attentionByReason` is the
+header window's four rows, and **they do not sum to the league count**: one
+league off for two reasons is one league there and two rows here, which is why
+the window prints the count separately rather than presenting a breakdown a
+reader could add up. Both read the same functions the tiles do, so a row that
+says two and a page with three lit tiles cannot happen.
+
+**On the card, the identity line became the manager page's config rail.** The
+team name went with it deliberately — the card is about the league, and the
+rail answers what game it is playing — and `total_rosters` is now stated once,
+as the rail's own `Teams` field. It is the same `LeagueConfigWindow`, so a
+league described one way on `/manager` cannot be described another here. The
+`as_of === "current"` caveat **kept a line of its own**: it is the one claim
+this tool cannot make silently, and it rode the line that was deleted. The tile
+row is two across on a phone and four from `sm`, on `GRID_COLS[4]`'s measured
+rule, and stays a direct child of the `<summary>` — a wrapper there is a flat
+rendering context and every `translateZ` under it collapses with no error to
+say so.
+
+**The header took `/manager`'s own pass.** `ManagerPlate` gets children for the
+first time on this page, which is what switches it from `inline-flex` to the
+full-width row — the seam that component's note has described since the manager
+header merged. `WeekSummary` is `season-summary.tsx` with a week's figures:
+a projected record and a dial for the rate it implies, over the **narrowed**
+list, because a reader who has filtered to dynasty is asking about their
+dynasty week. **A league with no opponent is excluded, never counted as a
+loss** — `opponent_points` is null for a future week, an unpaired week and an
+unstored opponent, three absences and no result — so a week with nothing
+projected draws an empty track and an em dash rather than a projected 0–13 in
+August.
+
+Two measurements are this page's own. The dial's inner window is `inset-3`
+rather than the manager's `inset-[0.9375rem]`, because the percentage clipped
+against the round edge at 15px once `Win rate` became a `Proj win` caption; and
+**the figure steps down to 15px at six characters**, which a render found: at
+17px `100.0%` measures 61.2px inside a window whose widest chord at that height
+is 60.8px, and `100.0%` is exactly what a small account projects when every
+league is a win. Every shorter reading keeps the design's own 17px.
+
+**The attention housing became one lit window on the plate**, carrying the
+league count and the four reasons under a hairline — a lit row per reason above
+zero, muted throughout at zero, and **no rows and no zeroes before the check
+lands**: the em dash is what says "not yet", where four zeroes would make the
+same false claim four times. Its denominator is the leagues **on screen** that
+the check answered for, not every league it answered for: narrowed to one
+league, `1 of 3` would be a count over a list the reader cannot see.
+
+**And the filters moved onto the plate**, exactly as they did on `/manager`: the
+key, a `Clear` key that appears only while something is filtering, and the
+summary sentence, all in the plate's `controls` strip. The standalone sentence
+under the header and the `Clear filters` key at the end of the week-stepper row
+are both gone — they were the same news in two places, and neither said what
+had been narrowed. The stepper keeps its row and its hairline.
+
+#### Verified
+
+Rendered through a temporary `/preview` route against the real components,
+tokens and Tailwind build — the method the console-card, shares, rack and
+timeline passes established, since no database is reachable from where this was
+built — then driven over CDP at 1280 and 390 in both schemes and deleted. The
+mechanics that method needs are unchanged: `--no-proxy-server`, and `localhost`
+rather than `127.0.0.1`. The fixtures are three leagues — a dynasty superflex
+two over its roster limit with a running back in the superflex seat, a best-ball
+redraft two spots open and graded off the live lineup, and a league the check
+answers nothing for — plus a cleared payload and one that never resolves.
+
+Every arm landed. The dynasty card read `−6.6 / 2 to move / 1 non-QB / 2 over`,
+all four in the error tone; the best-ball card read `Best ball / — / — / 2 open`
+with only the last lit, which is the `count` state doing the one thing it exists
+for; the cleared payload drew four checkmarks per card with the words intact as
+`sr-only` names, and the window fell to `0 of 2` in readout teal with four muted
+rows and muted pips. The unanswered league drew four em dashes. Before the check
+resolved the count read `—` and every row read `—`.
+
+The plate: `Proj rec 2–0` with the dial at `100.0%` measuring 54px inside its 62px
+window after the step-down, the attention window at the plate's right end, and
+the config rail replacing the identity line on all three cards — `—` for both
+counts, both ladders and the premium on the unsynced league, with **no pips at
+all**. Applying `Dynasty` from the plate's own key narrowed the page to one card,
+lit the key with its badge, raised the `Clear` key, printed `dynasty · 1 of 3`,
+and moved the projected record `2–0 → 1–0` and the window to `1 of 1` — the
+narrowed-list rule end to end. `Clear` put all three back and took the key away.
+Opening a card left the sync key, the seat rows, the `sit`/`→ RB` marks and the
+bench disclosure exactly as they were.
+
+At every width and in both schemes: `document.documentElement.scrollWidth` equal
+to the viewport, zero elements past the viewport, one `<h1>`, the dialog
+`:modal` and named `League filters`, and **no console output of any kind**.
+
+**Not verified against real data**, which is the gap to close first: every number
+above is a fixture, and what a render cannot check is the census against a real
+corpus — whether `settings.reserve_slots` and the `IR`/`TAXI` seat counts
+actually disagree in the leagues this database holds, and how often a stored
+roster is genuinely over its own limit rather than the count merely looking
+plausible.
+
+#### Worth doing next, not drawn here
+
+The superflex finding has no row-level mark in the expanded lineup table. The
+`sit`/`start`/`move_to` marks are the precedent — a `non-qb` mark on the SF seat
+row would let a reader act without counting seats.
+
 ## The trades board
 
 `/trades` is every trade this database has stored for a season, newest first,

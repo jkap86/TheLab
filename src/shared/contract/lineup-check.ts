@@ -123,6 +123,31 @@ export type LineupCheckLeague = {
   /** Everyone else, best first. */
   bench: LineupCheckPlayer[];
   /**
+   * The roster census, as the league counts it: how many players are held
+   * against how many the league allows, with taxi and IR counted against their
+   * own limits rather than against the active roster — which is how Sleeper
+   * enforces them.
+   *
+   * **Null is "not on file" and zero is "this league has none".** A league with
+   * no `taxi_slots` key and no `TAXI` seat simply has no taxi squad
+   * (`taxi_max: 0`); a league whose settings were never synced cannot be
+   * answered for (`null`), and the tile draws an em dash rather than claiming
+   * the roster is empty. The same three-way grammar every other figure on this
+   * wire is written in.
+   *
+   * The counts are the *live* roster's, not the stepped week's: Sleeper stores
+   * no historical `reserve` or `taxi`, and the question the check answers —
+   * will Sleeper refuse an add — is a question about now. It is the one figure
+   * on the card that does not move with the week stepper.
+   */
+  roster_count: number;
+  roster_max: number | null;
+  ir_count: number;
+  ir_max: number | null;
+  taxi_count: number;
+  taxi_max: number | null;
+
+  /**
    * Starting slots this build doesn't recognise, left out of the comparison.
    * Non-empty means the numbers cover only part of the real lineup.
    */

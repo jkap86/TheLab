@@ -37,11 +37,27 @@ export type WeekLineupLeague = {
   roster_positions: string[] | null;
   scoring_settings: Record<string, number> | null;
   best_ball: boolean;
+  /**
+   * The league's own settings blob. Read here for `reserve_slots` and
+   * `taxi_slots` alone — the census's two limits, which some leagues express
+   * only here and others only as `IR`/`TAXI` entries in `roster_positions`.
+   */
+  settings: Record<string, unknown> | null;
   roster_id: number;
   /** Sleeper's array, positional against the starting slots; `"0"` is empty. */
   starters: string[] | null;
   /** The roster, Sleeper's padded entries included. */
   players: string[] | null;
+  /**
+   * The **live** roster's three arrays, padding included — the census's whole
+   * input. Separate from `players` above, which is the week's own roster where
+   * one is stored: Sleeper keeps no historical `reserve` or `taxi`, so a census
+   * mixing the week's roster with today's IR would be two grains in one figure.
+   * See the contract's `roster_count` for why the census is a *now* question.
+   */
+  roster_players: string[] | null;
+  reserve: string[] | null;
+  taxi: string[] | null;
   as_of: "week" | "current";
   /**
    * Who they play this week and what that roster is starting, or null where the
@@ -195,8 +211,81 @@ export function solveWeekLineup(
     kickoff_moves: moves === null ? null : moves.length,
     lineup,
     bench,
+    ...rosterCensus(league, positions),
     unknown_slots: comparison.unknown_slots,
   };
+}
+
+/**
+ * The roster census: what the league holds against what it allows.
+ *
+ * **Taxi and IR are counted against their own limits**, which is how Sleeper
+ * enforces them — a taxi stash does not occupy an active roster spot, so
+ * folding all three into one figure would report a legal roster as over.
+ *
+ * Two rules carry it, and both are the app's usual three-way grammar:
+ *
+ * - **A limit is null only where it cannot be answered**, never where it is
+ *   zero. `roster_max` reads `roster_positions` — every seat except `IR` and
+ *   `TAXI`, `BN` included, because a bench spot is a roster spot — so this
+ *   solve always answers it: `solveWeekLineup` has already returned null for a
+ *   league with no slots on file, which is the only way it could be unknown.
+ *   It stays nullable on the wire all the same, because that is the state the
+ *   tile draws its em dash for and a client must not have to know which
+ *   producer filled it. The other two prefer `settings` and fall back to the
+ *   seat count, because some leagues state them in one place and some in the
+ *   other; a league with neither has **no** taxi squad, which is a real `0`.
+ * - **Sleeper's padding is not a player.** `players`, `reserve` and `taxi` are
+ *   stored verbatim, `""` and `"0"` entries included, so a raw `.length`
+ *   overcounts. The active count is the roster less whatever is parked, since
+ *   Sleeper lists a reserved or taxied player in `players` too.
+ */
+function rosterCensus(
+  league: WeekLineupLeague,
+  positions: readonly string[],
+): Pick<
+  LineupCheckLeague,
+  "roster_count" | "roster_max" | "ir_count" | "ir_max" | "taxi_count" | "taxi_max"
+> {
+  const reserve = realIds(league.reserve);
+  const taxi = realIds(league.taxi);
+  const parked = new Set([...reserve, ...taxi]);
+  const held = realIds(league.roster_players);
+
+  const irSlots = positions.filter((slot) => slot === "IR").length;
+  const taxiSlots = positions.filter((slot) => slot === "TAXI").length;
+
+  return {
+    roster_count: held.filter((id) => !parked.has(id)).length,
+    roster_max: positions.length - irSlots - taxiSlots,
+    ir_count: reserve.length,
+    ir_max: settingCount(league.settings, "reserve_slots") ?? irSlots,
+    taxi_count: taxi.length,
+    taxi_max: settingCount(league.settings, "taxi_slots") ?? taxiSlots,
+  };
+}
+
+/** One of Sleeper's player arrays with its slot padding dropped, deduplicated. */
+function realIds(ids: readonly string[] | null): string[] {
+  return [...new Set(ids ?? [])].filter((id) => id && id !== "0");
+}
+
+/**
+ * A settings key read as a count, or null where the league does not state one.
+ *
+ * Sleeper omits the key entirely on a league that has none, and the caller
+ * falls back to the seat count for exactly that reason — so "absent" has to
+ * come back distinguishable from a stated zero, which is a league that
+ * deliberately has no taxi squad.
+ */
+function settingCount(
+  settings: Record<string, unknown> | null,
+  key: string,
+): number | null {
+  const raw = settings?.[key];
+  if (typeof raw === "number") return Number.isFinite(raw) ? raw : null;
+  if (typeof raw === "string" && /^\d+$/.test(raw)) return Number(raw);
+  return null;
 }
 
 /**

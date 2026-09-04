@@ -926,9 +926,24 @@ export type ManagerWeekLineupRow = {
   scoring_settings: Record<string, number> | null;
   /** Sleeper seats this league's lineup itself — there is no gap to report. */
   best_ball: boolean;
+  /**
+   * The league's own settings blob, for the roster census — `reserve_slots` and
+   * `taxi_slots` live here, and some leagues express them only here where
+   * others express them only as `IR`/`TAXI` entries in `roster_positions`.
+   */
+  settings: Record<string, unknown> | null;
   roster_id: number;
   starters: string[] | null;
   players: string[] | null;
+  /**
+   * The *live* roster's own three arrays, padding included, for the census —
+   * see the contract's `roster_count`. They are deliberately not the
+   * week's: Sleeper stores no historical `reserve` or `taxi`, so the census is
+   * a question about now and is read from the row that answers it.
+   */
+  roster_players: string[] | null;
+  reserve: string[] | null;
+  taxi: string[] | null;
   /**
    * Which lineup `starters` actually is.
    *
@@ -1008,11 +1023,15 @@ export async function getManagerWeekLineups(
 ): Promise<ManagerWeekLineupRow[]> {
   const { rows } = await pool.query<ManagerWeekLineupSqlRow>(
     `SELECT l.league_id, l.total_rosters, l.roster_positions, l.scoring_settings,
+            l.settings,
             (CASE WHEN l.settings->>'best_ball' ~ '^[0-9]+$'
                   THEN (l.settings->>'best_ball')::int = 1 END) AS best_ball,
             r.roster_id,
             r.starters AS starters,
             r.players  AS players,
+            r.players  AS roster_players,
+            r.reserve  AS reserve,
+            r.taxi     AS taxi,
             m.starters AS week_starters,
             m.players  AS week_players,
             om.roster_id AS opponent_roster_id,
@@ -1051,7 +1070,11 @@ export async function getManagerWeekLineups(
       // Sleeper omits the key on every league that isn't one, so absent is a
       // real `false` here — unlike the settings a week has no zero on.
       best_ball: row.best_ball === true,
+      settings: row.settings,
       roster_id: row.roster_id,
+      roster_players: row.roster_players,
+      reserve: row.reserve,
+      taxi: row.taxi,
       starters: stored ? row.week_starters : row.starters,
       // The week's own roster where there is one: a player dropped since is
       // still who that lineup was chosen from.

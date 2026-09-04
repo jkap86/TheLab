@@ -7,14 +7,25 @@ import {
   DEFAULT_LEAGUE_FILTERS,
   filterSummary,
   CONSOLE_KEY,
+  CONSOLE_KEY_PILL,
+  CONSOLE_TRACK,
+  CONSOLE_WINDOW,
+  LeagueFiltersDialog,
   ManagerPlate,
   matchesFilters,
+  Scanlines,
   useManagerLeagues,
 } from "@/features/shared";
 
 import { useLineupCheck } from "../hooks/use-lineup-check";
-import { needsAttention } from "../helpers/lineup-check-metrics";
+import {
+  attentionByReason,
+  needsAttention,
+  type AttentionReasons,
+} from "../helpers/lineup-check-metrics";
+import { weekSummary } from "../helpers/week-summary";
 import { LineupCheckCard } from "./lineup-check-card";
+import { WeekSummary } from "./week-summary";
 import { WeekStepper } from "./week-stepper";
 
 /**
@@ -37,9 +48,15 @@ import { WeekStepper } from "./week-stepper";
  * them, rather than the page waiting on the slower of the two. It is also what
  * makes a failed check cost the week's numbers and not the list.
  *
- * The plate and the card are the leagues console's, unchanged. A reader
- * arriving from `/manager` is looking at the same leagues, and a second
- * vocabulary for them would be a second chance for one to drift.
+ * The plate and the card are the leagues console's. A reader arriving from
+ * `/manager` is looking at the same leagues, and a second vocabulary for them
+ * would be a second chance for one to drift — which is why this page took that
+ * one's header pass whole: the figures are engraved on the identity plate
+ * rather than standing beside it in a housing of their own, and the Filters key
+ * and the sentence saying what it narrowed are a strip along the plate's foot.
+ * What differs is only the figures themselves, because a week is not a season:
+ * a projected record and a projected win rate where `/manager` carries the
+ * standing ones, with the attention window at the plate's right end.
  *
  * **The panel is gone, for the reason it went there.** This page used to draw
  * a rounded, bordered panel with `--background` showing around it; the ground
@@ -115,16 +132,74 @@ function Checker({
     leagues.length > 0 && !refreshing,
   );
   const checked = check?.leagues ?? {};
+  // **Both are taken over the narrowed list**, the same argument
+  // `seasonSummary` reverses itself on: a reader who has filtered to dynasty is
+  // asking about their dynasty week, and the plate is the page's one set of
+  // figures.
   const attention = needsAttention(visible, checked);
+  const reasons = attentionByReason(visible, checked);
+  const summary = weekSummary(visible, checked);
+  // The window's denominator is the leagues *on screen* that the check
+  // answered for, not every league it answered for: narrowed to one league,
+  // `1 of 3` would be a count over a list the reader cannot see.
+  const answered = visible.filter(
+    (league) => checked[league.league_id] !== undefined,
+  ).length;
 
   const name = user ? user.display_name || user.username : username;
 
   return (
     <div className="relative">
-      <header className="relative flex flex-wrap items-center gap-6">
+      <header className="relative">
         <ManagerPlate
           name={name}
           avatarUrl={user?.avatar_url ?? null}
+          /*
+            **The Filters key sits on the plate**, the arrangement `/manager`
+            arrived at: up in the rack the key said "a filter is on" and nothing
+            said *what* was narrowed, while the sentence that said so stood on a
+            line of its own under the header. Here the key, the key that undoes
+            it and the sentence are one object.
+
+            `leagues` is the **unfiltered** list deliberately — it is the
+            population every count inside the dialog is taken over, and handing
+            it the filtered one would collapse each of the dialog's own menus to
+            the selection already made.
+          */
+          controls={
+            leagues.length > 0 ? (
+              <>
+                <span className={`${CONSOLE_TRACK} flex items-center gap-1.5 p-1`}>
+                  <LeagueFiltersDialog
+                    filters={filters}
+                    onChange={setFilters}
+                    leagues={leagues}
+                    triggerClassName={`${CONSOLE_KEY_PILL} inline-flex items-center`}
+                  />
+                  {/* Only while there is something to clear: a key that is a
+                      no-op three quarters of the time is a key a reader stops
+                      reading. */}
+                  {narrowing && (
+                    <button
+                      type="button"
+                      onClick={() => setFilters(DEFAULT_LEAGUE_FILTERS)}
+                      className={CONSOLE_KEY}
+                    >
+                      Clear
+                    </button>
+                  )}
+                </span>
+                {/* `flex-[1_1_12rem]` is what lets the sentence take the rest of
+                    the strip and then drop to its own line rather than
+                    truncating the moment the keys grow. */}
+                {narrowing && (
+                  <p className="m-0 min-w-0 flex-[1_1_12rem] truncate font-mono text-[0.6875rem] uppercase tracking-[0.16em] text-active">
+                    {filterSummary(filters)} · {visible.length} of {leagues.length}
+                  </p>
+                )}
+              </>
+            ) : undefined
+          }
           eyebrow={
             <span className="flex items-baseline gap-2">
               {heading}
@@ -135,40 +210,35 @@ function Checker({
               )}
             </span>
           }
-        />
-
-        {leagues.length > 0 && (
-          <div className="ml-auto">
-            <AttentionHousing
-              attention={attention}
-              of={Object.keys(checked).length}
-              pending={check === null}
-            />
-          </div>
-        )}
+        >
+          {/* The week is engraved on the plate rather than standing beside it,
+              and the attention window rides at its right end — the header pass
+              `/manager` took, applied to the figures this page has. Passing
+              children is what switches `ManagerPlate` to its full-width box;
+              with no leagues there is nothing to sum and the plate stays the
+              `inline-flex` it has always been here. */}
+          {leagues.length > 0 ? (
+            <WeekSummary summary={summary}>
+              <AttentionWindow
+                attention={attention}
+                of={answered}
+                reasons={reasons}
+                pending={check === null}
+              />
+            </WeekSummary>
+          ) : undefined}
+        </ManagerPlate>
       </header>
 
-      {narrowing && (
-        <p className="relative mt-5 truncate font-mono text-[0.6875rem] uppercase tracking-[0.16em] text-active">
-          {filterSummary(filters)} · {visible.length} of {leagues.length}
-        </p>
-      )}
-
+      {/* The stepper keeps the row and the hairline fills the rest of it. The
+          `Clear filters` key that used to stand at its far end is on the plate
+          now, beside the key that set the filter in the first place. */}
       <div className="relative my-9 flex flex-wrap items-center gap-3">
         <WeekStepper week={check?.week ?? null} onChange={onWeek} />
         <div
           aria-hidden
           className="h-px flex-1 bg-gradient-to-r from-active/35 via-foreground/5 to-transparent"
         />
-        {narrowing && (
-          <button
-            type="button"
-            onClick={() => setFilters(DEFAULT_LEAGUE_FILTERS)}
-            className={CONSOLE_KEY}
-          >
-            Clear filters
-          </button>
-        )}
       </div>
 
       {error ? (
@@ -229,49 +299,107 @@ function Checker({
 }
 
 /**
- * The one figure worth reading before a hundred cards: how many of these
- * lineups want a press.
+ * How many of these lineups want a press, and what for.
  *
- * Counted over *leagues* rather than over points or seats — a league with both
- * a gap and a re-seat is one league, and one trip to Sleeper. Zero is the good
- * answer and says so in words; before the check lands there is no number, and
- * an em dash is what says that rather than a zero that would read as "all
- * clear" for the length of a round trip.
+ * **One lit window, where it used to be a plate holding a readout.** The plate
+ * went with the header pass: the identity plate is the instrument now and this
+ * is a window set into it, the same surface every other reading on the console
+ * is drawn on.
+ *
+ * The count is over *leagues* — a league with both a gap and a re-seat is one
+ * league, and one trip to Sleeper. The four rows underneath are over *reasons*,
+ * and **they do not sum to it**, which is why the count is stated separately
+ * and the rows are labelled by reason rather than presented as a breakdown a
+ * reader could add up. See `attentionByReason`.
+ *
+ * Before the check lands there is no number at all: an em dash rather than a
+ * zero, which would read as "all clear" for the length of a round trip, and no
+ * rows, because four zeroes make the same claim four times. `aria-live` is on
+ * the count so the answer is announced when it arrives.
  */
-function AttentionHousing({
+function AttentionWindow({
   attention,
   of,
+  reasons,
   pending,
 }: {
   attention: number;
   of: number;
+  reasons: AttentionReasons;
   pending: boolean;
 }) {
   return (
-    <div className="inline-flex items-center gap-4 rounded-xl border border-foreground/8 bg-[image:var(--plate-bg)] px-5 py-3 shadow-[var(--plate-shadow)]">
-      <div className="relative overflow-hidden rounded-[0.625rem] border border-black/85 bg-[image:var(--readout-bg)] px-4 py-2.5 shadow-[var(--readout-shadow)]">
+    <div
+      className={`${CONSOLE_WINDOW} flex min-w-[12.5rem] flex-col gap-[0.4375rem] rounded-[0.625rem] px-3 py-2.5 font-mono`}
+      title={`${attention} of ${of} league${of === 1 ? "" : "s"} checked need a look`}
+    >
+      <Scanlines />
+      <span className="relative flex items-baseline justify-between gap-2.5">
+        <span className="text-[0.5625rem] uppercase tracking-[0.18em] text-readout-label">
+          Need a look
+        </span>
         <span
-          aria-hidden
-          className="pointer-events-none absolute inset-0 bg-[image:var(--readout-scanlines)]"
-        />
-        <p className="relative m-0 whitespace-nowrap font-mono text-[0.6875rem] uppercase tracking-[0.14em] text-foreground/60">
-          Needs a look
-        </p>
-        <p
-          className={`relative m-0 mt-2 font-mono text-lg leading-none tabular-nums ${
-            attention > 0 ? "text-error" : "text-readout"
-          }`}
           aria-live="polite"
+          className={`text-[1.0625rem] leading-none tabular-nums ${
+            !pending && attention > 0
+              ? "text-error [text-shadow:0_0_12px_rgba(252,165,165,0.45)]"
+              : "text-readout [text-shadow:var(--readout-text-glow)]"
+          }`}
         >
-          {pending ? "—" : attention > 0 ? attention : "All set"}
-        </p>
-      </div>
-      {!pending && (
-        <p className="m-0 max-w-[9rem] font-mono text-[0.6875rem] uppercase tracking-[0.14em] text-foreground/60">
-          of {of} league{of === 1 ? "" : "s"} checked
-        </p>
-      )}
+          {pending ? "—" : `${attention} of ${of}`}
+        </span>
+      </span>
+
+      <span
+        aria-hidden
+        className="relative block h-px bg-[color-mix(in_srgb,var(--readout-label)_26%,transparent)]"
+      />
+
+      <ReasonRow label="Points left" count={pending ? null : reasons.points} />
+      <ReasonRow label="Kickoff order" count={pending ? null : reasons.kickoff} />
+      <ReasonRow label="Superflex" count={pending ? null : reasons.superflex} />
+      <ReasonRow label="Roster slots" count={pending ? null : reasons.roster} />
     </div>
+  );
+}
+
+/**
+ * One reason, and how many leagues are off for it.
+ *
+ * A row above zero is lit in the error tone, pip included; a zero row is the
+ * window's muted ink throughout, so the eye finds the reasons that want a press
+ * without reading four numbers. `null` is the state before the check lands —
+ * the em dash, never a zero, for the reason the count above draws one.
+ */
+function ReasonRow({ label, count }: { label: string; count: number | null }) {
+  const lit = count !== null && count > 0;
+  return (
+    <span className="relative flex items-center gap-2">
+      <span
+        aria-hidden
+        className={`size-1.5 shrink-0 rounded-full ${
+          lit
+            ? "bg-error shadow-[0_0_10px_rgba(252,165,165,0.5)]"
+            : "bg-readout-muted"
+        }`}
+      />
+      <span
+        className={`flex-1 whitespace-nowrap text-[0.625rem] uppercase tracking-[0.14em] ${
+          lit ? "text-readout-line" : "text-readout-muted"
+        }`}
+      >
+        {label}
+      </span>
+      <span
+        className={`text-[0.8125rem] leading-none tabular-nums ${
+          lit
+            ? "text-error [text-shadow:0_0_10px_rgba(252,165,165,0.5)]"
+            : "text-readout-muted"
+        }`}
+      >
+        {count ?? "—"}
+      </span>
+    </span>
   );
 }
 

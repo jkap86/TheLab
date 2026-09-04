@@ -4,6 +4,7 @@ import {
   CardRule,
   CONSOLE_CARD,
   CONSOLE_WINDOW,
+  LeagueConfigWindow,
   LeaguePlate,
   PlateField,
   rankColor,
@@ -15,6 +16,8 @@ import {
   gapCell,
   kickoffCell,
   kickoffTime,
+  rosterCell,
+  superflexCell,
   type MetricCell,
 } from "../helpers/lineup-check-metrics";
 import { LeagueSyncKey } from "./league-sync-key";
@@ -26,9 +29,10 @@ import { LeagueSyncKey } from "./league-sync-key";
  * deliberately the same object: a reader arriving here from `/manager` is
  * looking at the same leagues, and two cards drawn to hold a league would be
  * two chances for one of them to drift. So it carries the same housing, the
- * same league plate with the avatar lit in its bezel, and the same identity
- * line — with the week's projected outcome on the plate opposite, where the
- * manager card puts the record and the ranks.
+ * same league plate with the avatar lit in its bezel, and the same league
+ * config rail — with the week's projected outcome on the plate opposite, where
+ * the manager card puts the record and the ranks, and four checks on the tile
+ * row where that card puts its ranks.
  *
  * Three constraints are inherited and every one is silent when broken:
  *
@@ -78,6 +82,8 @@ export function LineupCheckCard({
 }) {
   const gap = gapCell(entry);
   const kickoff = kickoffCell(entry);
+  const superflex = superflexCell(entry);
+  const roster = rosterCell(entry);
 
   return (
     <li className="relative flex pointer-fine:[perspective:2400px] hover:z-10 has-[details[open]]:z-10">
@@ -122,24 +128,39 @@ export function LineupCheckCard({
 
           <CardRule />
 
-          <p className="relative mt-3.5 font-mono text-[0.6875rem] uppercase tracking-[0.16em] text-foreground/60 pointer-fine:[transform:translateZ(14px)]">
-            {league.team_name?.trim() || "—"}
-            {` · ${league.total_rosters}-team`}
-            {/* A lineup graded off the roster's *live* starters rather than the
-                week's own stored ones has to say so — otherwise a stepped week
-                shows today's lineup under that week's heading, which is the one
-                claim this tool must not make silently. */}
-            {entry?.as_of === "current" && (
-              <span className="text-foreground/[0.78]"> · lineup as set now</span>
-            )}
-          </p>
+          {/* What game this league is playing, where the identity line used to
+              be. It is the manager card's own window and the same component,
+              so a league described one way there cannot be described another
+              here — and the team name went with the line deliberately: the
+              card is about the league, and `total_rosters` is now stated once,
+              as the rail's own `Teams` field. `18px` sits between the tiles'
+              22px and the plates, so the planes read front to back. */}
+          <LeagueConfigWindow
+            league={league}
+            className="mt-3.5 pointer-fine:[transform:translateZ(18px)]"
+          />
+
+          {/* A lineup graded off the roster's *live* starters rather than the
+              week's own stored ones has to say so — otherwise a stepped week
+              shows today's lineup under that week's heading, which is the one
+              claim this tool must not make silently. It kept its own line when
+              the identity line went, for exactly that reason. */}
+          {entry?.as_of === "current" && (
+            <p className="relative mt-3 font-mono text-[0.6875rem] uppercase tracking-[0.16em] text-foreground/[0.78] pointer-fine:[transform:translateZ(14px)]">
+              Lineup as set now
+            </p>
+          )}
 
           {/* A direct child of the summary, so the `translateZ` survives: a
               plain wrapper here is a flat rendering context and the depth would
-              go with no error to say so. */}
-          <div className="relative mt-4 grid grid-cols-2 gap-2.5 pointer-fine:[transform:translateZ(22px)]">
+              go with no error to say so. Two across on a phone and four from
+              `sm`, on the manager card's own `GRID_COLS[4]` rule — a four-way
+              split at 390 is 70px a tile, narrower than the reading it holds. */}
+          <div className="relative mt-3 grid grid-cols-2 gap-2.5 sm:grid-cols-4 pointer-fine:[transform:translateZ(22px)]">
             <MetricTile label="Vs optimal" cell={gap} />
             <MetricTile label="Kickoff" cell={kickoff} />
+            <MetricTile label="Superflex" cell={superflex} />
+            <MetricTile label="Roster" cell={roster} />
           </div>
         </summary>
 
@@ -231,7 +252,19 @@ function ProjectionPlate({ entry }: { entry?: LineupCheckLeague | null }) {
   );
 }
 
-/** One reading, as a lit window — the same surface as the console's readouts. */
+/**
+ * One reading, as a lit window — the same surface as the console's readouts.
+ *
+ * **The label sits outside the content cap and the value inside it.** The cap
+ * is 132px, which is what keeps a four-tile row from stretching a figure across
+ * a 1014px card; a label capped with it clips "Vs optimal" to "Vs opti…", and
+ * the label is the one thing on the tile that cannot be inferred from what is
+ * under it.
+ *
+ * The value switches on the cell's own state rather than on a boolean, so the
+ * four tones stay four — see `MetricCell`. A **clear** draws the checkmark and
+ * nothing else, which is why `cell.text` survives as the mark's `sr-only` name.
+ */
 function MetricTile({ label, cell }: { label: string; cell: MetricCell }) {
   return (
     <div
@@ -245,19 +278,64 @@ function MetricTile({ label, cell }: { label: string; cell: MetricCell }) {
       <p className="relative m-0 truncate font-mono text-[0.625rem] uppercase tracking-[0.14em] text-readout-label">
         {label}
       </p>
-      {/* Full opacity on either tone: the light-mode teal is only ~5:1 against
-          the page, and an alpha drops it below AA. */}
-      <p
-        className={`relative m-0 mt-2 truncate font-mono text-[1.0625rem] leading-none tabular-nums ${
-          cell.alert
-            ? "text-error [text-shadow:0_0_12px_rgba(252,165,165,0.45)]"
-            : "text-readout [text-shadow:var(--readout-text-glow)]"
-        }`}
-      >
-        {cell.text}
-      </p>
+      <div className="relative max-w-[8.25rem]">
+        {cell.state === "clear" ? (
+          <CheckMark text={cell.text} title={cell.title} />
+        ) : (
+          // Full opacity on every tone: the light-mode teal is only ~5:1
+          // against the page, and an alpha drops it below AA.
+          <p
+            className={`m-0 mt-2 truncate font-mono text-[1.0625rem] leading-none tabular-nums ${
+              cell.state === "alert"
+                ? "text-error [text-shadow:0_0_12px_rgba(252,165,165,0.45)]"
+                : cell.state === "count"
+                  ? "text-readout [text-shadow:var(--readout-text-glow)]"
+                  : // No answer at all: the muted ink and no glow, because a lit
+                    // em dash reads as a reading rather than as its absence.
+                    "text-readout-muted"
+            }`}
+          >
+            {cell.text}
+          </p>
+        )}
+      </div>
       <span className="sr-only">{cell.title}</span>
     </div>
+  );
+}
+
+/**
+ * A cleared check: the mark instead of the word.
+ *
+ * Four tiles of words is four things to read on a card whose whole job is to be
+ * scanned past; a mark is the one shape a reader can take in without reading.
+ * **The word stays as the mark's `sr-only` name** — the mark is the whole of
+ * what a sighted reader gets, so `Set` and `In order` have to remain available
+ * to everyone else, and `title` carries the units as it does on every tile.
+ *
+ * The stroke resolves from `text-readout` on the wrapper, so the glyph inverts
+ * with the theme rather than naming a colour of its own.
+ */
+function CheckMark({ text, title }: { text: string; title: string }) {
+  return (
+    <span
+      title={title}
+      className="mt-1.5 inline-flex size-6 items-center justify-center rounded-full border border-active/40 bg-[radial-gradient(closest-side,rgba(0,255,229,0.16),transparent)] text-readout shadow-[inset_0_0_12px_rgba(0,255,229,0.3),0_0_14px_-6px_rgba(0,255,229,0.6)]"
+    >
+      <svg
+        viewBox="0 0 24 24"
+        className="size-[15px] [filter:drop-shadow(0_0_6px_rgba(0,255,229,0.75))]"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth={2.6}
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        aria-hidden
+      >
+        <path d="M4.5 12.6l4.8 4.8L19.5 7.2" />
+      </svg>
+      <span className="sr-only">{text}</span>
+    </span>
   );
 }
 
