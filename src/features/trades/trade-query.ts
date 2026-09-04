@@ -21,10 +21,9 @@ import { type LeagueScope, resolveLeagueScope } from "./league-scope.ts";
  * The league-scope vocabulary, re-exported so this feature's consumers keep one
  * import for "what the board is asking for".
  *
- * TheLabX also builds a `tradeHttpRequest` here — a method, a query string and
- * a body — because a scope past ~500 ids moves to a POST. There is no body form
- * in this port (see `./league-scope`), so a request is always a GET and its
- * query string is the whole of it.
+ * How a request *travels* is {@link tradeHttpRequest}'s: a scope too long for a
+ * request line moves into a body, which is TheLabX's arrangement and is now
+ * this repo's too — see `./league-scope` for what made it earn its place here.
  */
 export { type LeagueScope, resolveLeagueScope };
 
@@ -126,6 +125,85 @@ export function tradeQueryKey(request: TradeRequest): string {
     .sort(([a], [b]) => a.localeCompare(b))
     .map(([key, value]) => `${key}=${value}`)
     .join("&");
+}
+
+/**
+ * The most query string one trades request may put on its request line, in
+ * characters.
+ *
+ * **A budget for the whole header block, not for the URL.** A router's limit —
+ * Heroku's is 8KB — covers the request line *and* every header beside it, so
+ * what this leaves is ~6KB for cookies, the user agent and the rest. Two
+ * thousand characters is around ninety league ids, since a nineteen-digit
+ * Sleeper id and its encoded separator cost twenty-two each.
+ *
+ * It is deliberately far below the limit rather than just under it: what sits
+ * on the other side is not a slower board but a **431 with an empty body**,
+ * which reaches the page as a failed fetch naming nothing at all. Being wrong
+ * in the safe direction costs a POST.
+ */
+export const MAX_TRADE_QUERY_CHARS = 2000;
+
+/**
+ * The parameters that may move off the request line.
+ *
+ * **Only the league scope, because only the league scope is unbounded.** Every
+ * other parameter here is something a reader picked — a manager, a handful of
+ * players, two picks — and a person cannot select their way past a request
+ * line. The scope is the *answer* to the league rules, computed over the whole
+ * corpus (see `./league-scope`), so it grows with the crawler rather than with
+ * anything anyone typed.
+ */
+const MOVABLE_KEYS = ["leagues", "xleagues"] as const;
+
+/** One trades read as it goes on the wire. `body` is null for a plain GET. */
+export type TradeHttpRequest = {
+  method: "GET" | "POST";
+  /** What stays on the request line. */
+  search: URLSearchParams;
+  /** The rest, form-encoded, or null where everything fitted. */
+  body: string | null;
+};
+
+/**
+ * How to send a set of trade parameters: as a query string, or — where that
+ * string is longer than a router will carry — as a query string with the league
+ * scope moved into a body.
+ *
+ * **The body is the rest of the query string, not a vocabulary of its own.** It
+ * is form-encoded and the route folds it back into one `URLSearchParams` before
+ * anything reads it (`shared/trades/transport`), so a parameter is spelled once
+ * and parsed once however it travelled.
+ *
+ * **Nothing about identity moves with it.** {@link tradeQueryKey} is built from
+ * the parameters and never from this, because what a request *is* cannot depend
+ * on how it fitted: the same board reached by a GET and by a POST is one cache
+ * entry and one subject.
+ *
+ * Two costs, both taken deliberately. A POST response is not held by the
+ * browser's cache, so a narrowed board forfeits the page route's
+ * `private, max-age=30` and with it the back button's free redraw. And a
+ * request that is over the budget with **nothing movable in it** stays a GET
+ * rather than being refused here: the parameters left are a reader's own
+ * selections, so the honest failure is the router's rather than a board this
+ * module quietly declined to ask for.
+ */
+export function tradeHttpRequest(params: URLSearchParams): TradeHttpRequest {
+  const line: TradeHttpRequest = { method: "GET", search: params, body: null };
+  if (params.toString().length <= MAX_TRADE_QUERY_CHARS) return line;
+
+  const search = new URLSearchParams(params);
+  const body = new URLSearchParams();
+  let moved = false;
+  for (const key of MOVABLE_KEYS) {
+    for (const value of search.getAll(key)) {
+      body.append(key, value);
+      moved = true;
+    }
+    search.delete(key);
+  }
+
+  return moved ? { method: "POST", search, body: body.toString() } : line;
 }
 
 const sorted = (values: readonly string[]) => [...values].sort();

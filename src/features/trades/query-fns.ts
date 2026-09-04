@@ -5,7 +5,7 @@ import type {
 } from "@/shared/contract";
 
 import { apiFetch } from "../shared/api/api-fetch.ts";
-import { tradeQueryParams } from "./trade-query.ts";
+import { tradeHttpRequest, tradeQueryParams } from "./trade-query.ts";
 import type { TradeRequest } from "./trade-query.ts";
 
 /**
@@ -16,20 +16,41 @@ import type { TradeRequest } from "./trade-query.ts";
  * logic inside a hook is only reachable through a renderer. The imports are
  * relative with a `.ts` extension for the same reason.
  *
- * **All three are ordinary GETs.** Filtering and paginating on the server is
- * what makes that enough: a page lands in one response, so `fetch` and
- * `res.json()` is the whole of it, and what carries the progressive feel is the
- * paging hook rather than a stream.
+ * **All three are reads and none of them streams.** Filtering and paginating on
+ * the server is what makes that enough: a page lands in one response, so
+ * `fetch` and `res.json()` is the whole of it, and what carries the progressive
+ * feel is the paging hook rather than a stream. The leagues read is a plain GET
+ * and always will be; the two that carry a league scope become POSTs once that
+ * scope outgrows a request line, which is transport rather than a difference in
+ * what they are — see {@link tradeHttpRequest}.
  */
 
-/** One trades read: the query string is the whole request. */
+/**
+ * One trades read.
+ *
+ * The parameters are the request, and {@link tradeHttpRequest} decides only how
+ * they travel: everything fits on the line, or the league scope moves into a
+ * form-encoded body and the route folds it back before anything reads it.
+ */
 function sendTradeRequest(
   path: string,
-  search: URLSearchParams,
+  params: URLSearchParams,
   fallbackError: string,
   signal?: AbortSignal,
 ): Promise<Response> {
-  return apiFetch(`${path}?${search}`, { signal, fallbackError });
+  const { method, search, body } = tradeHttpRequest(params);
+  return apiFetch(`${path}?${search}`, {
+    method,
+    body,
+    // Named only where there is a body, so a GET is not given a content type
+    // for a payload it does not have.
+    headers:
+      body === null
+        ? undefined
+        : { "Content-Type": "application/x-www-form-urlencoded" },
+    signal,
+    fallbackError,
+  });
 }
 
 /** One page of the board. `cursor` is null for the first. */
