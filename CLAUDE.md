@@ -1142,6 +1142,88 @@ one deliberate divergence: they **report** their failures, because lineups is an
 enhancement beside a list where a drawer is only this data, and a silent failure
 there is a panel that opens empty with nothing saying why.
 
+### Four facets, behind one key
+
+The players panel narrows by **position, NFL team, age and draft class**, all
+four multi-select, behind a `Filters` key in the search row. It narrowed by
+position alone until this landed, which left the two things a dynasty reader
+opens the list for — how old a player is, and which class he came out of —
+visible as columns and unreachable as questions. Every facet was already on the
+wire: `PlayerShare` carries all four, and the last two are the Age and Class
+columns. Nothing on the server changed and there was no migration.
+
+**The rules live in `helpers/player-filters.ts`**, pure and under Node's own
+runner, for the reason `league-filters/predicates.ts` is: each of them is silent
+when it goes wrong.
+
+- **Empty is "not asked", not "everything chosen".** A facet with nothing
+  selected excludes nobody. Read the other way, a player carrying a value that
+  appeared after the reader last touched the facet would silently drop off the
+  list.
+- **A full-width span is not a filter.** `spanActive` compares a span against
+  the *bounds* rather than against null, so a reader who drags a handle out and
+  back has no filter: the key goes unlit, the summary empties, and — the part
+  that matters — absent ages stop being excluded.
+- **A null age or draft class is outside every span.** An absent answer is not a
+  young player, and folding nulls in would make `22–25` quietly mean "22–25, and
+  everyone we know nothing about". It is the rule the cells already draw an em
+  dash by and the sort already puts absent rows last by.
+- **Counts ride the unfiltered population**, which is the rule the position
+  chips already lived by, now extended to teams: every chip and every menu
+  option says how many players it *would leave*, so a chip that reads zero once
+  pressed cannot happen and a reader can widen without clearing first.
+- **The badge counts facets, not values.** "3" beside the key means three
+  questions are answered, which is what survives the tray being shut.
+- **Bounds are read off the population.** A board with no rookies offers no
+  rookie handle, next year's class arrives without an edit, and a facet with
+  fewer than two distinct values draws no row at all — a slider whose handles
+  cannot be apart answers nothing.
+
+**Team is a `<select>` that adds rather than selects.** A native `multiple`
+select is a scrolling list box on every platform and 32 chips is the tray's
+whole height; chosen teams come back as removable chips, so what is narrowed is
+readable without opening the menu. Options are ordered by count, because the
+codes worth reaching for are the ones the manager actually rosters.
+
+**Age and Class are two stacked `<input type="range">`s** — `.lab-range`, the
+one new stylesheet rule, because a thumb is a pseudo-element and cannot be a
+utility, the argument `.lab-scroll` already makes. Native, so arrow keys,
+Home/End and the platform touch target come free; the inputs are
+`pointer-events: none` with the thumbs re-enabled, which is what lets the two
+overlap without the upper swallowing the lower's handle. The readout carries the
+*state* in its ink — `--readout-label` on both bounds, lit once it narrows —
+rather than in a prefix, since "Any · 2012–2024" is 99px of a 66px window.
+
+**Three things about the tray are load-bearing and all three are silent when
+wrong.** Its open height is a **measured pixel value** re-read by a
+`ResizeObserver`, not a `0fr`→`1fr` grid row, whose interpolation stalls in
+Chrome whenever the subtree is written to in the same frame — and not a
+`max-height`, which either clips a wrapped row of team chips or eases against a
+number nothing on screen matches. Its **transition list is identical in both
+states**, because rewriting `transition` in the same frame as the animated
+property cancels it. And it carries **`inert`** while shut:
+`pointer-events: none` stops the mouse and nothing else, so without it a
+keyboard reader tabs out of the search field into an invisible panel of
+fourteen controls.
+
+**The key rides the search row and the tray wraps onto the line under it**,
+which is one flex row rather than two: `PlayerFilters` is one component, so its
+key and the tray it controls are one node and one `useId` and arrive in one
+slot, and a fragment cannot put half of itself in a row and half in the column
+outside it. The `Pos` well the drawer used to draw is gone — four facets are a
+panel, and a panel that owns its own grooves and labels cannot be laid out from
+the drawer.
+
+**Emptying the list became reachable, and the empty state had to learn it.** One
+position chip could never empty the panel — every chip counts over the
+unfiltered population, so pressing one leaves at least its own count — but four
+facets are an AND, and `RB ∧ BAL ∧ 22–24` is empty while all three read a
+number. `rows.length === 0` alone would report that as "No players rostered in
+these leagues yet.": a claim about the account, made by a narrowing the reader
+could undo, with no key offered to undo it. It is `rows.length === 0 &&
+!filtersActive` now, and the filtered case gets "No players match these
+filters." and the Clear key.
+
 ### The columns are chosen, ordered, and shared between the panels
 
 Five metrics — Value, Age, Class, Rec · Win, Share — of which a row carries at
@@ -1184,19 +1266,24 @@ dropped, the fallback is the reader's own **rightmost** column, not a fixed one.
 which is the console's own rule rather than a style choice: a track holds one
 travelling key and a well holds a panel of controls, and that shape difference
 is what stops the two adjacent control groups from reading as one row of eight
-buttons. **Reordering happens on `dragenter`, not on drop** — the strip is three
-keys wide, so the move is visible while it is being made and there is no drop
-target to miss — and the insert side is decided from the **pre-move** positions,
-because removing the dragged key shifts every key after it down one and a key
-dragged rightward would otherwise land on the index it just vacated and appear
-to do nothing.
+buttons. **Reordering is tap-to-lift, tap-to-drop**: a slab's `⣿` handle arms
+it, accent slots appear between the remaining slabs, and one names where it
+goes. The insert index is read from the **pre-move** positions, because removing
+the lifted slab shifts every slab after it down one and one moved rightward
+would otherwise land on the index it just vacated and appear to do nothing. The
+two slots either side of the lifted slab are **omitted, not disabled** —
+dropping a slab back where it started is not a move, and a target that does
+nothing has to be explained.
 
-**The order is mouse-only and that is a recorded choice**, the one the handoff
-asks be recorded either way: the *set* stays fully keyboard-reachable, since
-every slab's label drops it and every spare key appends it, so any order is
-reachable by dropping and re-adding. A `◀ ▶` pair per slab is what would make
-the order directly reachable, and it is four more controls in a strip that
-already has up to eight.
+**It was a drag, and this file recorded the order as mouse-only** — deliberately,
+on the argument that the *set* stays keyboard-reachable (every slab's label
+drops it and every spare key appends it, so any order is reachable by dropping
+and re-adding) and that a `◀ ▶` pair per slab is four more controls in a strip
+that already holds eight. **Touch is what broke that trade**: HTML5
+`dragstart`/`dragenter` do not fire on a phone at all, so the order was not
+reachable there by any means — not slowly, not awkwardly. Arming costs nothing
+at rest, since the slots exist only while a slab is lifted, and it lands the
+keyboard order for free, which the drag never had.
 
 ### What Value, Age and Class cost on the server
 
@@ -1266,7 +1353,8 @@ one. It costs nothing until a drawer has been opened.
   list, where the column states a fact about a row. `players.years_exp` is
   stored and still unread, for the reason the section above gives.
   The position chips did port — they are read off `PlayerSummary`, which is
-  already on the wire, and 471 rows want them.
+  already on the wire, and 471 rows want them — and they are a facet in the
+  tray above rather than a well of their own since.
 - **The tab pages** (`/manager/[searched]/players` and `/leaguemates`). The same
   lists behind two doors; the drawers are the door this app has.
 
@@ -1335,6 +1423,52 @@ all** on the league whose `roster_positions` are null, which reads `—` for bot
 ladders, both counts and the premium. A `bonus_rec_te` of 0 renders `0` and an
 absent `scoring_settings` renders `—`, which is the null-is-not-zero rule at its
 one visible seam.
+
+**The four facets** were verified the way the redesign was and for the same
+reason — no database is reachable from where they were built — through a
+temporary `/preview` route rendering the real `PlayerSharesDrawer` and
+`LeaguemateSharesDrawer` against fixture payloads, driven over CDP at 1280 and
+390 in both schemes, then deleted. The numbers below are fixtures; what they
+check is the rules and the layout rather than Sleeper.
+
+One render changed the code, and it is the one the handoff's own diff got wrong:
+`{filters}` dropped into the search row put the **tray** in that row too — a
+fragment does not escape its parent — where it laid out 774px wide inside a
+354px panel and was silently clipped by the panel's own `overflow-hidden`, with
+`document.scrollWidth` still reading 390 and nothing on screen saying so. The
+row wraps now; measured after, the tray is 506 of 532 at 1280 and 328 of 354 at
+390, with **zero** elements past the panel in either scheme at either width.
+
+The rules held end to end. Two position chips took 90 rows to 26 with the badge
+reading 1; adding BAL took it to 10 and the badge to 2, with the chosen option
+disabled in the menu, the select snapping back to `+ Add team` and "All 9 teams"
+giving way to a lit chip carrying its own count. Arrow keys on the min-age
+handle moved 21 → 25 (native, no handler), lighting that readout with
+`--readout-text-glow` while the Class one stayed on `--readout-label`, and
+`End` → `Age 35–35` against the `—` position emptied the list to "No players
+match these filters." with the Clear key beside it — the AND case the empty
+state had to learn. Six arrow-lefts back to the bound put the badge out, the
+summary back to "Nothing narrowed" and all 90 rows back, which is `spanActive`
+at both ends. A query nothing answers still says "Nobody by that name."
+
+The tray: 14 controls reachable in DOM order with it open (search → key → 8
+chips → the menu → 4 handles), **0 reachable** with it shut, `inert` on and the
+shell at `0px`. Its measured height followed six team chips wrapping — 288 →
+328 → 369px, the shell equal to the tray to the pixel at each — which is what
+the `ResizeObserver` is for. Under `prefers-reduced-motion: reduce` the shell's
+`transition-property` computes to `none` and the tray opens to its full height
+at once, which is `.lab-anim` doing its job rather than the tray not opening.
+
+The columns strip was driven by **touch**, since that is the whole reason it
+stopped being a drag: `Input.dispatchTouchEvent` on a slab's `⣿` raised two
+slots (of four positions, less the two either side of it, each labelled "Move
+Value here"), a tap on the last stored `["record","share","value"]` and moved
+the header labels and the row cells with it, and a second lift cancelled by its
+own handle left the order untouched. The leaguemates panel, which passes no
+filters at all, is unchanged: no key, a two-child search row 36px tall, nothing
+past its panel. Exactly one `<h1>`, `document.documentElement.scrollWidth`
+equal to the viewport at both widths, and **no console output of any kind** —
+no React warning about the controlled select or the layout effect.
 
 ## KeepTradeCut values
 

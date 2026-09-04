@@ -3,11 +3,19 @@
 import { useMemo, useState } from "react";
 
 import type { ManagerLeague, ManagerPlayersPayload } from "@/shared/contract";
-import { CONSOLE_KEY_PILL } from "@/features/shared";
 
 import type { LeagueSubjects, Subject } from "../helpers/league-subjects";
 import { subjectKey } from "../helpers/league-subjects";
+import {
+  activeFilterCount,
+  keepsPlayer,
+  NO_PLAYER_FILTERS,
+  playerFilterBounds,
+  UNKNOWN_VALUE,
+  type PlayerFilterState,
+} from "../helpers/player-filters";
 import { playerShares } from "../helpers/shares";
+import { PlayerFilters } from "./player-filters";
 import { SharesDrawer, type SharesDrawerRow } from "./shares-drawer";
 
 /**
@@ -24,17 +32,15 @@ import { SharesDrawer, type SharesDrawerRow } from "./shares-drawer";
  * than being derived here, and all three are **null where absent, never zero**.
  * Which market the value is on is the payload's own answer (`ktc`), because a
  * row spans leagues and so cannot resolve one per league the way a card does.
+ *
+ * **The panel narrows four ways, not one.** Position was the only facet, which
+ * left the two things a dynasty reader opens this list for — how old a player
+ * is and which class he came out of — visible as columns and unreachable as
+ * questions. Age and Class were already on the payload; NFL team was already on
+ * the row as its note. The filter state and its predicate live in
+ * `helpers/player-filters.ts` so they can be tested; the drawer holds the state
+ * because the drawer is what owns the rows.
  */
-
-/** Sleeper's own vocabulary, in the order a roster is usually read. */
-const POSITION_ORDER = ["QB", "RB", "WR", "TE", "K", "DEF"];
-const UNKNOWN_POSITION = "—";
-
-function positionRank(position: string): number {
-  const i = POSITION_ORDER.indexOf(position);
-  return i === -1 ? POSITION_ORDER.length : i;
-}
-
 export function PlayerSharesDrawer({
   open,
   onClose,
@@ -61,7 +67,12 @@ export function PlayerSharesDrawer({
   subjects: LeagueSubjects;
   onToggle: (subject: Subject) => void;
 }) {
-  const [position, setPosition] = useState<string | null>(null);
+  // A way of reading this list rather than a device preference, so both are
+  // `useState` — the same call `LeagueTeams` makes about its metric select.
+  // Neither is cleared on close: the narrowing is the answer the reader built,
+  // and the key's own badge is what says so when the tray is shut.
+  const [filters, setFilters] = useState<PlayerFilterState>(NO_PLAYER_FILTERS);
+  const [trayOpen, setTrayOpen] = useState(false);
 
   const shares = useMemo(
     () =>
@@ -71,45 +82,43 @@ export function PlayerSharesDrawer({
     [leagues, read.data],
   );
 
-  // Counted over the *unfiltered* rows, so a chip always says how many it would
-  // leave rather than how many are left — a chip that read zero once pressed
-  // could not be reasoned about.
-  const positions = useMemo(() => {
-    const counts = new Map<string, number>();
-    for (const player of shares?.players ?? []) {
-      const key = player.position ?? UNKNOWN_POSITION;
-      counts.set(key, (counts.get(key) ?? 0) + 1);
-    }
-    return [...counts.entries()].sort(
-      (a, b) => positionRank(a[0]) - positionRank(b[0]) || a[0].localeCompare(b[0]),
-    );
-  }, [shares]);
+  // Memoised rather than defaulted inline, so a render while the read is in
+  // flight does not hand every memo below a new empty array to recompute from.
+  const players = useMemo(() => shares?.players ?? [], [shares]);
 
-  const rows = useMemo<SharesDrawerRow[]>(() => {
-    const players = shares?.players ?? [];
-    const kept =
-      position === null
-        ? players
-        : players.filter((p) => (p.position ?? UNKNOWN_POSITION) === position);
+  // Bounds off the population, so a board with no rookies offers no rookie
+  // handle and next year's class arrives without an edit here.
+  const ageBounds = useMemo(() => playerFilterBounds(players, (p) => p.age), [players]);
+  const classBounds = useMemo(
+    () => playerFilterBounds(players, (p) => p.draft_class),
+    [players],
+  );
 
-    return kept.map((player) => ({
-      key: player.player_id,
-      id: player.player_id,
-      name: player.name,
-      note: player.team,
-      held: player.leagues.length,
-      leagues: player.leagues,
-      value: player.ktc_value,
-      age: player.age,
-      draftClass: player.draft_class,
-      badge: { label: player.position ?? UNKNOWN_POSITION },
-    }));
-  }, [shares, position]);
+  const rows = useMemo<SharesDrawerRow[]>(
+    () =>
+      players
+        .filter((p) => keepsPlayer(p, filters, ageBounds, classBounds))
+        .map((player) => ({
+          key: player.player_id,
+          id: player.player_id,
+          name: player.name,
+          note: player.team,
+          held: player.leagues.length,
+          leagues: player.leagues,
+          value: player.ktc_value,
+          age: player.age,
+          draftClass: player.draft_class,
+          badge: { label: player.position ?? UNKNOWN_VALUE },
+        })),
+    [players, filters, ageBounds, classBounds],
+  );
 
   const chosen = useMemo(
     () => new Set(subjects.subjects.map(subjectKey)),
     [subjects],
   );
+
+  const active = activeFilterCount(filters, ageBounds, classBounds);
 
   return (
     <SharesDrawer
@@ -126,64 +135,21 @@ export function PlayerSharesDrawer({
       loading={read.loading}
       error={read.error}
       emptyMessage="No players rostered in these leagues yet."
-      chipsActive={position !== null}
-      onClearChips={() => setPosition(null)}
-      chips={
-        positions.length > 1 && (
-          <>
-            <PositionChip
-              label="All"
-              count={shares?.players.length ?? 0}
-              on={position === null}
-              onPick={() => setPosition(null)}
-            />
-            {positions.map(([value, count]) => (
-              <PositionChip
-                key={value}
-                label={value}
-                count={count}
-                on={position === value}
-                onPick={() => setPosition(position === value ? null : value)}
-              />
-            ))}
-          </>
-        )
+      filtersActive={active > 0}
+      onClearFilters={() => setFilters(NO_PLAYER_FILTERS)}
+      filters={
+        <PlayerFilters
+          players={players}
+          filters={filters}
+          onChange={setFilters}
+          ageBounds={ageBounds}
+          classBounds={classBounds}
+          open={trayOpen}
+          onToggleOpen={() => setTrayOpen((v) => !v)}
+        />
       }
       selected={(subject) => chosen.has(subjectKey(subject))}
       onToggle={onToggle}
     />
-  );
-}
-
-/**
- * A chosen chip is drawn **lit**, not dimmed — the theme rule against an alpha
- * on the accent as text, and it has the advantage of being true: pressing it
- * again clears it.
- */
-function PositionChip({
-  label,
-  count,
-  on,
-  onPick,
-}: {
-  label: string;
-  count: number;
-  on: boolean;
-  onPick: () => void;
-}) {
-  return (
-    <button
-      type="button"
-      onClick={onPick}
-      aria-pressed={on}
-      className={`${CONSOLE_KEY_PILL} bg-[image:var(--key-bg)] px-[0.5625rem] py-1 text-[0.625rem] tracking-[0.14em] shadow-[var(--key-shadow)] ${
-        on
-          ? "border-active/45 text-readout"
-          : "border-foreground/10 text-foreground/75 hover:text-readout"
-      }`}
-    >
-      {label}
-      <span className="ml-1.5 tabular-nums text-foreground/45">{count}</span>
-    </button>
   );
 }

@@ -1,12 +1,19 @@
 "use client";
 
-import { type ReactNode, useEffect, useId, useMemo, useRef, useState } from "react";
+import {
+  Fragment,
+  type ReactNode,
+  useEffect,
+  useId,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 
 import type { ManagerLeague } from "@/shared/contract";
 import {
   CONSOLE_KEY_PILL,
   CONSOLE_TRACK,
-  CONSOLE_WELL,
   CONSOLE_WINDOW,
   MAX_SHARES_COLUMNS,
   mergeSharesColumns,
@@ -171,9 +178,9 @@ export function SharesDrawer({
   loading,
   error,
   emptyMessage,
-  chips,
-  chipsActive,
-  onClearChips,
+  filters,
+  filtersActive,
+  onClearFilters,
   selected,
   onToggle,
 }: {
@@ -195,10 +202,19 @@ export function SharesDrawer({
   error: string | null;
   /** What to say when there is genuinely nothing, as opposed to nothing matching. */
   emptyMessage: string;
-  /** The players drawer's position chips; absent on the leaguemates one. */
-  chips?: ReactNode;
-  chipsActive?: boolean;
-  onClearChips?: () => void;
+  /**
+   * The players drawer's filter controls — the Filters key and its tray.
+   * Absent on the leaguemates panel, which has nothing to narrow by.
+   *
+   * The drawer no longer wraps this in a well of its own: one facet was a row
+   * of chips and four is a panel, and a panel that owns its own grooves and
+   * labels cannot be laid out from here. It is a fragment of two — a key for
+   * the search row and a tray that wraps onto the line under it.
+   */
+  filters?: ReactNode;
+  /** Whether anything is narrowing — the empty state's claim depends on it. */
+  filtersActive?: boolean;
+  onClearFilters?: () => void;
   selected: (subject: Subject) => boolean;
   onToggle: (subject: Subject) => void;
 }) {
@@ -213,7 +229,7 @@ export function SharesDrawer({
   // `useState` — the same call `LeagueTeams` makes about its metric select.
   // The *columns* are persisted, because those are a preference.
   const [sort, setSort] = useState<SharesColumnId | "name">("share");
-  const [dragCol, setDragCol] = useState<SharesColumnId | null>(null);
+  const [lifted, setLifted] = useState<SharesColumnId | null>(null);
 
   const stored = useSharesColumns();
   const cols = useMemo(() => sharesColumns(stored, kind), [stored, kind]);
@@ -354,7 +370,7 @@ export function SharesDrawer({
               Wrapped, it has the row to itself. One element either way, ordered
               by the cascade: a client component must not have to hydrate to
               learn a breakpoint. */}
-          <div className="flex flex-wrap items-center gap-x-3 gap-y-2 px-3.5 py-2.5">
+          <div className="flex flex-wrap items-center gap-x-3 gap-y-2 px-3 pb-0 pt-1.5">
             <EngravedTitle id={titleId}>{title}</EngravedTitle>
 
             {/* **A closed dialog says nothing**, which is the whole reason this
@@ -362,7 +378,7 @@ export function SharesDrawer({
                 `LeaguesHome` hands both drawers the filtered list and the folds
                 count over exactly it — but nothing in here said so. */}
             <span
-              className={`${CONSOLE_WINDOW} order-last flex min-w-0 basis-full items-center rounded-lg px-2.5 py-[0.3125rem] @md:order-none @md:basis-auto @md:flex-1`}
+              className={`${CONSOLE_WINDOW} order-last flex min-w-0 basis-full items-center rounded-lg px-2.5 py-[0.3125rem] @md:order-none @md:basis-auto @md:flex-[1_1_0]`}
             >
               <Scanlines />
               <span className="relative truncate font-mono text-[0.5625rem] uppercase tracking-[0.14em] text-readout-line">
@@ -374,14 +390,23 @@ export function SharesDrawer({
               type="button"
               aria-label="Close"
               onClick={close}
-              className={`${CONSOLE_KEY_PILL} ml-auto border-foreground/12 bg-[image:var(--key-bg)] px-3 py-1.5 text-[0.625rem] text-foreground/78 shadow-[var(--key-shadow)] hover:text-readout @md:ml-0`}
+              className={`${CONSOLE_KEY_PILL} ml-auto border-foreground/12 bg-[image:var(--key-bg)] px-[0.6875rem] py-1 text-[0.625rem] text-foreground/78 shadow-[var(--key-shadow)] hover:text-readout @md:ml-0`}
             >
               Esc
             </button>
           </div>
 
-          <div className="flex flex-col gap-[0.4375rem] px-3.5 pb-[0.6875rem]">
-            <div className="flex items-center gap-2">
+          <div className="flex flex-col gap-[0.3125rem] px-3 pb-2 pt-1.5">
+            {/* **The row wraps, and the tray is what wraps onto the second
+                line.** `PlayerFilters` is one component — the key and the tray
+                it controls are one node and one `useId`, so they arrive in one
+                slot — and a fragment cannot put half of itself in this row and
+                half in the column outside it. So the row is the wrapping
+                container and the tray takes a full basis, which is the same two
+                lines the deck would have drawn. The vertical gap is the
+                column's own, because the collapsed tray's negative margin is
+                what cancels it. */}
+            <div className="flex flex-wrap items-center gap-x-2 gap-y-[0.3125rem]">
               <input
                 ref={inputRef}
                 type="search"
@@ -390,7 +415,7 @@ export function SharesDrawer({
                 placeholder={`Search ${noun}`}
                 aria-label={`Search ${noun}`}
                 // 16px or iOS Safari zooms the page on focus.
-                className="min-w-0 flex-1 rounded-xl border border-black/60 bg-[image:var(--key-bg)] px-3 py-[0.4375rem] text-[16px] text-foreground/88 shadow-[var(--track-shadow)] placeholder:text-foreground/45 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-active/60 @md:text-[0.8125rem]"
+                className="min-w-0 flex-1 rounded-xl border border-black/60 bg-[image:var(--key-bg)] px-[0.6875rem] py-[0.3125rem] text-[16px] text-foreground/88 shadow-[var(--track-shadow)] placeholder:text-foreground/45 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-active/60 @md:text-[0.8125rem]"
               />
               <span
                 className={`${CONSOLE_WINDOW} inline-flex shrink-0 items-center rounded-xl px-[0.6875rem] py-[0.4375rem]`}
@@ -401,18 +426,13 @@ export function SharesDrawer({
                   {shown.length}
                 </span>
               </span>
+              {/* The Filters key rides here rather than in a well of its
+                  own: this is the row with the spare width. Its tray is the
+                  node beside it, and wraps — see above. */}
+              {filters}
             </div>
 
-            {chips && (
-              <div className={`${CONSOLE_WELL} flex flex-wrap items-center gap-1.5 p-1.5`}>
-                <span className="px-1 font-mono text-[0.5625rem] uppercase tracking-[0.16em] text-foreground/48">
-                  Pos
-                </span>
-                {chips}
-              </div>
-            )}
-
-            <div className="flex flex-wrap items-center gap-2">
+            <div className="flex flex-wrap items-center gap-1.5">
               <SortTrack
                 cols={cols}
                 active={sortKey}
@@ -421,8 +441,8 @@ export function SharesDrawer({
               <ColumnsStrip
                 cols={cols}
                 kind={kind}
-                dragging={dragCol}
-                onDrag={setDragCol}
+                lifted={lifted}
+                onLift={setLifted}
                 onChange={writeCols}
               />
             </div>
@@ -485,12 +505,22 @@ export function SharesDrawer({
               </p>
             ) : shown.length === 0 ? (
               // Two different claims, and the second is the reader's to undo.
-              rows.length === 0 ? (
+              //
+              // **`rows.length === 0` is not on its own the first claim**, and
+              // it stopped being so when the facets became four. One position
+              // chip could never empty the list — every chip counts over the
+              // unfiltered population, so pressing one leaves at least its own
+              // count — but four facets are an AND, and RB ∧ BAL ∧ 22–24 is
+              // empty while all three chips read a number. Reported as
+              // `emptyMessage` that is a claim about the account made by a
+              // narrowing the reader could undo, with no key offered to undo
+              // it.
+              rows.length === 0 && !filtersActive ? (
                 <Message>{emptyMessage}</Message>
               ) : (
                 <div className="flex flex-wrap items-center justify-between gap-3 py-6 pr-3">
                   <Message>
-                    {chipsActive
+                    {filtersActive
                       ? `No ${noun} match these filters.`
                       : `Nobody by that name.`}
                   </Message>
@@ -498,7 +528,7 @@ export function SharesDrawer({
                     type="button"
                     onClick={() => {
                       setQuery("");
-                      onClearChips?.();
+                      onClearFilters?.();
                     }}
                     className={`${CONSOLE_KEY_PILL} border-foreground/10 bg-[image:var(--key-bg)] text-foreground/80 shadow-[var(--key-shadow)] hover:text-readout`}
                   >
@@ -671,46 +701,62 @@ function SortTrack({
  * {@link MAX_SHARES_COLUMNS} and the last chosen slab's drop control disables
  * at one, so an invalid set cannot be made in the first place.
  *
- * **Reordering happens on `dragenter`, not on drop.** The strip is three keys
- * wide, so the move is visible while it is being made and there is no drop
- * target to miss.
+ * **Reordering is tap-to-lift, tap-to-drop, and it used to be a drag.** The
+ * drag was `dragenter`-driven so the move was visible while it was being made,
+ * and it was recorded here as mouse-only on the argument that the *set* stays
+ * keyboard-reachable and a `◀ ▶` pair per slab is four more controls. Touch
+ * broke that trade: HTML5 drag events do not fire at all on a phone, so the
+ * order was not reachable there by any means. Arming a slab costs nothing at
+ * rest — the insert slots exist only while one is lifted — and it lands the
+ * keyboard order for free, which the drag never had.
  *
- * The order is mouse-only, and that is a recorded choice rather than an
- * oversight: the *set* is fully keyboard-reachable (every slab's label drops it
- * and every spare key adds it, and an add appends), so a keyboard reader can
- * reach any order by dropping and re-adding. A `◀ ▶` pair per slab is what
- * would make the order directly reachable, and it is four more controls in a
- * strip that already has up to eight.
+ * **The two slots either side of the lifted slab are omitted, not disabled.**
+ * Dropping a slab back where it started is not a move, and a target that does
+ * nothing is a target that has to be explained.
  */
 function ColumnsStrip({
   cols,
   kind,
-  dragging,
-  onDrag,
+  lifted,
+  onLift,
   onChange,
 }: {
   cols: readonly SharesColumnId[];
   kind: SubjectKind;
-  dragging: SharesColumnId | null;
-  onDrag: (id: SharesColumnId | null) => void;
+  lifted: SharesColumnId | null;
+  onLift: (id: SharesColumnId | null) => void;
   onChange: (next: readonly SharesColumnId[]) => void;
 }) {
   const spares = SHARES_COLUMNS_BY_KIND[kind].filter((id) => !cols.includes(id));
   const locked = cols.length === 1;
   const full = cols.length >= MAX_SHARES_COLUMNS;
+  const from = lifted ? cols.indexOf(lifted) : -1;
 
-  const reorder = (from: SharesColumnId, target: SharesColumnId) => {
-    // **Decide the insert side from the pre-move positions.** Removing the
-    // dragged key shifts every key after it down one, so a key dragged
-    // rightward lands on the index it just vacated — inserting "before the
-    // target" then reproduces the order it started in and the drag visibly does
-    // nothing.
-    const fromIdx = cols.indexOf(from);
-    const toIdx = cols.indexOf(target);
-    const next = cols.filter((id) => id !== from);
-    const at = next.indexOf(target);
-    next.splice(fromIdx < toIdx ? at + 1 : at, 0, from);
-    onChange(next);
+  const place = (to: number) => {
+    if (!lifted) return;
+    const rest = cols.filter((id) => id !== lifted);
+    // **The insert index is read against the pre-move order.** Removing the
+    // lifted slab shifts everything after it down one, so a slab moved
+    // rightward would otherwise land back on the index it just vacated and the
+    // move would visibly do nothing.
+    rest.splice(to > from ? to - 1 : to, 0, lifted);
+    onChange(rest);
+    onLift(null);
+  };
+
+  const slot = (at: number) => {
+    // Nothing lifted, or a slot either side of where it already sits.
+    if (!lifted || at === from || at === from + 1) return null;
+    return (
+      <button
+        key={`slot-${at}`}
+        type="button"
+        aria-label={`Move ${sharesColumnLabel(lifted)} here`}
+        title="Move here"
+        onClick={() => place(at)}
+        className="h-[1.5625rem] w-[0.3125rem] shrink-0 rounded-full bg-active opacity-55 shadow-[0_0_10px_var(--accent-glow)] transition-[width,opacity] duration-150 hover:w-[0.5625rem] hover:opacity-100 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-active/60"
+      />
+    );
   };
 
   return (
@@ -723,42 +769,50 @@ function ColumnsStrip({
           specificity coin flip `CONSOLE_KEY_PILL` exists to keep colours out
           of, and a radius is not worth taking it for. */}
       <span className="inline-flex min-w-0 flex-wrap items-center gap-1 rounded-xl border border-foreground/8 bg-[image:var(--key-bg)] p-1 shadow-[var(--well-shadow)]">
-        {cols.map((id) => (
-          <span
-            key={id}
-            draggable
-            onDragStart={() => onDrag(id)}
-            onDragEnter={() => {
-              if (dragging && dragging !== id) reorder(dragging, id);
-            }}
-            onDragOver={(e) => e.preventDefault()}
-            onDragEnd={() => onDrag(null)}
-            className={
-              "inline-flex shrink-0 cursor-grab items-center gap-[0.3125rem] rounded-lg border bg-[image:var(--plate-raised-bg)] py-1 pl-[0.3125rem] pr-1.5 " +
-              (dragging === id
-                ? "border-active/80 opacity-45 shadow-[var(--key-shadow-pressed)]"
-                : "border-active/55 shadow-[var(--plate-raised-shadow)]")
-            }
-          >
-            <span
-              aria-hidden
-              className="font-mono text-[0.5rem] leading-[0.8] tracking-[-0.06em] text-foreground/38"
-            >
-              ⣿
-            </span>
-            <button
-              type="button"
-              disabled={locked}
-              title={locked ? "At least one column" : `Remove ${sharesColumnLabel(id)}`}
-              onClick={() => onChange(cols.filter((k) => k !== id))}
-              className={`whitespace-nowrap font-mono text-[0.625rem] uppercase tracking-[0.14em] text-readout [text-shadow:var(--readout-text-glow)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-active/60 ${
-                locked ? "cursor-default" : "cursor-pointer"
-              }`}
-            >
-              {sharesColumnLabel(id)}
-            </button>
-          </span>
-        ))}
+        {cols.map((id, i) => {
+          const on = lifted === id;
+          return (
+            <Fragment key={id}>
+              {slot(i)}
+              <span
+                className={
+                  "inline-flex shrink-0 items-center gap-[0.3125rem] rounded-lg border bg-[image:var(--plate-raised-bg)] py-1 pl-[0.3125rem] pr-1.5 transition-[opacity,border-color] duration-150 " +
+                  (on
+                    ? "border-active opacity-50 shadow-[var(--key-shadow-pressed)]"
+                    : "border-active/55 shadow-[var(--plate-raised-shadow)]")
+                }
+              >
+                <button
+                  type="button"
+                  title={on ? "Cancel move" : `Move ${sharesColumnLabel(id)}`}
+                  aria-label={on ? "Cancel move" : `Move ${sharesColumnLabel(id)}`}
+                  aria-pressed={on}
+                  onClick={() => onLift(on ? null : id)}
+                  className={`cursor-pointer px-px font-mono text-[0.5rem] leading-[0.8] tracking-[-0.06em] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-active/60 ${
+                    on ? "text-active" : "text-foreground/38"
+                  }`}
+                >
+                  ⣿
+                </button>
+                <button
+                  type="button"
+                  disabled={locked}
+                  title={locked ? "At least one column" : `Remove ${sharesColumnLabel(id)}`}
+                  onClick={() => {
+                    onChange(cols.filter((k) => k !== id));
+                    onLift(null);
+                  }}
+                  className={`whitespace-nowrap font-mono text-[0.625rem] uppercase tracking-[0.14em] text-readout [text-shadow:var(--readout-text-glow)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-active/60 ${
+                    locked ? "cursor-default" : "cursor-pointer"
+                  }`}
+                >
+                  {sharesColumnLabel(id)}
+                </button>
+              </span>
+            </Fragment>
+          );
+        })}
+        {slot(cols.length)}
 
         {spares.length > 0 && (
           <span
