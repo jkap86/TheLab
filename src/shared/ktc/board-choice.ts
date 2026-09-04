@@ -19,7 +19,11 @@
  * they already reach `@/shared/ktc/roster`.
  */
 
-import type { KtcBoardChoice, KtcFormat } from "@/shared/contract";
+import type {
+  KtcBoardChoice,
+  KtcFormat,
+  KtcLineupChoice,
+} from "@/shared/contract";
 
 import { DYNASTY_LEAGUE_TYPE } from "../manager/draft-picks.ts";
 
@@ -50,6 +54,34 @@ export function parseKtcBoardChoice(value: unknown): KtcBoardChoice {
     (KTC_BOARD_CHOICES as readonly string[]).includes(value)
     ? (value as KtcBoardChoice)
     : DEFAULT_KTC_BOARD;
+}
+
+/** In control order, `auto` first — what a bay's lineup track renders. */
+export const KTC_LINEUP_CHOICES: readonly KtcLineupChoice[] = [
+  "auto",
+  "oneqb",
+  "sf",
+];
+
+/** The default: the league's own lineup, rather than either board. */
+export const DEFAULT_KTC_LINEUP: KtcLineupChoice = "auto";
+
+/**
+ * Fold anything into a valid QB-board choice, on
+ * {@link parseKtcBoardChoice}'s exact terms — an unreadable value is `auto`,
+ * because this too names which of two prices to print for data already chosen.
+ *
+ * The two axes are parsed by two functions rather than one generic over a list
+ * because they are two vocabularies: a market is `dynasty`/`redraft` and a
+ * lineup is `oneqb`/`sf`, and a single parser taking the valid set as an
+ * argument is one call site away from validating a market against the lineup
+ * list without anything failing.
+ */
+export function parseKtcLineupChoice(value: unknown): KtcLineupChoice {
+  return typeof value === "string" &&
+    (KTC_LINEUP_CHOICES as readonly string[]).includes(value)
+    ? (value as KtcLineupChoice)
+    : DEFAULT_KTC_LINEUP;
 }
 
 /**

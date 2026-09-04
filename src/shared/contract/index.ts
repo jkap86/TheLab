@@ -1,5 +1,9 @@
 export { type UserInfo } from "./user-info";
-export { type KtcBoardChoice, type KtcFormat } from "./ktc";
+export {
+  type KtcBoardChoice,
+  type KtcFormat,
+  type KtcLineupChoice,
+} from "./ktc";
 export { type ApiErrorPayload } from "./api-error-payload";
 export { type VisitorLogEntry, type VisitorLogsPayload } from "./logs";
 export {
@@ -20,6 +24,9 @@ export {
   type LineupMetricId,
   type MetricRank,
   type LineupRanks,
+  type ColumnRanks,
+  type LineupColumn,
+  type KtcBoardStamp,
   type RosterPick,
   type LeagueTeam,
   type LeagueLineupEntry,

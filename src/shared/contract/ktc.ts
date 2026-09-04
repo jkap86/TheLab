@@ -27,3 +27,18 @@ export type KtcFormat = "dynasty" | "redraft";
  * (`features/shared/ktc-board`) is the one place that rule is spelled.
  */
 export type KtcBoardChoice = "auto" | KtcFormat;
+
+/**
+ * Which of a market's two QB boards a column reads, one state wider than the
+ * league's own answer.
+ *
+ * The second axis a KeepTradeCut column carries. `auto` is the rule — a league
+ * starting more than one quarterback reads superflex prices and everything
+ * else reads 1QB — and it is what every column opens on, because that rule is
+ * right for a league without anybody being asked. The two forcing states are
+ * for the reader comparing a 1QB league against a superflex one on one scale,
+ * which is the same argument {@link KtcBoardChoice}'s forcing states make one
+ * axis over. `resolveKtcLineup` (`shared/ktc/roster`) is where the rule lives,
+ * beside the predicate it defers to.
+ */
+export type KtcLineupChoice = "auto" | "oneqb" | "sf";

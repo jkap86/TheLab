@@ -6,7 +6,7 @@
  * `"use client"` module without dragging `pg` or the solver along.
  */
 
-import type { KtcFormat } from "./ktc";
+import type { KtcBoardChoice, KtcFormat, KtcLineupChoice } from "./ktc";
 
 /** One rostered player, as the lineup solve priced him. */
 export type LineupPlayer = {
@@ -104,6 +104,48 @@ export type MetricRank = { rank: number; of: number };
 export type LineupRanks = Record<LineupMetricId, MetricRank | null>;
 
 /**
+ * One column a card carries: a metric, and — for the four KeepTradeCut
+ * metrics — which market and which QB board it is priced on.
+ *
+ * **A column is a triple rather than a metric id**, which is what lets the same
+ * metric sit in two bays: "KTC total on the dynasty board at superflex prices"
+ * and "KTC total on the dynasty board at 1QB prices" are two readings of one
+ * roster, and a reader comparing them is doing the thing the second axis exists
+ * for. The two axes are ignored on the five non-KTC metrics — a projection and
+ * an ADP curve have no market to read — and {@link lineupColumnKey} is what
+ * folds that back into one identity, so those five can never duplicate.
+ *
+ * Both axes default to `auto`, which is a rule rather than a value: the league
+ * decides. See {@link KtcBoardChoice} and {@link KtcLineupChoice}.
+ */
+export type LineupColumn = {
+  metric: LineupMetricId;
+  format: KtcBoardChoice;
+  lineup: KtcLineupChoice;
+};
+
+/**
+ * The ranks one league's entry carries, keyed by **column identity** rather
+ * than by metric id.
+ *
+ * The nine metric ids are always present, ranked on the pricing a league reads
+ * for itself — `auto` on both axes — which is what the timeline, and any reader
+ * that has not asked for a forced board, gets for free. A column that *has*
+ * forced one carries an extra key beside them (`ktc_total:dynasty:sf`), and
+ * only the variants the request named are computed: the four KTC metrics of a
+ * market nobody asked for are rows nothing would read.
+ *
+ * The exhaustive half is the compiler seam it always was — a new
+ * {@link LineupMetricId} breaks the ranks literal until it is placed — and the
+ * index signature is what a column key reads through. It answers `undefined`
+ * for a key the payload never carried, which is a real state: a client holding
+ * a column whose variant the server was not asked for.
+ */
+export type ColumnRanks = LineupRanks & {
+  readonly [column: string]: MetricRank | null | undefined;
+};
+
+/**
  * One future draft pick a roster owns, named the way Sleeper names it. The
  * facts ship and the display rule lives in the card: a pick whose draft order
  * is set reads by its slot ("1.05"), an unordered one by its round ("2nd"),
@@ -177,7 +219,7 @@ export type LeagueTeam = {
  */
 export type LeagueLineupEntry = {
   teams: LeagueTeam[];
-  ranks: LineupRanks;
+  ranks: ColumnRanks;
 };
 
 /** `GET /api/user/[username]/lineups` — every roster solved, batched. */
@@ -191,22 +233,24 @@ export type ManagerLineupsPayload = {
    */
   from_week: number | null;
   /**
-   * Which KeepTradeCut market priced this answer and when it was scraped, or
-   * null where nothing could be priced at all — an unreadable board, which the
-   * route degrades to rather than failing over, exactly as it does for a failed
-   * projections span.
+   * Every KeepTradeCut market that answered this request, and when each was
+   * scraped. Empty where nothing could be read at all — an unreadable board,
+   * which the route degrades to rather than failing over, exactly as it does
+   * for a failed projections span.
    *
-   * The route echoes it for the reason the lineup-check route echoes its season
-   * and week: the reader asked for `auto`, `dynasty` or `redraft`, and only the
-   * server knows what `auto` came out as. **`"mixed"` is that answer across an
-   * account holding both kinds of league** — the honest one, since the page's
-   * leagues were then priced on two different markets and no single name is
-   * true of the column.
-   *
-   * `updated_at` rides along because these are someone else's numbers on a
-   * fifteen-minute cache, and anything showing them should be able to say how
-   * old they are.
+   * **A list rather than one board, because a column names its own market
+   * now.** The route used to resolve one `?ktc_board=` for the page and echo
+   * what it came out as — `"mixed"` where an account held both kinds of league
+   * — which was the honest name while every KTC column read one thing. With
+   * the market moved into the bay there is no page-wide answer to give: two
+   * columns can sit on two markets deliberately. So what ships is what was
+   * *read*, per market, which is the question the picker's foot actually asks —
+   * these are someone else's numbers on a fifteen-minute cache, and anything
+   * showing them should be able to say how old they are.
    */
-  ktc: { board: KtcFormat | "mixed"; updated_at: string | null } | null;
+  ktc: readonly KtcBoardStamp[];
   leagues: Record<string, LeagueLineupEntry>;
 };
+
+/** One market that answered, and when it was last scraped. */
+export type KtcBoardStamp = { format: KtcFormat; updated_at: string | null };

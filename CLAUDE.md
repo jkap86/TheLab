@@ -519,6 +519,18 @@ cannot drift; a league where the manager holds no rostered team — left, choppe
 out, or not yet drafted — has nothing to rank, where `getManagerLeagues` still
 lists the chopped case.
 
+**The ranks are keyed by *column*, not by metric.** `LineupRanks` is still the
+exhaustive nine and is still what every league answers on the boards it reads
+for itself; `ColumnRanks` is that record widened with an index signature, and a
+column that has forced a KeepTradeCut market or QB board carries an extra key
+beside them (`ktc_total:dynasty:sf`). `lineupColumnKey` in `shared/ktc/columns`
+is the only spelling of it — the client stores columns, the request names the
+variants, the route ranks them and the tile reads them back, and a key spelled
+twice is a dynasty superflex figure printed under a 1QB label with nothing on
+screen saying so. A column on `auto` keys by its bare metric id, which is what
+lets the nine base ranks answer it without the client knowing what the server
+resolved.
+
 The metric ids are a type-only union in the contract (`LineupMetricId`), and
 the runtime lists live as exhaustive `Record<LineupMetricId, …>`s on each side
 of the seam — the server's ranks literal, the client's `METRIC_ORDER` in
@@ -620,11 +632,101 @@ at once. `lineup-breakdown.tsx` exports `Lens`, `LineupLensKeys` and
 `lineupTotal` for that row and renders rows only. The
 column choice is a *set*, rendered in canonical order and persisted under
 `thelab:lineup-columns` by `lineup-columns.ts`, a wrapper over the internal
-`local-store.ts` on the same terms as `account.ts`. The picker is a native
-`<dialog>`/`showModal()` (focus trap, Esc and backdrop for free — no
-dependency), and it enforces its bounds by disabling rather than correcting:
-the fifth box greys out at four, the last checked box at one, so an invalid
-selection cannot be made rather than being repaired after.
+`local-store.ts` on the same terms as `account.ts` — a set of **triples** since
+the market moved into the column; see Four bays, and a column that names its
+own board. The picker is a native `<dialog>`/`showModal()` (focus trap, Esc and
+backdrop for free — no dependency), and it enforces its bounds by disabling
+rather than correcting: the keys that would open a fifth bay grey out at four,
+the last bay's clear key does too, and a switch greys the board the other bay
+already holds — so an invalid selection cannot be made rather than being
+repaired after.
+
+### Four bays, and a column that names its own board
+
+The picker was nine checkbox rows over a page-wide KeepTradeCut key at its foot.
+It is four numbered bays, always four, with the market and the QB board set
+*inside* a bay — so a column is a `(metric, market, lineup)` triple and the same
+metric can sit in two of them. Applied from a design handoff.
+
+**It needed no migration and no schema change.** `format` is a `ktc_values`
+row's identity and `sf`/`oneqb` are two columns of that row, so a forced board
+is a second read of a table already in hand — which is why the whole thing is
+code.
+
+**The budget is the UI.** Four is what the card's tile row holds, and a panel
+shaped like the thing it configures does not have to state its own rule: an
+empty bay is what says a column is free to take, and a full rack is what says
+none is. The checkbox-and-lamp markup went entirely — every control is a
+`<button>` now, which the two-axis bays need anyway.
+
+**A global board key is contradicted by a column that names its own**, which is
+why the old foot is deleted rather than moved. The market is not a property of
+the page; it is what one of these four columns *means*. Putting it in the bay is
+what makes the comparison a dynasty reader opens the panel for — one metric on
+two boards at once — expressible at all, and the second axis arrives with it for
+the same reason. What survives of the foot is the scrape line, per market
+(`KTC scraped · dynasty 6m ago · redraft 6m ago`), because these are someone
+else's numbers on a fifteen-minute cache.
+
+**`ManagerLineupsPayload.ktc` became a list for exactly that reason.** It used
+to echo the one market the page resolved, with `"mixed"` as the honest name for
+an account holding both kinds. There is no page-wide answer to give any more, so
+what ships is what was *read*, per market — which is also the only thing the
+foot could print.
+
+**A KTC key keeps its `+` while a bay is free, and that press is the feature.**
+Pressing `KTC total` a second time opens a second bay on the same metric, so it
+must not be a no-op — `nextColumn` opens the first pricing the metric is not
+already held on, scanning both axes in control order, so the first press always
+lands on `Auto · Auto` (which is what the empty bay's caption promises) and only
+a later one lands elsewhere. The five metrics with no market have exactly one
+pricing by construction, so a chosen one disables rather than pressing to no
+effect.
+
+**Two switches, and the boards the other bay holds are greyed.** `normalize`
+dedupes on the whole triple, so a press that landed on the other bay's pricing
+would have to either lose a column or exchange the two — one silent, the other a
+key that appears dead once the canonical order puts them back. Disabling is the
+rule the budget is already enforced by, and it is the one that says *why*.
+
+**The switch tracks are `KtcBoardKeys` with a `size` arm, never a second copy.**
+`SwitchTrack` is generic over the option type so the two axes share the grammar
+without sharing the vocabulary — a market is `dynasty`/`redraft` and a lineup is
+`oneqb`/`sf`, and a parser handed the wrong list would reject nothing. Two rows
+of three rather than one row of six is the same argument at the layout grain:
+six keys across a 144px bay is 24px each and "1QB" stops being a word.
+
+**The panel scrolls, where it used to clip.** A rack of four bays over a
+nine-key list is 1,192px at 390 against a `<dialog>`'s UA `max-height` of the
+viewport less a little — so the `overflow: hidden` it inherited put the Done key
+somewhere no scroll could reach. `overflow-y-auto` still clips to the radius,
+which is what the hidden was doing the rest of its work for, and the grain
+overlay moved inside the content so it does not end at the fold.
+
+**The request carries the variants, not the columns**, and the difference is a
+round trip. The ranks a column reads are its variant's four, and the nine base
+ranks always ship — so `ktcVariantsOf` reduces the selection to the distinct
+non-`auto` pricings, `?ktc_boards=dynasty:sf,redraft:auto` carries them, and
+that string is what joins `useManagerLineups`' subject key. Adding a ROS tile,
+or a KTC tile on the league's own board, therefore costs nothing; forcing a
+market costs the one round trip it always cost. Sending the columns themselves
+would have made every press blank the page.
+
+**On the server it is four more ranks, not a second solve.** KTC never enters
+the seating, so a forced board changes what a roster is worth and not who is in
+it: `ktcMetricTotals` re-totals the lineups already solved against a second
+price table, and `variantPickValues` re-prices the cells `leaguePickBoard`
+resolved once — never a second grid, which is the reconstruction `draft-picks`
+is arranged to avoid and the one way a forced board's `ktc_picks` could disagree
+with the pills on the card. `LeagueTeam.totals`, the expanded card's lens and
+the timeline all stay on the league's own board, which is why the card passes
+the rail `board="auto"` rather than a stored preference: a past stop priced on a
+different board from the present table beside it is two numbers on two rulers.
+
+**`storeKtcBoard` / `useKtcBoard` stay**, for the trades board's control rail
+and for the shares drawer's Value column — one figure for a player held across a
+dozen leagues, where there is no league for `auto` to resolve against. Only the
+manager page's *rank columns* stopped reading a page-wide board.
 
 ### The detail is a comparison
 
@@ -1183,12 +1285,19 @@ question — the reading `/api/trades` gives every one of its narrowing
 parameters.
 
 **One stored preference, read by both pages** (`thelab:ktc-board`, on
-`account.ts`'s and `lineup-columns.ts`'s terms). "Which market do I read" has
-one answer, and flipping it on either page moves the other. On the manager page
-the control sits at the foot of the **Columns** dialog — it is not a view of
-the leagues, it is what four of those nine columns *mean*, and it is
-meaningless while none is chosen; on `/trades` it sits in the control rail
-beside Filters and Search, because there it changes every number on every card.
+`account.ts`'s and `lineup-columns.ts`'s terms). It sits in `/trades`' control
+rail beside Filters and Search, because there it changes every number on every
+card, and the manager page's **shares drawer** reads it for the Value column —
+one figure for a player held across a dozen leagues, so there is no league for
+`auto` to resolve against and the stored answer is the only one there is.
+
+**It used to sit at the foot of the Columns dialog too, and that is gone.** The
+argument for putting it there — it is not a view of the leagues, it is what four
+of those nine columns *mean* — is exactly the argument that has since moved it
+one grain further in, into the bay: a column names its own market now, so a
+page-wide key would be a second answer to a question four columns each give
+their own, and it could not express the comparison the bays exist for. See Four
+bays, and a column that names its own board.
 
 ### The one asymmetry, and why
 
@@ -1196,15 +1305,19 @@ beside Filters and Search, because there it changes every number on every card.
 difference is what the number is *for*.
 
 On `/manager` the four KTC columns are **ranked**, and a rank across a league's
-twelve rosters is something only the server can compute — so the choice rides
-the request as `?ktc_board=` and joins `useManagerLineups`' subject key, which
-blanks the ranks for one round trip rather than painting the old market's
-numbers under the new label. That is the cost a season change already pays, for
-one request covering the whole page. The route resolves `auto` per league and
-**echoes what answered** (`ManagerLineupsPayload.ktc`), with `"mixed"` for an
-account holding both kinds — the honest name, since no single one is true of
-the column — and the scrape time beside it, because these are someone else's
-numbers on a fifteen-minute cache.
+twelve rosters is something only the server can compute — so the market rides
+the request and joins `useManagerLineups`' subject key, which blanks the ranks
+for one round trip rather than painting the old market's numbers under the new
+label. That is the cost a season change already pays, for one request covering
+the whole page.
+
+**What rides it is no longer one choice**, since the market moved into the
+column: `?ktc_boards=` names the distinct pricings the reader's bays have
+*forced* (`dynasty:sf,redraft:auto`), the nine ranks on each league's own boards
+always ship, and the payload echoes what was **read**, per market, rather than
+the one board that answered. See Four bays, and a column that names its own
+board — including why a page-wide `"mixed"` had no honest reading left once two
+columns could sit on two markets deliberately.
 
 On `/trades` the number is only **printed**. Putting the flip in `TradeRequest`
 would reset a scrolled keyset walk to page one to change a display unit — the
@@ -4167,6 +4280,89 @@ number above is a fixture. What a render cannot check is the one thing the
 denominator's removal turns on — that `Teams` is genuinely the scale a reader
 reads a bare `2nd` against on a page of a hundred cards, where the field size
 differs between them.
+
+### The strip holds one row on a phone
+
+`GRID_COLS` fell to `grid-cols-2` below `sm`, so a four-column card drew two
+rows of two and the ranks pushed the card past the fold. It is one row of four
+at every width now, and what made that possible was a change already in the
+tree: dropping "of 12" out of the figure. An ordinal fits 75px where `2nd of 12`
+needs ~86px at 16px mono, so the tile shrank to `10px 8px` of padding, the
+figure went up to 21px, and at a 326px card inner width each tile measures
+**exactly 75px**. Applied from a design handoff.
+
+**The label became two lines with the height reserved on the *block*, not on
+either line.** A two-line label beside a one-line label would push its own
+figure down and the strip would read as four tiles at four heights; a
+`min-height` on the container is what holds every ordinal on one baseline.
+
+**Line one is the unit and line two is the scope** — `Proj pts / Starters`,
+`Draft cap / Bench` — which is the grammar that makes a 9px row of four legible:
+two tiles from one family read as one instrument rather than as two labels a
+reader has to tell apart. On the four KeepTradeCut metrics the second line
+carries the **market pair** instead (`Dyn·SF`), because which board priced a
+number is the thing a reader cannot infer, and the scope is already in the
+unit's own words (`KTC bench`).
+
+**That pair is resolved, not echoed.** A column left on `Auto` still priced
+against one market and one QB board, and a tile saying "Auto" would leave the
+reader to work out which — so the card runs `resolveKtcFormat` and
+`resolveKtcLineup`, the same two pure functions the route priced the number
+with, against its own league. A second spelling of either is a label naming a
+board the figure under it was not read on. `leagueType` rather than a read of
+`settings.type`, on that helper's own terms.
+
+**The denominator moved under the row rather than into the tile.** `Ranked of
+12`, right-aligned, once — read off the ranks themselves rather than
+`total_rosters`, since a metric ranks the rosters it could total; suppressed
+where no column has a rank, and suppressed where the columns on screen do not
+agree on a field size, because one caption over two of them would be wrong about
+one. In practice every metric ranks the same stored rosters, so the disagreement
+arm is a guard rather than a case — which is the point: it is the reading that
+cannot quietly become false.
+
+**One consequence worth knowing.** A column on `Auto` and a column forcing the
+board that league already reads resolve to the same pair, so the two tiles print
+the same label over the same rank. That is true rather than a fault — the two
+columns really are reading one board there — and it is visible only on a league
+whose own board is the one being forced.
+
+#### Verified
+
+Rendered through a temporary `/preview` route against the real components,
+tokens and Tailwind build — the method the console-card, shares, rack and
+timeline passes established, since no database is reachable from where this was
+built — then driven over CDP at 390 and 1280 in both schemes and deleted. The
+mechanics that method needs are unchanged: `--no-proxy-server`, `localhost`
+rather than `127.0.0.1`, and a phone viewport from
+`Emulation.setDeviceMetricsOverride`. The fixtures are two leagues — a dynasty
+superflex ranked on four columns including two KeepTradeCut boards, and a
+redraft league whose `roster_positions` never synced and whose entry is absent.
+
+Every arm landed. All four tiles measured **exactly 75px** at 390 with **no
+label clipped** on either line (`scrollWidth === clientWidth` on all eight), the
+caption read `RANKED OF 12` under the row, and the unranked league drew four em
+dashes with empty meters and no caption at all.
+`document.documentElement.scrollWidth === 390` with one `<h1>` and no console
+output of any kind.
+
+The picker was driven end to end. At four columns every key is disabled and the
+held ones announce their bay (`ROS starters, in bay 01`) where the rest read
+`no bay free`. Clearing two bays and pressing `KTC total` **twice** opened
+`Auto · Auto` and then `Auto · 1QB` — the second press is the feature, and it is
+not a no-op — after which each bay's Lineup track greyed the option the other
+held, in both directions. Setting bay 04 to `Dyn`/`SF` stored
+`ktc_total:dynasty:sf` and the card's fourth tile came back reading `KTC /
+DYN·SF` over `1st`, which is the variant rank end to end. The panel is 352px
+inside a 390 viewport with **zero** elements past its own box, `:modal` true,
+and the Done key reachable after the scroll the `overflow-y-auto` change exists
+for (content 1,192px against a UA cap of 868). The foot read `KTC scraped ·
+dynasty 6m ago · redraft 6m ago`.
+
+**Not verified against real data**, which is the gap to close first: every
+number above is a fixture. What a render cannot check is the server half — that
+a forced board's four ranks actually differ from the base nine over a real
+account, and what a second market read costs on the 113-league page.
 
 ## The console card
 

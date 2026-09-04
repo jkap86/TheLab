@@ -4,15 +4,20 @@ import type {
   KtcBoardChoice,
   LeagueLineupEntry,
   LeagueRecord,
-  LineupMetricId,
+  LineupColumn,
   ManagerLeague,
 } from "@/shared/contract";
+import { resolveKtcFormat } from "@/shared/ktc/board-choice";
+import { isKtcMetric, lineupColumnKey } from "@/shared/ktc/columns";
+import { resolveKtcLineup } from "@/shared/ktc/roster";
 import {
   CardPlateRow,
   CardRule,
   CONSOLE_CARD,
   CONSOLE_WINDOW,
+  ktcBoardLabel,
   LeagueConfigWindow,
+  leagueType,
   LeaguePlate,
   LINEUP_METRIC_LABELS,
   ordinal,
@@ -110,15 +115,23 @@ function formatRecord(record: LeagueRecord): string {
  * must generate.
  *
  * The tiles have the card's full width to themselves, so they take equal shares
- * of it and the row reads as one instrument strip across the card. Two across
- * on a phone is the exception: at 390 a four-way split is 70px a tile, which is
- * narrower than the rank it holds.
+ * of it and the row reads as one instrument strip across the card.
+ *
+ * **Four across at every width, phones included**, which reverses the two-up
+ * fallback this row used to take below `sm`. What made a four-way split at 390
+ * unreadable was the figure: `formatRank` printed "2nd of 12", which needs
+ * ~86px at 16px mono and cannot fit the 75px an equal quarter of a 326px card
+ * gives it. The denominator has since come out of the tile — it is one number
+ * for all four ranks, and it is stated once under the row and once more in the
+ * configuration window's `Teams` — so the figure is an ordinal, the tile is
+ * 75px, and the strip is one row rather than two. A four-tile strip that wraps
+ * is what pushes the card past the fold on a phone.
  */
 const GRID_COLS: Record<number, string> = {
   1: "grid-cols-1",
   2: "grid-cols-2",
-  3: "grid-cols-2 sm:grid-cols-3",
-  4: "grid-cols-2 sm:grid-cols-4",
+  3: "grid-cols-3",
+  4: "grid-cols-4",
 };
 
 export function LeagueCard({
@@ -131,7 +144,7 @@ export function LeagueCard({
 }: {
   league: ManagerLeague;
   /** The chosen rank columns, in canonical order — see `useLineupColumns`. */
-  columns: readonly LineupMetricId[];
+  columns: readonly LineupColumn[];
   /** This league's solve + ranks, once the batched lineups read lands. */
   entry?: LeagueLineupEntry | null;
   /**
@@ -216,12 +229,28 @@ export function LeagueCard({
               silently go. The margin is `mt-2.5` rather than `mt-4` because the
               window above already carries the separation the line did not. */}
           <div
-            className={`relative mt-2.5 grid gap-2.5 ${GRID_COLS[columns.length] ?? GRID_COLS[2]} pointer-fine:[transform:translateZ(22px)]`}
+            className={`relative mt-2.5 grid gap-2 ${GRID_COLS[columns.length] ?? GRID_COLS[2]} pointer-fine:[transform:translateZ(22px)]`}
           >
-            {columns.map((id) => (
-              <MetricTile key={id} id={id} entry={entry} />
+            {columns.map((column) => (
+              <MetricTile
+                key={lineupColumnKey(column)}
+                column={column}
+                league={league}
+                entry={entry}
+              />
             ))}
           </div>
+
+          {/* The field size, once, for the whole strip. It came out of the
+              tiles because it is one number for all four of them and a tile has
+              75px to spend; it is stated here rather than only in the
+              configuration window because a rank with no denominator anywhere
+              near it is an ordinal without a scale. Read off the ranks
+              themselves rather than `total_rosters` — a metric ranks the
+              rosters it could total, which is not always every seat — and
+              silent where the ranks do not agree on one, since a single caption
+              over two field sizes would be a claim about both. */}
+          <RankedOf columns={columns} entry={entry} />
         </summary>
 
         {/* The expanded half sits *outside* the 3D context on purpose: a table
@@ -345,29 +374,41 @@ function StandingPlate({ league }: { league: ManagerLeague }) {
  * makes it read as lit rather than as printed.
  */
 function MetricTile({
-  id,
+  column,
+  league,
   entry,
 }: {
-  id: LineupMetricId;
+  column: LineupColumn;
+  league: ManagerLeague;
   entry?: LeagueLineupEntry | null;
 }) {
-  const rank = entry?.ranks[id] ?? null;
+  const rank = entry?.ranks[lineupColumnKey(column)] ?? null;
   const fill = rankFill(rank);
   // Not `fill`: that is 0 for last place *and* for nothing-to-rank, and only
   // the first of those is red. See `rankPercentile`.
   const percentile = rankPercentile(rank);
   const tone = rankColor(percentile);
+  const words = LINEUP_METRIC_LABELS[column.metric];
 
   return (
-    <div className={`${CONSOLE_WINDOW} min-w-0 rounded-[0.625rem] px-3 py-2.5`}>
+    <div className={`${CONSOLE_WINDOW} min-w-0 rounded-[0.625rem] px-2 py-2.5`}>
       <Scanlines />
-      <p className="relative m-0 truncate font-mono text-[0.625rem] uppercase tracking-[0.14em] text-readout-label">
-        {LINEUP_METRIC_LABELS[id].column}
-      </p>
+      {/* **The min-height is on the block, not on either line**, and that is
+          what holds every ordinal in the row on one baseline: a two-line label
+          beside a one-line label would otherwise push its own figure down and
+          the strip would read as four tiles at four heights. */}
+      <div className="relative min-h-[1.5rem]">
+        <p className="m-0 truncate font-mono text-[0.5625rem] uppercase leading-[1.2] tracking-[0.1em] text-readout-label">
+          {words.unit}
+        </p>
+        <p className="m-0 mt-px min-h-[0.6875rem] truncate font-mono text-[0.5625rem] uppercase leading-[1.2] tracking-[0.12em] text-readout [text-shadow:var(--readout-text-glow)]">
+          {tileScope(column, league)}
+        </p>
+      </div>
       {/* A computed colour, so it goes through `style` — the ramp is
           continuous and there is no utility class to generate for it. */}
       <p
-        className="relative m-0 mt-2 truncate font-mono text-base leading-none tabular-nums"
+        className="relative m-0 mt-2 truncate font-mono text-[1.3125rem] font-medium leading-none tabular-nums"
         style={{
           color: tone,
           textShadow: `0 0 12px ${rankColor(percentile, 0.5)}`,
@@ -381,10 +422,11 @@ function MetricTile({
           being read, and at one column it was a bar the width of the card. The
           cap is on the *track*, so the fill's percentage resolves against 88px
           and a full meter is 88px of gauge. It is deliberately not on the tile:
-          the label has to keep the full width or "ROS starters" truncates. */}
+          the label has to keep the full width, which at 75px is every pixel it
+          has. */}
       <span
         aria-hidden
-        className="relative mt-2.5 block h-1 max-w-[5.5rem] rounded-full bg-[var(--meter-track)] shadow-[inset_0_1px_3px_rgba(0,0,0,0.95)]"
+        className="relative mt-[0.5625rem] block h-1 max-w-[5.5rem] rounded-full bg-[var(--meter-track)] shadow-[inset_0_1px_3px_rgba(0,0,0,0.95)]"
       >
         <span
           className="block h-1 rounded-full"
@@ -396,5 +438,61 @@ function MetricTile({
         />
       </span>
     </div>
+  );
+}
+
+/**
+ * A tile's second line: the scope for a projections or capital column, and the
+ * board a KeepTradeCut column actually read for *this* league.
+ *
+ * **Resolved rather than echoed**, which is the difference between a reading
+ * and a setting: a column left on `Auto` still priced against one market and
+ * one QB board, and a tile that said "Auto" would leave the reader to work out
+ * which — while the same two pure functions the route priced the number with
+ * are right here, on a card that knows its own league. A second spelling of
+ * either rule is a label naming a board the figure under it was not read on.
+ */
+function tileScope(column: LineupColumn, league: ManagerLeague): string {
+  if (!isKtcMetric(column.metric)) {
+    return LINEUP_METRIC_LABELS[column.metric].scope;
+  }
+  return ktcBoardLabel(
+    // `leagueType` rather than a read of `settings.type`, on that helper's own
+    // terms: Sleeper omits the field on a standard redraft league, and a second
+    // copy of that fallback is a second chance to forget it — here it would be
+    // a tile reading `Dyn` over a redraft league's number.
+    resolveKtcFormat(column.format, leagueType(league)),
+    resolveKtcLineup(column.lineup, league.roster_positions),
+  );
+}
+
+/**
+ * `Ranked of 12`, once, under the strip — or nothing at all.
+ *
+ * Suppressed while no column has a rank, because the caption would then be
+ * describing a field nobody has been placed in; and suppressed where the
+ * columns on screen do not agree on a field size, because one caption over two
+ * of them would be wrong about one. In practice every metric ranks the same
+ * stored rosters, so the disagreement arm is a guard rather than a case — which
+ * is the point: it is the reading that cannot quietly become false.
+ */
+function RankedOf({
+  columns,
+  entry,
+}: {
+  columns: readonly LineupColumn[];
+  entry?: LeagueLineupEntry | null;
+}) {
+  const sizes = new Set(
+    columns
+      .map((column) => entry?.ranks[lineupColumnKey(column)]?.of)
+      .filter((of): of is number => of !== undefined),
+  );
+  if (sizes.size !== 1) return null;
+
+  return (
+    <p className="relative m-0 mt-2 text-right font-mono text-[0.5625rem] uppercase tracking-[0.16em] text-readout-label">
+      Ranked of {[...sizes][0]}
+    </p>
   );
 }

@@ -9,7 +9,12 @@
 // documents; `parse`, `validate` and `client` are the sync's own building
 // blocks and have no caller outside this folder.
 
-export { isSuperflexLineup, ktcBoardValue, QB_ELIGIBLE_STARTING_SLOTS } from "./roster";
+export {
+  isSuperflexLineup,
+  ktcBoardValue,
+  QB_ELIGIBLE_STARTING_SLOTS,
+  resolveKtcLineup,
+} from "./roster";
 export { getKtcBoards } from "./board-read";
 export type { KtcBoards } from "./board-read";
 export { getKtcBoard, getKtcPickBoard } from "./queries";

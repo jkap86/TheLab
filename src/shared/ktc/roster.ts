@@ -23,6 +23,8 @@
  * types but doesn't know the `@/*` aliases.
  */
 
+import type { KtcLineupChoice } from "@/shared/contract";
+
 import { NON_STARTING_SLOTS, SLOT_POSITIONS } from "../projections/slots.ts";
 
 /**
@@ -87,4 +89,28 @@ export function ktcBoardValue(
 ): number | null {
   if (!value) return null;
   return superflex ? value.sf : value.oneqb;
+}
+
+/**
+ * Which of the two QB boards a *column* reads: the league's own answer under
+ * `auto`, and the reader's where they have forced one.
+ *
+ * Beside {@link isSuperflexLineup} rather than beside `parseKtcLineupChoice`,
+ * on `resolveKtcFormat`'s own line: parsing a choice is the reader's half and
+ * lives with the control's vocabulary, while turning one into a board is the
+ * league's half and belongs with the predicate it defers to. A forcing state
+ * that resolved anywhere else would be a second spelling of "starts more than
+ * one quarterback" — the exact drift this file exists to prevent.
+ *
+ * The card resolves this client-side to label a tile and the route resolves it
+ * to price one, which is the reason it is pure and free of runtime imports
+ * beyond the slot vocabulary: a tile reading `Dyn·SF` over a number priced at
+ * 1QB is a wrong label, not a stale one.
+ */
+export function resolveKtcLineup(
+  choice: KtcLineupChoice,
+  rosterPositions: readonly string[] | null,
+): boolean {
+  if (choice !== "auto") return choice === "sf";
+  return isSuperflexLineup(rosterPositions);
 }

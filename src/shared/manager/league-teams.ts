@@ -26,10 +26,10 @@ import type { KtcPickPrice } from "../ktc/picks.ts";
 import { ktcBoardValue } from "../ktc/roster.ts";
 import type { RosProjections } from "../projections/ros.ts";
 import type { AdpEntry } from "./adp-value.ts";
-import { leagueRosterPicks } from "./draft-picks.ts";
-import type { PickLeague } from "./draft-picks.ts";
+import { leaguePickBoard, pickCellKey } from "./draft-picks.ts";
+import type { LeaguePickBoard, PickLeague } from "./draft-picks.ts";
 import { rankLeagueLineups } from "./league-ranks.ts";
-import type { RankLeague } from "./league-ranks.ts";
+import type { RankLeague, RankVariant } from "./league-ranks.ts";
 
 /**
  * What one league's entry is built from: the solve's half and the picks' half
@@ -72,10 +72,17 @@ export function solveLeagueEntry(
   projections: RosProjections,
   adp: ReadonlyMap<string, AdpEntry>,
   ktc: KtcPricing = NO_KTC,
+  /**
+   * The extra boards this page's columns have forced, already resolved against
+   * this league. Empty for a page whose KTC columns all read `auto`, which is
+   * every page until a reader sets a bay's market or lineup by hand.
+   */
+  variants: readonly KtcVariantPricing[] = [],
 ): LeagueLineupEntry | null {
-  const picks = leagueRosterPicks(league, season, (pick) =>
+  const board = leaguePickBoard(league, season, (pick) =>
     pickValue(ktc, league.total_rosters, pick),
   );
+  const picks = board.byRoster;
 
   const pickValues = new Map<number, number>();
   for (const [rosterId, owned] of picks) {
@@ -92,6 +99,11 @@ export function solveLeagueEntry(
     adp,
     ktc.values,
     pickValues,
+    variants.map((variant): RankVariant => ({
+      key: variant.key,
+      values: variant.values,
+      pickValues: variantPickValues(board, league.total_rosters, variant),
+    })),
   );
   if (!lineup) return null;
   const teams: LeagueTeam[] = rosters.map(({ roster, lineup, totals }) => ({
@@ -125,6 +137,43 @@ export type KtcPricing = {
 
 /** No board read at all: every player and every pick prices to null. */
 const NO_KTC: KtcPricing = { values: new Map(), picks: {}, superflex: false };
+
+/**
+ * One forced board, named. The route resolves a column's `auto` halves against
+ * the league and hands the resulting pricing in under the key the card will
+ * look its rank up by.
+ */
+export type KtcVariantPricing = KtcPricing & { key: string };
+
+/**
+ * What one forced board prices each roster's picks at.
+ *
+ * **Off the grid already laid, never a second one.** A market changes what a
+ * pick is worth and nothing about which cell it is or which slot it falls on,
+ * so this re-prices the cells `leaguePickBoard` resolved once rather than
+ * calling it again per variant — which would be the second reconstruction of a
+ * draft order that `draft-picks` is arranged to avoid, and the one way a forced
+ * board's `ktc_picks` could come to disagree with the pills on the card.
+ */
+function variantPickValues(
+  board: LeaguePickBoard,
+  teams: number,
+  ktc: KtcPricing,
+): Map<number, number> {
+  const totals = new Map<number, number>();
+  for (const [rosterId, owned] of board.owned) {
+    let sum = 0;
+    for (const pick of owned) {
+      const cell = board.cells.get(
+        pickCellKey(pick.season, pick.round, pick.original_roster_id),
+      );
+      if (!cell) continue;
+      sum += pickValue(ktc, teams, cell) ?? 0;
+    }
+    totals.set(rosterId, sum);
+  }
+  return totals;
+}
 
 /**
  * What KTC prices one resolved pick at, or null where it prices nothing for it.

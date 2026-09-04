@@ -128,9 +128,16 @@ export function LeaguesHome({
     setOpened(new Set());
   }
 
-  // The KTC market this device reads. It rides *both* server reads below for
-  // one reason: the price a shares row prints and the ranks a card prints are
-  // on one market or they are on two, and the reader chose one.
+  // The KTC market this device reads, for the shares drawer's Value column —
+  // one figure for a player held across a dozen leagues, so there is no league
+  // for `auto` to resolve against and the reader's stored answer is the only
+  // one there is (`resolveKtcCrossLeagueFormat`).
+  //
+  // **The cards no longer read it**, which is what moving the market into the
+  // bay changed: a column names its own board now, and a page-wide key would be
+  // a second answer to a question four columns each give their own. What the
+  // cards ask for instead is the *variants* their columns have forced — see
+  // `useManagerLineups`.
   const ktcBoard = useKtcBoard();
 
   // Read once, by both drawers and by the predicate below — see the hook for
@@ -184,18 +191,20 @@ export function LeaguesHome({
       ? (players.data?.players[s.id]?.name ?? s.id)
       : (leaguemates.data?.users[s.id]?.display_name ?? s.id);
 
+  const columns = useLineupColumns();
+
   // Fetched once the leagues settle — `!refreshing` flipping true is also what
   // refetches after a cold sync, when the rosters this read solves from were
-  // just written. See the hook. The board rides the request rather than being
-  // applied here, because the four KTC columns are ranked and only the server
-  // can rank them.
+  // just written. See the hook. The columns ride the request rather than being
+  // applied here, because their ranks are the server's: only it can rank a
+  // roster against the other eleven, and a forced market is a board only it can
+  // price.
   const lineups = useManagerLineups(
     username,
     state.season,
     leagues.length > 0 && !refreshing,
-    ktcBoard,
+    columns,
   );
-  const columns = useLineupColumns();
 
   // Sleeper lets a display name go missing, so the username is the fallback
   // everywhere this pair is shown.
@@ -308,8 +317,7 @@ export function LeaguesHome({
         {leagues.length > 0 && (
           <ColumnsStrip
             columns={columns}
-            board={ktcBoard}
-            ktc={lineups?.ktc ?? null}
+            ktc={lineups?.ktc ?? []}
           />
         )}
       </header>
@@ -429,7 +437,15 @@ export function LeaguesHome({
                   // page's raw query — see `parseRequestedSeason`.
                   season={state.season}
                   username={username}
-                  board={ktcBoard}
+                  // **`auto`, not the stored board.** The rail redraws this
+                  // card's own team browser over past rosters, and that browser
+                  // reads `LeagueTeam.totals` — which the route computes on the
+                  // league's own market and QB board, whatever any column has
+                  // forced. A past stop priced on a different board from the
+                  // present table beside it is two numbers on two rulers, which
+                  // is the one thing the timeline's three narrowing parameters
+                  // exist to prevent.
+                  board="auto"
                 />
               ))}
             </ul>
