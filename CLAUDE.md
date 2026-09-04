@@ -1261,9 +1261,16 @@ carries has nothing to guard against here; see the lineups section.
 
 ## The tools console
 
-`/tools` is one bevelled panel: the wordmark plate and the account readout on
-one row, a rule, then the tool grid. Applied from a design handoff, and three
-things about it are structural rather than cosmetic.
+`/tools` is one bevelled panel: the account readout on the top row, a rule,
+then the tool grid. Applied from a design handoff, and three things about it are
+structural rather than cosmetic.
+
+**The engraved wordmark plate that used to open that row is gone**, and so is
+the rack's tool menu above it — see The tools page carries neither, under The
+app rack. What the plate leaves behind is a visually-hidden `<h1>`, still passed
+in from the page so the copy stays on the server side of the client boundary,
+and one class: the account control no longer takes `ml-auto`, which pinned it to
+the right of an otherwise empty row.
 
 **The sticky header is gone, and nothing replaced it.** The account used to be a
 full-width card under a translucent scrim that followed the scroll; it is a
@@ -1302,14 +1309,16 @@ the glyph alpha. Both the wordmark and the tool names do this, and both take
 their filter stack from a token — see the Theme section for why the stack cannot
 be written into the class string.
 
-**Both copies of the wordmark are `whitespace-nowrap`, and the type steps down
+**Both copies of a wordmark are `whitespace-nowrap`, and the type steps down
 below `sm`.** The engraving is two stacked copies of "The Lab" — an `aria-hidden`
-extrusion under the `<h1>` face. If the face wraps and the extrusion cannot, the
+extrusion under the face. If the face wraps and the extrusion cannot, the
 extrusion's second line hangs off the plate as a ghost "LAB"; the plate is also
-wider than a phone at 2.5rem, so the two are one fix. For the same reason the
-panel's gutter steps `6 → 8 → 13` rather than going straight to the design's 13,
-and the lookup input is fluid below `sm` and `w-56` above it — a fixed-width
-input is wider than the panel's content box on a phone.
+wider than a phone at 2.5rem, so the two are one fix. The rule outlived the
+plate on this page — the rack's own wordmark and `ManagerPlate` both live by it.
+For the same reason the panel's gutter steps `6 → 8 → 13` rather than going
+straight to the design's 13, and the lookup input is fluid below `sm` and `w-56`
+above it — a fixed-width input is wider than the panel's content box on a
+phone.
 
 **Light mode is derived, not measured.** The design was approved in dark; every
 chrome token has a light counterpart reasoned out from it (bevels invert, the
@@ -1334,13 +1343,19 @@ used to have a housing beside the account's, so that below `sm` the cluster
 wrapped within itself and the lookup kept a full row; with the key gone the
 lookup has the row outright and the wrap is moot.
 
-**Only `LabWordmark` joined the barrel.** The page passes it in as `ToolsHome`'s
-heading, which is what keeps the one piece of static copy on the server side of
-the client boundary. `tools`, `toolHref` and `Tool` stay out on the folder rule:
-only this folder's own modules build on them.
+**`LabWordmark` has left the barrel with the plate.** It joined it only because
+the page passed it in as `ToolsHome`'s heading; the heading is now a
+visually-hidden `<h1>` written inline, which keeps that copy on the server side
+of the client boundary just as the plate did, and nothing outside this folder
+builds on the component any more. It is kept rather than deleted — `ManagerPlate`
+and the rack's own wordmark both cite it for decisions they take, so it is the
+`peekActiveSeason` case: a module with no caller that carries the argument a
+reader would otherwise get wrong. `tools`, `toolHref`, `Tool` and `ToolsMenu`
+stay out on the same folder rule: only this folder's own modules build on them.
 
-Accessibility that the chrome must not cost: exactly one `<h1>` (the extrusion
-copy is `aria-hidden`), the readout's live state announced by `sr-only`
+Accessibility that the chrome must not cost: exactly one `<h1>` (`sr-only` since
+the plate went — the rack renders none, so dropping the plate without it would
+leave the page with no heading at all), the readout's live state announced by `sr-only`
 "Connected" rather than by the pulsing dot alone, disabled cards keeping
 `role="link"` + `aria-disabled` + their `sr-only` reason, and nothing below
 `foreground/60` or under 11px — the mono legends sit exactly on that floor.
@@ -2250,9 +2265,10 @@ size it against.
 The app had no navigation. `/tools` was the only way to another tool and a
 typed URL was the only way back, so the rack is the one genuinely new object in
 this pass rather than a restyling of an old one: a floating housing carrying
-the wordmark, a recessed track of tool links, a season readout and the theme
-key. Applied from a design handoff scoped to `/manager/[username]`; five things
-about it are structural rather than cosmetic.
+the wordmark, the tool navigation, a season readout and the theme key. Applied
+from a design handoff scoped to `/manager/[username]`; five things about it are
+structural rather than cosmetic. **The tool links have since become one key that
+opens a menu** — see The track became a menu below; the five still hold.
 
 **It lives in `features/tools`, not `features/shared`.** Everything it is made
 of is that folder's own — the tool registry, `toolHref`, the flask mark, the
@@ -2271,14 +2287,15 @@ what lights a key, not the resolved `href`: Manager points at
 `/manager/<username>` once an account is stored, and matching on that would
 leave the rack unlit on somebody else's page.
 
-**Below `md` the brand row becomes `display: contents`.** The rack is two
+**Below `md` the brand row becomes `display: contents`.** The rack was two
 stacked objects at a phone's width — a brand pill, then the nav track — and one
 row above it. Rather than render two trees, the wrapper's box stops existing at
 `md`, its children join the rack's flex container directly, and `order` puts
 them back in the wide layout's reading order. That is also why the pill chrome
 is on the rack above `md` and on the row below it: there is only ever one box
-painting it. The nav track scrolls rather than wrapping, because a nav that
-reflows to two lines moves the rack's height with the route.
+painting it. The stacking is what the menu removed — one key fits in the brand
+row where six never did — but the mechanism is unchanged and still carries the
+menu, the theme key and the readout into their wide-layout order.
 
 **The season readout is published by the page, not read by the rack.** It names
 whose page this is, which is manager data in app-level chrome, and three
@@ -2299,6 +2316,72 @@ removed from `tools-home`, `leagues-home`, `trades-home` and
 the name of the theme a press switches *to* beside the glyph. That word is
 `aria-hidden` rather than being the button's name — each face already carries a
 full sentence, and a visible "Light" would only prepend a redundant token.
+
+### The track became a menu
+
+The six-key horizontal track is one key that names the page you are on and opens
+a menu of the rest — `tools-menu.tsx`, a sibling of `app-rack.tsx` and out of the
+barrel on the folder rule. Two reasons, and the second is what made it worth
+doing: the rack's width grew with the registry, which `constants/tools.ts` is
+documented as sizing for eight to ten entries, and below `md` the track was
+already an `overflow-x-auto` row, so everything past Trades was reachable only by
+a horizontal swipe nobody would guess at. **One key costs the same width at six
+tools as at ten.**
+
+**The key names the page you are on rather than saying "Tools."** That is the
+only thing the old track said besides its list — the lit key *was* the "you are
+here" — and a menu that dropped it would be a nav that reports nothing. The
+menu repeats it: the current entry is drawn raised and lit, with an accent lamp
+beside it, for the moment the open menu covers the key it came from.
+
+**The tools page carries neither the menu nor the groove.** Its grid *is* the
+tool list, and a menu of the same six names directly above it is a second copy
+of the page's own content — the same argument that took the wordmark plate off
+that page, where the rack already engraves "The Lab". The groove goes with the
+menu, since a separator with nothing on its far side is a rule. The one thing
+that has to move for it is the theme key's auto-margin: above `md` the readout's
+own `ml-auto` normally takes the row's slack, and the tools page has no menu
+*and* publishes no readout, so there the key takes it itself (`md:ml-auto`
+against `md:ml-0` everywhere else). The visible cost is that `/tools` is now the
+one route with no `aria-current="page"` and no `<nav>` at all — correct, since
+the page is the list rather than a page beside it.
+
+**It is not a `<dialog>`, where the league filters and the columns picker both
+are.** Those are modal; a nav menu that trapped focus and dimmed the page to
+offer six links would be heavier than the links are worth. So the dismissal a
+`<dialog>` gives for free is spelled out: a **capture-phase `pointerdown`**, so
+a press that starts outside dismisses before whatever it landed on acts on it,
+and Escape, which returns focus to the key it came from — the one piece of that
+behaviour that is not optional. Closing on a menu item's click is not redundant
+with the route change either: the current page's own entry navigates nowhere, so
+nothing else would dismiss it.
+
+**Below `md` the menu rides in the brand row beside the wordmark**, which is what
+removes the second stacked row a phone used to get. Measured at 390 that row
+fits exactly, with no slack: flask, wordmark, the longest tool name
+("Lineup Checker") and the icon-only theme key come to the full content width,
+and the open menu's right edge lands on the viewport's. **Below 390 it
+overflows** — at 375 the theme key spills past the rack pill's cap by 8px — which
+is a width this repo has never verified at (the bar is 1280 and 390 in both
+schemes) and which the page already overflowed at 360 for its own reasons before
+this landed. If it ever needs to hold, the cheap fix is dropping the wordmark's
+*text* below 390 and keeping the flask, on the theme key's own precedent that
+the legend is the first thing to go — with an `sr-only` name left on the link.
+
+#### Verified
+
+Against a throwaway Postgres 16 cluster and a production build, over CDP at 1280
+and 390 in both schemes. `/tools` renders no `<nav>`, no menu trigger and no
+groove, one `sr-only` `<h1>` measuring 1x1, and the theme key pinned right on an
+otherwise empty rack row; the panel's lookup sits at the row's left where
+`ml-auto` used to hold it right. On the other routes the key names the page
+("Lineup Checker", "Trades", "Manager"), the menu lists all six with `toolHref`'s
+resolved targets, and exactly one entry carries `aria-current="page"` — the
+resolved-vs-`base` rule intact, since `/manager/jkap86` lights Manager. Escape
+closes it and returns focus to the key with `aria-expanded` back to `false`; an
+outside `pointerdown` closes it; reopening works. `document.documentElement.scrollWidth`
+equals the viewport at 1280 and 390 with the menu open, and the four-instrument
+row (brand, groove, menu, readout + theme key) is unmoved at 1280.
 
 ### The ground, and why it is per-route
 
@@ -2408,7 +2491,9 @@ Checked at 1280 and 390 in both schemes against the live database, with headless
 Chrome over CDP: the rack, the ground, the View housing, the rank ramp, both
 dialogs and the expanded card's strip. The DOM checks that matter also hold —
 exactly one `<h1>` per page (the rack's wordmark is spans), one
-`aria-current="page"` matching the route, one `<nav>`, one theme control.
+`aria-current="page"` matching the route, one `<nav>`, one theme control — the
+first three re-checked after the menu landed, with `/tools` the deliberate
+exception on the last two.
 
 Two things are deliberately left. **`/picktracker` and `/comps` are in the rack
 and are 404s**, because they are in `constants/tools.ts` and the handoff names

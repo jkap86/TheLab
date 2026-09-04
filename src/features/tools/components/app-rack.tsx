@@ -13,9 +13,10 @@ import {
 import { tools } from "../constants/tools";
 import { toolHref } from "../helpers/tool-href";
 import { FlaskMark } from "./flask-mark";
+import { ToolsMenu } from "./tools-menu";
 
 /**
- * The app rack: a floating housing carrying the wordmark, the tool links, the
+ * The app rack: a floating housing carrying the wordmark, the tool menu, the
  * season readout and the theme key.
  *
  * The app had no navigation at all before this — every page was reached from
@@ -64,6 +65,19 @@ export function AppRack() {
     [account],
   );
 
+  const currentBase =
+    links.find(
+      (link) =>
+        pathname === link.base || pathname.startsWith(`${link.base}/`),
+    )?.base ?? null;
+
+  // **The tools page carries no tool menu.** Its grid *is* the list, and a
+  // menu of the same names directly above it is a second copy of the page's
+  // own content — the same argument that took the wordmark plate off that
+  // page, where the rack already engraves "The Lab". The groove goes with it,
+  // since a separator with nothing on its far side is a rule.
+  const showMenu = currentBase !== "/tools";
+
   return (
     <div className="mx-auto mt-6 w-full max-w-6xl px-3.5 md:px-4">
       {/*
@@ -107,9 +121,28 @@ export function AppRack() {
             </span>
           </Link>
 
+          {/* The tool menu rides in the brand row below `md` — one key fits
+              beside the wordmark where the six-key track never did, which is
+              what removes the second stacked row a phone used to get. */}
+          {showMenu && (
+            <div className="ml-auto shrink-0 md:contents">
+              <ToolsMenu links={links} currentBase={currentBase} />
+            </div>
+          )}
+
           {/* The theme key, in a recessed pad of its own. Icon-only at a
-              phone's width, where the legend is the first thing to go. */}
-          <div className="ml-auto shrink-0 rounded-full bg-[image:var(--key-bg)] p-1 shadow-[var(--track-shadow)] md:order-5 md:ml-0">
+              phone's width, where the legend is the first thing to go.
+
+              The auto-margin is unchanged below `md` (the menu sits between
+              the brand and this, and neither takes the slack). Above `md` the
+              readout's own `ml-auto` normally does the work — except on the
+              tools page, which has no menu *and* publishes no readout, so
+              there the key has to take the row's slack itself. */}
+          <div
+            className={`ml-auto shrink-0 rounded-full bg-[image:var(--key-bg)] p-1 shadow-[var(--track-shadow)] md:order-5 ${
+              showMenu ? "md:ml-0" : "md:ml-auto"
+            }`}
+          >
             <ThemeToggle
               className={
                 "inline-flex items-center gap-2 rounded-full bg-[image:var(--key-bg)] p-[0.4375rem] " +
@@ -124,40 +157,15 @@ export function AppRack() {
           </div>
         </div>
 
-        <span
-          aria-hidden
-          className="hidden w-px self-stretch bg-[image:var(--groove)] shadow-[var(--groove-highlight)] md:order-2 md:my-1 md:block"
-        />
-
-        {/* A recessed track with the current page raised out of it as a lit
-            key. It scrolls rather than wrapping at a phone's width: a nav that
-            reflows to two lines moves the rack's height with the route. */}
-        <nav
-          aria-label="Tools"
-          className="flex w-full items-center gap-1 overflow-x-auto rounded-full bg-[image:var(--key-bg)] p-1 shadow-[var(--track-shadow)] md:order-3 md:w-auto"
-        >
-          {links.map((link) => {
-            const current =
-              pathname === link.base || pathname.startsWith(`${link.base}/`);
-            return (
-              <Link
-                key={link.base}
-                href={link.href}
-                aria-current={current ? "page" : undefined}
-                className={`shrink-0 whitespace-nowrap rounded-full px-3 py-[0.4375rem] font-mono text-[0.6875rem] uppercase tracking-[0.14em] transition-[color,box-shadow] duration-150 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-active/60 md:px-3.5 md:py-2 md:tracking-[0.16em] ${
-                  current
-                    ? "bg-[image:var(--key-bg)] text-readout shadow-[var(--key-shadow)] [text-shadow:var(--readout-text-glow)]"
-                    : "text-foreground/60 hover:bg-foreground/[0.04] hover:text-readout"
-                }`}
-              >
-                {link.text}
-              </Link>
-            );
-          })}
-        </nav>
+        {showMenu && (
+          <span
+            aria-hidden
+            className="hidden w-px self-stretch bg-[image:var(--groove)] shadow-[var(--groove-highlight)] md:order-2 md:my-1 md:block"
+          />
+        )}
 
         {/* Whose page this is. Hidden below `md`, where row one has room for
-            the brand and the theme key and nothing else. */}
+            the brand, the menu and the theme key and nothing more. */}
         {readout && (
           <span className="relative ml-auto hidden shrink-0 items-center gap-2.5 overflow-hidden rounded-full border border-black/85 bg-[image:var(--readout-bg)] px-3.5 py-[0.4375rem] shadow-[var(--readout-shadow)] md:order-4 md:inline-flex">
             <span

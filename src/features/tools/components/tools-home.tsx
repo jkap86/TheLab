@@ -5,18 +5,23 @@ import { UserLookup } from "./user-lookup";
 import { ToolGrid } from "./tools-grid";
 
 /**
- * The page as one console: a bevelled panel holding the wordmark plate, the
- * account readout and the tool grid.
+ * The page as one console: a bevelled panel holding the account readout and
+ * the tool grid.
  *
  * The sticky translucent header the account card used to sit under is gone.
- * The account is a compact readout on the wordmark's row now, so there is
- * nothing left that needs to follow the scroll, and the panel can carry its own
- * light instead of a scrim. (`--header-from` / `--header-to`, the scrim's two
+ * The account is a compact readout on the top row now, so there is nothing
+ * left that needs to follow the scroll, and the panel can carry its own light
+ * instead of a scrim. (`--header-from` / `--header-to`, the scrim's two
  * tokens, went with it — the sticky header was their only reader.)
  *
+ * The engraved wordmark plate used to open that row; the rack above the page
+ * already carries the same engraving, so `heading` is now the visually-hidden
+ * `<h1>` alone. What that changes here is one class: the account control no
+ * longer takes `ml-auto`. It is the only object on the row, and `ml-auto`
+ * pinned it to the right of an empty one.
+ *
  * The gutter steps 6 -> 8 -> 13 rather than going straight to the design's 13:
- * the wordmark plate is a fixed-width object, and at a phone's width the
- * padding is the only thing left to give it.
+ * at a phone's width the padding is the only thing left to give the content.
  */
 export function ToolsHome({ heading }: { heading: React.ReactNode }) {
   const user = useStoredAccount();
@@ -39,7 +44,7 @@ export function ToolsHome({ heading }: { heading: React.ReactNode }) {
         {/* The theme key used to sit beside the lookup in a housing of its
             own; it is in the app rack now, so the lookup has the row to
             itself and no longer has to share a phone's width with it. */}
-        <div className="ml-auto flex flex-wrap items-center justify-end gap-3">
+        <div className="flex flex-wrap items-center gap-3">
           <UserLookup user={user} onUserChange={storeAccount} />
         </div>
       </header>
