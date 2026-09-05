@@ -472,7 +472,15 @@ export function LeaguesHome({
               </div>
             </Plate>
           ) : (
-            <ul className="relative m-0 grid list-none grid-cols-1 gap-[1.125rem] p-0">
+            // **The gap is the ledge's overhang, not a rhythm.** A league
+            // card's header is a milled billet hung 20px above the card's own
+            // top edge (18 below `sm`), so at the 18px this row used to carry
+            // the ledge landed *inside* the card above it — 2px of one league's
+            // name over another league's foot, with nothing on screen saying
+            // which card it belonged to. 28px is that overhang plus the 8 of
+            // breath the plate row used to have to itself. The first card's
+            // ledge has the filter summary's own margin above it.
+            <ul className="relative m-0 mt-2 grid list-none grid-cols-1 gap-7 p-0">
               {visible.map((league) => (
                 <LeagueCard
                   key={league.league_id}

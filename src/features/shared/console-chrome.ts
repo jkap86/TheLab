@@ -17,6 +17,13 @@
  *   so the key reads proud of it. {@link CONSOLE_WELL} is the shallow tray a
  *   whole panel of controls sits in, which at the same depth would read as a
  *   hole rather than a surface.
+ *
+ * And there is a fourth family at the foot of this file — the **billet**, a
+ * solid part chamfered on all four edges, which is what a league card's ledge,
+ * its chip rail and its rank windows' headers are milled from. A plate and a
+ * key are each one face carrying one thing; a billet is thick enough to hold a
+ * name proud on its face and a well cut into the same part. See
+ * {@link CONSOLE_BILLET}.
  */
 
 /** The travel every key shares: raised at rest, down on its own shadow when pressed. */
@@ -175,3 +182,88 @@ export const CONSOLE_PLATE =
 export const CONSOLE_READOUT =
   "relative overflow-hidden border border-black/85 bg-[image:var(--readout-bg)] " +
   "shadow-[var(--readout-shadow)]";
+
+/**
+ * A **milled billet**: a solid machined part, chamfered on all four edges.
+ *
+ * The fourth surface family the console has, and it exists because the other
+ * three cannot hold two lines. A {@link CONSOLE_PLATE} is screwed onto a
+ * housing and a {@link CONSOLE_KEY} is pressed into one — both are one face
+ * with one thing on it — where a billet is thick enough to carry a name proud
+ * on its face *and* a well cut into the same part below it. That is what lets
+ * the league card's ledge replace two plates competing for one line.
+ *
+ * The chamfer is the whole of it: bright top, dark underside, lit left, shaded
+ * right, in one shadow list because a shadow list is atomic — a caller that
+ * appended a fifth inset would replace all four. It carries **no radius and no
+ * padding**, for {@link CONSOLE_CARD_SHELL}'s reason: the ledge and a chip are
+ * the same stock at two sizes, and two base `rounded-*` utilities of the same
+ * specificity are decided by Tailwind's emit order rather than by the class
+ * attribute.
+ *
+ * **It carries no `position` either, for the same reason and a sharper one.**
+ * A billet is a positioning context — the grain and the raking specular are
+ * absolutely-positioned children, since CSS cannot spell either as a second
+ * background on an element that already has one — but the ledge is itself
+ * `absolute`, hung off the card's top edge, and `relative` written in here
+ * would be a second base `position` utility competing with it. Which one wins
+ * is Tailwind's emit order; when `relative` did, the ledge dropped 71px into
+ * the card's own padding and sat where the chip rail should be, with `left`
+ * and `right` doing nothing at all. So the caller states its own: `relative`
+ * on a chip, `absolute` on the ledge. `overflow-hidden` stays, being the half
+ * of the contract nothing composes against.
+ */
+export const CONSOLE_BILLET =
+  "overflow-hidden bg-[image:var(--billet-bg)] shadow-[var(--billet-shadow)]";
+
+/**
+ * The shallow well cut into a billet's own face — the standing drops into this.
+ *
+ * Its gradient is the face's **inverted**, and that inversion is the entire
+ * cue: a surface lit from above is bright where it faces the light, and a
+ * recess is bright where it faces away. Read as a token rather than as a second
+ * {@link CONSOLE_WELL}, which is a tray cut into a *panel* and takes the
+ * panel's own key background — there is no key stock inside a billet.
+ */
+export const CONSOLE_MILLED_WELL =
+  "bg-[image:var(--billet-well-bg)] shadow-[var(--billet-well-shadow)]";
+
+/** A chip of the same billet stock: one raised part carrying a pair of bays. */
+export const CONSOLE_CHIP =
+  "bg-[image:var(--chip-bg)] shadow-[var(--chip-shadow)]";
+
+/**
+ * The tray of holes a rail of {@link CONSOLE_CHIP}s sits in.
+ *
+ * Flat rather than a gradient, deliberately: it is a hole, and a hole has no
+ * face to catch a light. That is also what separates it from
+ * {@link CONSOLE_WELL} — a tray holding controls is a surface, a tray holding
+ * chips is the absence of one.
+ */
+export const CONSOLE_CHIP_TRAY =
+  "bg-[color:var(--chip-tray-bg)] shadow-[var(--chip-tray-shadow)]";
+
+/**
+ * The machined header a lit window's words are stamped into, above its glass.
+ *
+ * The unit and the scope live on the **metal** so the glass below holds only
+ * the figure and its meter. That is the hierarchy fix rather than a decoration:
+ * on one surface a caption and a number are peers however they are sized, and
+ * on two the caption is plainly a label for the thing beneath it.
+ */
+export const CONSOLE_WINDOW_LEDGE =
+  "bg-[image:var(--window-ledge-bg)] shadow-[var(--window-ledge-shadow)]";
+
+/**
+ * Lit glass with **no teal in its recess** — {@link CONSOLE_WINDOW}'s other
+ * half, for a window that carries a machined header.
+ *
+ * `--glass-shadow` is `--window-shadow` with the inner accent glow taken out
+ * and a black ring put in. The league card spends teal in exactly two places
+ * now — the format lamp and a lit pip — and a third behind every rank figure is
+ * what made the old tile row read as noise. A window whose words sit on metal
+ * has a ledge to separate it from the housing, so it does not need the lit lip
+ * `--window-shadow` closes that gap with either.
+ */
+export const CONSOLE_GLASS =
+  "relative overflow-hidden bg-[image:var(--readout-bg)] shadow-[var(--glass-shadow)]";
