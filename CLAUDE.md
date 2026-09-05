@@ -5449,6 +5449,228 @@ tighter 14px gutter; and whether the four-bay rack holds a reader's own stored
 selection as legibly as the fixtures', since the bay's short unit is the *value*
 axis and two KTC bays on one board read alike there.
 
+## The league card's machined billet
+
+A polish pass on `/manager`'s league card alone — the same league, the same
+standing, the same settings and the same four ranks, recomposed into three
+strata: a **milled billet ledge** carrying identity and standing, a **chip
+rail** carrying the settings as four paired bays, and four **glass rank
+windows** whose words sit on metal. Applied from a design handoff, option `6a`,
+with its `3a` phone arm. Nothing on the wire moved: no route, no query, no
+contract type, no payload field, no migration.
+
+**Four problems drove it**, and each has a measurable fix rather than a taste:
+labels too small and too tracked; ladder pips uncountable, the unlit one having
+been painted near-black on a dark ground at about 1.15:1; every field looking
+equal; and seven settings crammed into one wrapping glass readout.
+
+### The billet is a fourth surface family
+
+The console had three — a plate screwed onto a housing, a key pressed into one,
+a recess cut into either — and every one of them is **one face carrying one
+thing**. That is exactly what the header could not be. Two plates in a row were
+two objects competing for a line: the reading plate kept its width and the
+league name, which is the card's whole subject, truncated into whatever was
+left. At a phone's width that was nine characters, and `StandingPlate` had
+already dropped the points rank to get it there.
+
+A **billet** is solid stock chamfered on all four edges — bright top, dark
+underside, lit left, shaded right — and it is thick enough to hold a name proud
+on its face *and* a well cut into the same part beneath it. So the name has the
+full line and stops truncating (274px against 98 at 390, measured), the standing
+drops into the well, and **all three figures come back at every width**, the one
+that was dropped included. Depth carries the hierarchy where a second pill used
+to.
+
+`CONSOLE_BILLET`, `CONSOLE_MILLED_WELL`, `CONSOLE_CHIP`, `CONSOLE_CHIP_TRAY`,
+`CONSOLE_WINDOW_LEDGE` and `CONSOLE_GLASS` are the class strings;
+`CardLedge`, `LedgeName`, `LedgeWell`, `LedgeBay`, `LedgeFigure`,
+`BilletFinish` and `MilledHairline` are the components, and they live in
+`card-plate.tsx` beside the plates for the reason the plates live together — the
+day a second card takes the ledge, it takes this one. **The other three cards
+keep the two-plate row**: `/trades`, `/lineupchecker` and `/picktracker` are
+pages this bundle does not design, and restyling their header in place would be
+the redesign `ConsoleGround` was already reverted out of `layout.tsx` for.
+
+**`CONSOLE_BILLET` carries no `position`, and that is the emit-order trap twice
+over.** It is a positioning context — the grain and the raking specular are
+absolutely-positioned children, since CSS cannot spell either as a second
+background on an element that already has one — but the *ledge* is `absolute`,
+and `relative` written into the constant is a second base `position` utility of
+the same specificity. Tailwind's emit order decides, and it decided for
+`relative`: the ledge dropped **71px** into the card's padding, sat where the
+chip rail belongs, and `left`/`right` did nothing at all. So the caller states
+its own position, the way `CONSOLE_KEY_PILL` splits shape from colour and
+`CONSOLE_CARD_SHELL` splits housing from padding.
+
+**The ledge's insets are the card's own gutter at each width** — `left-3.5`
+below `sm`, `left-4` above — because an absolutely positioned child resolves
+`left` against the *padding box*, its border's inner edge, while everything
+under it starts one padding in. Written `left-0` the ledge would overhang the
+chip rail by exactly the card's gutter, and the standing bays are meant to share
+that rail's left margin.
+
+**The card's top padding is two numbers, because the ledge is two heights.** A
+league whose rosters have not been read has no standing to cut a well for, so
+its ledge is the name line alone — 53px against 106 at desktop, 45 against 93 at
+a phone — and under the taller card's padding it floated over 76px of nothing.
+Both arms are the measured ledge less its overhang plus the same 14px of breath,
+so the accent rule sits the same distance below the ledge either way. The card
+cannot ask the ledge, which is out of flow; it asks the same `standingFields`
+the well is built from, so the two cannot disagree about which ledge is drawn.
+
+### The chip rail, and the flex property that made it silent
+
+`LeagueChipRail` is the settings as **four paired chips in a recessed tray**,
+and it is a second *arrangement* rather than a second derivation: it and
+`LeagueConfigWindow` both read `readLeagueConfig`, so a league described one way
+on `/manager` cannot be described another on `/trades`, and neither can drift
+from the Filters dialog that narrows by the same rules. The window stays as it
+is, being what the other two cards draw.
+
+**The pairing answers four questions** — what game, what scale, what QB shape,
+what TE shape — and it is what guarantees the thing the wrapping window could
+only ask for: **TE and its premium can never split across lines**, because they
+are two bays of one part. Seven readings loose in a row broke wherever the width
+ran out, which is what put `TE prem` on a line of its own below `lg` with
+nothing saying which ladder it belonged to.
+
+**`flex-auto`, never `flex-1`, and the difference is the whole layout.**
+Tailwind spells `flex-1` as `flex: 1 1 0%`, and a wrapping flex container breaks
+lines on each item's *hypothetical* size: at basis 0 every chip claimed zero, so
+the rail never wrapped at 390 — all four squeezed onto one line at **76px around
+120px of content**, and every bay clipped its own label to three characters
+inside the chip's `overflow-hidden`, with `documentElement.scrollWidth` still
+reading 390 and nothing on screen saying so. `flex-auto` is `flex: 1 1 auto`,
+which breaks on content and then grows into what is left — one row of four at a
+card's full width, two rows of two at a phone's, with no breakpoint involved in
+either.
+
+**The unlit pip is the readability fix, and it is a light machined slot rather
+than a dark hole.** `--pip-unlit-bg` is one step lighter than the handoff's
+`#8ea0a5`, and the step is a measured guarantee: against the chip face's top
+stop that value is 2.87:1, under the 3:1 a graphical element owes, and a 15px
+pip inside a chip padded 8px does reach that band. `#94a6ab` is 3.09:1 there and
+4.2–4.9:1 where the pip actually sits.
+
+**The Superflex tag survives as a fifth chip**, and only in the one case the
+ladders cannot state — `QB+SF ≥ 2` with no `SUPER_FLEX`, a league that prices
+like superflex and looks, on two ladders, like one that simply starts two
+quarterbacks. It is a chip rather than a third bay inside one of the four
+because every other chip is a *pair* and a lone third bay breaks the grammar a
+reader counts by, and because appending it to the TE chip is exactly the split
+the pairing exists to prevent. Whether the shape exists in this corpus is still
+the open question `LeagueConfigWindow` records; narrowing rather than deleting
+is still the arm that is correct under both answers.
+
+### The rank windows
+
+**Both words moved onto a machined header above the glass**, which is the
+hierarchy fix rather than a decoration: on one surface a caption and a number
+are peers however they are sized, and on two the caption is plainly a label for
+the thing beneath it. The glass holds the figure and its meter alone. Below `sm`
+the header stacks — an equal quarter of a phone-width card is ~79px and the two
+words cannot share a line in it.
+
+**The ordinal's suffix is demoted** so the digit reads first — a size down, a
+weight lighter, 55% opacity — which needs two elements for one string.
+`ordinalParts` in `shared/format.ts` is that split and `ordinal` composes it
+back, so the 11th–13th rule has exactly one spelling: a second copy beside the
+window is a card reading "11st" on the one league where anybody would notice.
+
+**The meter is a 2px hairline with no glow on its fill**, running the window's
+full width. It was a 4px bar throwing light in its own hue and capped at 88px —
+the cap existed to stop it reading as a progress bar being filled, which a
+hairline does not do. On one card the glow read as an instrument; on a hundred,
+four to a card, it was the noisiest thing on the page.
+
+**Teal is spent in two places and no more** — the format lamp and a lit pip. The
+card's accent underglow, the graticule floor, `--card-specular` and the windows'
+own inner teal recess all went with this pass; `--glass-shadow` is
+`--window-shadow` with that glow taken out and a black ring put in. What is left
+of the overlays is a brushed finish, the sheen and the edge light.
+
+### Tokens, contrast, and the light half
+
+Every new material value is a token with a **derived light counterpart**, on
+this file's own rule that a bevel is a stack and the inverse is a different
+stack rather than a different alpha. Three of them are the light scheme turned
+over rather than dimmed, and each says so where it is defined: the billet's face
+goes near-white because a part standing on the light housing is the surface
+catching the light; `--glass-meter-track` is light on near-black glass and dark
+on pale; `--billet-name-shadow` is a dark emboss under pale ink and a light one
+under dark.
+
+**Ink on metal is its own family** (`--billet-name`, `-figure`, `-unit`,
+`-label`, `-scope`), not the `--readout-*` trio, which is type on lit glass — a
+label stamped into a machined face drawn in the readout's mint would say the
+ledge was a window. Every level was measured against the endpoints of each face
+it lands on rather than against an average, since a billet runs three stops top
+to bottom. `--billet-label` is 0.76 rather than the handoff's 0.72 for that
+reason: the design measured its bay labels in the *well* (5.3–6.5:1 at 0.72,
+which is the 6.1–6.9 it reports), but the chip rail draws the same label on the
+chip's own face, whose top stop takes it to 4.36:1. At 0.76 every band of every
+face clears 4.5:1 — chips 4.7–7.8, the well 5.7–7.1.
+
+**`--card-freeze-top` grew from 4.625rem to 5.875rem, and it is the ledge that
+has to clear the rack rather than the housing.** A plate hung 13px above the
+card's top edge; the ledge hangs 20, and it carries the league's name — so
+parked at the old offset the name sat 8px *behind* the pinned rack, which is
+precisely the reading the freeze exists to keep on screen.
+
+**The list's gap is the overhang, not a rhythm.** At the 18px that row carried,
+the ledge landed *inside* the card above it — 2px of one league's name over
+another league's foot. 28px is the overhang plus the 8 of breath the plate row
+had to itself.
+
+`--fs-14`, which the handoff lists as NEW, already existed.
+
+### Verified
+
+Rendered through a temporary `/preview` route against the real components,
+tokens and Tailwind build — the method the console-card, shares, rack and
+timeline passes established, since no database is reachable from where this was
+built — then driven over CDP at 1280 and 390 in both schemes and deleted. The
+mechanics are unchanged: `--no-proxy-server`, and `localhost` rather than
+`127.0.0.1`. The fixtures are five cards — a dynasty superflex on four ROS and
+capital columns, the same league on four KeepTradeCut columns including two
+forced boards, a 14-team best-ball redraft with nothing ranked, a league with
+two bare `QB` slots and no `SUPER_FLEX`, and one whose `roster_positions`,
+`settings`, `scoring_settings` and rosters were never synced.
+
+**One mechanic is new and worth writing down: headless Chrome reports
+`pointer: none` and `hover: none`, so every `pointer-fine:` and `hover:` rule on
+this card is inert in a default CDP run** — which means the screenshots are the
+*coarse-pointer* card unless the flag is set. Launching with
+`--blink-settings=availablePointerTypes=4,primaryPointerType=4,availableHoverTypes=2,primaryHoverType=2`
+turns both on (4 is `FINE`, 2 is `HOVER`). Both runs are worth having: the
+unforced one is the phone arm, the forced one is the only way to see the depth
+at all.
+
+Every arm landed. The ledge hangs 19px above the card and insets 17 at 1280, 17
+and 15 at 390 — the design's 20/16 and 18/14 less the card's own 1px border,
+which is what `getBoundingClientRect` includes and `left` does not. The two-line
+ledge measures 106px at 1280 and 93 at 390 and the one-line ledge 53 and 45,
+with the accent rule **23px and 22px below the ledge in every one of the four
+cases** after the conditional padding. The chip rail is one row of four at 1280
+and two rows of two at 390 — chips at x=35/225 and x=35/185, 46px tall, with
+`TE`/`TE prem` one part — and the Superflex fixture draws five. Nothing is
+clipped at either width in either scheme but the long fixture league name, which
+truncates at 274px of 376. Hover gave `translateZ(30px) rotateX(0)`, the border
+at `active/0.45` and the rule 36px → 92px; under
+`prefers-reduced-motion: reduce` the sheen's transition computes to `none` and
+`.lab-card-3d` clears the transform. `documentElement.scrollWidth` equals the
+viewport at both widths in both schemes, with one `<h1>` and **no console output
+of any kind**. 1,207 unit tests pass; `lint`, `typecheck` and `build` are clean.
+
+**Not verified against real data**, which is the gap to close first: every number
+above is a fixture. Three things a render cannot check — whether a real account's
+league names now set acceptably in the ledge's full line, which is the change's
+whole claim; whether the freeze reads on a 113-league page, where the sticky
+ledge is one per card over a real twelve-team browser; and whether any league in
+the corpus actually starts two bare `QB` slots, which is what decides if the
+fifth chip ever renders.
+
 ## The console card
 
 One card carries a league across three tools — `/trades`, `/manager` and

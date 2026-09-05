@@ -1,6 +1,8 @@
+import type { ReactNode } from "react";
+
 import type { ManagerLeague } from "@/shared/contract";
 
-import { CONSOLE_WINDOW } from "../console-chrome";
+import { CONSOLE_CHIP, CONSOLE_CHIP_TRAY, CONSOLE_WINDOW } from "../console-chrome";
 import {
   isBestBall,
   leagueType,
@@ -8,7 +10,13 @@ import {
   slotCount,
   TYPE_OPTIONS,
 } from "../league-filters";
-import { Scanlines } from "./card-plate";
+import {
+  BilletFinish,
+  LedgeBay,
+  LedgeFigure,
+  MilledHairline,
+  Scanlines,
+} from "./card-plate";
 
 /**
  * What game this league is playing, as one lit window across the card.
@@ -95,6 +103,51 @@ const TYPE_LABELS = new Map(
   ]),
 );
 
+/**
+ * Everything either reading of a league's configuration is made of, derived
+ * once.
+ *
+ * The window and the chip rail below are two arrangements of one set of facts,
+ * and the module's whole promise is that no rule here is spelled twice — so the
+ * reading of it is not spelled twice either. A second copy would be a second
+ * chance to forget that Sleeper omits `type` on a redraft league, or that a
+ * `total_rosters` of 0 is a row stored before the league answered, and the
+ * symptom would be a card describing one game on `/manager` and another on
+ * `/trades`.
+ */
+function readLeagueConfig(league: ManagerLeague) {
+  return {
+    format: TYPE_LABELS.get(leagueType(league)) ?? "Redraft",
+    lineup: isBestBall(league) ? "Best ball" : "Managed",
+    // Two exact groups rather than the union, so both readings *state* the
+    // lineup's QB shape instead of naming it. `qbEligible` is still read, for
+    // the one case two ladders cannot state — see the Superflex tag.
+    qb: slotCount(league, "QB"),
+    sf: slotCount(league, "SUPER_FLEX"),
+    qbEligible: slotCount(league, "QB+SF"),
+    te: slotCount(league, "TE"),
+    starters: slotCount(league, "STARTERS"),
+    teams: league.total_rosters > 0 ? league.total_rosters : null,
+    tePremium: scoringValue(league, "bonus_rec_te"),
+  };
+}
+
+/**
+ * The one shape two ladders cannot state: a league starting two bare `QB` slots
+ * and no `SUPER_FLEX` at all.
+ *
+ * It prices exactly like a superflex league and looks, on the ladders, like a
+ * league that simply starts two quarterbacks — so both readings carry a tag
+ * narrowed to precisely that disagreement, and neither draws one otherwise.
+ */
+function isUnnamedSuperflex(config: ReturnType<typeof readLeagueConfig>): boolean {
+  return (
+    config.qbEligible !== null &&
+    config.qbEligible >= 2 &&
+    (config.sf ?? 0) < 1
+  );
+}
+
 export function LeagueConfigWindow({
   league,
   className = "",
@@ -103,16 +156,8 @@ export function LeagueConfigWindow({
   /** Placement and plane — see the module note. */
   className?: string;
 }) {
-  // Two exact groups rather than the union, so the window *states* the lineup's
-  // QB shape instead of naming it. `qbEligible` is still read, for the one case
-  // two ladders cannot state — see the tag below.
-  const qb = slotCount(league, "QB");
-  const sf = slotCount(league, "SUPER_FLEX");
-  const qbEligible = slotCount(league, "QB+SF");
-  const te = slotCount(league, "TE");
-  const starters = slotCount(league, "STARTERS");
-  const teams = league.total_rosters > 0 ? league.total_rosters : null;
-  const tePremium = scoringValue(league, "bonus_rec_te");
+  const config = readLeagueConfig(league);
+  const { format, lineup, qb, sf, te, starters, teams, tePremium } = config;
 
   return (
     <div
@@ -122,12 +167,12 @@ export function LeagueConfigWindow({
 
       {/* What game. */}
       <span className="relative inline-flex flex-nowrap items-center gap-[0.375rem] whitespace-nowrap">
-        <Tag lit>{TYPE_LABELS.get(leagueType(league)) ?? "Redraft"}</Tag>
+        <Tag lit>{format}</Tag>
         {/* The lineup mode is stated either way — "Managed" is a fact about the
             league, and a tag that appeared only for best ball would leave the
             reader to infer the common case from an absence. It is unlit because
             it is the one of the three that is usually the default. */}
-        <Tag>{isBestBall(league) ? "Best ball" : "Managed"}</Tag>
+        <Tag>{lineup}</Tag>
         {/*
           The Superflex tag used to appear on every league the `QB+SF ≥ 2` rule
           matched, and the two ladders below say that outright for the ordinary
@@ -146,9 +191,7 @@ export function LeagueConfigWindow({
           the reader is not left to infer superflex from two ladders that never
           name it. It stays until the query is run.
         */}
-        {qbEligible !== null && qbEligible >= 2 && (sf ?? 0) < 1 && (
-          <Tag lit>Superflex</Tag>
-        )}
+        {isUnnamedSuperflex(config) && <Tag lit>Superflex</Tag>}
       </span>
 
       <Divider />
@@ -275,6 +318,200 @@ function Ladder({ label, slots }: { label: string; slots: number | null }) {
       <span className="font-mono text-[length:var(--fs-12)] tabular-nums text-readout-line">
         {slots ?? "—"}
       </span>
+    </span>
+  );
+}
+
+/**
+ * The same facts as {@link LeagueConfigWindow}, as **four paired chips in a
+ * recessed tray** — the manager league card's settings rail.
+ *
+ * A second arrangement rather than a second derivation: both read
+ * {@link readLeagueConfig}, so a league described one way here cannot be
+ * described another in the window, and neither can drift from the Filters
+ * dialog that narrows by the same rules.
+ *
+ * **The pairing is the design, and it is not arbitrary.** Seven readings loose
+ * in one wide window wrapped wherever the row ran out — which is what put `TE
+ * prem` on a line of its own below `lg` and left the reader to work out which
+ * ladder it belonged to. Paired, each chip answers one question — *what game*,
+ * *what scale*, *what QB shape*, *what TE shape* — and the grouping guarantees
+ * the thing the window could only ask for: **TE and its premium can never split
+ * across lines**, because they are two bays of one part.
+ *
+ * **`flex-1 basis-auto`, never `basis-0`**, and the difference is what makes
+ * one rule serve both widths. A wrapping flex container breaks lines on each
+ * item's *hypothetical* size — its content — and only then distributes the
+ * slack within a line, so at a card's full width all four sit on one row and
+ * grow into it, while at a phone's the four content widths exceed the tray and
+ * it breaks two and two on its own. With `basis-0` every chip would be equally
+ * sized and nothing would ever wrap: four chips would shrink to a quarter of
+ * 334px and `Starters` would clip. No breakpoint is involved in either.
+ *
+ * **The tray is a hole and the chips are parts**, which is the whole of why
+ * this reads at a glance where a single wide window did not: a reader counts
+ * four objects before reading a word of them. See {@link CONSOLE_CHIP_TRAY}.
+ *
+ * Placement and plane are the caller's, for {@link LeagueConfigWindow}'s reason.
+ */
+export function LeagueChipRail({
+  league,
+  className = "",
+}: {
+  league: ManagerLeague;
+  /** Placement and plane — see {@link LeagueConfigWindow}. */
+  className?: string;
+}) {
+  const config = readLeagueConfig(league);
+  const { format, lineup, qb, sf, te, starters, teams, tePremium } = config;
+
+  return (
+    <div
+      className={`${CONSOLE_CHIP_TRAY} flex flex-wrap items-stretch gap-1.5 rounded-[0.8125rem] p-1.5 ${className}`}
+    >
+      <Chip>
+        <LedgeBay label="Format">
+          <Lamp />
+          <LedgeFigure>{format}</LedgeFigure>
+        </LedgeBay>
+        <MilledHairline />
+        {/* Stated either way: "Managed" is a fact about the league, and a bay
+            that appeared only for best ball would leave the reader to infer the
+            common case from an absence. */}
+        <LedgeBay label="Lineup">
+          <LedgeFigure>{lineup}</LedgeFigure>
+        </LedgeBay>
+      </Chip>
+
+      <Chip>
+        <LedgeBay label="Teams">
+          <LedgeFigure>{teams ?? "—"}</LedgeFigure>
+        </LedgeBay>
+        <MilledHairline />
+        <LedgeBay label="Starters">
+          <LedgeFigure>{starters ?? "—"}</LedgeFigure>
+        </LedgeBay>
+      </Chip>
+
+      {/* `SF 0` on a one-QB league is the statement to want, and the two-pip
+          floor is what makes it one: none of the one this board could have. A
+          null count still draws no ladder at all — see {@link ChipLadder}. */}
+      <Chip>
+        <LedgeBay label="QB">
+          <ChipLadder slots={qb} />
+          <LedgeFigure>{qb ?? "—"}</LedgeFigure>
+        </LedgeBay>
+        <MilledHairline />
+        <LedgeBay label="SF">
+          <ChipLadder slots={sf} />
+          <LedgeFigure>{sf ?? "—"}</LedgeFigure>
+        </LedgeBay>
+      </Chip>
+
+      <Chip>
+        <LedgeBay label="TE">
+          <ChipLadder slots={te} />
+          <LedgeFigure>{te ?? "—"}</LedgeFigure>
+        </LedgeBay>
+        <MilledHairline />
+        <LedgeBay label="TE prem">
+          <LedgeFigure>{tePremium ?? "—"}</LedgeFigure>
+        </LedgeBay>
+      </Chip>
+
+      {/*
+        The one reading the ladders cannot make, kept rather than dropped with
+        the tags — see {@link isUnnamedSuperflex}. It is a fifth chip rather
+        than a bay inside one of the four, because every other chip is a *pair*
+        and a lone third bay would break the grammar a reader counts by; and
+        because appending it to the TE chip is exactly the split that pairing
+        exists to prevent. On the corpus this may never render at all, which is
+        the arm that is correct under both answers to a question no render can
+        settle.
+      */}
+      {isUnnamedSuperflex(config) && (
+        <Chip>
+          <LedgeBay label="Lineup">
+            <Lamp />
+            <LedgeFigure>Superflex</LedgeFigure>
+          </LedgeBay>
+        </Chip>
+      )}
+    </div>
+  );
+}
+
+/**
+ * One raised part of the rail, carrying a pair of bays.
+ *
+ * The same billet stock as the ledge above it, finish and all — a rail whose
+ * chips were cut from different metal is the thing {@link BilletFinish} exists
+ * to prevent. `min-h` is the phone's: two chips on a row have to agree on a
+ * height whatever their bays contain, and a ladder bay is taller than a plain
+ * one.
+ */
+function Chip({ children }: { children: ReactNode }) {
+  return (
+    <span
+      // **`flex-auto`, never `flex-1`.** Tailwind spells `flex-1` as
+      // `flex: 1 1 0%`, which is the `basis-0` case the component note above
+      // rules out — and the failure is silent: at 390 the four chips all
+      // claimed a zero hypothetical size, so the rail never wrapped, every one
+      // of them squeezed to 76px around 120px of content, and each bay clipped
+      // its own label to three characters inside the chip's `overflow-hidden`.
+      // `flex-auto` is `flex: 1 1 auto`, which is what lets a line break on
+      // content and then grow into what is left.
+      className={`${CONSOLE_CHIP} relative flex min-h-[2.625rem] min-w-0 flex-auto items-center justify-center gap-2 overflow-hidden rounded-[0.5625rem] px-2 py-[0.3125rem] sm:min-h-0 sm:gap-2.5 sm:px-3 sm:py-2`}
+    >
+      <BilletFinish />
+      {children}
+    </span>
+  );
+}
+
+/** The lit indicator on the format bay — one of the card's two teal moments. */
+function Lamp() {
+  return (
+    <span
+      aria-hidden
+      className="block h-[0.3125rem] w-[0.3125rem] shrink-0 rounded-full bg-active shadow-[0_0_6px_var(--accent-glow)]"
+    />
+  );
+}
+
+/**
+ * A slot count as countable pips, milled into a chip.
+ *
+ * **Two pips is the floor**, which is what makes a superflex league visibly
+ * different from a one-QB one at a glance: a single lit dot reads as "one", and
+ * one of two reads as "one of the two this board could have". Past two the
+ * ladder is exact, so a three-QB league draws three lit.
+ *
+ * A **null** count draws no ladder at all. An empty two-pip ladder is a claim
+ * that the league starts none of these, which is a different statement from not
+ * knowing — the same rule the figure beside it draws its em dash by.
+ *
+ * The unlit pip is the readability fix this whole pass exists for: it used to
+ * be a near-black hole on a dark ground at about 1.15:1, and it is a **light
+ * machined slot** now. See `--pip-unlit-bg`.
+ */
+function ChipLadder({ slots }: { slots: number | null }) {
+  if (slots === null) return null;
+  const total = Math.max(2, slots);
+
+  return (
+    <span aria-hidden className="inline-flex shrink-0 items-center gap-[2px]">
+      {Array.from({ length: total }, (_, i) => (
+        <span
+          key={i}
+          className={
+            "block h-[15px] w-[3px] rounded-[1px] " +
+            (i < slots
+              ? "bg-[image:var(--pip-lit-bg)] shadow-[var(--pip-lit-shadow)]"
+              : "bg-[color:var(--pip-unlit-bg)] shadow-[var(--pip-unlit-shadow)]")
+          }
+        />
+      ))}
     </span>
   );
 }

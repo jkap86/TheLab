@@ -1,7 +1,11 @@
 import type { ReactNode } from "react";
 
 import { Avatar } from "../avatar";
-import { CONSOLE_PLATE } from "../console-chrome";
+import {
+  CONSOLE_BILLET,
+  CONSOLE_MILLED_WELL,
+  CONSOLE_PLATE,
+} from "../console-chrome";
 
 /**
  * The plates that straddle a console card's top edge.
@@ -231,6 +235,180 @@ export function Scanlines() {
     <span
       aria-hidden
       className="pointer-events-none absolute inset-0 bg-[image:var(--readout-scanlines)]"
+    />
+  );
+}
+
+/**
+ * The **billet ledge**: one milled part straddling a card's top edge, carrying
+ * the card's subject on its face and its standing in a well cut below.
+ *
+ * This is the manager league card's header, and it replaces {@link CardPlateRow}
+ * there rather than in general — the trade, lineup-checker and picktracker cards
+ * still take the two-plate row, which the design bundle behind this does not
+ * cover. Both live here for the same reason either one does: a card header is a
+ * shared object, and the day a second card takes the ledge it takes this one.
+ *
+ * **What the ledge fixes is a line, not a surface.** Two plates in one row are
+ * two things competing for the same width: the reading plate keeps its own and
+ * the league name — the card's whole subject — truncates into whatever is left,
+ * which at a phone's width was nine characters and had already cost the points
+ * rank its place on the plate opposite to get there. Stacked into one part the
+ * name has the full line and stops truncating at all, and the standing sits
+ * under it in a well, so **depth carries the hierarchy where a second pill used
+ * to**.
+ *
+ * A billet rather than a plate because a plate cannot hold two lines: see
+ * {@link CONSOLE_BILLET}. The grain and the raking specular are what make it
+ * read as milled stock rather than as a gradient, and they are children rather
+ * than a second background for `Scanlines`' reason — CSS cannot spell a second
+ * background on an element that already has one.
+ *
+ * **The insets match the card's own horizontal padding at each width**, and
+ * that is alignment rather than taste: the ledge is absolutely positioned, so
+ * `left`/`right` resolve against the card's *padding box* — its border's inner
+ * edge — while everything under it starts one padding in. Written as `0` the
+ * ledge would overhang the chip rail below by exactly the card's gutter, and
+ * the standing bays inside it are meant to share the rail's left margin.
+ */
+export function CardLedge({ children }: { children: ReactNode }) {
+  return (
+    <div
+      className={`${CONSOLE_BILLET} absolute -top-[18px] left-3.5 right-3.5 rounded-[0.8125rem] px-2 py-[0.4375rem] sm:-top-5 sm:left-4 sm:right-4 sm:p-2`}
+    >
+      <BilletFinish />
+      {children}
+    </div>
+  );
+}
+
+/**
+ * The two overlays that make a billet read as machined: a horizontal brushed
+ * grain and one raking specular across it.
+ *
+ * Exported because a chip is the same stock — see the chip rail — and two
+ * spellings of a finish is a rail whose parts are visibly cut from different
+ * metal. The grain is horizontal where the card's own is diagonal, which is
+ * what says the ledge is a separate part bolted on rather than a region of the
+ * housing behind it.
+ */
+export function BilletFinish() {
+  return (
+    <>
+      <span
+        aria-hidden
+        className="pointer-events-none absolute inset-0 bg-[image:var(--billet-grain)]"
+      />
+      <span
+        aria-hidden
+        className="pointer-events-none absolute inset-0 bg-[image:var(--billet-specular)]"
+      />
+    </>
+  );
+}
+
+/**
+ * The ledge's first line: the league's mark, then its name, proud on the face.
+ *
+ * **The name has the line to itself**, which is the whole point of the ledge —
+ * it is `flex-1 min-w-0` against a fixed mark, so the only thing that can take
+ * width from it is the mark, and the truncation it still declares is a
+ * hundred-character league rather than an ordinary one.
+ *
+ * It is `--font-display` where the rest of a card is mono, which the console
+ * card pass deliberately made uniform and this deliberately breaks: the labels
+ * around it stay mono, so the two families are the card's own distinction
+ * between a caption stamped into metal and the thing it names.
+ */
+export function LedgeName({
+  name,
+  avatarUrl,
+}: {
+  name: string;
+  avatarUrl: string | null | undefined;
+}) {
+  return (
+    <span className="relative flex min-w-0 items-center gap-2.5 px-1 pb-1.5 pt-px sm:gap-[0.6875rem]">
+      <LeagueMark name={name} url={avatarUrl} />
+      <span className="min-w-0 flex-1 truncate font-display text-[length:var(--fs-14)] font-medium uppercase tracking-[0.1em] text-[color:var(--billet-name)] [text-shadow:var(--billet-name-shadow)] sm:text-[length:var(--fs-17)] sm:tracking-[0.12em]">
+        {name}
+      </span>
+    </span>
+  );
+}
+
+/**
+ * The ledge's second line: a shallow well cut into the same part.
+ *
+ * Its gradient is the face's inverted, which is the entire cue that it is a
+ * recess rather than a second face — see {@link CONSOLE_MILLED_WELL}. The bays
+ * inside it are **left-aligned**, sharing the name's own left margin and the
+ * chip rail's below: right-aligned they open a dead gap through the middle of
+ * the ledge, which is the variant the design rejected.
+ */
+export function LedgeWell({ children }: { children: ReactNode }) {
+  return (
+    <span
+      className={`${CONSOLE_MILLED_WELL} relative flex items-stretch gap-3 rounded-lg px-2 py-1.5 sm:gap-[0.9375rem] sm:px-[0.6875rem] sm:py-[0.375rem]`}
+    >
+      {children}
+    </span>
+  );
+}
+
+/**
+ * One bay of a milled part: a stamped label over its figure.
+ *
+ * The same object in the ledge's well and in a chip on the rail below, which is
+ * why it lives here rather than in either — two spellings of a bay is a card
+ * whose standing and whose settings are set in different type.
+ *
+ * `children` rather than a `value` string because a bay's figure is not always
+ * text: the format bay leads with a lit lamp and a slot bay with its ladder,
+ * and both sit on the figure's own baseline.
+ */
+export function LedgeBay({
+  label,
+  children,
+}: {
+  label: string;
+  children: ReactNode;
+}) {
+  return (
+    <span className="flex min-w-0 flex-col justify-center gap-px sm:gap-[3px]">
+      <span className="whitespace-nowrap font-mono text-[length:var(--fs-9)] uppercase tracking-[0.11em] text-[color:var(--billet-label)] sm:text-[length:var(--fs-10)] sm:tracking-[0.13em]">
+        {label}
+      </span>
+      <span className="inline-flex items-center gap-[0.375rem] sm:gap-[0.4375rem]">
+        {children}
+      </span>
+    </span>
+  );
+}
+
+/** A bay's figure, on the one type every figure milled into this card shares. */
+export function LedgeFigure({ children }: { children: ReactNode }) {
+  return (
+    <span className="whitespace-nowrap font-display text-[length:var(--fs-15)] font-medium leading-[1.15] tracking-[-0.005em] tabular-nums text-[color:var(--billet-figure)] sm:text-[length:var(--fs-16)]">
+      {children}
+    </span>
+  );
+}
+
+/**
+ * The cut between two bays of **one** part.
+ *
+ * Shallower than {@link PlateDivider}, which uses `--groove` — a groove is the
+ * channel between two parts of a console, and there is only one part here. It
+ * is a dark line with the light catching its far lip, and `self-stretch` is
+ * what makes it a cut rather than a dash: it runs the bay's own height, inset a
+ * few pixels top and bottom so it never touches the part's chamfer.
+ */
+export function MilledHairline() {
+  return (
+    <span
+      aria-hidden
+      className="my-[0.1875rem] w-px shrink-0 self-stretch bg-[color:var(--milled-hairline)] shadow-[var(--milled-hairline-highlight)]"
     />
   );
 }

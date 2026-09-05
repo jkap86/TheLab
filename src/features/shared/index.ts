@@ -11,14 +11,19 @@ export { storeAccount, useStoredAccount } from "./account";
 export { apiFetch, isAbortError } from "./api";
 export { Avatar } from "./avatar";
 export {
+  CONSOLE_BILLET,
   CONSOLE_CARD,
   CONSOLE_CARD_SHELL,
+  CONSOLE_CHIP,
+  CONSOLE_CHIP_TRAY,
+  CONSOLE_GLASS,
   CONSOLE_HOUSING,
   CONSOLE_HOUSING_INSET,
   CONSOLE_KEY,
   CONSOLE_KEY_BLOCK,
   CONSOLE_KEY_PILL,
   CONSOLE_METAL,
+  CONSOLE_MILLED_WELL,
   CONSOLE_PLATE,
   CONSOLE_READOUT,
   CONSOLE_TRACK,
@@ -26,6 +31,7 @@ export {
   CONSOLE_WELL,
   CONSOLE_WINDOW,
   CONSOLE_WINDOW_KEY,
+  CONSOLE_WINDOW_LEDGE,
   PLATE_KEY,
   PLATE_KEY_CHROME,
 } from "./console-chrome";
@@ -39,7 +45,7 @@ export {
   useTradeValueBasis,
 } from "./trade-value-basis";
 export { KtcBoardKeys } from "./ui/ktc-board-keys";
-export { formatInstantDate, formatInstantTime, ordinal } from "./format";
+export { formatInstantDate, formatInstantTime, ordinal, ordinalParts } from "./format";
 // The rank ramp and its two readings. The trades board joined the manager
 // card as a reader when its asset values gained a place in their own league:
 // a bar and a hue drawn from one rank on two pages must come off one module.
@@ -110,11 +116,21 @@ export { useManagerLeagues } from "./use-manager-leagues";
 export type { ManagerLeaguesState } from "./use-manager-leagues";
 export { ThemeToggle } from "./theme-toggle";
 export { ManagerPlate } from "./ui/manager-plate";
-// The console card's header, shared by all three league cards — see the module.
+// The console card's header, shared by all four league cards — see the module.
+// `CardLedge` and the bays under it are the manager card's own arrangement of
+// the same header, and live beside the plates for the same reason the plates
+// live together: the day a second card takes the ledge it takes this one.
 export {
+  BilletFinish,
+  CardLedge,
   CardPlateRow,
   CardRule,
   LeaguePlate,
+  LedgeBay,
+  LedgeFigure,
+  LedgeName,
+  LedgeWell,
+  MilledHairline,
   PlateDivider,
   PlateField,
   ReadingPlate,
@@ -128,5 +144,5 @@ export { DraftPicks } from "./ui/draft-picks";
 export { LeagueTeams } from "./ui/league-teams";
 // What game a league is playing, as one lit window — read by the manager card
 // and the trade card, which is what brought it here from `features/manager`.
-export { LeagueConfigWindow } from "./ui/league-config-window";
+export { LeagueChipRail, LeagueConfigWindow } from "./ui/league-config-window";
 export { PageShell } from "./ui/page-shell";

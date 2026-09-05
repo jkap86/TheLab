@@ -156,8 +156,17 @@
    * One value at every width. The card is one per row and its housing is the
    * same height on a phone as on a desktop, so a per-arm offset would be three
    * spellings of one gap.
+   *
+   * **It is the ledge that has to clear the rack, not the housing**, which is
+   * why this grew from 4.625rem when the manager card's two plates became one
+   * billet. A plate hung 13px above the card's top edge; the ledge hangs 20px,
+   * and it carries the league's name — so parked at the old offset the name
+   * slid 8px *behind* the rack, which is precisely the reading the freeze
+   * exists to keep on screen. 94px is the rack's 62px plus the ledge's 20 plus
+   * the same 12 of breath, and it still clears at the two narrower arms, where
+   * the rack is shorter and the ledge hangs 18.
    */
-  --card-freeze-top: 4.625rem;
+  --card-freeze-top: 5.875rem;
 
   /* ---- Instrument chrome (dark) ------------------------------------ */
 
@@ -357,6 +366,10 @@
   --card-lift-hover: 0 38px 70px -22px rgba(0, 0, 0, 0.95);
   --card-halo-hover: 0 0 70px -14px rgba(0, 255, 229, 0.45);
   --card-sheen: linear-gradient(to right, transparent, rgba(255, 255, 255, 0.14), transparent);
+  /* The housing's own brushed finish, raked across it. Diagonal where a billet
+     bolted to it is grained horizontally — two parts of one machine are not cut
+     on the same pass, and that difference is what says the ledge is a part. */
+  --card-grain: repeating-linear-gradient(93deg, rgba(255, 255, 255, 0.035) 0 1px, transparent 1px 4px);
   --card-specular: linear-gradient(180deg, rgba(255, 255, 255, 0.075), transparent);
   --card-floor: repeating-linear-gradient(to right, rgba(0, 255, 229, 0.16) 0 1px, transparent 1px 20px),
     repeating-linear-gradient(to bottom, rgba(0, 255, 229, 0.16) 0 1px, transparent 1px 20px);
@@ -403,6 +416,118 @@
   --rank-l: 0.84;
   --rank-l-mid: 0.99;
   --rank-c: 0.18;
+
+  /* ---- Machined billet — the league card's ledge, rail and windows ---- */
+  /*
+   * One card carries a league across three tools, and this is the fourth
+   * surface family it is made of: a *milled billet*. A plate is screwed onto a
+   * housing (`--plate-raised-*`) and a key is pressed into one (`--key-*`); a
+   * billet is a solid part chamfered on all four edges, and the difference is
+   * what lets the league card's ledge hold two lines — a name proud on the
+   * face and a well cut into the same part — where a plate can only hold one.
+   *
+   * The chamfer is four insets and it is the whole of the effect: bright top,
+   * dark underside, lit left, shaded right. Written as one token rather than
+   * as four utilities because a shadow *list* is atomic in CSS — a caller that
+   * appended one would replace all four — and because the light scheme needs a
+   * different stack rather than a different alpha, which is this file's rule
+   * for every bevel.
+   */
+  --billet-bg: linear-gradient(180deg, #55686e 0%, #42555b 26%, #334549 62%, #26343a 100%);
+  --billet-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.5),
+    inset 0 -1px 0 rgba(0, 0, 0, 0.6), inset 1px 0 0 rgba(255, 255, 255, 0.1),
+    inset -1px 0 0 rgba(0, 0, 0, 0.35), 0 1px 2px rgba(0, 0, 0, 0.45),
+    0 20px 34px -20px #000;
+  /*
+   * The two overlays that make the billet read as *milled* rather than as a
+   * gradient: a horizontal brushed grain, and one raking specular across it.
+   * They are separate tokens because they are separate layers — CSS cannot
+   * spell either as a second background on an element that already has one,
+   * which is the same reason every lit window carries `Scanlines` as a child.
+   */
+  --billet-grain: repeating-linear-gradient(to bottom, rgba(255, 255, 255, 0.035) 0 1px, transparent 1px 3px);
+  --billet-specular: linear-gradient(104deg, transparent 18%, rgba(255, 255, 255, 0.11) 40%, transparent 58%);
+  /*
+   * The shallow well cut into the billet's own face, which the standing drops
+   * into. Its gradient is the face's *inverted* — dark at the top, light at the
+   * bottom — and that inversion is the whole cue: a surface lit from above is
+   * bright where it faces the light, a recess is bright where it faces away.
+   */
+  --billet-well-bg: linear-gradient(180deg, #26343a, #33454b);
+  --billet-well-shadow: inset 0 2px 5px rgba(0, 0, 0, 0.5),
+    inset 0 -1px 0 rgba(255, 255, 255, 0.16);
+  /* A chip of the same billet stock, and the tray of holes they sit in. The
+     tray is flat rather than a gradient because it is a hole, and a hole has
+     no face to catch a light. */
+  --chip-bg: linear-gradient(180deg, #43555b 0%, #2b3c41 55%, #1f2b30 100%);
+  --chip-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.3), 0 1px 2px rgba(0, 0, 0, 0.4);
+  --chip-tray-bg: #111a1d;
+  --chip-tray-shadow: inset 0 2px 6px rgba(0, 0, 0, 0.7);
+  /* The header a rank window's words are stamped into, above its glass. */
+  --window-ledge-bg: linear-gradient(180deg, #43555b 0%, #2a3b40 58%, #202c31 100%);
+  --window-ledge-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.32), 0 1px 0 rgba(0, 0, 0, 0.65);
+  /*
+   * The glass a rank figure is drawn on. `--window-shadow` with its inner teal
+   * glow taken out and a black ring put in: the card spends teal in exactly two
+   * places now — the format lamp and a lit pip — and a third one behind every
+   * figure is what made the old tile row read as noise.
+   */
+  --glass-shadow: inset 0 3px 9px rgba(0, 0, 0, 0.85), inset 0 0 0 1px rgba(0, 0, 0, 0.6),
+    0 1px 0 rgba(255, 255, 255, 0.11);
+  /*
+   * A slot ladder's pips, and the unlit one is the readability fix this pass
+   * exists for. It used to be painted near-black on a dark ground (~1.15:1),
+   * which is why nobody could count them; it is a **light machined slot** now —
+   * a cut in the metal catching the light — at 4.2–4.9:1 where the pip actually
+   * sits, which is the chip's middle band. Read the other way round in light
+   * mode: the slot is what the face is not, so on near-white metal it darkens.
+   *
+   * One step lighter than the handoff's `#8ea0a5`, and the step is a measured
+   * guarantee rather than a preference: against the chip face's *top* stop
+   * (`#43555b`) that value is 2.87:1, under the 3:1 a graphical element owes,
+   * and a 15px pip inside a chip padded 8px does reach that band at its own top
+   * edge. `#94a6ab` is 3.09:1 there and unchanged to the eye everywhere the
+   * handoff measured.
+   */
+  --pip-lit-bg: linear-gradient(180deg, #8ffff4, #00e2cb);
+  --pip-lit-shadow: 0 0 5px rgba(0, 255, 229, 0.35);
+  --pip-unlit-bg: #94a6ab;
+  --pip-unlit-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.4);
+  /* The hairline between two bays of one part: a cut, with the light catching
+     its far lip. `--groove` is the deeper channel between two *parts*. */
+  --milled-hairline: rgba(0, 0, 0, 0.45);
+  --milled-hairline-highlight: 1px 0 0 rgba(255, 255, 255, 0.07);
+  /*
+   * Ink on metal, in the four levels the billet uses. These are not the
+   * `--readout-*` trio, which is type on lit *glass*: a label stamped into a
+   * machined face is the metal's own colour lightened, and drawing it in the
+   * readout's mint would say the ledge was a window. Every one was checked
+   * against its own local gradient band rather than against an average, since a
+   * billet face runs three stops from top to bottom.
+   *
+   * `--billet-label` is 0.76 rather than the handoff's 0.72 for that reason:
+   * the design measured its bay labels in the *well* (5.3–6.5:1 at 0.72, which
+   * is the 6.1–6.9 the handoff reports), but the chip rail draws the same label
+   * on the chip's own face, whose top stop takes it to 4.36:1. At 0.76 every
+   * band of every face this ink lands on clears 4.5:1 — chips 4.7–7.8, the well
+   * 5.7–7.1.
+   */
+  /*
+   * The hairline a rank window's meter runs in, and the emboss under a name
+   * stamped into a billet. Both are the two places on this card where the light
+   * scheme is not the dark one dimmed but the dark one *turned over*: a track
+   * cut into near-black glass has to be lighter than the glass and a track cut
+   * into pale glass has to be darker, and an emboss under pale ink throws a
+   * dark shadow where an emboss under dark ink throws a light one.
+   */
+  --glass-meter-track: rgba(255, 255, 255, 0.09);
+  --billet-name-shadow: 0 1px 0 rgba(0, 0, 0, 0.35);
+
+  --billet-name: #f6f8f8;
+  --billet-figure: #f1f4f4;
+  --billet-unit: rgba(237, 237, 237, 0.88);
+  --billet-label: rgba(237, 237, 237, 0.76);
+  --billet-scope: rgba(237, 237, 237, 0.7);
 }
 
 /*
@@ -563,6 +688,7 @@
   --card-lift-hover: 0 38px 70px -22px rgba(15, 23, 42, 0.45);
   --card-halo-hover: 0 0 70px -14px rgba(13, 148, 136, 0.4);
   --card-sheen: linear-gradient(to right, transparent, rgba(255, 255, 255, 0.55), transparent);
+  --card-grain: repeating-linear-gradient(93deg, rgba(15, 23, 42, 0.03) 0 1px, transparent 1px 4px);
   --card-specular: linear-gradient(180deg, rgba(255, 255, 255, 0.6), transparent);
   --card-floor: repeating-linear-gradient(to right, rgba(13, 148, 136, 0.16) 0 1px, transparent 1px 20px),
     repeating-linear-gradient(to bottom, rgba(13, 148, 136, 0.16) 0 1px, transparent 1px 20px);
@@ -588,6 +714,58 @@
   --rank-l: 0.52;
   --rank-l-mid: 0.42;
   --rank-c: 0.16;
+
+  /* ---- Machined billet (light) ---------------------------------------- */
+  /*
+   * Derived from the dark values, not measured — the design was approved in
+   * dark, as everywhere else on the console. The billet inverts the way every
+   * bevel here does: the chamfer's bright top stays bright and its underside
+   * goes to slate rather than to black, and the *face* goes near-white, because
+   * a billet is mounted on the light housing (`--housing-bg`, a mid slate) and
+   * a part standing on a housing is the surface catching the light. That is the
+   * same argument `--plate-raised-bg` already makes one grain up.
+   *
+   * The well keeps the inversion that makes it a well: its gradient is the
+   * face's turned over, so it is dark where the face is bright.
+   */
+  --billet-bg: linear-gradient(180deg, #ffffff 0%, #f1f5f7 26%, #dfe8eb 62%, #c9d6da 100%);
+  --billet-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.95),
+    inset 0 -1px 0 rgba(15, 23, 42, 0.28), inset 1px 0 0 rgba(255, 255, 255, 0.7),
+    inset -1px 0 0 rgba(15, 23, 42, 0.16), 0 1px 2px rgba(15, 23, 42, 0.22),
+    0 20px 34px -20px rgba(15, 23, 42, 0.5);
+  --billet-grain: repeating-linear-gradient(to bottom, rgba(15, 23, 42, 0.03) 0 1px, transparent 1px 3px);
+  --billet-specular: linear-gradient(104deg, transparent 18%, rgba(255, 255, 255, 0.75) 40%, transparent 58%);
+  --billet-well-bg: linear-gradient(180deg, #b4c5cb, #dde7ea);
+  --billet-well-shadow: inset 0 2px 5px rgba(15, 23, 42, 0.22),
+    inset 0 -1px 0 rgba(255, 255, 255, 0.9);
+  --chip-bg: linear-gradient(180deg, #ffffff 0%, #eef3f5 55%, #dae4e8 100%);
+  --chip-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.95), 0 1px 2px rgba(15, 23, 42, 0.2);
+  /* Still a hole, so still darker than the housing it is cut into. */
+  --chip-tray-bg: #93a5ab;
+  --chip-tray-shadow: inset 0 2px 6px rgba(15, 23, 42, 0.3);
+  --window-ledge-bg: linear-gradient(180deg, #ffffff 0%, #edf2f4 58%, #d8e2e6 100%);
+  --window-ledge-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.95), 0 1px 0 rgba(15, 23, 42, 0.22);
+  --glass-shadow: inset 0 3px 9px rgba(15, 23, 42, 0.2), inset 0 0 0 1px rgba(15, 23, 42, 0.14),
+    0 1px 0 rgba(255, 255, 255, 0.9);
+  /* The slot reads as a cut, so on near-white metal it is the *dark* value —
+     the one place this pair is not the dark scheme's lightened. */
+  --pip-lit-bg: linear-gradient(180deg, #14a294, #0b6d63);
+  --pip-lit-shadow: 0 0 5px rgba(13, 148, 136, 0.35);
+  --pip-unlit-bg: #6f8288;
+  --pip-unlit-shadow: inset 0 1px 2px rgba(15, 23, 42, 0.3);
+  --milled-hairline: rgba(15, 23, 42, 0.22);
+  --milled-hairline-highlight: 1px 0 0 rgba(255, 255, 255, 0.9);
+  /* Solid inks rather than alphas, for `--readout-line`'s reason one surface
+     over: a light face cannot carry a light ink at an opacity and stay legible,
+     so each level is the measured colour it needs to be. */
+  --glass-meter-track: rgba(15, 23, 42, 0.16);
+  --billet-name-shadow: 0 1px 0 rgba(255, 255, 255, 0.85);
+
+  --billet-name: #0e1a1d;
+  --billet-figure: #152428;
+  --billet-unit: #223339;
+  --billet-label: #3a4d54;
+  --billet-scope: #3e5158;
 }
 
 @theme inline {

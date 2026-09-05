@@ -11,19 +11,23 @@ import { resolveKtcFormat } from "@/shared/ktc/board-choice";
 import { isKtcMetric, lineupColumnKey } from "@/shared/ktc/columns";
 import { resolveKtcLineup } from "@/shared/ktc/roster";
 import {
-  CardPlateRow,
+  CardLedge,
   CardRule,
   CONSOLE_CARD_SHELL,
+  CONSOLE_GLASS,
   CONSOLE_WINDOW,
+  CONSOLE_WINDOW_LEDGE,
   ktcBoardLabel,
-  LeagueConfigWindow,
+  LeagueChipRail,
+  LedgeBay,
+  LedgeFigure,
+  LedgeName,
+  LedgeWell,
   leagueType,
-  LeaguePlate,
   LINEUP_METRIC_LABELS,
+  MilledHairline,
   ordinal,
-  PlateDivider,
-  PlateField,
-  ReadingPlate,
+  ordinalParts,
   Scanlines,
 } from "@/features/shared";
 
@@ -35,12 +39,7 @@ import {
 // draws one. Named here, the chunk belongs to this route.
 import { TimelineView } from "@/features/shared/ui/timeline";
 
-import {
-  formatRank,
-  rankColor,
-  rankFill,
-  rankPercentile,
-} from "../helpers/lineup-metrics";
+import { rankColor, rankFill, rankPercentile } from "../helpers/lineup-metrics";
 
 
 /**
@@ -52,23 +51,40 @@ import {
  * `/lineupchecker` is looking at the same leagues, and the three cards should
  * read as one instrument seen from three tools.
  *
- * **The league's name moved from a headline into a plate**, which is the single
- * biggest change here. It used to be a 1.75rem `--chrome-face` engraving; it is
- * now a mono plate straddling the card's top edge with the league's avatar lit
- * in its bezel, and the plate opposite carries the three figures that used to
- * be scattered through the identity line and the status word: record, standings
- * rank, points rank.
+ * **The header is one milled billet, and that is the headline change.** It was
+ * two plates in a row — the league on the left, its standing on the right —
+ * competing for one line: the reading plate kept its width and the league's
+ * name, which is the card's whole subject, truncated into whatever was left.
+ * At a phone's width that was nine characters, and it had already cost the
+ * points rank its place on the plate opposite to get there. Stacked into one
+ * part the name has the full line and stops truncating, the standing drops into
+ * a **well cut into the same billet** below it, and all three figures come back
+ * at every width. See `CardLedge`.
  *
- * **The identity line under the rule became a configuration window.** It used
- * to read `team name · N-team · status`, which was one fact about the manager
- * and two about the league, none of them acted on; in its place is a lit window
- * stating what game the league is playing — format, lineup mode, teams,
- * starters, the QB, SF and TE ladders and the TE premium. See
- * `LeagueConfigWindow`, which reads every one of those off the rules the
- * Filters dialog narrows by rather than deriving any of them a second time.
+ * **Depth carries the hierarchy where a second pill used to.** That is the
+ * whole argument for a billet rather than a plate: a plate is one face carrying
+ * one thing, and a part chamfered on four edges is thick enough to hold a name
+ * proud on its face and a recess beneath it.
+ *
+ * **The identity line under the rule became the league's settings, and they are
+ * now four paired chips in a tray.** It used to read `team name · N-team ·
+ * status`, which was one fact about the manager and two about the league, none
+ * of them acted on; then a lit window carrying seven readings that wrapped
+ * wherever the row ran out. `LeagueChipRail` pairs them into four parts — what
+ * game, what scale, what QB shape, what TE shape — so nothing wraps ragged and
+ * `TE prem` can never split from the ladder it qualifies. It reads every rule
+ * off the same module the Filters dialog narrows by, so nothing is derived a
+ * second time; the trades and lineup-checker cards keep the window arrangement
+ * of the same facts, which is a design this bundle does not cover.
+ *
+ * **Teal is spent in two places and no more** — the format lamp and a lit
+ * ladder pip. The card's underglow, its scanlines and the glow under every
+ * rank meter are gone with the redesign, and what is left of the old tile row
+ * is a 2px hairline: a saturated bar throwing light under every figure on a
+ * page of a hundred cards was the noisiest thing on any of them.
  *
  * The rise is real perspective, not a `translateY`: the `<li>` owns the
- * `perspective`, the card sits at `rotateX(3deg)` at rest and flattens to
+ * `perspective`, the card sits at `rotateX(2deg)` at rest and flattens to
  * `translateZ(30px)` on hover, and the contents carry their own small
  * `translateZ` so the type separates from the housing as it comes forward. An
  * **open** card is held flat, because a tilted card with a twelve-team table
@@ -92,7 +108,9 @@ import {
  * scrolls into one had nothing on screen saying which league they were reading
  * — the name is on a plate at the card's top edge and the top edge was gone.
  * Three variants and one token do it: `group-open/card:sticky` at
- * `--card-freeze-top`, which is the rack's own height plus a little breath.
+ * `--card-freeze-top`, which is the rack's own height, the ledge's overhang and
+ * a little breath — **the ledge is what has to clear the rack**, not the
+ * housing, since it is the ledge the name is on. See that token.
  *
  * It has to be the **`<summary>`**, and the two obvious alternatives both fail
  * silently. The `<li>` is the whole card, expanded half included, and is taller
@@ -133,21 +151,20 @@ function formatRecord(record: LeagueRecord): string {
 }
 
 /**
- * The tile row, per column count, spelled out so Tailwind sees each class it
+ * The window row, per column count, spelled out so Tailwind sees each class it
  * must generate.
  *
- * The tiles have the card's full width to themselves, so they take equal shares
- * of it and the row reads as one instrument strip across the card.
+ * The windows have the card's full width to themselves, so they take equal
+ * shares of it and the row reads as one instrument strip across the card.
  *
  * **Four across at every width, phones included**, which reverses the two-up
  * fallback this row used to take below `sm`. What made a four-way split at 390
- * unreadable was the figure: `formatRank` printed "2nd of 12", which needs
- * ~86px at 16px mono and cannot fit the 75px an equal quarter of a 326px card
- * gives it. The denominator has since come out of the tile — it is one number
- * for all four ranks, and it is stated once under the row and once more in the
- * configuration window's `Teams` — so the figure is an ordinal, the tile is
- * 75px, and the strip is one row rather than two. A four-tile strip that wraps
- * is what pushes the card past the fold on a phone.
+ * unreadable was the figure: the rank printed "2nd of 12", which needs ~86px at
+ * 16px mono and cannot fit an equal quarter of a phone-width card. The
+ * denominator has since come out of the window — it is one number for all four
+ * ranks and is stated in the chip rail's `Teams` — so the figure is an ordinal
+ * with its suffix demoted, and the strip is one row rather than two. A four-way
+ * strip that wraps is what pushes the card past the fold on a phone.
  */
 const GRID_COLS: Record<number, string> = {
   1: "grid-cols-1",
@@ -178,13 +195,17 @@ export function LeagueCard({
   username: string;
   board: KtcBoardChoice;
 }) {
+  // Whether the ledge has a well cut into it, which decides how much of the
+  // card's top the ledge occupies. See the padding note below.
+  const standing = standingFields(league).length > 0;
+
   return (
     // The `perspective` makes each `<li>` its own stacking context, so a card
     // that rises cannot paint over the one after it in DOM order — the raise
     // has to be ordered here, on the grid item, rather than on the summary
     // inside it. Without this an open card sits *under* the card to its right,
     // which is the one moment the raise is most visible.
-    <li className="relative flex pointer-fine:[perspective:2400px] hover:z-10 has-[details[open]]:z-10">
+    <li className="relative flex pointer-fine:[perspective:2600px] hover:z-10 has-[details[open]]:z-10">
       {/* `min-w-0` is what lets the card shrink to a phone. The `<li>` is a
           row flex container, so its item takes `min-width: auto` and refuses
           to go below its own min-content — and the expanded half's two panes
@@ -194,20 +215,39 @@ export function LeagueCard({
       <details className="group/card flex min-w-0 flex-1 flex-col">
         <summary
           className={
-            `lab-card-3d ${CONSOLE_CARD_SHELL} pb-[1.125rem] pt-[1.875rem] flex flex-1 cursor-pointer list-none flex-col font-mono ` +
-            // **The gutter is 14px below `sm`, where every other card takes
-            // 18px.** Four tiles across a 362px card is what asks for it: the
-            // strip is the card's full width less this inset, and the four
-            // labels are the tightest thing on the page. It composes the
-            // *shell* rather than appending to `CONSOLE_CARD`, because two base
-            // `px-*` utilities are decided by Tailwind's emit order — see that
-            // constant's note.
-            "px-3.5 sm:px-[1.125rem] " +
+            `lab-card-3d ${CONSOLE_CARD_SHELL} flex flex-1 cursor-pointer list-none flex-col font-mono ` +
+            // **The top padding is what clears the ledge**, which is a whole
+            // two-line part hung off the card's edge rather than the single
+            // plate that used to be: 88px on a phone and 100px above `sm`,
+            // where a plate row needed 30. The gutter is 14px below `sm` and
+            // 16 above, and the ledge's own insets are written to match at
+            // each width — an absolutely positioned child resolves `left`
+            // against the *padding box*, so a ledge written `left-0` would
+            // overhang the chip rail beneath it by exactly the card's gutter.
+            //
+            // It composes the *shell* rather than appending to `CONSOLE_CARD`,
+            // because two base `px-*` utilities of the same specificity are
+            // decided by Tailwind's emit order — see that constant's note.
+            "px-3.5 pb-3.5 sm:px-4 sm:pb-4 " +
+            // **And it is two paddings, because the ledge is two heights.**
+            // A league whose rosters have not been read has no standing to cut
+            // a well for, so its ledge is the name line alone — 53px against
+            // 106 at desktop, 45 against 93 at a phone — and the taller card's
+            // padding left it floating over 76px of nothing. Both numbers are
+            // the measured ledge less its overhang plus the same 14px of
+            // breath, so the rule under the ledge sits the same distance below
+            // it either way. The card cannot ask the ledge, which is
+            // `absolute` and out of flow; it asks the same `standingFields`
+            // the well is built from, so the two cannot disagree about which
+            // ledge is being drawn.
+            (standing
+              ? "pt-[5.5rem] sm:pt-[6.25rem] "
+              : "pt-10 sm:pt-[2.9375rem] ") +
             // **The open card's housing freezes under the rack.** See the note
             // below the component on why it is the `summary` and nothing else.
             "group-open/card:sticky group-open/card:top-[var(--card-freeze-top)] group-open/card:z-20 " +
             "pointer-fine:[transform-style:preserve-3d] [transform-origin:center_bottom] " +
-            "pointer-fine:[transform:translateZ(0)_rotateX(3deg)] " +
+            "pointer-fine:[transform:translateZ(0)_rotateX(2deg)] " +
             "pointer-fine:hover:[transform:translateZ(30px)_rotateX(0deg)] " +
             "pointer-fine:group-open/card:[transform:translateZ(20px)_rotateX(0deg)] " +
             "transition-[transform,box-shadow,border-color] duration-[450ms] ease-[cubic-bezier(0.2,0.8,0.2,1)] " +
@@ -222,50 +262,51 @@ export function LeagueCard({
             aria-hidden
             className="pointer-events-none absolute inset-0 overflow-hidden rounded-[inherit]"
           >
-            {/* `--card-specular` is deliberately gone with the glass: it was a
-                white wash over a translucent card, and the housing draws its own
-                top highlight in `--housing-shadow`'s first inset. Two of them
-                is a bezel with a second, brighter bezel painted on it.
+            {/* Three layers, where there were four. `--card-specular` went with
+                the glass — the housing draws its own top highlight in
+                `--housing-shadow`'s first inset, and two of them is a bezel
+                with a second, brighter bezel painted on it. The graticule floor
+                and the accent underglow went with this pass: the floor exists
+                to be foreshortened by a tilt and the glow was the third place
+                the card spent teal, which is two more than the design allows
+                it. What is left is the finish, the sheen and the edge light.
 
-                The sheen only ever moves under a hover, and the floor exists to
-                be foreshortened by a tilt — neither has anything to say on a
-                flat card, so both come out of the tree rather than sitting
-                there as a gradient nobody sees. */}
+                The sheen only ever moves under a hover, so it stays out of the
+                tree entirely on a coarse pointer rather than sitting there as a
+                gradient nobody sees. */}
+            <span className="absolute inset-0 bg-[image:var(--card-grain)] opacity-20" />
             <span className="lab-anim absolute inset-y-0 left-0 hidden w-[55%] -translate-x-[180%] -skew-x-12 bg-[image:var(--card-sheen)] transition-transform duration-[900ms] ease-out group-hover/card:translate-x-[450%] pointer-fine:block" />
-            <span className="absolute -inset-x-1/4 -bottom-[8%] hidden h-[62%] origin-bottom bg-[image:var(--card-floor)] opacity-40 transition-opacity duration-[450ms] [mask-image:linear-gradient(to_top,#000,transparent_72%)] [transform:perspective(320px)_rotateX(66deg)] group-hover/card:opacity-100 group-open/card:opacity-100 pointer-fine:block" />
-            <span className="absolute -bottom-[45%] left-1/2 h-[85%] w-[120%] -translate-x-1/2 bg-[radial-gradient(closest-side,var(--accent-glow),transparent_75%)] opacity-30 transition-opacity duration-[450ms] group-hover/card:opacity-80 group-open/card:opacity-80" />
-            <span className="absolute inset-x-[18%] top-0 h-px bg-[image:var(--card-edge-light)] opacity-0 transition-opacity duration-[450ms] group-hover/card:opacity-100 group-open/card:opacity-100" />
+            <span className="absolute inset-x-[12%] top-0 h-px bg-[image:var(--card-edge-light)] opacity-0 transition-opacity duration-[450ms] group-hover/card:opacity-100 group-open/card:opacity-100" />
           </span>
 
-          {/* The plates are *not* inside the clipping layer: they straddle the
-              card's top edge, and a clip is exactly what would cut them off. */}
-          <CardPlateRow>
-            <LeaguePlate name={league.name} avatarUrl={league.avatar_url} />
-            <StandingPlate league={league} />
-          </CardPlateRow>
+          {/* The ledge is *not* inside the clipping layer: it straddles the
+              card's top edge, and a clip is exactly what would cut it off. */}
+          <CardLedge>
+            <LedgeName name={league.name} avatarUrl={league.avatar_url} />
+            <StandingWell league={league} />
+          </CardLedge>
 
           <CardRule />
 
           {/* What game this league is playing, in place of the identity line
               that used to sit here. The team name and the status went with it —
-              see `LeagueConfigWindow` — and the team count moved into the
-              window, where it is the scale the slot ladders are read against. */}
-          <LeagueConfigWindow
+              see `LeagueChipRail` — and the team count moved into it, where it
+              is the scale the slot ladders are read against and the only place
+              the card still states the field size the ranks below are out of. */}
+          <LeagueChipRail
             league={league}
-            className="mt-3.5 pointer-fine:[transform:translateZ(18px)]"
+            className="mt-2 pointer-fine:[transform:translateZ(24px)]"
           />
 
-          {/* The ranks get the row to themselves, under the configuration
-              rather than beside it — so the tiles stay a direct child of the
-              summary, which is what keeps their `translateZ` alive. A wrapper
-              here would be a flat rendering context and the depth would
-              silently go. The margin is `mt-2.5` rather than `mt-4` because the
-              window above already carries the separation the line did not. */}
+          {/* The ranks get the row to themselves, under the rail rather than
+              beside it — so the windows stay a direct child of the summary,
+              which is what keeps their `translateZ` alive. A wrapper here would
+              be a flat rendering context and the depth would silently go. */}
           <div
-            className={`relative mt-2.5 grid gap-1.5 sm:gap-2 ${GRID_COLS[columns.length] ?? GRID_COLS[2]} pointer-fine:[transform:translateZ(22px)]`}
+            className={`relative mt-1.5 grid gap-1.5 ${GRID_COLS[columns.length] ?? GRID_COLS[2]} pointer-fine:[transform:translateZ(12px)]`}
           >
             {columns.map((column) => (
-              <MetricTile
+              <RankWindow
                 key={lineupColumnKey(column)}
                 column={column}
                 league={league}
@@ -329,91 +370,90 @@ export function LeagueCard({
 }
 
 /**
- * Record, standings rank and points rank, on one plate.
+ * Record, standings rank and points rank, in the well cut into the ledge.
  *
  * **Three fields or as few as none**, and the absences are the point. A league
  * whose rosters have not been read has no record and no rank — nothing to
- * state — and the plate is not drawn at all, where drawing an empty one would
- * read as a rendering fault and drawing `0–0 · 1st` would be a claim. Each
- * field appears exactly when its own answer exists, so a league mid-way through
- * its first week can carry a record with no ranks behind it.
+ * state — and the well is not cut at all, where drawing an empty one would read
+ * as a rendering fault and drawing `0–0 · 1st` would be a claim. Each field
+ * appears exactly when its own answer exists, so a league mid-way through its
+ * first week can carry a record with no ranks behind it.
+ *
+ * **All three survive at every width now, and that is what the ledge bought.**
+ * On the two-plate header the points rank came off below `sm`, because three
+ * fields and their dividers were ~225px of a 322px row and the league name
+ * opposite was left with four characters. Nothing is opposite the standing any
+ * more — the name has the line above it — so the field that was dropped to buy
+ * the card's own subject nine characters comes back.
  */
-function StandingPlate({ league }: { league: ManagerLeague }) {
-  // `phone: false` is dropped below `sm` — see the note below.
-  const fields: { label: string; value: string; phone: boolean }[] = [];
-  // **Rank leads, and the record follows it.** The standing is what the plate
-  // is read for — the record is how it was arrived at — so it takes the
-  // position a reader's eye lands on first, nearest the card's own edge.
+function standingFields(league: ManagerLeague): { label: string; value: string }[] {
+  const fields: { label: string; value: string }[] = [];
+  // **Rank leads, and the record follows it.** The standing is what the well is
+  // read for — the record is how it was arrived at — so it takes the position a
+  // reader's eye lands on first, at the well's own left edge, which is the
+  // margin the name above and the chip rail below both share.
   if (league.standings_rank !== null) {
-    fields.push({
-      label: "Rank",
-      value: ordinal(league.standings_rank),
-      phone: true,
-    });
+    fields.push({ label: "Rank", value: ordinal(league.standings_rank) });
   }
   if (league.record) {
-    fields.push({ label: "Rec", value: formatRecord(league.record), phone: true });
+    fields.push({ label: "Rec", value: formatRecord(league.record) });
   }
   if (league.points_rank !== null) {
-    fields.push({ label: "Pts", value: ordinal(league.points_rank), phone: false });
+    fields.push({ label: "Pts", value: ordinal(league.points_rank) });
   }
+  return fields;
+}
+
+function StandingWell({ league }: { league: ManagerLeague }) {
+  const fields = standingFields(league);
   if (fields.length === 0) return null;
 
   return (
-    <ReadingPlate>
+    <LedgeWell>
       {fields.map((field, i) => (
-        // The divider is a sibling of the fields rather than a child of one, so
-        // the plate's own gap spaces all three evenly — nested, a divider would
-        // carry the gap twice and sit twice as far from the field beside it.
-        //
-        // **The points rank comes off the plate below `sm`**, which a render at
-        // 390 forced rather than the handoff asking for it: three fields and
-        // their dividers are ~225px of a 322px row, and the league plate
-        // opposite is left with four characters — "D…" where the league name is
-        // the card's whole subject. Dropping the third field gives it nine, and
-        // the points rank is the one of the three a reader can most nearly
-        // infer from the other two.
+        // The hairline is a sibling of the bays rather than a child of one, so
+        // the well's own gap spaces all three evenly — nested, a cut would
+        // carry the gap twice and sit twice as far from the bay beside it.
         <Fragment key={field.label}>
-          {i > 0 && (
-            <span className={field.phone ? undefined : "hidden sm:inline-flex"}>
-              <PlateDivider />
-            </span>
-          )}
-          <span className={field.phone ? undefined : "hidden sm:inline-flex"}>
-            <PlateField label={field.label}>{field.value}</PlateField>
-          </span>
+          {i > 0 && <MilledHairline />}
+          <LedgeBay label={field.label}>
+            <LedgeFigure>{field.value}</LedgeFigure>
+          </LedgeBay>
         </Fragment>
       ))}
-    </ReadingPlate>
+    </LedgeWell>
   );
 }
 
 /**
- * One rank column, as a lit window with a meter under it.
+ * One rank column, as a lit window with its words stamped into a machined
+ * header above the glass.
  *
- * The window is the same surface as the console's readouts, which is what ties
- * a card's numbers back to the instrument around them — a figure on glass reads
- * as data, a figure on the housing reads as a label. The meter is what makes
- * "2nd of 12" comparable across cards at a glance; the text is what makes it
- * exact.
+ * **Both words live on the metal, and that is the hierarchy fix.** They used to
+ * sit on the glass with the figure, where a caption and a number are peers
+ * however they are sized — a reader scanning a strip of four had to read the
+ * label to find the number. On two surfaces the caption is plainly a label for
+ * the thing beneath it, and the glass holds the figure and its meter alone.
+ *
+ * **The suffix is demoted so the digit reads first**: a size down, a weight
+ * lighter and at 55% opacity, which is what makes a page of cards scannable by
+ * their numerals. The 11th–13th rule stays in `ordinalParts` rather than being
+ * spelled again here — see that function.
  *
  * **The colour is the rank**, on the red -> neutral -> green ramp, and it is
  * driven by the same percentile as the meter's width so the bar and the hue
  * cannot disagree. It used to be the metric's *family* — accent for points,
- * `--metric-secondary` for capital — which told a reader the unit; the label
+ * `--metric-secondary` for capital — which told a reader the unit; the header
  * above the figure is what carries that now.
  *
- * The label went teal with the redesign, and for a reason rather than for
- * decoration: on a housing the windows are the only lit surface, so a label
- * drawn in the housing's own foreground would read as belonging to the metal
- * rather than to the glass it is printed on.
- *
- * The glow under the fill is not decoration: a saturated bar sitting flat on
- * lit glass reads as paint, where the same bar throwing light reads as part of
- * the instrument. The figure takes the same glow in its own hue, which is what
- * makes it read as lit rather than as printed.
+ * **The meter is a 2px hairline with no glow on its fill**, where it was a 4px
+ * bar throwing light in its own hue. On one card that read as an instrument; on
+ * a hundred, four to a card, it was the noisiest thing on the page. It also
+ * runs the window's full width rather than being capped at 88px, which the old
+ * bar needed to keep from reading as a progress bar being filled — a hairline
+ * does not.
  */
-function MetricTile({
+function RankWindow({
   column,
   league,
   entry,
@@ -429,81 +469,61 @@ function MetricTile({
   const percentile = rankPercentile(rank);
   const tone = rankColor(percentile);
   const words = LINEUP_METRIC_LABELS[column.metric];
+  const parts = rank ? ordinalParts(rank.rank) : null;
 
   return (
-    <div
-      className={`${CONSOLE_WINDOW} min-w-0 rounded-[0.625rem] px-1.5 py-2.5 sm:px-2`}
-    >
-      <Scanlines />
-      {/* **The min-height is on the block, not on either line**, and that is
-          what holds every ordinal in the row on one baseline: a two-line label
-          beside a one-line label would otherwise push its own figure down and
-          the strip would read as four tiles at four heights.
-
-          **The unit leads and the scope follows it**, which reverses what the
-          two lines used to say. Both were `--fs-9`, and the *second* one — the
-          qualifier — carried `text-readout` and the readout glow while the
-          first, the thing being qualified, was the muted label colour: the
-          scope out-shouted the unit. It is `--fs-11` on `--readout-line` over
-          `--fs-10` on `--readout-label` now, which is the hierarchy the words
-          already had.
-
-          **Neither line is tracked below `sm`, and both step down there**, and
-          that is a fit rather than a taste. At `tracking-[0.1em]` in a 59px
-          label box `Draft cap` measured 64.9px and 20 of the 32 labels a
-          four-column card draws were clipped; the tighter gutter and gap take
-          the box to 65px and dropping the tracking takes the word to 61.5px at
-          `--fs-10`. It does **not** fit at the `--fs-11` the hierarchy above
-          asks for — 67.7px, measured — so the phone keeps the step one size
-          down on each line rather than losing it: `Draft cap`, `KTC start` and
-          `KTC picks` are all the same widest word, and the margin at `--fs-10-5`
-          is 0.4px, which is not a margin. */}
-      <div className="relative min-h-[1.625rem]">
-        <p className="m-0 truncate font-mono text-[length:var(--fs-10)] uppercase leading-[1.2] text-readout-line sm:text-[length:var(--fs-11)] sm:tracking-[0.1em]">
+    <div className={`${CONSOLE_GLASS} min-w-0 rounded-xl`}>
+      {/* **Stacked below `sm`, side by side above it**, which is a fit rather
+          than a taste: an equal quarter of a phone-width card is ~79px of
+          window and the two words cannot sit on one line in it. Stacked they
+          are two truncating lines on the metal, which is where they belong
+          either way. */}
+      <div
+        className={`${CONSOLE_WINDOW_LEDGE} px-1.5 py-[0.3125rem] sm:flex sm:items-baseline sm:justify-between sm:gap-2 sm:px-[0.6875rem] sm:py-[0.4375rem]`}
+      >
+        <p className="m-0 truncate font-mono text-[length:var(--fs-10)] uppercase tracking-[0.02em] text-[color:var(--billet-unit)] sm:text-[length:var(--fs-11)] sm:tracking-[0.07em]">
           {words.unit}
         </p>
-        <p className="m-0 mt-px min-h-[0.6875rem] truncate font-mono text-[length:var(--fs-9)] uppercase leading-[1.2] text-readout-label sm:text-[length:var(--fs-10)] sm:tracking-[0.12em]">
+        <p className="m-0 min-h-[0.6875rem] truncate font-mono text-[length:var(--fs-9)] uppercase tracking-[0.06em] text-[color:var(--billet-scope)] sm:shrink-0 sm:tracking-[0.12em]">
           {tileScope(column, league)}
         </p>
       </div>
-      {/* A computed colour, so it goes through `style` — the ramp is
-          continuous and there is no utility class to generate for it. */}
-      <p
-        className="relative m-0 mt-2 truncate font-mono text-[length:var(--fs-18)] font-medium leading-none tabular-nums sm:text-[length:var(--fs-21)]"
-        style={{
-          color: tone,
-          textShadow: `0 0 12px ${rankColor(percentile, 0.5)}`,
-        }}
-      >
-        {formatRank(rank)}
-      </p>
-      {/* **Capped at 88px, where the label and the figure above take the tile's
-          full width.** A meter that runs the whole of an equal quarter-card
-          share reads as a progress bar being filled rather than as a gauge
-          being read, and at one column it was a bar the width of the card. The
-          cap is on the *track*, so the fill's percentage resolves against 88px
-          and a full meter is 88px of gauge. It is deliberately not on the tile:
-          the label has to keep the full width, which at 75px is every pixel it
-          has. */}
-      <span
-        aria-hidden
-        className="relative mt-[0.5625rem] block h-1 max-w-[5.5rem] rounded-full bg-[var(--meter-track)] shadow-[inset_0_1px_3px_rgba(0,0,0,0.95)]"
-      >
-        <span
-          className="block h-1 rounded-full"
+
+      <div className="px-1.5 pb-2 pt-2 sm:px-[0.6875rem] sm:pb-3 sm:pt-[0.8125rem]">
+        {/* A computed colour, so it goes through `style` — the ramp is
+            continuous and there is no utility class to generate for it. */}
+        <p
+          className="m-0 truncate font-display font-semibold leading-none tracking-[-0.025em] tabular-nums"
           style={{
-            width: `${fill}%`,
-            background: tone,
-            boxShadow: `0 0 8px ${rankColor(percentile, 0.55)}`,
+            color: tone,
+            textShadow: `0 0 20px ${rankColor(percentile, 0.4)}`,
           }}
-        />
-      </span>
+        >
+          <span className="text-[length:var(--fs-26)] sm:text-[length:var(--fs-32)]">
+            {parts ? parts.figure : "—"}
+          </span>
+          {parts && (
+            <span className="text-[length:var(--fs-12)] font-normal tracking-normal opacity-55 sm:text-[length:var(--fs-15)]">
+              {parts.suffix}
+            </span>
+          )}
+        </p>
+        <span
+          aria-hidden
+          className="mt-2 block h-0.5 rounded-full bg-[color:var(--glass-meter-track)] sm:mt-[0.8125rem]"
+        >
+          <span
+            className="block h-0.5 rounded-full"
+            style={{ width: `${fill}%`, background: tone }}
+          />
+        </span>
+      </div>
     </div>
   );
 }
 
 /**
- * A tile's second line: the scope for a projections or capital column, and the
+ * A window's second word: the scope for a projections or capital column, and the
  * board a KeepTradeCut column actually read for *this* league.
  *
  * **Resolved rather than echoed**, which is the difference between a reading

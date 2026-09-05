@@ -9,20 +9,35 @@
  * console come to punctuate a date differently.
  */
 
+/**
+ * An ordinal's two halves: the digits, and the suffix English insists on.
+ *
+ * Split because the league card's rank windows **demote the suffix** — the
+ * numeral is what a reader is scanning a page of cards for, so `nd` is drawn a
+ * size down, a weight lighter and at 55% opacity, and two type treatments in
+ * one string need two elements. {@link ordinal} composes them back, so the
+ * 11th–13th rule has exactly one spelling: a second copy of it beside the tile
+ * is a card reading "11st" on the one league where anybody would notice.
+ */
+export function ordinalParts(n: number): { figure: string; suffix: string } {
+  const tens = n % 100;
+  const suffix =
+    tens >= 11 && tens <= 13
+      ? "th"
+      : n % 10 === 1
+        ? "st"
+        : n % 10 === 2
+          ? "nd"
+          : n % 10 === 3
+            ? "rd"
+            : "th";
+  return { figure: `${n}`, suffix };
+}
+
 /** `1st`, `2nd`, `3rd`, `4th` — with the 11th–13th rule English insists on. */
 export function ordinal(n: number): string {
-  const tens = n % 100;
-  if (tens >= 11 && tens <= 13) return `${n}th`;
-  switch (n % 10) {
-    case 1:
-      return `${n}st`;
-    case 2:
-      return `${n}nd`;
-    case 3:
-      return `${n}rd`;
-    default:
-      return `${n}th`;
-  }
+  const { figure, suffix } = ordinalParts(n);
+  return `${figure}${suffix}`;
 }
 
 /**
