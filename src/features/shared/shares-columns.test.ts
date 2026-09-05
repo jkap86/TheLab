@@ -41,13 +41,27 @@ describe("sharesColumns", () => {
     assert.deepEqual(sharesColumns(ALL, "leaguemate"), ["record", "share"]);
   });
 
-  test("falls back to the panel's last column when nothing survives", () => {
-    // Not to a fixed default: Share is what that panel is most about, and a
-    // reader whose whole stored sequence is player metrics must still be shown
-    // something rather than an empty row of readouts.
+  test("falls back to everything the panel offers when nothing survives", () => {
+    // Not to a fixed default, and not to one column: a stored sequence naming
+    // nothing this panel answers is not a preference about this panel, so the
+    // honest default is what the panel is for.
     assert.deepEqual(sharesColumns(["value", "age", "class"], "leaguemate"), [
+      "record",
       "share",
     ]);
+  });
+
+  test("a week panel opens on both its columns, not just the last", () => {
+    // The case that made the single-column fallback wrong: `Started` and
+    // `Bench` are one reading split in two, and the stored default is three
+    // season metrics — so *every* first visit hit this branch and would have
+    // been shown the panel's second half alone.
+    for (const kind of ["starter", "opponent"] as const) {
+      assert.deepEqual(sharesColumns(DEFAULT_SHARES_COLUMNS, kind), [
+        "start",
+        "bench",
+      ]);
+    }
   });
 
   test("the default is valid on both panels", () => {

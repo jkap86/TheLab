@@ -1,21 +1,54 @@
 /**
- * The second narrowing on the manager's league grid: a set of *subjects* — the
- * players and the people the reader picked out of the shares drawers — and the
- * mode that combines them.
+ * The second narrowing on a league grid: a set of *subjects* — the players and
+ * the people the reader picked out of a shares drawer — and the mode that
+ * combines them.
  *
  * It sits beside `matchesFilters` rather than inside it, because the two are
  * different kinds of question and are answered from different data. A league
  * filter reads what a league *is*, off blobs the league itself carries; a
- * subject reads *who is in it*, off maps that arrive from two separate routes
- * and may not have arrived at all.
+ * subject reads *who is in it*, off maps that arrive from separate reads and may
+ * not have arrived at all.
+ *
+ * **It moved here from `features/manager` when the lineup checker grew drawers
+ * of its own** — the line `CONSOLE_KEY`, `ManagerPlate` and `LineupColumnsDialog`
+ * all moved on, and the same folder rule: a second feature reads it, and
+ * `features/lineupchecker` may not import from `features/manager`.
  *
  * Pure and type-free of the contract, so it resolves under Node's test runner.
  */
 
-export type SubjectKind = "player" | "leaguemate";
+/**
+ * Which panel a subject was picked in, which is also which population answers
+ * for it.
+ *
+ * **One union for the four panels, and it is the exhaustive seam.**
+ * `SHARES_COLUMNS_BY_KIND` is a `Record` over it, so a fifth panel does not
+ * compile until it has been given columns — and {@link matchesSubjects} takes
+ * its maps through a resolver keyed on it, so a fifth panel does not narrow
+ * until it has been given a population either. The two halves cannot drift.
+ *
+ * `player` and `leaguemate` are a season's — who the manager rosters, and who
+ * they play against — where `starter` and `opponent` are one *week's*: the
+ * players on their own lineups, and the players on the lineups facing them.
+ */
+export type SubjectKind = "player" | "leaguemate" | "starter" | "opponent";
 
 /** One thing the reader picked. `kind` is what says which map answers for it. */
 export type Subject = { kind: SubjectKind; id: string };
+
+/**
+ * The maps a narrowing reads, one per kind — league id to the ids that league
+ * holds — or **null for a map that has not arrived**, which is a third state
+ * and not an empty one. See {@link matchesSubjects}.
+ *
+ * A resolver rather than one argument per kind, which is what the two callers
+ * made necessary and what keeps this module honest: a page answers for the
+ * kinds its own drawers pick and returns null for the rest, so adding a panel
+ * costs a case here and nothing at every call site.
+ */
+export type SubjectRolls = (
+  kind: SubjectKind,
+) => Record<string, readonly string[]> | null;
 
 /**
  * `all` narrows to leagues holding **every** subject, `any` to leagues holding
@@ -76,10 +109,9 @@ export function removeSubject(
 function holds(
   leagueId: string,
   subject: Subject,
-  rosters: Record<string, readonly string[]> | null,
-  members: Record<string, readonly string[]> | null,
+  rolls: SubjectRolls,
 ): boolean | null {
-  const map = subject.kind === "player" ? rosters : members;
+  const map = rolls(subject.kind);
   if (!map) return null;
   const roll = map[leagueId];
   // A stored map with no row for this league *can* answer: it does not hold
@@ -111,15 +143,14 @@ function holds(
 export function matchesSubjects(
   leagueId: string,
   state: LeagueSubjects,
-  rosters: Record<string, readonly string[]> | null,
-  members: Record<string, readonly string[]> | null,
+  rolls: SubjectRolls,
 ): boolean {
   if (state.subjects.length === 0) return true;
 
   let answered = 0;
   let matched = 0;
   for (const subject of state.subjects) {
-    const held = holds(leagueId, subject, rosters, members);
+    const held = holds(leagueId, subject, rolls);
     if (held === null) continue;
     answered++;
     if (held) matched++;

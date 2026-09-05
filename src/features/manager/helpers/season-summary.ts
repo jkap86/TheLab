@@ -78,3 +78,31 @@ export function formatCombinedRecord(summary: SeasonSummary): string {
 export function formatWinPct(summary: SeasonSummary): string {
   return summary.winPct === null ? "—" : `${summary.winPct.toFixed(1)}%`;
 }
+
+/**
+ * One shares row's record column, folded and already spelled.
+ *
+ * **It moved out of the drawer with the drawer**, which is the whole reason it
+ * exists as a function: `SharesDrawer` folded this itself while it was a
+ * manager component and every row it drew carried a league list for it to fold
+ * from. Two of the four panels that share it now count a *week*, and have
+ * neither a season to fold nor leagues to fold it over — so the fold came back
+ * to the side that has both, and the drawer takes the answer.
+ *
+ * **Null where the set has played nothing**, never `0–0`: `formatCombinedRecord`
+ * always spells a string, so the game count is the only honest gate, and a
+ * record of nothing is a claim that they went winless.
+ */
+export function rowRecord(leagues: readonly ManagerLeague[]): {
+  label: string;
+  pct: number;
+  pctLabel: string;
+} | null {
+  const summary = seasonSummary(leagues);
+  if (summary.games === 0 || summary.winPct === null) return null;
+  return {
+    label: formatCombinedRecord(summary),
+    pct: summary.winPct,
+    pctLabel: formatWinPct(summary),
+  };
+}

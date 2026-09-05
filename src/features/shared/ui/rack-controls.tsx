@@ -8,6 +8,13 @@ import {
   type ReactNode,
 } from "react";
 
+// A sibling module in this folder, and that is what lets `RackControls` name
+// the union at all: `SubjectKind` lived in `features/manager` when this seam
+// was written, and `features/shared` may not read a sibling feature, so the two
+// legal values were spelled out here instead. It moved here with the shares
+// drawer, and the spelled-out copy went with it.
+import type { SubjectKind } from "../league-subjects";
+
 /**
  * Everything the app rack needs to draw a page's Browse controls.
  *
@@ -25,21 +32,38 @@ import {
  * than left published and unread: a field nobody reads is a field the next
  * reader of either file has to prove is dead.
  *
- * `drawer` rides along with `onOpenDrawer` because the two Browse keys report
- * which drawer is open (`aria-expanded`, and the lit state that goes with it);
- * the drawers themselves stay mounted on the page, where their state lives.
+ * `drawer` rides along with `onOpenDrawer` because the Browse keys report which
+ * drawer is open (`aria-expanded`, and the lit state that goes with it); the
+ * drawers themselves stay mounted on the page, where their state lives.
+ *
+ * **The keys are data now, where they used to be two legends written into
+ * `features/tools`.** That was tolerable while one page published controls and
+ * both its drawers were named in the rack's own markup; it stopped being so the
+ * moment a second page published a different pair, because the rack would then
+ * have carried every page's vocabulary and a `switch` on the route to choose
+ * between them. A page names its own keys and the rack only mounts them —
+ * which is the same rule this seam already exists for, one grain further in.
  */
 export type RackControls = {
   /**
-   * Which shares drawer is open, or null.
+   * The Browse keys this page offers, in the order the rack draws them.
    *
-   * The union is spelled out rather than imported as `SubjectKind`, which lives
-   * in `features/manager`: `features/shared` may not read a sibling feature.
-   * The two spellings are structurally identical, so the page's own
-   * `SubjectKind` assigns to this without a cast.
+   * **Hand over a stable array**, per the note on
+   * {@link usePublishRackControls}: a literal rebuilt each render republishes
+   * each render. A module-level constant is what both pages use, since the
+   * legends are fixed.
    */
-  drawer: "player" | "leaguemate" | null;
-  onOpenDrawer: (kind: "player" | "leaguemate") => void;
+  keys: readonly RackDrawerKey[];
+  /** Which of them is open, or null. */
+  drawer: SubjectKind | null;
+  onOpenDrawer: (kind: SubjectKind) => void;
+};
+
+/** One key: which drawer it opens, and what it says. */
+export type RackDrawerKey = {
+  kind: SubjectKind;
+  /** The legend, in the page's own words — "Players", "Opponents". */
+  label: string;
 };
 
 /**
@@ -98,11 +122,11 @@ export function useRackControls(): RackControls | null {
  */
 export function usePublishRackControls(controls: RackControls): void {
   const publish = useContext(WriteContext);
-  const { drawer, onOpenDrawer } = controls;
+  const { keys, drawer, onOpenDrawer } = controls;
 
   useEffect(() => {
     if (!publish) return;
-    publish({ drawer, onOpenDrawer });
+    publish({ keys, drawer, onOpenDrawer });
     return () => publish(null);
-  }, [publish, drawer, onOpenDrawer]);
+  }, [publish, keys, drawer, onOpenDrawer]);
 }

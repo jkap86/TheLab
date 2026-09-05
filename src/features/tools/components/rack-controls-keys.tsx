@@ -22,10 +22,15 @@ import {
  * *not* describe the page — the two keys open drawers — and for those the
  * scroll-depth argument still holds: the header scrolls away after two cards.
  *
- * **What it draws comes from the page, not from this folder.** The rack is
- * mounted above `{children}` and cannot see a page's state, so `RackControls`
- * is published upward and this component only mounts it; a page that publishes
- * nothing renders none of this, the rule the tools menu already lives by.
+ * **What it draws comes from the page, not from this folder — the legends
+ * included.** The rack is mounted above `{children}` and cannot see a page's
+ * state, so `RackControls` is published upward and this component only mounts
+ * it; a page that publishes nothing renders none of this, the rule the tools
+ * menu already lives by. The two legends used to be written here, which held
+ * while `/manager` was the only page publishing a pair; the lineup checker
+ * publishes `Starters` and `Opponents`, and a rack naming both pages' keys
+ * would need a `switch` on the route to choose between them. So the keys are
+ * data and this maps over them — same track, same fold, same dismissal.
  *
  * **Below `lg` the keys collapse behind one icon-only key.** That is answered
  * the way this folder already answered it once: `ToolsMenu` replaced a six-key
@@ -58,9 +63,9 @@ import {
  * straight back with any dialog mounted in this subtree: a modal `<dialog>` is
  * in the top layer only for as long as it still generates a box, so hiding the
  * panel it lives in takes the modal off screen with it and leaves a backdrop
- * over an inert page — a key that reads as dead. The two keys left open the
- * page's *own* drawers, which are mounted nowhere near this box, so they can
- * and do dismiss the menu on the press.
+ * over an inert page — a key that reads as dead. Every key here opens one of
+ * the page's *own* drawers, which are mounted nowhere near this box, so they
+ * can and do dismiss the menu on the press.
  *
  * **The same track serves both layouts, and no markup is rendered twice.** The
  * panel is `display: contents` at `lg`, so its box stops existing and the track
@@ -100,7 +105,7 @@ export function RackControlsKeys({ controls }: { controls: RackControls }) {
     };
   }, [open, dismiss]);
 
-  const { drawer, onOpenDrawer } = controls;
+  const { keys, drawer, onOpenDrawer } = controls;
   // Lit while a drawer is open, which is now the whole of what this key has to
   // report: the filter state is on the page's own plate, beside the figure it
   // moves and the sentence saying what it narrowed. A closed menu saying "a
@@ -145,38 +150,29 @@ export function RackControlsKeys({ controls }: { controls: RackControls }) {
         <div
           className={`${CONSOLE_TRACK} flex items-center gap-1.5 p-1 lg:order-4 lg:shrink-0`}
         >
-          {/* Both dismiss the menu on the press, and that is safe for exactly
-              one reason: a shares drawer is the *page's* dialog, mounted
+          {/* Every key dismisses the menu on the press, and that is safe for
+              exactly one reason: a shares drawer is the *page's* dialog, mounted
               nowhere near this box, so hiding the menu behind it leaves a clean
               page. A dialog mounted in here could not do this — see the module
               note. */}
-          <button
-            type="button"
-            onClick={() => {
-              onOpenDrawer("player");
-              setOpen(false);
-            }}
-            aria-haspopup="dialog"
-            aria-expanded={drawer === "player"}
-            // Shape and state composed rather than concatenated onto a string
-            // that already names a border colour — same specificity, and which
-            // one wins is decided by Tailwind's emit order.
-            className={`${key} ${state(drawer === "player")}`}
-          >
-            Players
-          </button>
-          <button
-            type="button"
-            onClick={() => {
-              onOpenDrawer("leaguemate");
-              setOpen(false);
-            }}
-            aria-haspopup="dialog"
-            aria-expanded={drawer === "leaguemate"}
-            className={`${key} ${state(drawer === "leaguemate")}`}
-          >
-            Leaguemates
-          </button>
+          {keys.map(({ kind, label }) => (
+            <button
+              key={kind}
+              type="button"
+              onClick={() => {
+                onOpenDrawer(kind);
+                setOpen(false);
+              }}
+              aria-haspopup="dialog"
+              aria-expanded={drawer === kind}
+              // Shape and state composed rather than concatenated onto a string
+              // that already names a border colour — same specificity, and which
+              // one wins is decided by Tailwind's emit order.
+              className={`${key} ${state(drawer === kind)}`}
+            >
+              {label}
+            </button>
+          ))}
         </div>
 
       </div>

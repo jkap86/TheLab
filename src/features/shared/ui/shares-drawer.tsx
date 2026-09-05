@@ -10,14 +10,10 @@ import {
   useState,
 } from "react";
 
-import type { ManagerLeague } from "@/shared/contract";
+import type { Subject, SubjectKind } from "../league-subjects";
 import {
-  CONSOLE_KEY_PILL,
-  CONSOLE_TRACK,
-  CONSOLE_WINDOW,
   MAX_SHARES_COLUMNS,
   mergeSharesColumns,
-  Scanlines,
   SHARES_COLUMN_WIDTHS,
   SHARES_COLUMNS_BY_KIND,
   type SharesColumnId,
@@ -25,14 +21,13 @@ import {
   sharesColumns,
   storeSharesColumns,
   useSharesColumns,
-} from "@/features/shared";
-
-import type { Subject, SubjectKind } from "../helpers/league-subjects";
+} from "../shares-columns";
 import {
-  formatCombinedRecord,
-  formatWinPct,
-  seasonSummary,
-} from "../helpers/season-summary";
+  CONSOLE_KEY_PILL,
+  CONSOLE_TRACK,
+  CONSOLE_WINDOW,
+} from "../console-chrome";
+import { Scanlines } from "./card-plate";
 
 /**
  * The shares drawer: a native `<dialog>` pinned to one edge of the viewport,
@@ -75,8 +70,18 @@ import {
  * a row with two jobs could not have been a disclosure. With one job it could
  * — and it still is not, because there is nothing left to disclose.
  *
- * The row's leagues are still *data*: the record column and the share are both
- * folded out of them.
+ * The row's leagues are still *data* on the caller's side: the record column is
+ * folded out of them there and arrives here already spelled — see
+ * {@link SharesDrawerRow.record}.
+ *
+ * **It moved here from `features/manager` when the lineup checker grew two
+ * panels of its own** — the line `CONSOLE_KEY`, `ManagerPlate`, `card-plate.tsx`
+ * and `LineupColumnsDialog` all moved on, and the same folder rule, since
+ * `features/lineupchecker` may not import from `features/manager`. Two things
+ * came off it in the move and both were manager-only: the `seasonSummary` fold
+ * above, and a `kind` that could only ever name two panels. What arrived in
+ * their place is {@link SharesDrawer}'s `detail` slot, which is how a panel
+ * puts a second view in front of its own list without owning a second dialog.
  */
 
 const SIDES = {
@@ -114,15 +119,44 @@ export type SharesDrawerRow = {
   /** How many of the counted leagues hold this row. */
   held: number;
   /**
-   * Which ones — **data, not markup.** The record column and the win rate are
-   * folded out of this list, over the same aggregate the header housing on the
-   * page behind uses, so the two cannot be computed different ways.
+   * The season columns. Absent on a row from a panel that cannot offer them.
+   *
+   * **The record arrives folded, where it used to be computed here.** This
+   * component folded `seasonSummary` over a league list carried on every row,
+   * which made a manager-only aggregate a cost every panel paid and a shape
+   * every panel had to carry — a week panel has no leagues to fold and no
+   * season to fold them over. Its caller does the fold now, against the same
+   * aggregate the header plate behind uses, so the two still cannot be computed
+   * different ways.
+   *
+   * Null throughout where a set of leagues has played nothing: a record of
+   * `0–0` is a claim that they went winless.
    */
-  leagues: ManagerLeague[];
-  /** The player columns. Absent on a leaguemate row, which cannot offer them. */
+  record?: RowRecord | null;
   value?: number | null;
   age?: number | null;
   draftClass?: number | null;
+  /**
+   * The week columns: how many of the counted lineups seated this player, and
+   * how many left him on the bench.
+   *
+   * **The two do not have to sum to {@link held}**, and reading them as if they
+   * did is the mistake to avoid: a league where the check answered nothing for
+   * a player counts him in neither, which is a third state and not a zero on
+   * one of them.
+   */
+  started?: number | null;
+  benched?: number | null;
+};
+
+/** A set of leagues' combined record, already spelled — see {@link SharesDrawerRow.record}. */
+export type RowRecord = {
+  /** `33–32`. */
+  label: string;
+  /** The same set's win rate, for the sort. */
+  pct: number;
+  /** `50.8%`, already spelled — the cell must not re-derive it. */
+  pctLabel: string;
 };
 
 /**
@@ -141,6 +175,8 @@ const SORT_ASCENDING: Record<SharesColumnId, boolean> = {
   class: false,
   record: false,
   share: false,
+  start: false,
+  bench: false,
 };
 
 /** The main figure's size, per metric — a record and a share carry two lines. */
@@ -150,18 +186,18 @@ const CELL_TEXT: Record<SharesColumnId, string> = {
   class: "text-[0.8125rem]",
   record: "text-[0.6875rem]",
   share: "text-[0.6875rem]",
+  start: "text-[0.6875rem]",
+  bench: "text-[0.6875rem]",
 };
 
-/** A row with its folded figures, ready to be sorted and drawn. */
+/** A row with its folded percentages, ready to be sorted and drawn. */
 type Prepared = {
   row: SharesDrawerRow;
+  /** {@link SharesDrawerRow.held} as a share of the counted leagues. */
   pct: number;
-  /** `33–32`, or null where no league in the set has played. */
-  record: string | null;
-  /** The same set's win rate, for the sort. Null wherever `record` is. */
-  winPct: number | null;
-  /** `50.8%`, already spelled — the cell must not re-derive it. */
-  winPctLabel: string | null;
+  /** The same, for the two week columns. Zero where the row has no figure. */
+  startPct: number;
+  benchPct: number;
 };
 
 export function SharesDrawer({
@@ -175,6 +211,9 @@ export function SharesDrawer({
   leagueCount,
   leagueTotal,
   filterSummary,
+  populationNote,
+  defaultSort = "share",
+  detail,
   loading,
   error,
   emptyMessage,
@@ -198,6 +237,41 @@ export function SharesDrawer({
   leagueTotal: number;
   /** What the league filters have been narrowed to, or null for nothing. */
   filterSummary: string | null;
+  /**
+   * A trailing clause on the population readout, or null.
+   *
+   * The week panels append `week 3` to it, because their shares are one week's
+   * and the readout is the only thing on screen that says so — a panel counting
+   * a single week under a sentence that names only leagues is a share a reader
+   * would take for the season's.
+   */
+  populationNote?: string | null;
+  /**
+   * Which column the list opens ordered by, where the panel's own leading
+   * column is not the answer.
+   *
+   * It is a prop rather than `cols[0]` because the two are different questions:
+   * the *order* of the columns is the reader's, stored and dragged, and what a
+   * panel opens sorted by is the panel's own claim about what it is for. The
+   * manager panels open on `share`, which is the metric their whole population
+   * rule exists to make honest. A stored key naming a column this panel cannot
+   * offer still falls back to the reader's rightmost — see `sortKey`.
+   */
+  defaultSort?: SharesColumnId | "name";
+  /**
+   * A view that stands in front of the list, or null for the list itself.
+   *
+   * **Two slots rather than one node**, because it replaces two things in two
+   * places: `deck` takes the search-and-sort band inside the raised plate, and
+   * `body` takes the scroller's contents inside the recessed tray. Handed one
+   * node the caller would have to draw its own plate and its own tray, and the
+   * panel's two surfaces would then have two spellings.
+   *
+   * The title band above it is deliberately untouched: the panel is still the
+   * same panel counting the same population, and a detail view that took the
+   * whole deck would leave a reader unable to see what they were inside of.
+   */
+  detail?: { deck: ReactNode; body: ReactNode } | null;
   loading: boolean;
   error: string | null;
   /** What to say when there is genuinely nothing, as opposed to nothing matching. */
@@ -228,7 +302,7 @@ export function SharesDrawer({
   // A way of reading this list rather than a device preference, so it is
   // `useState` — the same call `LeagueTeams` makes about its metric select.
   // The *columns* are persisted, because those are a preference.
-  const [sort, setSort] = useState<SharesColumnId | "name">("share");
+  const [sort, setSort] = useState<SharesColumnId | "name">(defaultSort);
   const [lifted, setLifted] = useState<SharesColumnId | null>(null);
 
   const stored = useSharesColumns();
@@ -274,23 +348,15 @@ export function SharesDrawer({
       ? rows.filter((r) => r.name.toLowerCase().includes(needle))
       : rows;
 
-    const prepared: Prepared[] = kept.map((row) => {
-      // The app's own aggregate, so the record in a row and the record in the
-      // header housing cannot be computed two different ways — and a league
-      // with no stored record is skipped rather than counted `0–0`.
-      const summary = seasonSummary(row.leagues);
-      // `formatCombinedRecord` always spells a string, so the gate is the game
-      // count: a set of leagues that has played nothing shows no record rather
-      // than an `0–0` claiming they went winless.
-      const played = summary.games > 0;
-      return {
-        row,
-        pct: leagueCount > 0 ? Math.round((row.held / leagueCount) * 100) : 0,
-        record: played ? formatCombinedRecord(summary) : null,
-        winPct: played ? summary.winPct : null,
-        winPctLabel: played ? formatWinPct(summary) : null,
-      };
-    });
+    const share = (n: number | null | undefined) =>
+      leagueCount > 0 && n != null ? Math.round((n / leagueCount) * 100) : 0;
+
+    const prepared: Prepared[] = kept.map((row) => ({
+      row,
+      pct: share(row.held),
+      startPct: share(row.started),
+      benchPct: share(row.benched),
+    }));
 
     if (sortKey === "name") {
       return prepared.sort((a, b) => a.row.name.localeCompare(b.row.name));
@@ -382,7 +448,12 @@ export function SharesDrawer({
             >
               <Scanlines />
               <span className="relative truncate font-mono text-[0.5625rem] uppercase tracking-[0.14em] text-readout-line">
-                {population(leagueCount, leagueTotal, filterSummary)}
+                {population(
+                  leagueCount,
+                  leagueTotal,
+                  filterSummary,
+                  populationNote,
+                )}
               </span>
             </span>
 
@@ -396,6 +467,14 @@ export function SharesDrawer({
             </button>
           </div>
 
+          {/* The second band: the list's own controls, or the detail view's
+              deck in their place. Both sit in the same plate at the same
+              padding, so pressing a row moves nothing above the fold. */}
+          {detail ? (
+            <div className="flex flex-col gap-[0.3125rem] px-3 pb-2 pt-1.5">
+              {detail.deck}
+            </div>
+          ) : (
           <div className="flex flex-col gap-[0.3125rem] px-3 pb-2 pt-1.5">
             {/* **The row wraps, and the tray is what wraps onto the second
                 line.** `PlayerFilters` is one component — the key and the tray
@@ -447,6 +526,7 @@ export function SharesDrawer({
               />
             </div>
           </div>
+          )}
         </div>
 
         {/* The list tray, recessed into the deck above it. A recess has to be
@@ -454,7 +534,7 @@ export function SharesDrawer({
             and a `--foreground` alpha is not — the latter inverts with the
             theme and would light the tray up in light mode. */}
         <div className="relative m-2 flex min-h-0 flex-1 flex-col rounded-[0.875rem] bg-black/[0.16] shadow-[var(--well-shadow)]">
-          {shown.length > 0 && (
+          {!detail && shown.length > 0 && (
             <>
               {/* The header is laid out from the same widths the cells are, so
                   a label sits over the readout it names. The right padding is
@@ -494,7 +574,12 @@ export function SharesDrawer({
             ref={listRef}
             className="lab-scroll relative min-h-0 flex-1 overflow-y-auto overscroll-contain pb-3 pl-[0.6875rem] pr-[0.4375rem] pt-2 [mask-image:linear-gradient(to_bottom,transparent_0,#000_0.625rem,#000_calc(100%-0.75rem),transparent_100%)]"
           >
-            {loading ? (
+            {detail ? (
+              // The detail view answers off rows already in hand, so it does
+              // not wait on the read and cannot fail on its own. A drawer that
+              // is still loading has no row to have pressed.
+              detail.body
+            ) : loading ? (
               <Message>Reading {noun}…</Message>
             ) : error ? (
               <p
@@ -577,11 +662,12 @@ function population(
   counted: number,
   total: number,
   summary: string | null,
+  note: string | null | undefined,
 ): string {
-  if (!summary) {
-    return `Across all ${counted} league${counted === 1 ? "" : "s"}`;
-  }
-  return `Across ${counted} of ${total} leagues · ${summary}`;
+  const leagues = summary
+    ? `Across ${counted} of ${total} leagues · ${summary}`
+    : `Across all ${counted} league${counted === 1 ? "" : "s"}`;
+  return note ? `${leagues} · ${note}` : leagues;
 }
 
 /** The metric's own number for a row, or null where it has none. */
@@ -594,9 +680,18 @@ function weightOf(id: SharesColumnId, prepared: Prepared): number | null {
     case "class":
       return prepared.row.draftClass ?? null;
     case "record":
-      return prepared.winPct;
+      return prepared.row.record?.pct ?? null;
     case "share":
       return prepared.row.held;
+    // **Zero is a real answer on both, so neither falls back to null**: a player
+    // nobody started is a fact this list is read for, and sorting him last in
+    // either direction — the rule an absent price is right to take — would put
+    // exactly the rows a reader opened the panel to find where they cannot see
+    // them. Absent stays null, and that is a row the check answered nothing for.
+    case "start":
+      return prepared.row.started ?? null;
+    case "bench":
+      return prepared.row.benched ?? null;
   }
 }
 
@@ -1015,6 +1110,11 @@ function Cell({
   let trail: string | null = null;
   let sub: string | null = null;
   let bar = false;
+  // **The bench figure is one step quieter than the started one.** Both are the
+  // same shape and the same scale, and which of the two a reader is after is
+  // the whole of what the panel is for — bench is the secondary reading, and a
+  // second lit column beside a lit column says neither is.
+  let quiet = false;
 
   switch (id) {
     case "value":
@@ -1027,15 +1127,32 @@ function Cell({
       if (row.draftClass != null) main = String(row.draftClass);
       break;
     case "record":
-      if (prepared.record) {
-        main = prepared.record;
-        sub = prepared.winPctLabel;
+      if (row.record) {
+        main = row.record.label;
+        sub = row.record.pctLabel;
       }
       break;
     case "share":
       main = `${row.held}/${leagueCount}`;
       trail = `${pct}%`;
       bar = true;
+      break;
+    // **No meter on either.** The share meter draws one figure against the
+    // panel's whole population; these two draw against each other, and a bar
+    // under each would read as two independent gauges of the same league count
+    // rather than as the two halves one lineup decision splits into.
+    case "start":
+      if (row.started != null) {
+        main = `${row.started}/${leagueCount}`;
+        trail = `${prepared.startPct}%`;
+      }
+      break;
+    case "bench":
+      quiet = true;
+      if (row.benched != null) {
+        main = `${row.benched}/${leagueCount}`;
+        trail = `${prepared.benchPct}%`;
+      }
       break;
   }
 
@@ -1046,7 +1163,11 @@ function Cell({
     >
       <Scanlines />
       <span
-        className={`relative flex items-baseline justify-between gap-1 whitespace-nowrap font-mono leading-[1.2] tabular-nums text-readout [text-shadow:var(--readout-text-glow)] ${CELL_TEXT[id]}`}
+        className={`relative flex items-baseline justify-between gap-1 whitespace-nowrap font-mono leading-[1.2] tabular-nums ${CELL_TEXT[id]} ${
+          quiet
+            ? "text-readout-line"
+            : "text-readout [text-shadow:var(--readout-text-glow)]"
+        }`}
       >
         <span>{main}</span>
         {trail && <span className="text-[0.5625rem] text-readout-label">{trail}</span>}

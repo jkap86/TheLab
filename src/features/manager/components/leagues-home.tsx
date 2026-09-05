@@ -12,20 +12,21 @@ import {
   LeagueFiltersDialog,
   ManagerPlate,
   matchesFilters,
+  matchesSubjects,
+  NO_SUBJECTS,
+  removeSubject,
+  SubjectTokens,
+  toggleSubject,
+  type LeagueSubjects,
+  type Subject,
+  type RackDrawerKey,
+  type SubjectRolls,
   usePublishRackControls,
   useKtcBoard,
   useLineupColumns,
   useManagerLeagues,
 } from "@/features/shared";
 
-import {
-  type LeagueSubjects,
-  matchesSubjects,
-  NO_SUBJECTS,
-  removeSubject,
-  type Subject,
-  toggleSubject,
-} from "../helpers/league-subjects";
 import { useManagerLineups } from "../hooks/use-manager-lineups";
 import {
   useManagerLeaguemates,
@@ -36,7 +37,19 @@ import { LeagueCard } from "./league-card";
 import { LeaguemateSharesDrawer } from "./leaguemate-shares-drawer";
 import { PlayerSharesDrawer } from "./player-shares-drawer";
 import { SeasonSummary } from "./season-summary";
-import { SubjectTokens } from "./subject-tokens";
+
+/**
+ * The two Browse keys this page puts in the rack, and their legends.
+ *
+ * **Module scope, not a literal in the render**, and that is the requirement
+ * `usePublishRackControls` states rather than a habit: the publish effect
+ * depends on this array, so one rebuilt each render would publish each render,
+ * set an ancestor's state and re-render — a loop rather than a stale value.
+ */
+const BROWSE_KEYS: readonly RackDrawerKey[] = [
+  { kind: "player", label: "Players" },
+  { kind: "leaguemate", label: "Leaguemates" },
+];
 
 /**
  * A manager's leagues for a season, as one console.
@@ -170,17 +183,24 @@ export function LeaguesHome({
     () => leagues.filter((league) => matchesFilters(league, filters)),
     [leagues, filters],
   );
+  // The two populations this page can answer a subject from, behind the
+  // resolver `matchesSubjects` takes. The two kinds it does *not* answer for —
+  // the lineup checker's week panels — come back null, which the predicate
+  // reads as "nothing here can say" and ignores rather than failing either way.
+  const rolls = useCallback<SubjectRolls>(
+    (kind) => {
+      if (kind === "player") return players.data?.rosters ?? null;
+      if (kind === "leaguemate") return leaguemates.data?.members ?? null;
+      return null;
+    },
+    [players.data, leaguemates.data],
+  );
   const visible = useMemo(
     () =>
       leagueFiltered.filter((league) =>
-        matchesSubjects(
-          league.league_id,
-          subjects,
-          players.data?.rosters ?? null,
-          leaguemates.data?.members ?? null,
-        ),
+        matchesSubjects(league.league_id, subjects, rolls),
       ),
-    [leagueFiltered, subjects, players.data, leaguemates.data],
+    [leagueFiltered, subjects, rolls],
   );
 
   // A token names what the reader picked. The maps are the only place those
@@ -225,7 +245,7 @@ export function LeaguesHome({
   // column selection or the KTC pair, and none of them is published. Publishing
   // a field the rack does not read is a field that looks load-bearing to the
   // next reader of either file.
-  usePublishRackControls({ drawer, onOpenDrawer: openDrawer });
+  usePublishRackControls({ keys: BROWSE_KEYS, drawer, onOpenDrawer: openDrawer });
 
   return (
     <div className="relative">

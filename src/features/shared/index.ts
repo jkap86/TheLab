@@ -70,13 +70,34 @@ export {
   storeSharesColumns,
   useSharesColumns,
 } from "./shares-columns";
-export type { SharesColumnId, SharesPanelKind } from "./shares-columns";
+export type { SharesColumnId } from "./shares-columns";
+// The second narrowing a league grid takes, and the two components that drive
+// it. All three came here from `features/manager` when the lineup checker grew
+// drawers of its own — the line `CONSOLE_KEY` and `ManagerPlate` moved on.
+export {
+  NO_SUBJECTS,
+  matchesSubjects,
+  removeSubject,
+  subjectCount,
+  subjectKey,
+  toggleSubject,
+} from "./league-subjects";
+export type {
+  LeagueSubjects,
+  Subject,
+  SubjectKind,
+  SubjectMatch,
+  SubjectRolls,
+} from "./league-subjects";
+export { SharesDrawer } from "./ui/shares-drawer";
+export type { SharesDrawerRow } from "./ui/shares-drawer";
+export { SubjectTokens } from "./ui/subject-tokens";
 export {
   RackControlsProvider,
   usePublishRackControls,
   useRackControls,
 } from "./ui/rack-controls";
-export type { RackControls } from "./ui/rack-controls";
+export type { RackControls, RackDrawerKey } from "./ui/rack-controls";
 export { THEME_BOOT_SCRIPT } from "./theme";
 export { useManagerLeagues } from "./use-manager-leagues";
 export type { ManagerLeaguesState } from "./use-manager-leagues";

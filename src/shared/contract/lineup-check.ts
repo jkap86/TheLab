@@ -89,6 +89,23 @@ export type LineupCheckLeague = {
    */
   opponent_points: number | null;
   /**
+   * The opponent's lineup as set, and everyone else on their roster.
+   *
+   * **Null wherever `opponent_points` is**, and for the same three reasons — a
+   * future week, a week Sleeper filed without a `matchup_id`, an opponent whose
+   * roster is not stored. Never an empty array for any of them: a panel counting
+   * opposing players over an empty list would report "no opposing players" for a
+   * league that simply has not been asked yet, which is the claim the null is
+   * here to refuse.
+   *
+   * `move_to` is null on every seat, and that is a fact rather than an omission:
+   * kickoff order is a question about the lineup a reader can still move, and
+   * the opponent's is not one of those.
+   */
+  opponent_lineup: LineupCheckSeat[] | null;
+  /** Everyone else on the opponent's roster, best first. Null with the above. */
+  opponent_bench: LineupCheckPlayer[] | null;
+  /**
    * What the best lineup **still reachable** projects — seats held by a player
    * whose game has kicked off stay as they are, the rest are solved. Part-way
    * through a week that is a different number from the best lineup outright,

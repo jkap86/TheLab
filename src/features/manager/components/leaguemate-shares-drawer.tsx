@@ -7,10 +7,16 @@ import type {
   ManagerLeaguematesPayload,
 } from "@/shared/contract";
 
-import type { LeagueSubjects, Subject } from "../helpers/league-subjects";
-import { subjectKey } from "../helpers/league-subjects";
+import {
+  SharesDrawer,
+  subjectKey,
+  type LeagueSubjects,
+  type SharesDrawerRow,
+  type Subject,
+} from "@/features/shared";
+
 import { leaguemateShares } from "../helpers/leaguemates";
-import { SharesDrawer, type SharesDrawerRow } from "./shares-drawer";
+import { rowRecord } from "../helpers/season-summary";
 
 /**
  * Leaguemate shares: everyone the manager plays against, and in how many
@@ -24,8 +30,8 @@ import { SharesDrawer, type SharesDrawerRow } from "./shares-drawer";
  * honestly put there: a leaguemate's record lives on their roster row in each
  * league, and reading twelve of those to answer a list is a different query.
  * What it says — "you are 14–8 in the leagues you share with Slim" — is also
- * the more interesting fact. The drawer folds it out of `leagues`, so this file
- * no longer computes it: one aggregate, one spelling.
+ * the more interesting fact. It is folded through `rowRecord`, the same
+ * aggregate the identity plate reads: one spelling, two readers.
  *
  * **The note under the name is gone**, which is what the record becoming a
  * column bought: it used to carry that same record, and the same fact twice on
@@ -75,7 +81,8 @@ export function LeaguemateSharesDrawer({
         id: mate.user_id,
         name: mate.name,
         held: mate.leagues.length,
-        leagues: mate.leagues,
+        // Folded here rather than in the drawer — see `SharesDrawerRow.record`.
+        record: rowRecord(mate.leagues),
         // The stored avatar rides through as a url rather than as a mounted
         // `<Avatar>`: the bezel is a fixed 1.875rem and `Avatar`'s `md` grows
         // to 2.25rem inside a container this wide. Same image, same fallback

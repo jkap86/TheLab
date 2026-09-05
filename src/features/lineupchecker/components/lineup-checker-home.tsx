@@ -1,6 +1,6 @@
 "use client";
 
-import { type ReactNode, useMemo, useState } from "react";
+import { type ReactNode, useCallback, useMemo, useState } from "react";
 
 import {
   activeFilterCount,
@@ -13,8 +13,18 @@ import {
   LeagueFiltersDialog,
   ManagerPlate,
   matchesFilters,
+  matchesSubjects,
+  NO_SUBJECTS,
+  removeSubject,
   Scanlines,
+  SubjectTokens,
+  toggleSubject,
+  type LeagueSubjects,
+  type RackDrawerKey,
+  type Subject,
+  type SubjectRolls,
   useManagerLeagues,
+  usePublishRackControls,
 } from "@/features/shared";
 
 import { useLineupCheck } from "../hooks/use-lineup-check";
@@ -23,10 +33,30 @@ import {
   needsAttention,
   type AttentionReasons,
 } from "../helpers/lineup-check-metrics";
+import type { WeekLineupEntry } from "../helpers/starter-shares";
 import { weekSummary } from "../helpers/week-summary";
 import { LineupCheckCard } from "./lineup-check-card";
+import { OpponentSharesDrawer } from "./opponent-shares-drawer";
+import { StarterSharesDrawer } from "./starter-shares-drawer";
 import { WeekSummary } from "./week-summary";
 import { WeekStepper } from "./week-stepper";
+
+/**
+ * The two Browse keys this page puts in the rack, and their legends.
+ *
+ * **Module scope, not a literal in the render**, which is the requirement
+ * `usePublishRackControls` states rather than a habit: the publish effect
+ * depends on this array, so one rebuilt each render would publish each render,
+ * set an ancestor's state and re-render — a loop rather than a stale value.
+ */
+const BROWSE_KEYS: readonly RackDrawerKey[] = [
+  { kind: "starter", label: "Starters" },
+  { kind: "opponent", label: "Opponents" },
+];
+
+/** Stable empty answer, so a render before the check lands hands the memos below
+ *  the same object rather than a new one to recompute from. */
+const NO_LEAGUES: Record<string, never> = {};
 
 /**
  * The lineup checker: every league this account plays in, what its lineup is
@@ -119,11 +149,13 @@ function Checker({
   const cold = leagues.length === 0 && refreshing;
 
   const [filters, setFilters] = useState(DEFAULT_LEAGUE_FILTERS);
-  const narrowing = activeFilterCount(filters) > 0;
-  const visible = useMemo(
-    () => leagues.filter((league) => matchesFilters(league, filters)),
-    [leagues, filters],
-  );
+  // The drawers' half of the narrowing, on `LeaguesHome`'s terms. `opened` is a
+  // latch rather than the open flag: a picked subject keeps narrowing the grid
+  // after its drawer closes, and both panels keep their own search and scroll
+  // once they have been opened.
+  const [subjects, setSubjects] = useState<LeagueSubjects>(NO_SUBJECTS);
+  const [drawer, setDrawer] = useState<Subject["kind"] | null>(null);
+  const [opened, setOpened] = useState<ReadonlySet<Subject["kind"]>>(new Set());
 
   const { payload: check, reread } = useLineupCheck(
     username,
@@ -131,7 +163,109 @@ function Checker({
     week,
     leagues.length > 0 && !refreshing,
   );
-  const checked = check?.leagues ?? {};
+  const checked = check?.leagues ?? NO_LEAGUES;
+
+  // **The two narrowings are two passes and the order is the cheap one** — the
+  // leagues console's arrangement, and the drawers count over exactly this
+  // intermediate list, never over the one below it.
+  const leagueFiltered = useMemo(
+    () => leagues.filter((league) => matchesFilters(league, filters)),
+    [leagues, filters],
+  );
+
+  // One league's contribution to a week fold: the league row the page draws and
+  // the week the check solved for it. A league the check answered nothing for
+  // is absent rather than present and empty — the denominator rule the two
+  // panels' `league_count` is written by.
+  const entries = useMemo<WeekLineupEntry[]>(
+    () =>
+      leagueFiltered.flatMap((league) => {
+        const entry = checked[league.league_id];
+        return entry ? [{ league, entry }] : [];
+      }),
+    [leagueFiltered, checked],
+  );
+
+  // The two populations a subject picked on this page is answered from: who was
+  // on each of the manager's rosters this week, and who was on each opponent's.
+  // A league with no opponent is simply absent from the second, which the
+  // predicate reads as "this league does not hold them" — correct, and a
+  // different state from the map not having arrived at all.
+  const rolls = useMemo(() => {
+    const starter: Record<string, string[]> = {};
+    const opponent: Record<string, string[]> = {};
+    for (const [id, entry] of Object.entries(checked)) {
+      starter[id] = [
+        ...entry.lineup.flatMap((seat) =>
+          seat.player ? [seat.player.player_id] : [],
+        ),
+        ...entry.bench.map((p) => p.player_id),
+      ];
+      if (entry.opponent_lineup && entry.opponent_bench) {
+        opponent[id] = [
+          ...entry.opponent_lineup.flatMap((seat) =>
+            seat.player ? [seat.player.player_id] : [],
+          ),
+          ...entry.opponent_bench.map((p) => p.player_id),
+        ];
+      }
+    }
+    return { starter, opponent };
+  }, [checked]);
+
+  // Null until the check lands, which `matchesSubjects` reads as "nothing here
+  // can say" and ignores — the only reading that matches what is on screen,
+  // since failing it closed would empty the grid while a read is in flight.
+  const subjectRolls = useCallback<SubjectRolls>(
+    (kind) => {
+      if (check === null) return null;
+      if (kind === "starter") return rolls.starter;
+      if (kind === "opponent") return rolls.opponent;
+      return null;
+    },
+    [check, rolls],
+  );
+
+  const visible = useMemo(
+    () =>
+      leagueFiltered.filter((league) =>
+        matchesSubjects(league.league_id, subjects, subjectRolls),
+      ),
+    [leagueFiltered, subjects, subjectRolls],
+  );
+
+  const narrowing = activeFilterCount(filters) > 0;
+
+  // A token names what the reader picked. The folded lineups are the only place
+  // those names live, so an id that outlives its payload falls back to itself
+  // rather than to a blank chip.
+  const subjectName = (subject: Subject) => {
+    for (const { entry } of entries) {
+      const sides = [
+        entry.lineup,
+        entry.opponent_lineup ?? [],
+      ].flatMap((lineup) => lineup.flatMap((s) => (s.player ? [s.player] : [])));
+      const found = [...sides, ...entry.bench, ...(entry.opponent_bench ?? [])].find(
+        (p) => p.player_id === subject.id,
+      );
+      if (found?.name) return found.name;
+    }
+    return subject.id;
+  };
+
+  // Latch and open in one handler — never during render. It is a `useCallback`
+  // because it crosses the rack seam below, where a new identity every render
+  // would re-publish on every render and set an ancestor's state in a loop.
+  const openDrawer = useCallback((kind: Subject["kind"]) => {
+    setOpened((prev) => (prev.has(kind) ? prev : new Set(prev).add(kind)));
+    setDrawer(kind);
+  }, []);
+
+  usePublishRackControls({
+    keys: BROWSE_KEYS,
+    drawer,
+    onOpenDrawer: openDrawer,
+  });
   // **Both are taken over the narrowed list**, the same argument
   // `seasonSummary` reverses itself on: a reader who has filtered to dynasty is
   // asking about their dynasty week, and the plate is the page's one set of
@@ -241,6 +375,17 @@ function Checker({
         />
       </div>
 
+      {/* The drawers hide their own state once closed, so the narrowing they
+          left behind needs a home on the page — the manager console's own
+          argument, and the same strip. */}
+      <SubjectTokens
+        subjects={subjects}
+        names={subjectName}
+        onRemove={(s) => setSubjects((prev) => removeSubject(prev, s))}
+        onMatch={(match) => setSubjects((prev) => ({ ...prev, match }))}
+        onClear={() => setSubjects(NO_SUBJECTS)}
+      />
+
       {error ? (
         <Alert>{error}</Alert>
       ) : cold ? (
@@ -293,6 +438,38 @@ function Checker({
             </ul>
           )}
         </>
+      )}
+
+      {/* Mounted once each kind has been opened, and kept: a closed drawer is
+          `open={false}`, not unmounted, so its search, its scroll and the
+          decisions view a reader was inside survive being shut. Both count over
+          `entries` — the league-filtered, subject-unnarrowed list — and the
+          readout's denominator is `leagues.length`, the account's own total. */}
+      {opened.has("starter") && (
+        <StarterSharesDrawer
+          open={drawer === "starter"}
+          onClose={() => setDrawer(null)}
+          entries={entries}
+          week={check?.week ?? null}
+          leagueTotal={leagues.length}
+          filterSummary={narrowing ? filterSummary(filters) : null}
+          pending={check === null}
+          subjects={subjects}
+          onToggle={(s) => setSubjects((prev) => toggleSubject(prev, s))}
+        />
+      )}
+      {opened.has("opponent") && (
+        <OpponentSharesDrawer
+          open={drawer === "opponent"}
+          onClose={() => setDrawer(null)}
+          entries={entries}
+          week={check?.week ?? null}
+          leagueTotal={leagues.length}
+          filterSummary={narrowing ? filterSummary(filters) : null}
+          pending={check === null}
+          subjects={subjects}
+          onToggle={(s) => setSubjects((prev) => toggleSubject(prev, s))}
+        />
       )}
     </div>
   );

@@ -2,6 +2,7 @@
 
 import { useMemo } from "react";
 
+import type { SubjectKind } from "./league-subjects.ts";
 import { useLocalValue, writeLocal } from "./local-store.ts";
 
 /*
@@ -52,6 +53,8 @@ const COLUMN_LABELS = {
   class: "Class",
   record: "Rec · Win",
   share: "Share",
+  start: "Started",
+  bench: "Bench",
 } as const;
 
 export type SharesColumnId = keyof typeof COLUMN_LABELS;
@@ -78,26 +81,37 @@ export const SHARES_COLUMN_WIDTHS: Record<SharesColumnId, string> = {
   class: "3.75rem",
   record: "4.25rem",
   share: "4.5rem",
+  start: "4.5rem",
+  bench: "4.5rem",
 };
-
-/** Which of the two shares panels is asking. */
-export type SharesPanelKind = "player" | "leaguemate";
 
 /**
  * Which columns each drawer can offer.
  *
- * The leaguemate panel is two of the five, and the three it drops are not
- * omissions: a value, an age and a draft class are facts about a *player*, and
- * there is no honest number of any of them for a person. A metric a panel
- * cannot offer is dropped from a stored selection rather than rendered blank —
- * see {@link sharesColumns}.
+ * **A `Record` over every {@link SubjectKind}, which is the seam rather than
+ * bookkeeping**: a fifth panel does not compile until it has been given
+ * columns, exactly as `LineupMetricId` breaks two compiles until a new metric
+ * has been placed on both sides of the wire.
+ *
+ * The leaguemate panel is two of the five season metrics, and the three it
+ * drops are not omissions: a value, an age and a draft class are facts about a
+ * *player*, and there is no honest number of any of them for a person.
+ *
+ * The two week panels offer neither set. A season's `Rec · Win` and a
+ * cross-league `Share` are answers about a whole year, and these two count one
+ * week: `Started` and `Bench` are how many of the week's lineups seated a
+ * player and how many left him off, which is the only pair either panel can
+ * state. A metric a panel cannot offer is dropped from a stored selection
+ * rather than rendered blank — see {@link sharesColumns}.
  */
 export const SHARES_COLUMNS_BY_KIND: Record<
-  SharesPanelKind,
+  SubjectKind,
   readonly SharesColumnId[]
 > = {
   player: ["value", "age", "class", "record", "share"],
   leaguemate: ["record", "share"],
+  starter: ["start", "bench"],
+  opponent: ["start", "bench"],
 };
 
 /**
@@ -167,22 +181,35 @@ export function useSharesColumns(): readonly SharesColumnId[] {
  * The stored sequence narrowed to what *this* panel can offer and capped at
  * {@link MAX_SHARES_COLUMNS}, never empty.
  *
- * **The fallback is the panel's last available column, not a fixed one.** A
- * reader whose stored sequence is all three player metrics opens the
- * leaguemates drawer and would otherwise be shown nothing; they get Share,
- * which is the column that panel is most about. Nothing is written back — the
- * stored sequence is the reader's answer for the panel that can honour it, and
- * rewriting it here would have opening one drawer quietly edit the other.
+ * **The fallback is everything the panel offers, not a fixed default and not
+ * its last column.** A stored sequence naming nothing this panel can answer is
+ * not a preference about this panel at all — it is the reader's answer for a
+ * different one — so the honest default is what the panel is *for*, which is
+ * every column it has, capped.
+ *
+ * It used to be the last column alone, on the argument that Share is what the
+ * leaguemates panel is most about. **That was wrong for a panel whose columns
+ * are a pair**, which is what the two week panels are: `Started` and `Bench`
+ * are one reading split in two, and a first visit shown only the second would
+ * be a panel silently missing the half it is named for — every reader's first
+ * visit, since the stored default is three season metrics and neither week
+ * panel offers any of them. The leaguemates panel gains its `Rec · Win` back on
+ * the same terms, which is the column it was already offering and already
+ * defaulting to whenever anything at all was stored for it.
+ *
+ * Nothing is written back — the stored sequence is the reader's answer for the
+ * panel that can honour it, and rewriting it here would have opening one drawer
+ * quietly edit the other.
  */
 export function sharesColumns(
   stored: readonly SharesColumnId[],
-  kind: SharesPanelKind,
+  kind: SubjectKind,
 ): readonly SharesColumnId[] {
   const offered = SHARES_COLUMNS_BY_KIND[kind];
   const kept = stored
     .filter((id) => offered.includes(id))
     .slice(0, MAX_SHARES_COLUMNS);
-  return kept.length > 0 ? kept : [offered[offered.length - 1]];
+  return kept.length > 0 ? kept : offered.slice(0, MAX_SHARES_COLUMNS);
 }
 
 /**
@@ -201,7 +228,7 @@ export function sharesColumns(
  */
 export function mergeSharesColumns(
   stored: readonly SharesColumnId[],
-  kind: SharesPanelKind,
+  kind: SubjectKind,
   shown: readonly SharesColumnId[],
 ): readonly SharesColumnId[] {
   const offered = SHARES_COLUMNS_BY_KIND[kind];

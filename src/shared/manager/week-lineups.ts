@@ -105,42 +105,16 @@ export function solveWeekLineup(
 
   const starters = league.starters ?? [];
 
-  // The candidate pool is the roster *and* whoever is starting: Sleeper's two
-  // arrays can disagree for a moment after a move, and a starter missing from
-  // `players` must still be priced — dropping him would credit the lineup with
-  // one fewer player than it is actually fielding. Padding entries are not
-  // players; a repeated id must not be seated twice.
-  const rostered = [
-    ...new Set([...(league.players ?? []), ...starters]),
-  ].filter((id) => id && id !== "0");
-
-  const priced = rostered.map((id) => {
-    const line = board[id];
-    const player: LineupCheckPlayer = {
-      player_id: id,
-      name: line?.name ?? null,
-      positions: line?.positions ?? [],
-      // Null only where the feed has no row at all. A row with no game scores a
-      // real zero — see the contract, and `./week` for why the row is kept.
-      points: line ? scoreStatLine(line.stats, league.scoring_settings) : null,
-      team: line?.team ?? null,
-      kickoff: kickoffFor(line?.team ?? null, kickoffs),
-      locked: locked.has(id),
-    };
-    return player;
-  });
-
+  const priced = priceRoster(
+    league.players,
+    starters,
+    league,
+    board,
+    locked,
+    kickoffs,
+  );
   const byId = new Map(priced.map((p) => [p.player_id, p]));
-
-  // The solver reads one number per player, and an unprojected player is a real
-  // zero to it: he can only ever fill a seat nobody else wanted, which is the
-  // honest ordering, and dropping him would overstate what the current lineup
-  // is scoring — the one thing this tool must get right.
-  const pool: RosterPlayer[] = priced.map((p) => ({
-    player_id: p.player_id,
-    positions: p.positions,
-    points: p.points ?? 0,
-  }));
+  const pool = solverPool(priced);
 
   const comparison = compareLineup({
     rosterPositions: positions,
@@ -183,27 +157,22 @@ export function solveWeekLineup(
     move_to: seat.player_id ? (moveTo.get(seat.player_id) ?? null) : null,
   }));
 
-  const seated = new Set(
-    comparison.current.map((seat) => seat.player_id).filter(Boolean),
-  );
-  const bench = priced
-    .filter((p) => !seated.has(p.player_id))
-    // The same key the solver seated by, so the bench reads as the queue for
-    // the lineup rather than a second opinion; ties on id for a stable page.
-    .sort(
-      (a, b) =>
-        (b.points ?? 0) - (a.points ?? 0) ||
-        a.player_id.localeCompare(b.player_id),
-    );
+  const bench = benchOf(priced, comparison.current);
+
+  // Solved through the same `compareLineup` on the same board, so the figure on
+  // the plate and the lineup the Opponents panel counts are one measurement.
+  const opponent = league.opponent
+    ? solveOpponentLineup(league, league.opponent, board, locked, kickoffs)
+    : null;
 
   return {
     roster_id: league.roster_id,
     best_ball: league.best_ball,
     as_of: league.as_of,
     current_points: comparison.current_points,
-    opponent_points: league.opponent
-      ? currentLineupPoints(league, league.opponent, board)
-      : null,
+    opponent_points: opponent?.points ?? null,
+    opponent_lineup: opponent?.lineup ?? null,
+    opponent_bench: opponent?.bench ?? null,
     optimal_points: comparison.optimal_points,
     points_left: comparison.points_left,
     start: comparison.start,
@@ -289,7 +258,83 @@ function settingCount(
 }
 
 /**
- * What another roster's lineup as set projects, on this league's own scoring.
+ * One roster, priced on this league's own scoring.
+ *
+ * **The candidate pool is the roster *and* whoever is starting**: Sleeper's two
+ * arrays can disagree for a moment after a move, and a starter missing from
+ * `players` must still be priced — dropping him would credit the lineup with
+ * one fewer player than it is actually fielding. Padding entries are not
+ * players; a repeated id must not be seated twice.
+ *
+ * Shared by both halves of a game, which is the point: the manager's roster and
+ * the opponent's are the same kind of thing read from the same board, and two
+ * spellings of "what is this player worth here" is two chances for the plate's
+ * two figures to be measured differently.
+ */
+function priceRoster(
+  players: readonly string[] | null,
+  starters: readonly string[],
+  league: WeekLineupLeague,
+  board: WeekProjections,
+  locked: ReadonlySet<string>,
+  kickoffs: ReadonlyMap<string, number> | null,
+): LineupCheckPlayer[] {
+  const rostered = [...new Set([...(players ?? []), ...starters])].filter(
+    (id) => id && id !== "0",
+  );
+
+  return rostered.map((id) => {
+    const line = board[id];
+    return {
+      player_id: id,
+      name: line?.name ?? null,
+      positions: line?.positions ?? [],
+      // Null only where the feed has no row at all. A row with no game scores a
+      // real zero — see the contract, and `./week` for why the row is kept.
+      points: line ? scoreStatLine(line.stats, league.scoring_settings) : null,
+      team: line?.team ?? null,
+      kickoff: kickoffFor(line?.team ?? null, kickoffs),
+      locked: locked.has(id),
+    };
+  });
+}
+
+/**
+ * The solver's view of a priced roster.
+ *
+ * An unprojected player is a real zero to it: he can only ever fill a seat
+ * nobody else wanted, which is the honest ordering, and dropping him would
+ * overstate what the current lineup is scoring — the one thing this tool must
+ * get right.
+ */
+function solverPool(priced: readonly LineupCheckPlayer[]): RosterPlayer[] {
+  return priced.map((p) => ({
+    player_id: p.player_id,
+    positions: p.positions,
+    points: p.points ?? 0,
+  }));
+}
+
+/** Everyone the lineup did not seat, best first; ties on id for a stable page. */
+function benchOf(
+  priced: readonly LineupCheckPlayer[],
+  seats: readonly { player_id: string | null }[],
+): LineupCheckPlayer[] {
+  const seated = new Set(seats.map((seat) => seat.player_id).filter(Boolean));
+  return priced
+    .filter((p) => !seated.has(p.player_id))
+    // The same key the solver seated by, so the bench reads as the queue for
+    // the lineup rather than a second opinion.
+    .sort(
+      (a, b) =>
+        (b.points ?? 0) - (a.points ?? 0) ||
+        a.player_id.localeCompare(b.player_id),
+    );
+}
+
+/**
+ * The other side of the game: what their lineup as set projects, who is in it,
+ * and who is not.
  *
  * **The whole comparison rather than a sum over the starters**, which looks
  * like waste and is not: `compareLineup` drops slots this build doesn't
@@ -303,35 +348,44 @@ function settingCount(
  * opponent will actually score — which is what `compareLineup` already answers
  * there for both sides.
  *
- * An unprojected player is a real zero here, exactly as he is above: he can
- * only fill a seat nobody else wanted, and dropping him would understate what
- * the opponent is fielding.
+ * **No `move_to` on any seat.** Kickoff order answers who should sit *where* in
+ * a lineup somebody can still move, and this is not one of those; deriving it
+ * anyway would put a swap mark on a lineup nobody reading this page can set.
  */
-function currentLineupPoints(
+function solveOpponentLineup(
   league: WeekLineupLeague,
   opponent: WeekLineupOpponent,
   board: WeekProjections,
-): number {
+  locked: ReadonlySet<string>,
+  kickoffs: ReadonlyMap<string, number> | null,
+): { points: number; lineup: LineupCheckSeat[]; bench: LineupCheckPlayer[] } {
   const starters = opponent.starters ?? [];
-  const rostered = [
-    ...new Set([...(opponent.players ?? []), ...starters]),
-  ].filter((id) => id && id !== "0");
+  const priced = priceRoster(
+    opponent.players,
+    starters,
+    league,
+    board,
+    locked,
+    kickoffs,
+  );
+  const byId = new Map(priced.map((p) => [p.player_id, p]));
 
-  const pool: RosterPlayer[] = rostered.map((id) => {
-    const line = board[id];
-    return {
-      player_id: id,
-      positions: line?.positions ?? [],
-      points: line ? scoreStatLine(line.stats, league.scoring_settings) : 0,
-    };
-  });
-
-  return compareLineup({
+  const comparison = compareLineup({
     rosterPositions: league.roster_positions ?? [],
     starters,
-    players: pool,
+    players: solverPool(priced),
     bestBall: league.best_ball,
-  }).current_points;
+  });
+
+  return {
+    points: comparison.current_points,
+    lineup: comparison.current.map((seat) => ({
+      slot: seat.slot,
+      player: seat.player_id ? (byId.get(seat.player_id) ?? null) : null,
+      move_to: null,
+    })),
+    bench: benchOf(priced, comparison.current),
+  };
 }
 
 /** A player's kickoff, or null where his team or the week's schedule is unknown. */

@@ -1,9 +1,8 @@
 "use client";
 
-import { CONSOLE_KEY_PILL, CONSOLE_WELL } from "@/features/shared";
-
-import type { LeagueSubjects, Subject } from "../helpers/league-subjects";
-import { subjectKey } from "../helpers/league-subjects";
+import { CONSOLE_KEY_PILL, CONSOLE_WELL } from "../console-chrome";
+import type { LeagueSubjects, Subject } from "../league-subjects";
+import { subjectKey } from "../league-subjects";
 
 /**
  * What the drawers left behind: one removable chip per picked subject, the mode

@@ -2969,6 +2969,184 @@ The superflex finding has no row-level mark in the expanded lineup table. The
 `sit`/`start`/`move_to` marks are the precedent — a `non-qb` mark on the SF seat
 row would let a reader act without counting seats.
 
+### Starters and Opponents
+
+Two more Browse keys in the rack, each opening a side panel of *week* shares:
+**Starters** (docks left) is every player on the manager's rosters this week
+with how many lineups started him and how many benched him, and **Opponents**
+(docks right) is the same two columns over the rosters facing them. Pressing a
+row narrows the league list behind the panel, exactly as a player row does on
+`/manager`, **and** opens a start/sit decisions view for that player. Applied
+from a design handoff.
+
+**It needed no migration**, and one contract addition. `LineupCheckLeague`
+carried `opponent_points` and nothing else about the other side, so the
+Opponents panel could not be built from the wire at all; `opponent_lineup` and
+`opponent_bench` sit beside it and are filled from the roster `compareLineup`
+already resolves for that figure. So the number on the card's plate and the
+players in that list are one measurement rather than two, and the null grammar
+carries over whole: **every case that leaves `opponent_points` null leaves both
+of these null**, never an empty array, because a panel counting an empty lineup
+would report "no opposing players" for a league nobody has been scheduled
+against yet. `move_to` is null on every opponent seat, which is a fact rather
+than an omission — kickoff order answers who should sit *where* in a lineup
+somebody can still move.
+
+**The Starters half needed no server work at all.** Every seat, every bench
+player and every projection is already on `useLineupCheck`'s payload because
+the cards render them, so the fold is `helpers/starter-shares.ts` on the client
+— which is also the only place it can be, since it counts over **the
+league-filtered, subject-unnarrowed list** and the filters are the browser's.
+That population rule is `playerShares`' in full: counted over the selection,
+every row would collapse to the row just picked and could not be widened
+without clearing first.
+
+**The denominator is leagues that contributed a lineup**, so the Opponents
+panel legitimately counts fewer leagues than the Starters panel on the same
+account — a future week, an unpaired week and an unstored opponent roster are
+all skipped rather than counted as leagues the opponent fielded nobody in. The
+readout says which: `Across all 12 leagues · week 1`, the existing
+`population()` string with the week appended, because these shares are one
+week's and nothing else on screen said so.
+
+#### Seat legality is the rule that is silent when wrong
+
+`helpers/start-sit-decisions.ts` is the half with real rules, and it has a test
+each because every one of them renders perfectly when it is wrong.
+
+**Legality is the seat's, not the two players'.** A receiver is not a candidate
+for a quarterback-only slot, and listing him as one is exactly the class of
+false claim `lineup-check-card.tsx`'s module note says this tool must not make.
+So `seatTakes` reads `SLOT_POSITIONS` — the app's own vocabulary, not a table
+written here, so a league running `REC_FLEX` is answered by the same list the
+solver seats from — and **an unrecognised seat takes nobody**, which is the
+call the solver already makes when it drops a slot into `unknown_slots`.
+
+**`relFor` prefers the narrowest bridging seat, which is the handoff's
+flex-before-superflex rule generalised.** Where the seat itself will not take
+the position, the swap is only reachable through a seat that takes both, read
+out of the league's *own* `roster_positions`; ordering the candidates by how
+many positions each admits offers `FLEX` (three) before `SUPER_FLEX` (four)
+without naming either slot, and leaves the superflex route naming the case it
+exists for — a swap with a quarterback on one end. Naming `Via SF` wherever a
+league happens to carry a spare QB slot would tell the reader the mechanism
+changed when only the league did. It asks the player's whole `fantasy_positions`
+list rather than his first, since Sleeper lists two for the players this matters
+most for.
+
+**Grouped by counterpart, not by league.** One counterpart is one decision made
+in however many lineups; grouping by league would split the same pairing across
+a dozen headings and make the count the reader is after something they had to
+add up. One row per league per pairing, never two. A **locked** player is still
+a counterpart — the card's numbers stop offering moves once a game kicks off,
+which is right for a tool answering what can still be changed, and this answers
+what was already decided.
+
+**A projection is scored by the league's own settings, so a row spanning
+leagues has no single figure.** `points` is the value where every counted
+league agrees and **null where they do not** — an average is a number no league
+pays and the first league's is that same arbitrariness hidden. It is answerable
+far more often than that sounds, because picking a counterpart re-folds over
+that pairing's own leagues, which is usually one scoring. The per-league deltas
+are never affected: each is computed inside one lineup.
+
+#### What moved, and the one fallback that was wrong
+
+- **`league-subjects.ts`, `shares-drawer.tsx` and `subject-tokens.tsx` went to
+  `features/shared`** — the line `CONSOLE_KEY`, `ManagerPlate`, `card-plate.tsx`
+  and `LineupColumnsDialog` all moved on, and the same folder rule, since
+  `features/lineupchecker` may not import from `features/manager`.
+  `SubjectKind` widened to the four panels and became the exhaustive seam
+  `SHARES_COLUMNS_BY_KIND` is a `Record` over, and `matchesSubjects` takes its
+  maps through a `SubjectRolls` resolver rather than one argument per kind — so
+  a fifth panel does not compile until it has columns and does not narrow until
+  it has a population.
+- **The drawer's `seasonSummary` fold came off it.** A record arrives on the row
+  already spelled (`rowRecord`), against the same aggregate the identity plate
+  reads. It was a manager-only cost every panel paid and a league list every row
+  had to carry; a week panel has neither.
+- **`SharesDrawer` gained a `detail` slot, and it is two nodes rather than
+  one** — `deck` takes the search-and-sort band inside the raised plate and
+  `body` takes the scroller's contents. Handed one node the caller would draw
+  its own plate and its own tray, and the panel's two surfaces would then have
+  two spellings. The title band above is deliberately untouched: it is still the
+  same panel counting the same population.
+- **The rack's Browse keys are data now** (`RackControls.keys`), where the two
+  legends used to be written into `features/tools`. That held while `/manager`
+  was the only page publishing a pair; with a second page publishing a different
+  one the rack would have carried every page's vocabulary and a `switch` on the
+  route to choose between them. Both pages hand over a **module-level** array,
+  which is what `usePublishRackControls` requires rather than prefers — a
+  literal rebuilt each render republishes each render.
+- **`sharesColumns` falls back to everything the panel offers, where it used to
+  fall back to the panel's last column.** That was the one thing a render caught
+  that no test would have: the stored default is three season metrics, neither
+  week panel offers any of them, so *every* first visit hit the fallback and was
+  shown `Bench` alone — a panel silently missing the half it is named for.
+  `Started` and `Bench` are one reading split in two. The leaguemates panel
+  gains its `Rec · Win` back on the same terms, which is the column it already
+  defaulted to whenever anything at all was stored.
+
+**Subjects of the two week kinds compose with each other through
+`matchesSubjects` exactly as `player` and `leaguemate` do**, which is a
+deliberate divergence from the handoff's "switching panels resets the
+selection". That predicate is written for a mixed selection and tested for one,
+and the handoff's own first rule — the panels stay mounted so their state
+survives — is what a reset would undo. What does reset is drawer-local: closing
+a panel clears its query, its open decisions view and its picked counterpart.
+
+#### Verified
+
+Rendered through a temporary `/preview` route against the real components,
+tokens and Tailwind build — the method the console-card, shares, rack and
+timeline passes established, since no database is reachable from where this was
+built — then driven over CDP at 1280 and 390 in both schemes and deleted. The
+mechanics that method needs are unchanged: `--no-proxy-server`, and `localhost`
+rather than `127.0.0.1`. The fixtures are three leagues: a dynasty superflex, a
+one-QB league, and a league with no scheduled opponent.
+
+Every arm landed. The panel opened on **both** columns with `Started ▼` sorting
+and no meter under either, the bench figure a step quieter than the started one,
+and the readout reading `Across all 3 leagues · week 1`. The Opponents panel
+read `Across all **2** leagues` over the same fixtures — the third league has no
+opponent — docked right, and searched "opposing players". Pressing Lamar Jackson
+replaced the search band with the decisions deck (`Back`, `QB · BAL`,
+`Proj 21.6`, `Started in 2 of 3 leagues · benched in 0`) and the tray with three
+counterpart cards, **all three from the superflex league**: the one-QB league
+contributes nothing, because no seat there takes both a quarterback and a
+receiver, which is the rule end to end. Picking one narrowed the line to
+`With Rome Odunze · 1 of 3 leagues` and the tray to one card; `Back` restored the
+list with the row still lit; Escape closed the panel and left the subject token
+behind it. A benched subject drew `RB1`/`RB2`/`WR1`/`WR2` seat indices,
+`Direct` against a like seat and `Via FLX` across one, and every negative delta
+in the error tone (`rgb(252,165,165)`) against the muted readout for a positive
+one — with the unprojected stash drawing an em dash and **no** colour on both
+its `Proj` and its delta. In the rack, `/lineupchecker` published `Starters` and
+`Opponents` and `/manager` still published `Players` and `Leaguemates`, both
+`display: contents` at 1280 and folded behind the collapse key at 390.
+
+One render changed the code. At 390 a league row is 284px of which the chip, the
+seat, the route and the delta take ~240, leaving the league name **44px against
+the 122px it wants** — every league read as six characters and an ellipsis, the
+failure this file has already recorded twice at other grains. The row wraps
+below `@md` now and the name takes the line above it; measured after, 284px and
+not truncated at 390, unchanged at 30px on one line from 640 up. The counterpart
+caption lost its position for the same render — the badge beside it already says
+it — and wraps rather than truncating, since the two counts are what the card is
+read for and truncation cut them off exactly where they start.
+
+At every width and in both schemes: `document.documentElement.scrollWidth` equal
+to the viewport, zero elements past the panel's own box, `:modal` true, one
+`<h1>`, one `<nav>`, and **no console output of any kind**.
+
+**Not verified against real data**, which is the gap to close first: every
+number above is a fixture. Three things a render cannot check — what a real
+account's decisions list actually costs (a player started in twelve leagues with
+eight legal bench candidates each is a long page, and there is no cap), how
+often the mixed-scoring rule leaves the `Proj` window on an em dash across a
+real 113-league account, and whether `opponent_lineup` is populated as widely as
+`opponent_points` already is.
+
 ## The trades board
 
 `/trades` is every trade this database has stored for a season, newest first,

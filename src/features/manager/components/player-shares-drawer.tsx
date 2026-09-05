@@ -4,8 +4,14 @@ import { useMemo, useState } from "react";
 
 import type { ManagerLeague, ManagerPlayersPayload } from "@/shared/contract";
 
-import type { LeagueSubjects, Subject } from "../helpers/league-subjects";
-import { subjectKey } from "../helpers/league-subjects";
+import {
+  SharesDrawer,
+  subjectKey,
+  type LeagueSubjects,
+  type SharesDrawerRow,
+  type Subject,
+} from "@/features/shared";
+
 import {
   activeFilterCount,
   keepsPlayer,
@@ -14,9 +20,9 @@ import {
   UNKNOWN_VALUE,
   type PlayerFilterState,
 } from "../helpers/player-filters";
+import { rowRecord } from "../helpers/season-summary";
 import { playerShares } from "../helpers/shares";
 import { PlayerFilters } from "./player-filters";
-import { SharesDrawer, type SharesDrawerRow } from "./shares-drawer";
 
 /**
  * Player shares: every player the manager rosters, and in how many of their
@@ -104,7 +110,8 @@ export function PlayerSharesDrawer({
           name: player.name,
           note: player.team,
           held: player.leagues.length,
-          leagues: player.leagues,
+          // Folded here rather than in the drawer — see `SharesDrawerRow.record`.
+          record: rowRecord(player.leagues),
           value: player.ktc_value,
           age: player.age,
           draftClass: player.draft_class,

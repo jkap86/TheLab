@@ -8,10 +8,22 @@ import {
   subjectKey,
   toggleSubject,
   type LeagueSubjects,
+  type SubjectRolls,
 } from "./league-subjects.ts";
 
 const ROSTERS = { a: ["p1", "p2"], b: ["p1"], c: [] as string[] };
 const MEMBERS = { a: ["me", "u1"], b: ["me"], c: ["me", "u1"] };
+
+/** The two maps a manager page answers with, behind the resolver. */
+const rolls =
+  (
+    rosters: Record<string, readonly string[]> | null,
+    members: Record<string, readonly string[]> | null,
+  ): SubjectRolls =>
+  (kind) =>
+    kind === "player" ? rosters : members;
+
+const BOTH = rolls(ROSTERS, MEMBERS);
 
 function picked(
   ids: { kind: "player" | "leaguemate"; id: string }[],
@@ -59,7 +71,7 @@ describe("toggleSubject", () => {
 describe("matchesSubjects", () => {
   test("an empty selection is not a narrowing", () => {
     for (const id of ["a", "b", "c"]) {
-      assert.equal(matchesSubjects(id, NO_SUBJECTS, ROSTERS, MEMBERS), true);
+      assert.equal(matchesSubjects(id, NO_SUBJECTS, BOTH), true);
     }
   });
 
@@ -68,10 +80,10 @@ describe("matchesSubjects", () => {
       { kind: "player" as const, id: "p1" },
       { kind: "player" as const, id: "p2" },
     ];
-    assert.equal(matchesSubjects("a", picked(both, "all"), ROSTERS, MEMBERS), true);
-    assert.equal(matchesSubjects("b", picked(both, "all"), ROSTERS, MEMBERS), false);
-    assert.equal(matchesSubjects("b", picked(both, "any"), ROSTERS, MEMBERS), true);
-    assert.equal(matchesSubjects("c", picked(both, "any"), ROSTERS, MEMBERS), false);
+    assert.equal(matchesSubjects("a", picked(both, "all"), BOTH), true);
+    assert.equal(matchesSubjects("b", picked(both, "all"), BOTH), false);
+    assert.equal(matchesSubjects("b", picked(both, "any"), BOTH), true);
+    assert.equal(matchesSubjects("c", picked(both, "any"), BOTH), false);
   });
 
   test("players and leaguemates combine in one selection", () => {
@@ -80,16 +92,16 @@ describe("matchesSubjects", () => {
       { kind: "leaguemate" as const, id: "u1" },
     ];
     // a holds both; b holds the player but not the person.
-    assert.equal(matchesSubjects("a", picked(mixed, "all"), ROSTERS, MEMBERS), true);
-    assert.equal(matchesSubjects("b", picked(mixed, "all"), ROSTERS, MEMBERS), false);
-    assert.equal(matchesSubjects("b", picked(mixed, "any"), ROSTERS, MEMBERS), true);
+    assert.equal(matchesSubjects("a", picked(mixed, "all"), BOTH), true);
+    assert.equal(matchesSubjects("b", picked(mixed, "all"), BOTH), false);
+    assert.equal(matchesSubjects("b", picked(mixed, "any"), BOTH), true);
   });
 
   test("a league missing from a map that IS loaded does not match", () => {
     // The map can answer: it has no row for this league, so the league does not
     // hold them. This is the case that must not be confused with the next one.
     assert.equal(
-      matchesSubjects("zz", picked([{ kind: "player", id: "p1" }]), ROSTERS, MEMBERS),
+      matchesSubjects("zz", picked([{ kind: "player", id: "p1" }]), BOTH),
       false,
     );
   });
@@ -98,7 +110,7 @@ describe("matchesSubjects", () => {
     // Failing it closed empties the grid while a payload is in flight; failing
     // it open would leave a lit token above a list it did not narrow.
     assert.equal(
-      matchesSubjects("a", picked([{ kind: "player", id: "p1" }]), null, MEMBERS),
+      matchesSubjects("a", picked([{ kind: "player", id: "p1" }]), rolls(null, MEMBERS)),
       true,
     );
     // The answerable half still narrows: the player is ignored, the person is not.
@@ -106,13 +118,13 @@ describe("matchesSubjects", () => {
       { kind: "player", id: "p1" },
       { kind: "leaguemate", id: "u1" },
     ]);
-    assert.equal(matchesSubjects("a", mixed, null, MEMBERS), true);
-    assert.equal(matchesSubjects("b", mixed, null, MEMBERS), false);
+    assert.equal(matchesSubjects("a", mixed, rolls(null, MEMBERS)), true);
+    assert.equal(matchesSubjects("b", mixed, rolls(null, MEMBERS)), false);
   });
 
   test("an empty roster holds nobody", () => {
     assert.equal(
-      matchesSubjects("c", picked([{ kind: "player", id: "p1" }]), ROSTERS, MEMBERS),
+      matchesSubjects("c", picked([{ kind: "player", id: "p1" }]), BOTH),
       false,
     );
   });
