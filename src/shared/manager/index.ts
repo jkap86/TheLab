@@ -69,10 +69,24 @@ export type {
 } from "./queries";
 export { solveLeagueLineup } from "./ros-lineups";
 export type { RosLineupLeague } from "./ros-lineups";
-export { lineupMetricTotals, rankLeagueLineups } from "./league-ranks";
-export type { LeagueRosterRow, RankLeague, RankedRoster } from "./league-ranks";
+export {
+  ktcMetricTotals,
+  lineupMetricTotals,
+  rankLeagueLineups,
+} from "./league-ranks";
+export type {
+  KtcMetricId,
+  LeagueRosterRow,
+  RankLeague,
+  RankedRoster,
+  RankVariant,
+} from "./league-ranks";
 export { leagueTeamName, pickValue, solveLeagueEntry } from "./league-teams";
-export type { KtcPricing, LineupLeagueRow } from "./league-teams";
+export type {
+  KtcPricing,
+  KtcVariantPricing,
+  LineupLeagueRow,
+} from "./league-teams";
 export {
   DYNASTY_LEAGUE_TYPE,
   DYNASTY_PICK_SEASONS,

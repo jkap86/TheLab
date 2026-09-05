@@ -291,6 +291,67 @@ describe("rankLeagueLineups", () => {
     );
   });
 
+  test("a forced board is four more ranks under its own keys", () => {
+    // The same nine rosters re-totalled on a second price table. The base ranks
+    // must stay exactly what the league's own board said — a variant is a
+    // column beside them, never a replacement for them.
+    const board: RosProjections = {
+      a: projected("a", ["WR"], { rec: 5 }),
+      b: projected("b", ["WR"], { rec: 3 }),
+    };
+    const l = league([roster(1, "me", ["a"]), roster(2, "t2", ["b"])]);
+    // On the league's own board the manager is worth less; on the forced one,
+    // more — so the two ranks disagree, which is the whole reason a column
+    // names its market.
+    const own = new Map([
+      ["a", 100],
+      ["b", 400],
+    ]);
+    const forced = new Map([
+      ["a", 900],
+      ["b", 200],
+    ]);
+    const { ranks } = rankLeagueLineups(l, "me", board, NO_ADP, own, new Map(), [
+      { key: "dynasty:sf", values: forced, pickValues: new Map() },
+    ]);
+
+    assert.deepEqual(ranks.ktc_total, { rank: 2, of: 2 });
+    assert.deepEqual(ranks["ktc_total:dynasty:sf"], { rank: 1, of: 2 });
+    assert.deepEqual(ranks["ktc_starters:dynasty:sf"], { rank: 1, of: 2 });
+    // Nobody owns a pick on either board, so the picks metric has nothing to
+    // say under the variant's key either — the all-zero rule, unchanged.
+    assert.equal(ranks["ktc_picks:dynasty:sf"], null);
+  });
+
+  test("a variant's picks ride its own board, and reconcile with its total", () => {
+    const board: RosProjections = { a: projected("a", ["WR"], { rec: 5 }) };
+    const l = league([roster(1, "me", ["a"]), roster(2, "t2", [])]);
+    const { rosters, ranks } = rankLeagueLineups(
+      l,
+      "me",
+      board,
+      NO_ADP,
+      new Map(),
+      new Map(),
+      [
+        {
+          key: "dynasty:auto",
+          values: new Map([["a", 300]]),
+          pickValues: new Map([[2, 5000]]),
+        },
+      ],
+    );
+
+    // The other roster owns nothing but 5,000 of picks, which on this board is
+    // enough to beat a 300-point player — so `ktc_total` includes the picks and
+    // the rank moves with them.
+    assert.deepEqual(ranks["ktc_total:dynasty:auto"], { rank: 2, of: 2 });
+    assert.deepEqual(ranks["ktc_picks:dynasty:auto"], { rank: 2, of: 2 });
+    // …while the base ranks, priced on a board nothing was read from, stay null.
+    assert.equal(ranks.ktc_total, null);
+    assert.equal(rosters.length, 2);
+  });
+
   test("a manager holding no roster gets a null lineup and null ranks", () => {
     const board: RosProjections = { w1: projected("w1", ["WR"], { rec: 5 }) };
     const l = league([roster(1, "t1", ["w1"])]);

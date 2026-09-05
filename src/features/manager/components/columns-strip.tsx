@@ -1,13 +1,11 @@
 "use client";
 
-import type {
-  KtcBoardChoice,
-  LineupMetricId,
-  ManagerLineupsPayload,
-} from "@/shared/contract";
+import type { LineupColumn, ManagerLineupsPayload } from "@/shared/contract";
+import { isKtcMetric, lineupColumnKey } from "@/shared/ktc/columns";
 import {
   CONSOLE_KEY_BLOCK,
   CONSOLE_WELL,
+  ktcChoiceLabel,
   LINEUP_METRIC_LABELS,
   LineupColumnsDialog,
   storeLineupColumns,
@@ -36,14 +34,11 @@ import {
  */
 export function ColumnsStrip({
   columns,
-  board,
   ktc,
 }: {
   /** The chosen columns, already in canonical order — see `useLineupColumns`. */
-  columns: readonly LineupMetricId[];
-  /** The stored KeepTradeCut market, for the dialog's own readout. */
-  board: KtcBoardChoice;
-  /** Which market answered and when it was scraped; null when none could. */
+  columns: readonly LineupColumn[];
+  /** Which markets answered and when each was scraped; empty when none could. */
   ktc: ManagerLineupsPayload["ktc"];
 }) {
   /**
@@ -56,9 +51,9 @@ export function ColumnsStrip({
    * by disabling the last ticked box, which is the same rule seen from the
    * other side.
    */
-  const remove = (id: LineupMetricId) => {
+  const remove = (index: number) => {
     if (columns.length <= 1) return;
-    storeLineupColumns(columns.filter((c) => c !== id));
+    storeLineupColumns(columns.filter((_, i) => i !== index));
   };
 
   return (
@@ -69,11 +64,11 @@ export function ColumnsStrip({
         Columns
       </span>
 
-      {columns.map((id) => (
+      {columns.map((col, i) => (
         <button
-          key={id}
+          key={lineupColumnKey(col)}
           type="button"
-          onClick={() => remove(id)}
+          onClick={() => remove(i)}
           className={
             `${CONSOLE_KEY_BLOCK} gap-2 border-active/40 bg-[image:var(--readout-bg)] px-2.5 py-[0.4375rem] ` +
             "text-readout [text-shadow:var(--readout-text-glow)] " +
@@ -83,8 +78,15 @@ export function ColumnsStrip({
           {/* The accessible name is the *action*, not the label: a button
               reading "ROS starters" announces a column, where what pressing it
               does is take one away. The glyph is decoration on top of that. */}
-          <span className="sr-only">Remove {LINEUP_METRIC_LABELS[id].column}</span>
-          <span aria-hidden>{LINEUP_METRIC_LABELS[id].column}</span>
+          {/* The market pair rides the chip on a KeepTradeCut column, because
+              two chips reading `KTC total` would otherwise be the one thing on
+              screen that cannot tell two columns apart — which is exactly the
+              pair of bays the picker exists to let a reader open. It is the
+              *setting* (`Auto · Auto`), like the bay's own quote: the strip
+              stands above a hundred leagues and cannot name a market for
+              them. */}
+          <span className="sr-only">Remove {chipLabel(col)}</span>
+          <span aria-hidden>{chipLabel(col)}</span>
           <span aria-hidden className="text-[0.75rem] leading-none text-readout-muted">
             ×
           </span>
@@ -93,10 +95,15 @@ export function ColumnsStrip({
 
       <LineupColumnsDialog
         columns={columns}
-        board={board}
         ktc={ktc}
         triggerClassName={`${CONSOLE_KEY_BLOCK} ml-auto border-foreground/10 bg-[image:var(--key-bg)] text-foreground/80 shadow-[var(--key-shadow)] hover:text-readout`}
       />
     </div>
   );
+}
+
+/** A chip's words: the metric, plus the board a KTC column is set to read. */
+function chipLabel(col: LineupColumn): string {
+  const name = LINEUP_METRIC_LABELS[col.metric].column;
+  return isKtcMetric(col.metric) ? `${name} · ${ktcChoiceLabel(col)}` : name;
 }

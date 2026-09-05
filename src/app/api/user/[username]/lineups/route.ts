@@ -5,15 +5,26 @@ import type {
   KtcFormat,
   ManagerLineupsPayload,
 } from "@/shared/contract";
-import { getKtcBoards, isSuperflexLineup, ktcBoardValue } from "@/shared/ktc";
+import {
+  getKtcBoards,
+  isSuperflexLineup,
+  ktcBoardValue,
+  resolveKtcLineup,
+} from "@/shared/ktc";
 import type { KtcBoards } from "@/shared/ktc";
-import { parseKtcBoardChoice, resolveKtcFormat } from "@/shared/ktc/board-choice";
+import { resolveKtcFormat } from "@/shared/ktc/board-choice";
+import { AUTO_VARIANT, ktcVariantKey, parseKtcVariants } from "@/shared/ktc/columns";
+import type { KtcVariant } from "@/shared/ktc/columns";
 import {
   getManagerDraftAdp,
   getManagerLeagueRosters,
   solveLeagueEntry,
 } from "@/shared/manager";
-import type { KtcPricing, ManagerLeagueRow } from "@/shared/manager";
+import type {
+  KtcPricing,
+  KtcVariantPricing,
+  ManagerLeagueRow,
+} from "@/shared/manager";
 import { getRosProjections, restOfSeasonStart } from "@/shared/projections";
 import type { RosProjections } from "@/shared/projections";
 import { getActiveSeason, parseRequestedSeason } from "@/shared/season";
@@ -47,15 +58,22 @@ export const dynamic = "force-dynamic";
  * route: `from_week: null` plus per-player null points is the fallback working,
  * and the reader can see which lens priced the page.
  *
- * **KeepTradeCut is the third valuation and the only one the reader steers.**
- * `?ktc_board=` carries their `auto`/`dynasty`/`redraft` choice; `auto` is
- * resolved per league against its own type, so an account holding both kinds is
- * priced on both markets and the payload says `"mixed"` rather than naming one.
- * An unreadable value falls back to `auto` instead of 400ing — see
- * `parseKtcBoardChoice` for why that is the opposite call from `?season=` and
- * right for the opposite reason. A failed board read degrades exactly as a
- * failed projections span does: `ktc: null`, every price null, the four KTC
- * metrics ranked null league-wide by the all-zero rule that already exists.
+ * **KeepTradeCut is the third valuation and the only one the reader steers**,
+ * and they now steer it per column rather than per page. Every league is priced
+ * on the market and QB board it reads for itself, which is what the nine base
+ * ranks are computed on; `?ktc_boards=` then names the extra pricings the
+ * reader's bays have *forced* — `dynasty:sf,redraft:auto` — and each becomes
+ * four more ranks over the same solves, keyed by the same `lineupColumnKey` the
+ * card looks them up by. Variants and not columns, because the ranks a column
+ * reads are its variant's: a request naming the columns would make adding a ROS
+ * tile cost a round trip.
+ *
+ * Every half of every token folds to `auto` when it cannot be read, on
+ * `parseKtcBoardChoice`'s terms — the opposite call from `?season=`, and right
+ * for the opposite reason. A failed board read degrades exactly as a failed
+ * projections span does: no stamp for that market, every price on it null, and
+ * its four metrics ranked null league-wide by the all-zero rule that already
+ * exists.
  */
 export async function GET(
   request: Request,
@@ -90,7 +108,7 @@ export async function GET(
       const empty: ManagerLineupsPayload = {
         season,
         from_week: null,
-        ktc: null,
+        ktc: [],
         leagues: {},
       };
       return NextResponse.json(empty);
@@ -110,19 +128,32 @@ export async function GET(
       }
     }
 
-    const ktc = await readKtcMarkets(leagues, url.searchParams.get("ktc_board"));
+    const forced = parseKtcVariants(url.searchParams.get("ktc_boards"));
+    const ktc = await readKtcMarkets(leagues, forced);
 
     const solved: ManagerLineupsPayload["leagues"] = {};
     for (const league of leagues) {
-      const superflex = isSuperflexLineup(league.roster_positions);
-      const board = superflex ? adp.superflex : adp.standard;
+      // The ADP board still splits on the league's *own* lineup, and reads the
+      // predicate directly rather than a column's choice: a forced QB board is
+      // a KeepTradeCut reading, where draft capital is priced off the drafts
+      // this league actually ran. Nothing about the seating moves when a bay is
+      // switched — see the KTC columns' own note in `contract/lineups`.
+      const board = isSuperflexLineup(league.roster_positions)
+        ? adp.superflex
+        : adp.standard;
       const entry = solveLeagueEntry(
         league,
         userId,
         season,
         projections,
         board,
-        ktc.pricing(league, superflex),
+        ktc.pricing(league, AUTO_VARIANT),
+        forced.map(
+          (variant): KtcVariantPricing => ({
+            key: ktcVariantKey(variant),
+            ...ktc.pricing(league, variant),
+          }),
+        ),
       );
       // A null entry means the store moved between the query and here — the
       // league drops out of the payload, as it always has for roster-less ones.
@@ -132,7 +163,7 @@ export async function GET(
     const payload: ManagerLineupsPayload = {
       season,
       from_week: coveredFrom,
-      ktc: ktc.answered,
+      ktc: ktc.stamps,
       leagues: solved,
     };
     return NextResponse.json(payload);
@@ -144,17 +175,19 @@ export async function GET(
 }
 
 /**
- * Every KeepTradeCut market this page's leagues read, and the per-league
+ * Every KeepTradeCut market this page's columns read, and the per-league
  * pricing drawn from them.
  *
- * **The formats are collected before anything is read**, so an account entirely
- * of one kind — or a reader forcing one board — costs one market's rows rather
- * than both. There are only ever two, so the loop is bounded by the enum.
+ * **The formats are collected before anything is read**, so a page whose
+ * columns all sit on `auto` over an all-redraft account costs one market's rows
+ * rather than both. There are only ever two, so the loop is bounded by the enum
+ * however many variants the reader has forced.
  *
  * The superflex axis is folded into two maps **per market rather than per
  * league**: which of KTC's two numbers a league reads is one of two answers,
  * and building a fresh map per league would be a hundred copies of the same
- * five hundred entries.
+ * five hundred entries. A forced QB board therefore costs nothing at all — it
+ * reads the other map that was already built.
  *
  * A market that fails to read is simply absent, and every league pointed at it
  * prices to null. That is the projections span's own degradation and for the
@@ -163,14 +196,19 @@ export async function GET(
  */
 async function readKtcMarkets(
   leagues: readonly ManagerLeagueRow[],
-  requested: string | null,
+  forced: readonly KtcVariant[],
 ): Promise<{
-  answered: ManagerLineupsPayload["ktc"];
-  pricing: (league: ManagerLeagueRow, superflex: boolean) => KtcPricing;
+  stamps: ManagerLineupsPayload["ktc"];
+  pricing: (league: ManagerLeagueRow, variant: KtcVariant) => KtcPricing;
 }> {
-  const choice = parseKtcBoardChoice(requested);
   const formats = [
-    ...new Set(leagues.map((l) => resolveKtcFormat(choice, l.league_type))),
+    ...new Set(
+      leagues.flatMap((league) =>
+        [AUTO_VARIANT, ...forced].map((variant) =>
+          resolveKtcFormat(variant.format, league.league_type),
+        ),
+      ),
+    ),
   ];
 
   const read = await Promise.all(
@@ -185,29 +223,20 @@ async function readKtcMarkets(
   );
 
   const markets = new Map<KtcFormat, Market>();
-  let newest: string | null = null;
+  const stamps: { format: KtcFormat; updated_at: string | null }[] = [];
   for (const [format, boards] of read) {
     if (!boards) continue;
     markets.set(format, toMarket(boards));
-    if (boards.updated_at && (!newest || boards.updated_at > newest)) {
-      newest = boards.updated_at;
-    }
+    stamps.push({ format, updated_at: boards.updated_at });
   }
 
-  // "mixed" is the honest name for a page whose leagues were priced on two
-  // markets: no single one is true of the column, and saying either would be.
-  const answered: ManagerLineupsPayload["ktc"] =
-    markets.size === 0
-      ? null
-      : {
-          board: markets.size === 1 ? [...markets.keys()][0] : "mixed",
-          updated_at: newest,
-        };
-
   return {
-    answered,
-    pricing: (league, superflex) => {
-      const market = markets.get(resolveKtcFormat(choice, league.league_type));
+    stamps,
+    pricing: (league, variant) => {
+      const superflex = resolveKtcLineup(variant.lineup, league.roster_positions);
+      const market = markets.get(
+        resolveKtcFormat(variant.format, league.league_type),
+      );
       if (!market) return { values: new Map(), picks: {}, superflex };
       return {
         values: superflex ? market.superflex : market.standard,

@@ -44,7 +44,10 @@ export * from "./league-filters";
 // rows are its own parts, on the folder rule the header above states.
 export { LeagueFiltersDialog } from "./league-filters-dialog/league-filters-dialog";
 export {
+  column,
   DEFAULT_LINEUP_COLUMNS,
+  ktcBoardLabel,
+  ktcChoiceLabel,
   LINEUP_METRIC_IDS,
   LINEUP_METRIC_LABELS,
   MAX_LINEUP_COLUMNS,

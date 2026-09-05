@@ -14,11 +14,20 @@ import { useLocalValue, writeLocal } from "./local-store";
 // only the key and the wrapper, on `account.ts`'s and `lineup-columns.ts`'s
 // exact terms.
 //
-// **One key for both pages that read it.** The manager page and the trades
-// board are two views of the same market, so "which board do I read" has one
-// answer — the same argument that put the resolved account in `features/shared`
-// rather than beside the tools page that writes it. Flipping it on either page
-// moves the other.
+// **One key for both pages that read it.** The trades board's control rail
+// writes it, and the manager page's shares drawer reads it for the Value column
+// — one figure for a player held across a dozen leagues, so there is no league
+// for `auto` to resolve against and the reader's stored answer is the only one
+// there is (`resolveKtcCrossLeagueFormat`). Flipping it on either page moves
+// the other, the same argument that put the resolved account in
+// `features/shared` rather than beside the tools page that writes it.
+//
+// **What no longer reads it is the manager page's rank columns.** The market
+// moved into the column when the picker became four bays: a KTC column names
+// its own market and QB board, so a page-wide key would be a second answer to a
+// question four columns each give their own — and it could not express the
+// comparison the bays exist for, which is one metric on two boards at once. See
+// `lineup-columns.ts` and `shared/ktc/columns`.
 const STORAGE_KEY = "thelab:ktc-board";
 
 /** Persist the chosen board (normalized, see below) and notify readers. */

@@ -2,30 +2,59 @@
 
 import { useMemo } from "react";
 
-import type { LineupMetricId } from "@/shared/contract";
+import type {
+  KtcBoardChoice,
+  KtcFormat,
+  KtcLineupChoice,
+  LineupColumn,
+  LineupMetricId,
+} from "@/shared/contract";
+// Relative with an explicit extension, the way `shares-columns.ts` beside it
+// reaches the same store: the rules below are read by Node's own test runner,
+// which resolves neither the `@/*` aliases nor an extensionless specifier. The
+// key spelling is `shared/ktc/columns` because the *server* writes the same
+// keys — see the note above — and it is pure for exactly this reason.
+import { isKtcMetric, lineupColumnKey } from "../../shared/ktc/columns.ts";
 
-import { useLocalValue, writeLocal } from "./local-store";
+import { useLocalValue, writeLocal } from "./local-store.ts";
 
 // Which rank columns the league cards show, remembered on the device. The
 // storage mechanics live in `local-store.ts`; what is here is only what this
 // key holds and the rules that keep it honest.
 //
-// The selection is a *set*, not an arrangement: columns always render in
-// canonical metric order, so `normalize` sorts on write and read alike and a
+// **A column is a triple now, not a metric id** — the metric, plus which
+// KeepTradeCut market and which QB board it is priced on. That is what lets one
+// metric occupy two bays: a reader comparing their roster's dynasty superflex
+// worth against its 1QB worth is asking two questions, and until the axes moved
+// into the column there was one global board and no way to ask both. The five
+// non-KTC metrics ignore both axes — a projection has no market — which is why
+// `lineupColumnKey` folds them back to a bare metric id and they can never
+// duplicate.
+//
+// The selection is still a *set*, not an arrangement: columns render in
+// canonical order, so `normalize` sorts on write and read alike and a
 // hand-edited or stale stored value cannot invent an ordering the UI never
-// offered. It lives in `features/shared` because the metric-id list is the
-// client half of the contract's compiler seam (see `LineupMetricId`) and the
+// offered. Bays are numbered by that order, so an edit renumbers them — which
+// is the cheaper of the two readings the design considered, and the one it
+// draws no dragging affordance for.
+//
+// It lives in `features/shared` because the metric-id list is the client half
+// of the contract's compiler seam (see `LineupMetricId`) and the
 // wrapper-over-`local-store` pattern is this folder's to own — `account.ts` is
-// the template.
+// the template. The key spelling itself is `shared/ktc/columns`, deep-imported
+// the way `@/shared/ktc/roster` already is, because the server writes the same
+// keys and a second spelling is a rank attributed to the wrong board.
 const STORAGE_KEY = "thelab:lineup-columns";
 
 /**
  * The most columns a card can carry before the grid stops reading.
  *
- * **Unmoved by the KTC metrics arriving**, deliberately: the cap is about how
- * much a card's tile row can hold at 390px — four tiles is already two rows of
- * two on a phone — not about how many lenses exist to choose between. Nine
- * options and four slots is the picker doing its job.
+ * **Unmoved by the two KTC axes arriving**, deliberately: the cap is about how
+ * much a card's tile row can hold at 390px — four 75px tiles is the row, and
+ * the fifth is what pushes the strip past the fold — not about how many
+ * readings exist to choose between. It is also the picker's own shape now: four
+ * bays, always four, so the budget is the UI rather than a rule the UI has to
+ * state.
  */
 export const MAX_LINEUP_COLUMNS = 4;
 
@@ -49,95 +78,216 @@ export const LINEUP_METRIC_IDS: readonly LineupMetricId[] = (
 ).sort((a, b) => METRIC_ORDER[a] - METRIC_ORDER[b]);
 
 /**
- * Words for the rank metrics — the card's column headers and the dialog's
- * option lines.
+ * Words for the rank metrics: the tile's two lines, the chip's short name and
+ * the bay's sentence.
  *
  * Beside `METRIC_ORDER` because the two are the same seam seen twice: this file
  * already holds the client half of the contract's compiler list, and the labels
- * are the other exhaustive `Record<LineupMetricId, …>` a new id has to be placed
- * in. They lived in `features/manager/helpers/lineup-metrics` until the columns
- * dialog moved here — a picker mounted in the app rack cannot read a sibling
- * feature for its own option text, and a copy of these strings would be a
- * second place for a metric to be renamed.
+ * are the other exhaustive `Record<LineupMetricId, …>` a new id has to be
+ * placed in.
+ *
+ * **`unit` over `scope` is the tile's whole grammar**, and it is what the row
+ * of four is legible at 9px for: the first line names what is being counted and
+ * the second names how much of the roster it was counted over, so two tiles
+ * from one family read as one instrument rather than as two labels a reader has
+ * to tell apart. On the four KeepTradeCut metrics the second line is spent on
+ * the market pair instead — `Dyn·SF` — because which board priced a number is
+ * the thing a reader cannot infer and the scope is already in the unit's own
+ * words. `scope` is therefore empty on exactly those four, and `isKtcMetric` is
+ * what says so rather than the emptiness being read as a signal.
+ *
+ * `column` is the longer name, for the chips and the picker's key list, where
+ * there is room for it and where the metric is being *chosen* rather than read.
  */
 export const LINEUP_METRIC_LABELS: Record<
   LineupMetricId,
-  { column: string; option: string }
+  { column: string; unit: string; scope: string; option: string }
 > = {
   ros_starters: {
     column: "ROS starters",
-    option: "Projected points — starters (rest of season)",
+    unit: "Proj pts",
+    scope: "Starters",
+    option: "Projected points — starters, rest of season.",
   },
   ros_bench: {
     column: "ROS bench",
-    option: "Projected points — bench (rest of season)",
+    unit: "Proj pts",
+    scope: "Bench",
+    option: "Projected points — bench, rest of season.",
   },
   capital_total: {
     column: "Capital",
-    option: "Draft capital — whole roster",
+    unit: "Draft cap",
+    scope: "Roster",
+    option: "Draft capital off ADP — the whole roster.",
   },
   capital_bench: {
     column: "Bench capital",
-    option: "Draft capital — bench only",
+    unit: "Draft cap",
+    scope: "Bench",
+    option: "Draft capital off ADP — the bench only.",
   },
   capital_starters: {
     column: "Starter capital",
-    option: "Draft capital — starters only",
+    unit: "Draft cap",
+    scope: "Starters",
+    option: "Draft capital off ADP — the starters only.",
   },
   ktc_total: {
     column: "KTC total",
-    option: "KeepTradeCut — roster and picks",
+    unit: "KTC",
+    scope: "",
+    option: "KeepTradeCut — roster and picks.",
   },
   ktc_starters: {
     column: "KTC starters",
-    option: "KeepTradeCut — starters only",
+    unit: "KTC start",
+    scope: "",
+    option: "KeepTradeCut — the starters only.",
   },
   ktc_bench: {
     column: "KTC bench",
-    option: "KeepTradeCut — bench only",
+    unit: "KTC bench",
+    scope: "",
+    option: "KeepTradeCut — the bench only.",
   },
   ktc_picks: {
     column: "KTC picks",
-    option: "KeepTradeCut — future draft picks",
+    unit: "KTC picks",
+    scope: "",
+    option: "KeepTradeCut — future draft picks.",
   },
 };
+
+/** The market half of a bay's label, as the switch keys spell it. */
+const MARKET_WORDS: Record<KtcBoardChoice, string> = {
+  auto: "Auto",
+  dynasty: "Dyn",
+  redraft: "Red",
+};
+
+/** The QB-board half, likewise. */
+const LINEUP_WORDS: Record<KtcLineupChoice, string> = {
+  auto: "Auto",
+  oneqb: "1QB",
+  sf: "SF",
+};
+
+/**
+ * What a KeepTradeCut column is *set* to — `Auto · Auto`, `Dyn · SF`.
+ *
+ * The bay and the chip print this, because a setting is what they are showing:
+ * `Auto` is a rule about each league and naming a market there would be a claim
+ * about leagues the control has never seen.
+ */
+export function ktcChoiceLabel(col: LineupColumn): string {
+  return `${MARKET_WORDS[col.format]} · ${LINEUP_WORDS[col.lineup]}`;
+}
+
+/**
+ * What a KeepTradeCut column actually *read*, for one league — `Dyn·SF`.
+ *
+ * The tile prints this, because a tile is a reading rather than a setting: the
+ * card knows its own league, so it resolves both axes through the same two pure
+ * functions the route priced the number with, and a column left on `Auto` still
+ * says which board answered. Tight rather than spaced, because it is nine
+ * characters of a 59px line.
+ */
+export function ktcBoardLabel(format: KtcFormat, superflex: boolean): string {
+  return `${MARKET_WORDS[format]}·${superflex ? "SF" : "1QB"}`;
+}
 
 /**
  * The four columns a first visit shows.
  *
- * Unchanged by the KTC metrics, so nobody's stored selection moves and a reader
- * who never opens the picker sees the page they had. The KTC columns are opt-in
- * because the market they read is a preference — see `ktc-board.ts`.
+ * Unchanged by the axes arriving, so nobody's stored selection moves and a
+ * reader who never opens the picker sees the page they had.
  */
-export const DEFAULT_LINEUP_COLUMNS: readonly LineupMetricId[] = [
-  "ros_starters",
-  "ros_bench",
-  "capital_total",
-  "capital_bench",
+export const DEFAULT_LINEUP_COLUMNS: readonly LineupColumn[] = [
+  column("ros_starters"),
+  column("ros_bench"),
+  column("capital_total"),
+  column("capital_bench"),
 ];
 
+/** One column on both axes' defaults — the league's own market and QB board. */
+export function column(
+  metric: LineupMetricId,
+  format: KtcBoardChoice = "auto",
+  lineup: KtcLineupChoice = "auto",
+): LineupColumn {
+  // The axes are meaningless on a metric with no market, and forcing them to
+  // `auto` here is what makes `lineupColumnKey` able to fold those five to a
+  // bare metric id — so a stored value that carries a stray board on a
+  // projections column cannot become a second, un-removable copy of it.
+  return isKtcMetric(metric)
+    ? { metric, format, lineup }
+    : { metric, format: "auto", lineup: "auto" };
+}
+
 /**
- * Fold anything — a toggle's draft, a stored string's parse — into a valid
- * selection: known ids only, deduped, canonical order, capped, and never
- * empty. Applied on write *and* read so the two ends cannot disagree about
- * what a valid selection is.
+ * Fold anything — a press, a stored string's parse, a value written by a build
+ * that predates the axes — into a valid selection: known metrics only, deduped
+ * on the whole triple, canonical order, capped, and never empty. Applied on
+ * write *and* read so the two ends cannot disagree about what a valid selection
+ * is.
+ *
+ * **A legacy `string[]` reads as triples on `auto`**, which is what keeps a
+ * stored selection through the change: the axes did not exist when it was
+ * written, and `auto` is what the page was doing anyway.
+ *
+ * The dedupe is on {@link lineupColumnKey} rather than on the metric, which is
+ * the whole point of the new shape — two KTC columns on two boards are two
+ * columns — and it is also what stops the same board being chosen twice.
+ *
+ * Exported for the tests: this is the pure half both ends of the store share,
+ * and every rule in it is silent when it goes wrong — a stored selection lost
+ * on upgrade, a second bay that quietly deletes the first, a fifth column.
  */
-function normalize(ids: unknown): readonly LineupMetricId[] {
-  if (!Array.isArray(ids)) return DEFAULT_LINEUP_COLUMNS;
-  const known = [
-    ...new Set(
-      ids.filter((id): id is LineupMetricId => typeof id === "string" && id in METRIC_ORDER),
-    ),
-  ];
-  if (known.length === 0) return DEFAULT_LINEUP_COLUMNS;
-  return known
-    .sort((a, b) => METRIC_ORDER[a] - METRIC_ORDER[b])
+export function normalizeLineupColumns(
+  value: unknown,
+): readonly LineupColumn[] {
+  if (!Array.isArray(value)) return DEFAULT_LINEUP_COLUMNS;
+
+  const seen = new Map<string, LineupColumn>();
+  for (const entry of value) {
+    const parsed = readColumn(entry);
+    if (!parsed) continue;
+    const key = lineupColumnKey(parsed);
+    if (!seen.has(key)) seen.set(key, parsed);
+  }
+  if (seen.size === 0) return DEFAULT_LINEUP_COLUMNS;
+
+  return [...seen.values()]
+    .sort(
+      (a, b) =>
+        METRIC_ORDER[a.metric] - METRIC_ORDER[b.metric] ||
+        // Two bays on one metric still need a stable order, and the axes are
+        // the only thing left to sort them by. The key is what the card looks
+        // its rank up by, so ordering on it cannot invent a third identity.
+        lineupColumnKey(a).localeCompare(lineupColumnKey(b)),
+    )
     .slice(0, MAX_LINEUP_COLUMNS);
 }
 
+/** One stored entry, in either shape, or null where it names no known metric. */
+function readColumn(entry: unknown): LineupColumn | null {
+  if (typeof entry === "string") {
+    return entry in METRIC_ORDER ? column(entry as LineupMetricId) : null;
+  }
+  if (!entry || typeof entry !== "object") return null;
+  const { metric, format, lineup } = entry as Record<string, unknown>;
+  if (typeof metric !== "string" || !(metric in METRIC_ORDER)) return null;
+  return column(
+    metric as LineupMetricId,
+    format === "dynasty" || format === "redraft" ? format : "auto",
+    lineup === "oneqb" || lineup === "sf" ? lineup : "auto",
+  );
+}
+
 /** Persist the chosen columns (normalized, see above) and notify readers. */
-export function storeLineupColumns(ids: readonly LineupMetricId[]) {
-  writeLocal(STORAGE_KEY, JSON.stringify(normalize(ids)));
+export function storeLineupColumns(columns: readonly LineupColumn[]) {
+  writeLocal(STORAGE_KEY, JSON.stringify(normalizeLineupColumns(columns)));
 }
 
 /**
@@ -145,13 +295,13 @@ export function storeLineupColumns(ids: readonly LineupMetricId[]) {
  * and wherever nothing valid is stored (the documented `local-store` trade: a
  * stored choice swaps in after hydration).
  */
-export function useLineupColumns(): readonly LineupMetricId[] {
+export function useLineupColumns(): readonly LineupColumn[] {
   const raw = useLocalValue(STORAGE_KEY);
   // Parsed in a memo keyed on the raw string, per the store's contract.
   return useMemo(() => {
     if (!raw) return DEFAULT_LINEUP_COLUMNS;
     try {
-      return normalize(JSON.parse(raw));
+      return normalizeLineupColumns(JSON.parse(raw));
     } catch {
       return DEFAULT_LINEUP_COLUMNS;
     }
