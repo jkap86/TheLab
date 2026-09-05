@@ -20,14 +20,18 @@ import { ToolGrid } from "./tools-grid";
  * longer takes `ml-auto`. It is the only object on the row, and `ml-auto`
  * pinned it to the right of an empty one.
  *
- * The gutter steps 6 -> 8 -> 13 rather than going straight to the design's 13:
- * at a phone's width the padding is the only thing left to give the content.
+ * The gutter steps 6 -> 8 -> 10 rather than going straight to the design's
+ * larger figure: at a phone's width the padding is the only thing left to give
+ * the content, and at `md` the inset is what the three-across grid is competing
+ * with — 52px of it against a `console` shell was still a 241px card. The top
+ * inset drops 64 -> 44px for the reason the wordmark plate's removal left
+ * behind: the panel was opening on 64px of padding above a lone input.
  */
 export function ToolsHome({ heading }: { heading: React.ReactNode }) {
   const user = useStoredAccount();
 
   return (
-    <div className="relative rounded-3xl border border-foreground/9 bg-[image:var(--panel-bg)] px-6 pb-[4.5rem] pt-16 shadow-[var(--panel-shadow)] sm:px-8 md:px-13">
+    <div className="relative rounded-3xl border border-foreground/9 bg-[image:var(--panel-bg)] px-6 pb-14 pt-11 shadow-[var(--panel-shadow)] sm:px-8 md:px-10">
       {/* Grain, then the specular hairline along the panel's top edge. Both are
           what keep a large flat surface from reading as flat. */}
       <span

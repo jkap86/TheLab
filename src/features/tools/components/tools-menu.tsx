@@ -9,6 +9,16 @@ export type ToolsMenuLink = {
   /** Where it goes: `toolHref(tool, username)`. */
   href: string;
   text: string;
+  /**
+   * The key's legend below `sm`, where the wordmark is back beside it and the
+   * row has no slack. From the tool registry rather than truncated here — see
+   * `Tool.short`. Absent means {@link ToolsMenuLink.text} already fits.
+   *
+   * Only the *key* shortens. The menu's own entries keep the full name: they
+   * sit in a tray of their own with room for it, and a list that abbreviated
+   * would be naming the tools by two vocabularies on one screen.
+   */
+  short?: string;
 };
 
 /**
@@ -89,7 +99,18 @@ export function ToolsMenu({
         onClick={() => setOpen((value) => !value)}
         className="inline-flex shrink-0 items-center gap-2.5 whitespace-nowrap rounded-full bg-[image:var(--key-bg)] py-[0.4375rem] pl-3 pr-2.5 font-mono text-[length:var(--fs-11)] uppercase tracking-[0.14em] text-readout shadow-[var(--key-shadow)] [text-shadow:var(--readout-text-glow)] transition-[transform,box-shadow,color] duration-150 active:translate-y-0.5 active:shadow-[var(--key-shadow-pressed)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-active/60 md:px-3.5 md:py-2 md:tracking-[0.16em]"
       >
-        {current?.text ?? "Tools"}
+        {/* Two spans switched by the cascade, never by state: a client
+            component must not have to hydrate to learn a breakpoint, and this
+            one is in the rack above every page. The short form is only ever
+            rendered where the registry gives one. */}
+        {current?.short ? (
+          <>
+            <span className="sm:hidden">{current.short}</span>
+            <span className="hidden sm:inline">{current.text}</span>
+          </>
+        ) : (
+          (current?.text ?? "Tools")
+        )}
         <ChevronMark open={open} />
       </button>
 

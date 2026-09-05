@@ -159,6 +159,112 @@ export const LINEUP_METRIC_LABELS: Record<
   },
 };
 
+/**
+ * The two axes a metric is composed from, and the grid they index.
+ *
+ * The nine ids are not nine unrelated readings: they are a *value* (what a
+ * number is priced in) crossed with a *scope* (how much of a roster it was
+ * counted over), and the picker asks those two questions rather than listing
+ * the products. The list was hiding two gaps that the grid makes visible, and
+ * both are real rather than oversights:
+ *
+ * - **Projection × All has no metric.** A whole-roster rest-of-season
+ *   projection does not exist here, and adding one is server work — an id in
+ *   the contract, a total in the solver, a rank in the route, a place in each
+ *   of the four exhaustive `Record<LineupMetricId, …>`s. Until it does, the key
+ *   is greyed with the reason in its title, which is this app's rule for a
+ *   control that cannot act.
+ * - **Picks are not a roster scope.** They are the one thing on a card that is
+ *   not a player, and only KeepTradeCut prices them — there is no ADP pick
+ *   ladder in this repo and a pick has no projection because it is not a player
+ *   yet. So `Picks` is a fourth scope key, live under KTC and greyed under the
+ *   other two.
+ *
+ * {@link METRIC_AXES} is the **fifth** exhaustive `Record<LineupMetricId, …>`
+ * in the compiler seam, and the grid is derived from it rather than written
+ * twice: a metric that named one pairing in the table and another in the grid
+ * would be a picker whose keys light on a column it does not set.
+ */
+export type ColumnValue = "projection" | "capital" | "ktc";
+export type ColumnScope = "starters" | "bench" | "all" | "picks";
+
+export const COLUMN_VALUES: readonly ColumnValue[] = [
+  "projection",
+  "capital",
+  "ktc",
+];
+export const COLUMN_SCOPES: readonly ColumnScope[] = [
+  "starters",
+  "bench",
+  "all",
+  "picks",
+];
+
+export const COLUMN_VALUE_LABELS: Record<ColumnValue, string> = {
+  projection: "Proj",
+  capital: "Capital",
+  ktc: "KTC",
+};
+
+export const COLUMN_SCOPE_LABELS: Record<ColumnScope, string> = {
+  starters: "Starters",
+  bench: "Bench",
+  all: "All",
+  picks: "Picks",
+};
+
+const METRIC_AXES: Record<LineupMetricId, [ColumnValue, ColumnScope]> = {
+  ros_starters: ["projection", "starters"],
+  ros_bench: ["projection", "bench"],
+  capital_total: ["capital", "all"],
+  capital_bench: ["capital", "bench"],
+  capital_starters: ["capital", "starters"],
+  ktc_total: ["ktc", "all"],
+  ktc_starters: ["ktc", "starters"],
+  ktc_bench: ["ktc", "bench"],
+  ktc_picks: ["ktc", "picks"],
+};
+
+/** Which cell of the grid a metric sits in. */
+export function metricAxes(metric: LineupMetricId): {
+  value: ColumnValue;
+  scope: ColumnScope;
+} {
+  const [value, scope] = METRIC_AXES[metric];
+  return { value, scope };
+}
+
+/** The metric at one cell, or null where the grid has a hole. */
+export function metricAt(
+  value: ColumnValue,
+  scope: ColumnScope,
+): LineupMetricId | null {
+  for (const id of LINEUP_METRIC_IDS) {
+    const [v, s] = METRIC_AXES[id];
+    if (v === value && s === scope) return id;
+  }
+  return null;
+}
+
+/**
+ * Why a cell has no metric — the key's title, and never a silent grey.
+ *
+ * Null where the cell exists. The two reasons are the two above, and they are
+ * different claims: one is a reading this app has not built, the other is a
+ * reading that cannot exist on that basis at all.
+ */
+export function cellGapReason(
+  value: ColumnValue,
+  scope: ColumnScope,
+): string | null {
+  if (metricAt(value, scope)) return null;
+  if (scope === "picks") return "Only KeepTradeCut prices a draft pick";
+  if (value === "projection" && scope === "all") {
+    return "There is no whole-roster projection";
+  }
+  return "No column reads that";
+}
+
 /** The market half of a bay's label, as the switch keys spell it. */
 const MARKET_WORDS: Record<KtcBoardChoice, string> = {
   auto: "Auto",

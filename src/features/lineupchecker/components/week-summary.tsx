@@ -23,6 +23,14 @@ import {
  *   `inset-[0.9375rem]`.** The caption beside the dial is `Proj win` where the
  *   manager's is `Win rate`, and the percentage inside clipped against the round
  *   edge at 15px once the label stopped carrying the word.
+ *
+ *   Everything *else* about the dial now steps with the manager's, 88px above
+ *   `sm` and 72px below it. It used to be a fixed 88 at every width — the same
+ *   plate over the same account drawn at two heights by two tools — and at a
+ *   phone's width those 16px are what let the attention window sit beside it
+ *   rather than wrap to a row of its own. Every inset is a chain measured from
+ *   the bezel's edge, so the arc, the pointer, the window and both type sizes
+ *   step together or the dial comes apart.
  * - **Leagues with no opponent are already gone** — `weekSummary` drops them
  *   rather than counting a future week as a loss — so a week with nothing
  *   projected draws an empty track and an em dash, never `0.0%`. That is
@@ -60,12 +68,12 @@ export function WeekSummary({
       <Groove />
 
       <div className="flex items-center gap-3">
-        <div className="relative size-22 shrink-0 rounded-full border border-foreground/10 bg-[image:var(--bezel-bg)] shadow-[var(--bezel-shadow)]">
+        <div className="relative size-18 shrink-0 rounded-full border border-foreground/10 bg-[image:var(--bezel-bg)] shadow-[var(--bezel-shadow)] sm:size-22">
           {/* The arc itself. A conic gradient rather than an SVG ring: the
               angle is the only thing that varies, and it varies per render. */}
           <span
             aria-hidden
-            className="absolute inset-[0.4375rem] rounded-full shadow-[inset_0_0_12px_rgba(0,0,0,0.95)]"
+            className="absolute inset-[0.3125rem] rounded-full shadow-[inset_0_0_12px_rgba(0,0,0,0.95)] sm:inset-[0.4375rem]"
             style={{
               background: `conic-gradient(var(--accent) 0deg ${degrees}deg, var(--dial-track) ${degrees}deg 360deg)`,
             }}
@@ -75,19 +83,19 @@ export function WeekSummary({
           {summary.winPct !== null && (
             <span
               aria-hidden
-              className="absolute inset-[0.4375rem] rounded-full"
+              className="absolute inset-[0.3125rem] rounded-full sm:inset-[0.4375rem]"
               style={{ transform: `rotate(${degrees}deg)` }}
             >
-              <span className="absolute -top-1 left-1/2 -ml-1 size-[0.5625rem] rounded-full bg-readout shadow-[0_0_12px_var(--accent-glow)]" />
+              <span className="absolute -top-[0.21875rem] left-1/2 -ml-[0.21875rem] size-[0.4375rem] rounded-full bg-readout shadow-[0_0_12px_var(--accent-glow)] sm:-top-1 sm:-ml-1 sm:size-[0.5625rem]" />
             </span>
           )}
           {/* The lit window at the centre, so the arc can be read exactly. */}
-          <div className="absolute inset-3 flex flex-col items-center justify-center overflow-hidden rounded-full border border-black/85 bg-[image:var(--readout-bg)] shadow-[var(--readout-shadow)]">
+          <div className="absolute inset-[0.6875rem] flex flex-col items-center justify-center overflow-hidden rounded-full border border-black/85 bg-[image:var(--readout-bg)] shadow-[var(--readout-shadow)] sm:inset-3">
             <span
               aria-hidden
               className="pointer-events-none absolute inset-0 bg-[image:var(--readout-scanlines)]"
             />
-            <span className="relative font-mono text-[length:var(--fs-9)] uppercase tracking-[0.16em] text-readout/60">
+            <span className="relative font-mono text-[length:var(--fs-8)] uppercase leading-none tracking-[0.14em] text-readout/60 sm:text-[length:var(--fs-9)] sm:tracking-[0.16em]">
               Win
             </span>
             {/* Stepping down at six characters, because `100.0%` — the one
@@ -104,10 +112,17 @@ export function WeekSummary({
                 the chord at its own height rather than the 62px diameter —
                 which is the measurement to redo, by eye, if the scale moves
                 again. `SeasonSummary`'s dial carries the same rule one step
-                tighter, its window being 56px against this one's 62. */}
+                tighter, its window being 56px against this one's 62.
+
+                **The step is the desktop arm's alone.** The phone dial's
+                window is 50px and its figure `--fs-10`, which puts `100.0%` at
+                ~41px inside it — the same margin the manager's phone dial has,
+                and no help needed. */}
             <span
-              className={`relative mt-0.5 font-mono leading-none text-readout [text-shadow:var(--readout-text-glow)] ${
-                pct.length > 5 ? "text-[length:var(--fs-13)]" : "text-[length:var(--fs-17)]"
+              className={`relative mt-0.5 font-mono text-[length:var(--fs-10)] leading-none text-readout [text-shadow:var(--readout-text-glow)] ${
+                pct.length > 5
+                  ? "sm:text-[length:var(--fs-13)]"
+                  : "sm:text-[length:var(--fs-17)]"
               }`}
             >
               {pct}
@@ -117,7 +132,7 @@ export function WeekSummary({
         {/* Dropped below `sm` on the manager plate's own measurement: the whole
             block has to fit a 332px plate there, and the lit window inside the
             dial already reads "WIN 50.0%". */}
-        <span className="hidden max-w-16 font-mono text-[length:var(--fs-11)] uppercase tracking-[0.16em] text-foreground/60 sm:inline">
+        <span className="hidden max-w-16 font-mono text-[length:var(--fs-11)] uppercase tracking-[0.16em] text-foreground/72 sm:inline">
           Proj win
         </span>
       </div>
@@ -137,7 +152,7 @@ export function WeekSummary({
 function Figure({ label, children }: { label: string; children: string }) {
   return (
     <dl className="m-0 flex flex-col justify-center gap-2 px-2 sm:px-4">
-      <dt className="font-mono text-[length:var(--fs-11)] uppercase tracking-[0.16em] text-foreground/60">
+      <dt className="font-mono text-[length:var(--fs-11)] uppercase tracking-[0.16em] text-foreground/72">
         {label}
       </dt>
       {/* `nowrap`: the en dash in `8–5` is a line-break opportunity, and a

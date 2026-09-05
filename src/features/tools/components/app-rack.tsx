@@ -78,6 +78,7 @@ export function AppRack() {
         base: tool.href,
         href: toolHref(tool, account?.username ?? null),
         text: tool.text,
+        short: tool.short,
       })),
     ],
     [account],
@@ -143,21 +144,47 @@ export function AppRack() {
               `LabWordmark`'s reason — a face that wraps under an extrusion that
               cannot leaves a ghost "LAB" beside it.
 
-              **It is the flask alone below `sm`, and that is a measurement.**
-              The rack is one row at every width — a constraint rather than an
-              observation, since `--rack-clear` is three values and not five —
-              so a row that does not fit does not wrap, it overflows the pill.
-              With the wordmark on, the row's content is ~370px against a
-              362px pill at 390: it fits from ~412px up and not below, which is
-              most phones. The wordmark is what goes, on the theme key's own
-              precedent that the legend is the first thing to drop — the flask
-              *is* the mark, and it stays. `sm` rather than a bespoke 412px
-              because the house has one vocabulary of breakpoints and a tablet
-              has room for both.
+              **It is back on the phone rack, on every page whose rack is not
+              also carrying that page's own controls** — and both halves of that
+              are measurements rather than a rule of thumb.
+
+              It was the flask alone below `sm`, on a reading of ~370px of
+              content against a 362px pill at 390. That reading was taken when
+              the menu key still carried the full tool name; with `Mgr` and
+              `Lineups` from the registry (see `Tool.short`) a page like
+              `/tools` or `/trades` measures well inside the 348px the pill's
+              content box gives at 390, so the thing the wordmark was dropped
+              for no longer costs what it did there.
+
+              What it still costs is on the two pages that publish Browse keys.
+              Measured at 390 on `/lineupchecker`: wordmark 129.1 + menu key
+              116.9 + controls key 50 + theme key 38, with three 12px gaps —
+              **370px against 348**, and what hangs off the pill's right edge is
+              the theme key. `/manager` fits (333) but only because `Mgr` is
+              three letters, and the next tool to publish controls is what would
+              break it silently. So the legend yields to the page's own
+              controls, which is the theme key's own precedent — the legend is
+              the first thing to go — applied to what the row is actually
+              carrying rather than to a breakpoint that cannot see it.
+
+              **Tightening the row instead was tried and measured**, and it is
+              recorded here so it is not tried again: cutting the rack's gap
+              12 -> 8, the brand link's 12 -> 8 and the menu key's padding and
+              tracking gets `/lineupchecker` to +4px of slack at 390 and **-12
+              at 375**, which is an ordinary phone. Four pixels is not a margin
+              on a row whose width the next entry in `tools.ts` changes.
+
+              The rack is still one row at every width — a constraint rather
+              than an observation, since `--rack-clear` is three values and not
+              five — so a row that does not fit does not wrap, it overflows the
+              pill. The `sr-only` name above is what keeps the link named at
+              every width either way.
             */}
             <span
               aria-hidden
-              className="relative hidden whitespace-nowrap font-display text-[length:var(--fs-15)] font-bold uppercase leading-none tracking-[0.09em] sm:inline-block md:text-[length:var(--fs-18)]"
+              className={`relative whitespace-nowrap font-display text-[length:var(--fs-15)] font-bold uppercase leading-none tracking-[0.09em] md:text-[length:var(--fs-18)] ${
+                controls ? "hidden sm:inline-block" : "inline-block"
+              }`}
             >
               <span className="absolute left-0 top-0 text-[var(--chrome-extrude)] [text-shadow:var(--chrome-extrude-shadow)]">
                 The Lab

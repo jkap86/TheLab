@@ -3,9 +3,14 @@ import { ToolsHome } from "@/features/tools";
 
 export default function ToolsPage() {
   return (
-    // `wide` because the grid is three across now; the default gutters were cut
-    // for a two-column page.
-    <PageShell width="wide">
+    // `console`, not `wide`. `wide` and `default` are both `max-w-4xl` — they
+    // differ only in gutters — so a three-across grid inside `tools-home`'s own
+    // panel inset landed a card at 241px and wrapped "Lineup Checker" and
+    // "Pick Tracker" onto two lines at `--fs-28`. At `console` (`max-w-6xl`) a
+    // card is 334px and every title sets on one line. It is the same reading
+    // `/manager` made when its cards clipped their tiles: the honest answer to
+    // a readout that does not fit is a wider shell, not smaller type.
+    <PageShell width="console">
       {/*
         The engraved `LabWordmark` plate used to be the heading here. It is
         gone: the app rack above already engraves "The Lab" on every page, and

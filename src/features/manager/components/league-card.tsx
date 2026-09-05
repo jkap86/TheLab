@@ -13,7 +13,7 @@ import { resolveKtcLineup } from "@/shared/ktc/roster";
 import {
   CardPlateRow,
   CardRule,
-  CONSOLE_CARD,
+  CONSOLE_CARD_SHELL,
   CONSOLE_WINDOW,
   ktcBoardLabel,
   LeagueConfigWindow,
@@ -194,7 +194,15 @@ export function LeagueCard({
       <details className="group/card flex min-w-0 flex-1 flex-col">
         <summary
           className={
-            `lab-card-3d ${CONSOLE_CARD} flex flex-1 cursor-pointer list-none flex-col font-mono ` +
+            `lab-card-3d ${CONSOLE_CARD_SHELL} pb-[1.125rem] pt-[1.875rem] flex flex-1 cursor-pointer list-none flex-col font-mono ` +
+            // **The gutter is 14px below `sm`, where every other card takes
+            // 18px.** Four tiles across a 362px card is what asks for it: the
+            // strip is the card's full width less this inset, and the four
+            // labels are the tightest thing on the page. It composes the
+            // *shell* rather than appending to `CONSOLE_CARD`, because two base
+            // `px-*` utilities are decided by Tailwind's emit order — see that
+            // constant's note.
+            "px-3.5 sm:px-[1.125rem] " +
             // **The open card's housing freezes under the rack.** See the note
             // below the component on why it is the `summary` and nothing else.
             "group-open/card:sticky group-open/card:top-[var(--card-freeze-top)] group-open/card:z-20 " +
@@ -254,7 +262,7 @@ export function LeagueCard({
               silently go. The margin is `mt-2.5` rather than `mt-4` because the
               window above already carries the separation the line did not. */}
           <div
-            className={`relative mt-2.5 grid gap-2 ${GRID_COLS[columns.length] ?? GRID_COLS[2]} pointer-fine:[transform:translateZ(22px)]`}
+            className={`relative mt-2.5 grid gap-1.5 sm:gap-2 ${GRID_COLS[columns.length] ?? GRID_COLS[2]} pointer-fine:[transform:translateZ(22px)]`}
           >
             {columns.map((column) => (
               <MetricTile
@@ -266,16 +274,23 @@ export function LeagueCard({
             ))}
           </div>
 
-          {/* The field size, once, for the whole strip. It came out of the
-              tiles because it is one number for all four of them and a tile has
-              75px to spend; it is stated here rather than only in the
-              configuration window because a rank with no denominator anywhere
-              near it is an ordinal without a scale. Read off the ranks
-              themselves rather than `total_rosters` — a metric ranks the
-              rosters it could total, which is not always every seat — and
-              silent where the ranks do not agree on one, since a single caption
-              over two field sizes would be a claim about both. */}
-          <RankedOf columns={columns} entry={entry} />
+          {/*
+            **The field size is stated once on this card, in the configuration
+            window's `Teams`, and there used to be a second copy here.**
+            `RankedOf` printed `Ranked of 12` under the strip — the same number
+            as `Teams`, 40px above it, and the only right-aligned caption on a
+            card where everything else is left. It is gone rather than moved:
+            the window's field is the scale every count beside it is already
+            read against, so the choice was between two spellings of one
+            denominator and one, and the surviving one is the one with a
+            vocabulary around it.
+
+            The reading it *could* make and `Teams` cannot is a rank's own `of`
+            — the rosters a metric could total, which is not always every seat —
+            but that gap is a guard rather than a case (every metric ranks the
+            same stored rosters), and a caption that is right about a case
+            nobody has is not worth a second denominator on every card.
+          */}
         </summary>
 
         {/* The expanded half sits *outside* the 3D context on purpose: a table
@@ -416,24 +431,45 @@ function MetricTile({
   const words = LINEUP_METRIC_LABELS[column.metric];
 
   return (
-    <div className={`${CONSOLE_WINDOW} min-w-0 rounded-[0.625rem] px-2 py-2.5`}>
+    <div
+      className={`${CONSOLE_WINDOW} min-w-0 rounded-[0.625rem] px-1.5 py-2.5 sm:px-2`}
+    >
       <Scanlines />
       {/* **The min-height is on the block, not on either line**, and that is
           what holds every ordinal in the row on one baseline: a two-line label
           beside a one-line label would otherwise push its own figure down and
-          the strip would read as four tiles at four heights. */}
-      <div className="relative min-h-[1.5rem]">
-        <p className="m-0 truncate font-mono text-[length:var(--fs-9)] uppercase leading-[1.2] tracking-[0.1em] text-readout-label">
+          the strip would read as four tiles at four heights.
+
+          **The unit leads and the scope follows it**, which reverses what the
+          two lines used to say. Both were `--fs-9`, and the *second* one — the
+          qualifier — carried `text-readout` and the readout glow while the
+          first, the thing being qualified, was the muted label colour: the
+          scope out-shouted the unit. It is `--fs-11` on `--readout-line` over
+          `--fs-10` on `--readout-label` now, which is the hierarchy the words
+          already had.
+
+          **Neither line is tracked below `sm`, and both step down there**, and
+          that is a fit rather than a taste. At `tracking-[0.1em]` in a 59px
+          label box `Draft cap` measured 64.9px and 20 of the 32 labels a
+          four-column card draws were clipped; the tighter gutter and gap take
+          the box to 65px and dropping the tracking takes the word to 61.5px at
+          `--fs-10`. It does **not** fit at the `--fs-11` the hierarchy above
+          asks for — 67.7px, measured — so the phone keeps the step one size
+          down on each line rather than losing it: `Draft cap`, `KTC start` and
+          `KTC picks` are all the same widest word, and the margin at `--fs-10-5`
+          is 0.4px, which is not a margin. */}
+      <div className="relative min-h-[1.625rem]">
+        <p className="m-0 truncate font-mono text-[length:var(--fs-10)] uppercase leading-[1.2] text-readout-line sm:text-[length:var(--fs-11)] sm:tracking-[0.1em]">
           {words.unit}
         </p>
-        <p className="m-0 mt-px min-h-[0.6875rem] truncate font-mono text-[length:var(--fs-9)] uppercase leading-[1.2] tracking-[0.12em] text-readout [text-shadow:var(--readout-text-glow)]">
+        <p className="m-0 mt-px min-h-[0.6875rem] truncate font-mono text-[length:var(--fs-9)] uppercase leading-[1.2] text-readout-label sm:text-[length:var(--fs-10)] sm:tracking-[0.12em]">
           {tileScope(column, league)}
         </p>
       </div>
       {/* A computed colour, so it goes through `style` — the ramp is
           continuous and there is no utility class to generate for it. */}
       <p
-        className="relative m-0 mt-2 truncate font-mono text-[length:var(--fs-21)] font-medium leading-none tabular-nums"
+        className="relative m-0 mt-2 truncate font-mono text-[length:var(--fs-18)] font-medium leading-none tabular-nums sm:text-[length:var(--fs-21)]"
         style={{
           color: tone,
           textShadow: `0 0 12px ${rankColor(percentile, 0.5)}`,
@@ -491,33 +527,3 @@ function tileScope(column: LineupColumn, league: ManagerLeague): string {
   );
 }
 
-/**
- * `Ranked of 12`, once, under the strip — or nothing at all.
- *
- * Suppressed while no column has a rank, because the caption would then be
- * describing a field nobody has been placed in; and suppressed where the
- * columns on screen do not agree on a field size, because one caption over two
- * of them would be wrong about one. In practice every metric ranks the same
- * stored rosters, so the disagreement arm is a guard rather than a case — which
- * is the point: it is the reading that cannot quietly become false.
- */
-function RankedOf({
-  columns,
-  entry,
-}: {
-  columns: readonly LineupColumn[];
-  entry?: LeagueLineupEntry | null;
-}) {
-  const sizes = new Set(
-    columns
-      .map((column) => entry?.ranks[lineupColumnKey(column)]?.of)
-      .filter((of): of is number => of !== undefined),
-  );
-  if (sizes.size !== 1) return null;
-
-  return (
-    <p className="relative m-0 mt-2 text-right font-mono text-[length:var(--fs-9)] uppercase tracking-[0.16em] text-readout-label">
-      Ranked of {[...sizes][0]}
-    </p>
-  );
-}

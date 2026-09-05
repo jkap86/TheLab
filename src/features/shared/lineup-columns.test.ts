@@ -2,13 +2,18 @@ import assert from "node:assert/strict";
 import { describe, test } from "node:test";
 
 import {
+  cellGapReason,
   column,
+  COLUMN_SCOPES,
+  COLUMN_VALUES,
   DEFAULT_LINEUP_COLUMNS,
   ktcBoardLabel,
   ktcChoiceLabel,
   LINEUP_METRIC_IDS,
   LINEUP_METRIC_LABELS,
   MAX_LINEUP_COLUMNS,
+  metricAt,
+  metricAxes,
   normalizeLineupColumns,
 } from "./lineup-columns.ts";
 import { isKtcMetric } from "../../shared/ktc/columns.ts";
@@ -122,5 +127,70 @@ describe("the labels", () => {
     );
     assert.equal(ktcBoardLabel("dynasty", true), "Dyn·SF");
     assert.equal(ktcBoardLabel("redraft", false), "Red·1QB");
+  });
+});
+
+/**
+ * The grid the picker composes a column from — a value crossed with a scope.
+ *
+ * Every rule here is silent when it goes wrong: a metric that named one cell in
+ * the table and another in the lookup would be a key that lights on a column it
+ * does not set, and a hole with no reason attached would be a greyed key a
+ * reader cannot find out anything about.
+ */
+describe("the value × scope grid", () => {
+  test("every metric round-trips through its own cell", () => {
+    // `metricAt` is derived from `METRIC_AXES` rather than written beside it,
+    // and this is what says the derivation is total: no id is unreachable from
+    // the two keys a reader presses.
+    for (const id of LINEUP_METRIC_IDS) {
+      const { value, scope } = metricAxes(id);
+      assert.equal(metricAt(value, scope), id, id);
+    }
+  });
+
+  test("no two metrics share a cell", () => {
+    const seen = new Set(
+      LINEUP_METRIC_IDS.map((id) => {
+        const { value, scope } = metricAxes(id);
+        return `${value}:${scope}`;
+      }),
+    );
+    assert.equal(seen.size, LINEUP_METRIC_IDS.length);
+  });
+
+  test("the two holes are the two the design names, and no others", () => {
+    const holes: string[] = [];
+    for (const value of COLUMN_VALUES) {
+      for (const scope of COLUMN_SCOPES) {
+        if (!metricAt(value, scope)) holes.push(`${value}:${scope}`);
+      }
+    }
+    // Projection has no whole-roster reading, and only KeepTradeCut prices a
+    // pick — so picks are absent under the other two bases. Anything else
+    // appearing here is a metric that quietly stopped being reachable.
+    assert.deepEqual(holes.sort(), [
+      "capital:picks",
+      "projection:all",
+      "projection:picks",
+    ]);
+  });
+
+  test("a hole always carries a reason and a cell never does", () => {
+    for (const value of COLUMN_VALUES) {
+      for (const scope of COLUMN_SCOPES) {
+        const reason = cellGapReason(value, scope);
+        assert.equal(
+          reason === null,
+          metricAt(value, scope) !== null,
+          `${value}:${scope}`,
+        );
+        if (reason !== null) assert.ok(reason.length > 0);
+      }
+    }
+    // The two are different claims: one is a reading this app has not built,
+    // the other is a reading that cannot exist on that basis at all.
+    assert.match(cellGapReason("projection", "all")!, /whole-roster/);
+    assert.match(cellGapReason("capital", "picks")!, /KeepTradeCut/);
   });
 });

@@ -146,7 +146,7 @@ export function LineupCheckCard({
               claim this tool must not make silently. It kept its own line when
               the identity line went, for exactly that reason. */}
           {entry?.as_of === "current" && (
-            <p className="relative mt-3 font-mono text-[length:var(--fs-11)] uppercase tracking-[0.16em] text-foreground/[0.78] pointer-fine:[transform:translateZ(14px)]">
+            <p className="relative mt-3 font-mono text-[length:var(--fs-11)] uppercase tracking-[0.16em] text-foreground/85 pointer-fine:[transform:translateZ(14px)]">
               Lineup as set now
             </p>
           )}
@@ -274,8 +274,14 @@ function MetricTile({ label, cell }: { label: string; cell: MetricCell }) {
       <Scanlines />
       {/* Teal rather than the housing's foreground: on a housing the windows
           are the only lit surface, so a label in the metal's own colour would
-          read as belonging to the metal rather than to the glass. */}
-      <p className="relative m-0 truncate font-mono text-[length:var(--fs-10)] uppercase tracking-[0.14em] text-readout-label">
+          read as belonging to the metal rather than to the glass.
+
+          **The tracking is 0.06em below `sm`** so the label reads as a word
+          rather than as spaced caps. It is cosmetic and nothing was clipping —
+          these tiles are two-up on a phone and the widest label (`Vs optimal`,
+          84.4px) has ~47px of slack in a 131px box, which is the opposite of
+          the manager card's four-up strip one tool over. */}
+      <p className="relative m-0 truncate font-mono text-[length:var(--fs-10)] uppercase tracking-[0.06em] text-readout-label sm:tracking-[0.14em]">
         {label}
       </p>
       <div className="relative max-w-[8.25rem]">

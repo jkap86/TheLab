@@ -257,9 +257,14 @@
    * They are tokens rather than alphas over `--color-readout` for the reason
    * the accent is never drawn with an alpha: light mode's readout text is a
    * teal that is already near its contrast floor, and `text-readout/45` on a
-   * pale mint window is ~2:1. The dark values are the alphas the handoff
-   * specifies; the light ones are solid colours measured against
-   * `--readout-bg` (11:1, 5.2:1, 4.8:1).
+   * pale mint window is ~2:1. The light ones are solid colours measured
+   * against `--readout-bg` (11:1, 5.2:1, 4.8:1).
+   *
+   * The two label alphas were 0.55 and 0.45 and are 0.72 and 0.62: at
+   * `--fs-9`/`--fs-10` on `--readout-bg` the old pair measured ~3:1 and
+   * ~2.5:1, under the 4.5:1 floor, and they are the colour of the label
+   * under every number on every card in the app. The new pair clears it
+   * with no size change. Light mode needed no edit, being solid already.
    *
    * The give track's three shades (0.45 name, 0.4 value, 0.3 sign) collapse
    * into `--readout-muted` alone: a light counterpart cannot carry an alpha,
@@ -267,8 +272,8 @@
    * tell the halves apart anyway.
    */
   --readout-line: rgba(214, 255, 250, 0.92);
-  --readout-label: rgba(159, 255, 242, 0.55);
-  --readout-muted: rgba(159, 255, 242, 0.45);
+  --readout-label: rgba(159, 255, 242, 0.72);
+  --readout-muted: rgba(159, 255, 242, 0.62);
   --groove: linear-gradient(to bottom, transparent, rgba(0, 0, 0, 0.9), transparent);
   --groove-highlight: 1px 0 0 rgba(255, 255, 255, 0.07);
 

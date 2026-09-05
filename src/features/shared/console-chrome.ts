@@ -115,13 +115,29 @@ export const CONSOLE_WELL =
  * three times, and a housing that drifted between them would read as three
  * different instruments.
  *
- * The 18px radius and the `30px 18px 18px` padding are part of it: the top
- * padding is what the plate straddling the edge needs to clear.
+ * The 18px radius is part of it, and so is the padding — which is why there
+ * are two constants. {@link CONSOLE_CARD_SHELL} is the housing with **no
+ * padding of its own**; {@link CONSOLE_CARD} is that plus the standard inset.
+ */
+export const CONSOLE_CARD_SHELL =
+  "relative rounded-[1.125rem] border border-foreground/10 " +
+  "bg-[image:var(--housing-bg)] shadow-[var(--housing-shadow)]";
+
+/**
+ * The housing with its own padding: `30px 18px 18px`, the top of it what the
+ * plate straddling the card's edge needs to clear.
+ *
+ * Split from {@link CONSOLE_CARD_SHELL} for {@link CONSOLE_KEY_PILL}'s reason,
+ * one axis over: a card that needs a *different* inset at a phone's width
+ * cannot get it by appending `px-3.5` to a string that already says
+ * `px-[1.125rem]`. Both are base `px-*` utilities of the same specificity, so
+ * which one wins is Tailwind's emit order rather than the class attribute's —
+ * and it is a card silently laid out at the wrong width rather than an error.
+ * A card that wants its own gutter composes the shell with it; everything else
+ * takes this and is unchanged.
  */
 export const CONSOLE_CARD =
-  "relative rounded-[1.125rem] border border-foreground/10 " +
-  "bg-[image:var(--housing-bg)] px-[1.125rem] pb-[1.125rem] pt-[1.875rem] " +
-  "shadow-[var(--housing-shadow)]";
+  `${CONSOLE_CARD_SHELL} px-[1.125rem] pb-[1.125rem] pt-[1.875rem]`;
 
 /**
  * A readout set *into* a housing, as opposed to sitting on a panel.

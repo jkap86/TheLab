@@ -3,6 +3,16 @@ export type Tool = {
    *  the tool it is rendering. */
   href: string;
   text: string;
+  /**
+   * The name at a phone's width, where the rack's menu key carries it beside
+   * the wordmark and the flask. Omitted where {@link Tool.text} already fits.
+   *
+   * It lives here rather than being truncated in `ToolsMenu` because a short
+   * name is a fact about the tool — "Lineup Checker" abbreviates to "Lineups"
+   * and not to "Lineup Ch…" — and a component cutting a string at a character
+   * count would have to be right about every entry the registry grows into.
+   */
+  short?: string;
   description: string;
   /**
    * Where it points once an account resolves, given that account's username.

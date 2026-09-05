@@ -177,7 +177,7 @@ export function SeasonSummary({
             plate: the caption is ~46px of it and the lit window inside the dial
             already reads "WIN 50.0%", so it is the one thing here that says
             something twice. Without it the block measured 311px against 332. */}
-        <span className="hidden max-w-16 font-mono text-[length:var(--fs-11)] uppercase tracking-[0.16em] text-foreground/60 sm:inline">
+        <span className="hidden max-w-16 font-mono text-[length:var(--fs-11)] uppercase tracking-[0.16em] text-foreground/72 sm:inline">
           Win rate
         </span>
       </div>
@@ -206,7 +206,7 @@ function Figure({
 }) {
   return (
     <dl className={`m-0 flex flex-col justify-center gap-1 px-0 sm:gap-2 sm:px-4 ${className}`}>
-      <dt className="font-mono text-[length:var(--fs-9)] uppercase tracking-[0.16em] text-foreground/60 sm:text-[length:var(--fs-11)]">
+      <dt className="font-mono text-[length:var(--fs-9)] uppercase tracking-[0.16em] text-foreground/72 sm:text-[length:var(--fs-11)]">
         {label}
       </dt>
       {/* `nowrap`: the en dash in `8–5` is a line-break opportunity, and a

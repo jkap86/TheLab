@@ -19,6 +19,12 @@ import { Avatar } from "../avatar";
  * name* — arbitrary length, arbitrary case — so it is a size down from the
  * wordmark and allowed to wrap, where "The Lab" never had to.
  *
+ * The bezel is `size-12` below `sm` and not `size-10`: at 40px a fixed 44px
+ * `Avatar size="lg"` lapped the ring on all four sides. Both halves moved —
+ * the avatar steps down to 38px there (see `avatar.tsx`, where it lands for
+ * every caller) and the mount up to 48px, which is the 44-in-56 proportion the
+ * desktop plate already has.
+ *
  * The engraving is two copies of the same string: the lower one carries the
  * extrusion and is `aria-hidden`, the upper one is the `<h1>`. The face is a
  * gradient clipped to the glyphs, so its colour is `transparent` and a
@@ -115,7 +121,7 @@ export function ManagerPlate({
     >
       <span
         aria-hidden
-        className="inline-flex size-10 shrink-0 items-center justify-center rounded-full border border-foreground/10 bg-[image:var(--bezel-bg)] shadow-[var(--bezel-shadow)] sm:size-14"
+        className="inline-flex size-12 shrink-0 items-center justify-center rounded-full border border-foreground/10 bg-[image:var(--bezel-bg)] shadow-[var(--bezel-shadow)] sm:size-14"
       >
         <Avatar url={avatarUrl} name={name} size="lg" />
       </span>

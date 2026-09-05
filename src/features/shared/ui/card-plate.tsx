@@ -173,7 +173,7 @@ export function PlateField({
 }) {
   return (
     <span className="inline-flex items-baseline gap-[5px] sm:gap-[0.375rem]">
-      <span className="font-mono text-[length:var(--fs-8)] uppercase tracking-[0.18em] text-foreground/[0.42] sm:text-[length:var(--fs-10)]">
+      <span className="font-mono text-[length:var(--fs-8)] uppercase tracking-[0.18em] text-foreground/[0.58] sm:text-[length:var(--fs-10)]">
         {label}
       </span>
       <span className="font-mono text-[length:var(--fs-13)] font-medium tabular-nums text-foreground/[0.97] sm:text-[length:var(--fs-17)]">

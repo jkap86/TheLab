@@ -7,6 +7,7 @@ export const tools: Tool[] = [
   {
     href: "/manager",
     text: "Manager",
+    short: "Mgr",
     description:
       "Rank your leagues by record, points, roster value, and projections.",
     hrefFor: (username) => `/manager/${username}`,
@@ -30,6 +31,7 @@ export const tools: Tool[] = [
   {
     href: "/lineupchecker",
     text: "Lineup Checker",
+    short: "Lineups",
     description: "Validate that your optimal lineup is set.",
     hrefFor: (username) => `/lineupchecker/${username}`,
   },

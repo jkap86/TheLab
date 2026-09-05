@@ -9,6 +9,7 @@ import {
   CONSOLE_KEY,
   CONSOLE_TRACK_SM,
   LeagueFiltersDialog,
+  LineupColumnsDialog,
   ManagerPlate,
   matchesFilters,
   matchesSubjects,
@@ -33,7 +34,6 @@ import {
   useManagerLeaguemates,
   useManagerPlayers,
 } from "../hooks/use-manager-shares";
-import { ColumnsStrip } from "./columns-strip";
 import { LeagueCard } from "./league-card";
 import { LeaguemateSharesDrawer } from "./leaguemate-shares-drawer";
 import { PlayerSharesDrawer } from "./player-shares-drawer";
@@ -77,10 +77,9 @@ const BROWSE_KEYS: readonly RackDrawerKey[] = [
  * figure for. The rack's lit Filters key said "a filter is on"; the plate's
  * `Leagues 9 / 14` said the same thing with a number, and neither said what had
  * been narrowed — so the key, the count and the summary sentence are one strip
- * on the plate now (see {@link ManagerPlate}'s `controls`), and the column
- * selection is the tray under it (see {@link ColumnsStrip}), where a closed
- * dialog's state is finally named. The rack keeps the two Browse keys, which
- * open drawers rather than describing this page.
+ * on the plate now (see {@link ManagerPlate}'s `controls`), and the columns
+ * picker's key sits on its own row under it. The rack keeps the two Browse
+ * keys, which open drawers rather than describing this page.
  *
  * **The rack is mounted in `layout.tsx`, so it cannot see this component's
  * state — and that is the real cost of putting anything up there.** The state
@@ -346,16 +345,30 @@ export function LeaguesHome({
           ) : undefined}
         </ManagerPlate>
 
-        {/* Which rank columns the cards below are carrying, named and
-            removable — the other half of what the rack's View track used to
-            hold, and the half a closed dialog could never say. Inside the
-            header, under the plate, because it describes the grid the plate
-            counts. */}
+        {/*
+          **The picker's key, and no tray around it.** This was `ColumnsStrip`:
+          a `CONSOLE_WELL` holding a `Columns` label, one lit chip per chosen
+          column and the key at `ml-auto`. The chips are gone — the designer's
+          call — and with them the reason for the well, since a tray holding a
+          single key reads as a hole rather than as a panel of controls. The
+          key stands on the row on its own instead, right-aligned above the
+          grid it configures.
+
+          The bound the chips carried survives where it always also lived: the
+          dialog refuses to clear the last bay standing (`onClear` is null
+          there), which is the rule that must not become a fall back to
+          `DEFAULT_LINEUP_COLUMNS` — `normalize` does exactly that when handed
+          an empty array, which is right for a stale stored value and wrong for
+          a press.
+        */}
         {leagues.length > 0 && (
-          <ColumnsStrip
-            columns={columns}
-            ktc={lineups?.ktc ?? []}
-          />
+          <div className="relative mt-3.5 flex items-center justify-end">
+            <LineupColumnsDialog
+              columns={columns}
+              ktc={lineups?.ktc ?? []}
+              triggerClassName={CONSOLE_KEY}
+            />
+          </div>
         )}
       </header>
 

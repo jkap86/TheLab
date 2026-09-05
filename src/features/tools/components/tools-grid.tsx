@@ -14,9 +14,13 @@ export function ToolGrid({ user }: { user: UserInfo | null }) {
     // is itself `flex`, which is what lets the card be `flex-1` instead of
     // `h-full` — see the note in `tool-card.tsx`. The row gap leaves room for
     // the hover rise; the column gap does not need to.
+    //
+    // The perspective carries `pointer-fine:` with the rest of the depth: a
+    // coarse pointer has no hover to flatten the tilt, so the projection is a
+    // stacking context per card bought with nothing to spend it on.
     <ul className="grid grid-cols-1 gap-x-[1.125rem] gap-y-7 sm:grid-cols-2 lg:grid-cols-3">
       {tools.map((tool) => (
-        <li key={tool.href} className="flex [perspective:2400px]">
+        <li key={tool.href} className="flex pointer-fine:[perspective:2400px]">
           <ToolLinkCard
             tool={tool}
             href={toolHref(tool, user?.username ?? null)}

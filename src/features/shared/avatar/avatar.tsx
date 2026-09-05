@@ -10,7 +10,14 @@ const SIZES = {
   md: "h-7 w-7 text-[length:var(--fs-12)] @lg:h-9 @lg:w-9 @lg:text-[length:var(--fs-14)]",
   // An identity plate: big enough to anchor a card, small enough to share a
   // phone-width row with whatever sits beside it.
-  lg: "h-11 w-11 text-[length:var(--fs-18)]",
+  //
+  // It steps down below `sm` because the bezel it sits in does. `ManagerPlate`
+  // is `size-10` (40px) at a phone's width and `size-14` above it, and a fixed
+  // 44px face measured 46px including its border *inside* a 42px ring — the
+  // avatar lapping the mount on all four sides. This is the only fixed size
+  // with a mount to fit, so the step lives here where every caller gets it
+  // rather than in a class the plate appends.
+  lg: "h-[2.375rem] w-[2.375rem] text-[length:var(--fs-16)] sm:h-11 sm:w-11 sm:text-[length:var(--fs-18)]",
   // A page that is *about* one account — the tools lookup — where the avatar is
   // the subject rather than a label on a row.
   xl: "h-16 w-16 text-[length:var(--fs-24)]",

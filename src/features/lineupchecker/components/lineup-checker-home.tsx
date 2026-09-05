@@ -284,7 +284,10 @@ function Checker({
 
   return (
     <div className="relative">
-      <header className="relative">
+      {/* The bottom margin is the header's own below `sm`, because the stepper
+          row that used to carry it (`my-9`) is `display: none` there and a
+          hidden element's margins collapse with it. */}
+      <header className="relative mb-6 sm:mb-0">
         <ManagerPlate
           name={name}
           avatarUrl={user?.avatar_url ?? null}
@@ -322,6 +325,30 @@ function Checker({
                       Clear
                     </button>
                   )}
+                </span>
+                {/*
+                  **The week stepper rides the strip below `sm`, and the row
+                  under the plate from `sm` up.** On a phone that row was the
+                  stepper and then a hairline with almost nothing on its far
+                  side — 36px of control and a rule across the rest of a 390px
+                  screen — while the strip beside it had slack. Above `sm` the
+                  hairline has a page to run across and the row earns itself.
+
+                  It is rendered twice, which every other two-position control
+                  in this app refuses to do — and the two facts that make it
+                  safe here are worth stating, because neither holds for the
+                  dialogs that established the rule. `WeekStepper` holds **no
+                  state**: the week comes off the payload and the handler is the
+                  page's, so two copies cannot disagree. And both gates are
+                  `display: none`, which takes an element out of the
+                  accessibility tree entirely — so the `aria-live` readout
+                  inside it exists exactly once at any width, and nothing is
+                  announced twice. What it costs is one duplicated control in
+                  the DOM, where `LeagueTeams`' `lg:contents` rule is about
+                  hundreds of rows.
+                */}
+                <span className="sm:hidden">
+                  <WeekStepper week={check?.week ?? null} onChange={onWeek} />
                 </span>
                 {/* `flex-[1_1_12rem]` is what lets the sentence take the rest of
                     the strip and then drop to its own line rather than
@@ -364,10 +391,12 @@ function Checker({
         </ManagerPlate>
       </header>
 
-      {/* The stepper keeps the row and the hairline fills the rest of it. The
-          `Clear filters` key that used to stand at its far end is on the plate
-          now, beside the key that set the filter in the first place. */}
-      <div className="relative my-9 flex flex-wrap items-center gap-3">
+      {/* The stepper keeps the row and the hairline fills the rest of it, from
+          `sm` up — below it the stepper is on the plate's own strip and this
+          row would be a rule with nothing on its far side. The `Clear filters`
+          key that used to stand at its far end is on the plate now, beside the
+          key that set the filter in the first place. */}
+      <div className="relative my-6 hidden flex-wrap items-center gap-3 sm:my-9 sm:flex">
         <WeekStepper week={check?.week ?? null} onChange={onWeek} />
         <div
           aria-hidden
@@ -493,6 +522,21 @@ function Checker({
  * zero, which would read as "all clear" for the length of a round trip, and no
  * rows, because four zeroes make the same claim four times. `aria-live` is on
  * the count so the answer is announced when it arrives.
+ *
+ * **Below `sm` it shares the dial's line rather than taking one of its own,
+ * and the four rows become one wrapping row of pips.** The `min-w-[12.5rem]`
+ * this used to carry unconditionally was the whole of the problem: with the
+ * 88px dial and the `Proj rec` figure beside it, 200px does not fit a 336px
+ * plate, so the window wrapped and the plate became four rows — 385px of a
+ * phone screen before a single card. It is `min-w-0 flex-1` there and the
+ * floor comes back at `sm`, where there is room for it.
+ *
+ * The rows keep every rule they had: the em dash before the check lands, the
+ * lit error tone above zero, the muted ink at zero. What changes below `sm` is
+ * that they flow rather than stack, and each carries a short label — the
+ * `Tool.short` argument at a row's grain, and spelled as two spans switched by
+ * the cascade rather than by state, because this is rendered above the fold on
+ * every visit and must not wait for hydration to learn its width.
  */
 function AttentionWindow({
   attention,
@@ -507,7 +551,7 @@ function AttentionWindow({
 }) {
   return (
     <div
-      className={`${CONSOLE_WINDOW} flex min-w-[12.5rem] flex-col gap-[0.4375rem] rounded-[0.625rem] px-3 py-2.5 font-mono`}
+      className={`${CONSOLE_WINDOW} flex min-w-0 basis-full flex-col justify-center gap-2 rounded-[0.625rem] px-3 py-2.5 font-mono sm:basis-auto sm:gap-[0.4375rem] sm:min-w-[12.5rem]`}
       title={`${attention} of ${of} league${of === 1 ? "" : "s"} checked need a look`}
     >
       <Scanlines />
@@ -532,10 +576,28 @@ function AttentionWindow({
         className="relative block h-px bg-[color-mix(in_srgb,var(--readout-label)_26%,transparent)]"
       />
 
-      <ReasonRow label="Points left" count={pending ? null : reasons.points} />
-      <ReasonRow label="Kickoff order" count={pending ? null : reasons.kickoff} />
-      <ReasonRow label="Superflex" count={pending ? null : reasons.superflex} />
-      <ReasonRow label="Roster slots" count={pending ? null : reasons.roster} />
+      <div className="relative flex flex-wrap items-center gap-x-2.5 gap-y-1 sm:flex-col sm:items-stretch sm:gap-[0.4375rem]">
+        <ReasonRow
+          label="Points left"
+          short="Pts"
+          count={pending ? null : reasons.points}
+        />
+        <ReasonRow
+          label="Kickoff order"
+          short="Kick"
+          count={pending ? null : reasons.kickoff}
+        />
+        <ReasonRow
+          label="Superflex"
+          short="SF"
+          count={pending ? null : reasons.superflex}
+        />
+        <ReasonRow
+          label="Roster slots"
+          short="Roster"
+          count={pending ? null : reasons.roster}
+        />
+      </div>
     </div>
   );
 }
@@ -547,11 +609,23 @@ function AttentionWindow({
  * window's muted ink throughout, so the eye finds the reasons that want a press
  * without reading four numbers. `null` is the state before the check lands —
  * the em dash, never a zero, for the reason the count above draws one.
+ *
+ * `short` is the label below `sm`, where the four of these flow along one line
+ * inside a window sharing its row with a dial. Both are rendered and the
+ * cascade picks one, never state — see the window's own note.
  */
-function ReasonRow({ label, count }: { label: string; count: number | null }) {
+function ReasonRow({
+  label,
+  short,
+  count,
+}: {
+  label: string;
+  short: string;
+  count: number | null;
+}) {
   const lit = count !== null && count > 0;
   return (
-    <span className="relative flex items-center gap-2">
+    <span className="flex items-center gap-1.5 sm:gap-2">
       <span
         aria-hidden
         className={`size-1.5 shrink-0 rounded-full ${
@@ -561,11 +635,12 @@ function ReasonRow({ label, count }: { label: string; count: number | null }) {
         }`}
       />
       <span
-        className={`flex-1 whitespace-nowrap text-[length:var(--fs-10)] uppercase tracking-[0.14em] ${
+        className={`whitespace-nowrap text-[length:var(--fs-10)] uppercase tracking-[0.14em] sm:flex-1 ${
           lit ? "text-readout-line" : "text-readout-muted"
         }`}
       >
-        {label}
+        <span className="sm:hidden">{short}</span>
+        <span className="hidden sm:inline">{label}</span>
       </span>
       <span
         className={`text-[length:var(--fs-13)] leading-none tabular-nums ${

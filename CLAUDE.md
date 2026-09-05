@@ -648,6 +648,15 @@ It is four numbered bays, always four, with the market and the QB board set
 *inside* a bay — so a column is a `(metric, market, lineup)` triple and the same
 metric can sit in two of them. Applied from a design handoff.
 
+**The panel has since been rewritten around those bays** — the nine keys and
+their nine sentences are gone, a bay is *selected* and edited in place, and the
+metrics are composed from a value and a scope rather than listed; see The Card
+columns dialog, rewritten. Everything in this section about what a *column* is
+still holds, and is what that rewrite is built on: the triple, the bay, the
+`taken` rule, the variants on the request, and the four ranks on the server.
+What it supersedes is the panel's shape, which is why the height below is a
+figure the rewrite quotes as the thing it fixed.
+
 **It needed no migration and no schema change.** `format` is a `ktc_values`
 row's identity and `sf`/`oneqb` are two columns of that row, so a forced board
 is a second read of a table already in hand — which is why the whole thing is
@@ -2115,9 +2124,12 @@ deleted is dead weight, in the same way Geist Mono was before this page asked
 for it.
 
 **The grid is three across at `lg`**, sized for the eight to ten tools the page
-is growing into rather than the five it has. `PageShell width="wide"` is reused
-for it; the design's placeholder cards (Values, Matchups, Drafts, League Graph)
-are *not* shipped and `constants/tools.ts` is untouched.
+is growing into rather than the five it has. It was `PageShell width="wide"` and
+is `console` **since** — `wide` and `default` are both `max-w-4xl`, so three
+across the panel's own inset landed a card at 241px and wrapped two titles; see
+The finalization pass. The design's placeholder cards (Values, Matchups, Drafts,
+League Graph) are *not* shipped and `constants/tools.ts` carries only the five,
+plus the `short` names the rack's menu key reads.
 
 **Two CSS constraints carry the card, and both are silent when broken.**
 
@@ -4562,7 +4574,12 @@ whole mechanism, and the separator is a **milled cut read horizontally** — a
 dark hairline with a light one under it — rather than `--groove`, which is the
 vertical channel beside the avatar and would read as a rule turned on its side.
 
-**The columns are a tray of chips under the plate**, `ColumnsStrip` in a
+**The columns are a tray of chips under the plate** — **gone since**, along with
+the whole component; see The finalization pass below, where the designer removed
+the chips and the well went with them, a tray holding a single key reading as a
+hole. What follows describes the tray it was, and the last-chip rule it records
+is the one that survived it, into the dialog that already enforced the same
+bound. `ColumnsStrip`, in a
 `CONSOLE_WELL`: one lit chip per chosen column, pressable to remove, with the
 existing `LineupColumnsDialog` as `Edit columns` at the far end. Same problem as
 the subject tokens and the same answer — a closed dialog says nothing, and a
@@ -4717,7 +4734,11 @@ with, against its own league. A second spelling of either is a label naming a
 board the figure under it was not read on. `leagueType` rather than a read of
 `settings.type`, on that helper's own terms.
 
-**The denominator moved under the row rather than into the tile.** `Ranked of
+**The denominator moved under the row rather than into the tile** — and has
+since moved out of the card altogether, `Teams` in the configuration window
+being the same number 40px above it; see The finalization pass below for the
+judgement that removed it and for the one reading it could make that `Teams`
+cannot. What follows is `RankedOf` as it stood. `Ranked of
 12`, right-aligned, once — read off the ranks themselves rather than
 `total_rosters`, since a metric ranks the rosters it could total; suppressed
 where no column has a rank, and suppressed where the columns on screen do not
@@ -4844,6 +4865,12 @@ flow reflows and type in a circle clips.
   go, and it also closes a fault that predates the scale: `/lineupchecker`'s
   rack was 54px over its pill at 390 and nobody had measured it.
 
+  **The gate is narrower since**, and the measurement above is why it could be:
+  the menu key carries a short tool name now, so the row only exceeds the pill
+  on the pages whose rack is *also* carrying that page's controls. The wordmark
+  is back below `sm` everywhere else, and the 370-against-348 figure that keeps
+  it off the other two is remeasured in The finalization pass.
+
 **The open card's housing freezes**, which is `group-open/card:sticky` at
 `--card-freeze-top` and nothing else. A twelve-team browser is taller than the
 viewport, so a reader three scrolls into one had nothing on screen naming the
@@ -4947,6 +4974,294 @@ the sticky housings are one per card and the browser under one of them is a real
 twelve-team solve. And whether `1.16` is the right figure against real content
 rather than against three fixture leagues, which is exactly what the one-number
 scale exists to make cheap to answer.
+
+### The finalization pass
+
+A contrast, density and phone-layout pass over `/tools`, `/manager` and
+`/lineupchecker`, plus one genuine redesign — the **Card columns** dialog.
+Applied from a design handoff, on its chosen directions (`1b` for Tools, `4b`
+for the modal). Nothing on the wire moved: no route, no query, no contract type,
+no payload field, and no migration.
+
+**The one change that touches every page is two numbers.** `--readout-label` and
+`--readout-muted` are the colour of the label under every figure on every card
+in the app, and at 0.55 and 0.45 over `--readout-bg` they measured ~3:1 and
+~2.5:1 — both under the floor. They are 0.72 and 0.62. Light mode needed no
+edit, its counterparts being solid colours already measured at 5.2 and 4.8:1,
+which is the argument `globals.css` gives for why they are tokens rather than
+alphas in the first place. Four component-level label colours follow the same
+reasoning and are not tokens: `PlateField`'s label, both summaries' `<dt>`, and
+the lineup checker's `Lineup as set now`.
+
+#### Tools
+
+**`/tools` was on `wide`, which is `max-w-4xl` — the same as `default`.** The two
+arms differ only in gutters, so a three-across grid inside the panel's own inset
+landed a card at 241px and wrapped two of the five titles. It is `console` now
+and the panel's inset steps `6 -> 8 -> 10` rather than to 13: card 241 -> **334px**,
+every title on one line, measured.
+
+**A locked card is not dimmed; it says so in words.** `opacity-45` over a
+description already at `text-foreground/60` composited near 1.9:1, on three of
+the five cards a first visit shows — and the dimming was the only *visible*
+signal the card was inert, the `role="link"` + `aria-disabled` pair having
+carried it for everybody else. So the foot reads `Account needed` where an open
+card reads `Open`, at full contrast, and the phone card carries the same fact as
+`Account` / `Ready` on its title row.
+
+**The phone card drops its foot row and its depth.** The whole card is the
+target on a touch device, so a row whose only job is to say "this is pressable"
+is a row spent on nothing; the title steps `--fs-28 -> --fs-24` and the padding
+tightens. **The depth rides `pointer-fine:` rather than a breakpoint** — the
+league cards' own gate, and for their reason: the tilt exists to be flattened by
+a hover, so on a coarse pointer it is a composited plane per card with nothing to
+spend it on. The `<li>`'s `perspective` went with it.
+
+#### The rack's wordmark, and the short tool names
+
+`Tool.short` is new — `Mgr` and `Lineups` — and it lives in the registry rather
+than being truncated in `ToolsMenu`, because a short name is a fact about the
+tool: "Lineup Checker" abbreviates to "Lineups" and not to "Lineup Ch…", and a
+component cutting at a character count would have to be right about every entry
+`tools.ts` grows into. Only the *key* shortens; the menu's own entries keep the
+full name, since a list that abbreviated would name the tools by two
+vocabularies on one screen.
+
+**The wordmark is back on the phone rack, on every page whose rack is not also
+carrying that page's own controls** — and the gate is `controls`, not `sm`,
+because a measurement says so. The pill's content box is 348px at 390. On
+`/lineupchecker`: wordmark 129.1 + menu key 116.9 + Browse key 50 + theme key 38,
+with three 12px gaps — **370 against 348**, and what hangs off the right edge is
+the theme key. `/manager` fits at 333, but only because `Mgr` is three letters,
+and the next tool to publish controls is what would break it silently. So the
+legend yields to the page's own controls, which is the theme key's own precedent
+— the legend is the first thing to go — applied to what the row is *carrying*
+rather than to a breakpoint that cannot see it.
+
+**Tightening the row instead was tried, measured and reverted**, and it is
+written down in `app-rack.tsx` so it is not tried again: cutting the rack's gap
+12 -> 8, the brand link's 12 -> 8 and the menu key's padding and tracking gets
+`/lineupchecker` to **+4px at 390 and -12 at 375**, which is an ordinary phone.
+Four pixels is not a margin on a row whose width the next registry entry changes.
+
+#### The manager card
+
+**The avatar lapped its own bezel on a phone.** `ManagerPlate`'s mount was
+`size-10` (40px) and `Avatar size="lg"` a fixed 44px — 46px including its border
+inside a 42px ring, on all four sides. Both halves moved: the avatar steps to
+38px below `sm` (in `avatar.tsx`, where every caller gets it) and the mount to
+48px, which is the 44-in-56 proportion the desktop plate already had. Measured
+after: 5px of ring on every side at both widths.
+
+**Twenty of the thirty-two tile labels were clipped at 390.** Four tiles across a
+362px card gave a 75px tile and a 59px label box, against `Draft cap` at 64.9px
+tracked. The gutter goes `px-[1.125rem] -> px-3.5`, the gap `2 -> 1.5`, the tile
+padding `px-2 -> px-1.5` and both label lines lose their tracking below `sm` —
+tile **79px**, label box **65px**, and **0 of 32 clipped**, driven over every
+metric at both schemes.
+
+That gutter is why `CONSOLE_CARD` split. `CONSOLE_CARD_SHELL` is the housing with
+**no padding of its own** and `CONSOLE_CARD` is that plus the standard inset, on
+`CONSOLE_KEY_PILL`'s exact line one axis over: a card that needs a different
+gutter cannot get it by appending `px-3.5` to a string that already says
+`px-[1.125rem]`, because two base `px-*` utilities of the same specificity are
+decided by Tailwind's emit order rather than the class attribute's — and the
+symptom is a card silently laid out at the wrong width.
+
+**The tile's two lines had the hierarchy backwards.** Both were `--fs-9`, and the
+*second* — the qualifier — carried `text-readout` and the readout glow while the
+first, the thing being qualified, was the muted label colour. It is
+`--readout-line` over `--readout-label` now, at `--fs-11`/`--fs-10` from `sm` up.
+**The size half of that is one step smaller on a phone, and a render is what said
+so**: at `--fs-11` untracked, `Draft cap`, `KTC start` and `KTC picks` are all
+67.7px against the 65px box, and `--fs-10-5` leaves 0.4px, which is not a margin.
+So the phone runs `--fs-10` over `--fs-9` — the hierarchy kept, one size down —
+which is the §3.2/§3.3 conflict the handoff could not see from either section
+alone.
+
+**`RankedOf` is deleted.** It printed `Ranked of 12` under the strip: the same
+number as the configuration window's `Teams` 40px above it, and the only
+right-aligned caption on a card where everything else is left. The reading it
+*could* make and `Teams` cannot is a rank's own `of` — the rosters a metric could
+total, which is not always every seat — but that gap is a guard rather than a
+case, and a caption that is right about a case nobody has is not worth a second
+denominator on every card. **This was the handoff's own judgement call**, flagged
+for the designer with a recommendation; the recommendation is what shipped, and
+the alternative it names (keep it, drop `Teams`) is still available.
+
+**`ColumnsStrip` is gone and the picker's key stands on its own row.** The tray
+held a `Columns` label, one lit chip per chosen column and the key at `ml-auto`;
+the designer removed the chips, and the well went with them, because a tray
+holding a single key reads as a hole rather than as a panel of controls. The
+bound the chips carried survives where it always also lived — the dialog refuses
+to clear the last bay standing — and that rule is the one that must not become a
+fall back to `DEFAULT_LINEUP_COLUMNS`, which is exactly what `normalize` does
+when handed an empty array.
+
+#### The lineup checker
+
+**The week dial did not step down.** `SeasonSummary` runs 88px and 72px and
+documents why; this one was a fixed 88 at every width — the same plate over the
+same account drawn at two heights by two tools. Every inset is a chain measured
+from the bezel's edge, so the arc, the pointer, the window and both type sizes
+step together or the dial comes apart. The desktop arm's `100.0%` rule is
+untouched; the phone window is 50px and its figure `--fs-10`, which needs no
+help.
+
+**The attention window forced the plate to four rows.** Its `min-w-[12.5rem]`
+does not fit beside an 88px dial and a `Proj rec` figure in a 336px plate, so it
+wrapped *and kept its floor*: 385px of phone before a single card. Below `sm` it
+takes the line under the dial, its four `ReasonRow`s flow as one row of pips with
+short labels, and the floor comes back at `sm`.
+
+**`basis-full`, not `flex-1`, and that is the thing a render had to say.** The
+handoff specifies `min-w-0 flex-1`; `flex-1` is `flex: 1 1 0%`, so the window's
+hypothetical size is zero and it *always* fits on the dial's line — measured at
+134.8px, in which the four pips are 52.2, 60.6, 43.8 and 66 and stack four deep,
+which is the arrangement the change exists to replace. On its own line the wrap
+box is 306px and the four flow in one row: window **336 × 77px**, one pip line,
+measured.
+
+**The week stepper joins the plate's controls strip below `sm`**, where its own
+row was 36px of control and a hairline across the rest of a phone. **It is
+rendered twice, which every other two-position control in this app refuses to
+do**, and the two facts that make it safe are worth stating because neither holds
+for the dialogs that established the rule: `WeekStepper` holds **no state** — the
+week is off the payload and the handler is the page's, so two copies cannot
+disagree — and both gates are `display: none`, which takes an element out of the
+accessibility tree, so the `aria-live` readout inside it exists exactly once at
+any width. Driven at both widths: two in the DOM, **one visible**. The header
+carries the bottom margin below `sm`, because a hidden element's margins collapse
+with it.
+
+### The Card columns dialog, rewritten
+
+The one genuine redesign, and the idea is one sentence: **the bay you select is
+the thing you are editing.**
+
+**What was wrong is a number.** Add and edit were two regions — a rack of four
+bays, and under it a list of nine keys each carrying a full sentence, with the
+chosen ones repeating that sentence inside their bay. Twelve sentences in a
+448px column measured 1218px at desktop and 1352px at 390, against a `<dialog>`'s
+own budget of ~812px: it scrolled, and *Done* sat well below the fold.
+
+**The nine metric keys are gone because the nine metrics were never nine
+questions.** They are a *value* crossed with a *scope*, and `METRIC_AXES` in
+`lineup-columns.ts` is that grid — the **fifth** exhaustive
+`Record<LineupMetricId, …>` in the contract's compiler seam, with `metricAt`
+derived from it rather than written twice, because a metric that named one
+pairing in the table and another in the lookup would be a picker whose keys light
+on a column it does not set.
+
+**The grid has two holes and the list was hiding both.** Projection × All has no
+metric — a whole-roster rest-of-season projection does not exist here, and adding
+one is server work — and picks are not a roster scope, only KeepTradeCut pricing
+them. Each is greyed with its **reason in the key's title**, which is this app's
+rule for a control that cannot act; `cellGapReason` is the one spelling, and
+`lineup-columns.test.ts` pins that a hole always carries a reason, that a cell
+never does, and that the holes are exactly those three cells and no others.
+
+**`SwitchTrack` was generalised rather than copied**, which the handoff asks for
+by name and `ktc-board-keys.tsx`'s own note already required: a switch that
+stopped travelling in one of two spellings is the failure `console-chrome`'s
+constants exist to prevent, and four tracks in one panel is four chances at it.
+Two things generalised with it, and each is a state the two KTC axes never had —
+`value` may be **null**, because an empty bay lights nothing where a market
+always has an answer, and `taken` became `unavailable`, returning a *reason*
+rather than a boolean, because a key can now be off for reasons that are not
+"another bay holds it". A `row` size carries the labelled track; the legend is
+`aria-hidden` because the group it labels already carries the same string as its
+accessible name.
+
+**The selection follows the column it wrote, and that is a bug a render found.**
+Bays are numbered by canonical order, so an edit renumbers them: adding
+`Proj · Bench` from bay 04 sorts it to bay 02 and left the panel editing bay 04's
+old neighbour — the reader pressing a key and watching a different column answer.
+Every write goes through `write`, which asks `normalizeLineupColumns` where the
+column landed rather than predicting it. `clear` is the one that does not, and
+deliberately: what the reader is looking at is the socket they emptied.
+
+**An empty bay composes rather than refusing.** Its tracks are live with nothing
+lit, and a press picks the first cell that is *free* — pressing `Proj` with bay
+01 on `Proj · Starters` opens `Proj · Bench` rather than greying. A filled bay
+keeps the axis the reader is not pressing, which is what makes the grid's holes
+visible instead of silently routed around. Both were wrong in the first cut and
+both were caught by driving the panel.
+
+**The bay is the preview**, so there is no preview tile: the selected bay is
+already drawn as the tile it configures and a second copy would be the same
+reading twice. What is kept from the stepped-composer direction is the **`Reads`
+line** — the composed column stated in words, on lit glass, recomposed on every
+press — because it is the one thing the rack cannot say: a bay is four characters
+of unit over a board pair, and `KTC · Dyn · SF` does not tell a reader the number
+includes the picks.
+
+**Two units per bay, switched by the cascade.** A bay is 91px at the dialog's
+desktop width and 72px at 390, and inside the second there are ~58px for that
+line — where `Draft cap`, `KTC start` and `KTC picks` all measure 61.5px. The
+long form is the card tile's own `unit`, which is what makes the bay read as the
+tile; the short form is the *value* axis the track below sets, the same word one
+grain coarser, and it cannot clip.
+
+**A `Position` axis is deliberately not built.** The design offers a third track
+— `All / QB / RB / WR / TE / IDP` — and it is the one thing in the panel that is
+a *feature* rather than a re-presentation: there is no position axis on
+`LineupColumn`, no per-position total on `LeagueTeam`, nothing in
+`lineupMetricTotals` that groups by position, and no rank for one in the route.
+Building the track without those four seams would be a control that reads a
+column nobody can compute. The handoff flags it as new server scope and asks that
+it be confirmed first; it is flagged back rather than guessed at. The words
+themselves are not new when it arrives — `SLOT_GROUPS` is derived from the
+solver's own tables.
+
+#### Verified
+
+Rendered through a temporary `/preview` route against the real components,
+tokens and Tailwind build — the method the console-card, shares, rack and
+timeline passes established, since no database is reachable from where this was
+built — then driven over CDP at 1280, 390 and 375 in both schemes and deleted.
+The mechanics are unchanged: `--no-proxy-server`, `localhost` rather than
+`127.0.0.1`, and a phone viewport from `Emulation.setDeviceMetricsOverride`.
+
+The dialog: **448 × 504px** at desktop and **352 × 558px** at 390, both far
+inside the 812px budget where the panel it replaces was 1218 and 1352. Four bays
+across at both widths in **one row**, 91px and 72px, with **no line clipped** on
+any of the nine metrics; `:modal` true, **zero** elements past the panel's own
+box, and *Done* inside the viewport at both. Every rule landed: bay 03 on
+`Dyn · SF` beside bay 02 on `Dyn · Auto` greyed the QB track's `Auto` with
+"Another bay is on this board"; sitting on `All` greyed `Proj` with "There is no
+whole-roster projection"; `Picks` greyed under Capital with "Only KeepTradeCut
+prices a draft pick"; the empty bay drew `Composing`, an `Add` key and two live
+tracks, and pressing `Proj` on it stored `ros_bench`, moved the selection to the
+bay that column sorted into, and put `Projected points — bench, rest of season.`
+in the `Reads` line.
+
+The manager card at 390: tile **79px**, label box **65px**, **0 of 32 labels
+clipped** across three column sets in both schemes, one row of four, and no
+`Ranked of` caption. `/tools` at 1280: card **334px**, all five titles on one
+line, `opacity: 1` on all three locked cards, `Account needed`/`Open` in the
+foot, no `<nav>` — the page's deliberate exception. The rack is **one row with
+zero overflow** on `/tools`, `/trades`, `/picktracker`, `/manager` and
+`/lineupchecker` at 390 **and 375**, with the wordmark drawn on the first three
+and the flask alone on the two that publish Browse keys. The lineup checker
+plate: dial **88 -> 72px**, attention window **336 × 77px** on its own line with
+**one** pip row at 390 and four stacked rows at 1280, exactly **one** stepper
+visible at each width against two in the DOM, and the avatar **38-in-48** at
+phone and **44-in-56** at desktop with 5px of ring on every side.
+
+At every width and in both schemes: `document.documentElement.scrollWidth` equal
+to the viewport, zero elements past it, one `<h1>`, and no console output but the
+dev server's own React-DevTools and HMR lines. 1,207 unit tests pass; `lint`,
+`typecheck` and `build` are clean.
+
+**Not verified against real data**, which is the gap to close first: every number
+above is a fixture. Three things a render cannot check — whether the raised
+`--readout-label` reads as intended on **Pick Tracker, Trades and Logs**, which
+the handoff has not designed and which every use of those two tokens now touches;
+whether a real account's league names still set acceptably in the manager card's
+tighter 14px gutter; and whether the four-bay rack holds a reader's own stored
+selection as legibly as the fixtures', since the bay's short unit is the *value*
+axis and two KTC bays on one board read alike there.
 
 ## The console card
 

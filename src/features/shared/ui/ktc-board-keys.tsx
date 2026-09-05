@@ -38,6 +38,9 @@ import { CONSOLE_TRACK } from "../console-chrome";
  * word.
  */
 
+/** Why a board key is off: a sibling bay is already reading it. */
+const BOARD_TAKEN = "Another bay is on this board";
+
 const MARKET_LABELS: Record<KtcBoardChoice, string> = {
   auto: "Auto",
   dynasty: "Dynasty",
@@ -57,7 +60,17 @@ const LINEUP_LABELS: Record<KtcLineupChoice, string> = {
   sf: "SF",
 };
 
-type Size = "md" | "sm";
+/**
+ * Three sizes, and they are sizes rather than three components.
+ *
+ * `md` is the full key, `sm` the one that fits two switches inside a 200px
+ * bay, and `row` the labelled track the columns dialog stands its four axes in
+ * — legend on the left at `sm` and up, above the keys below it. What must not
+ * happen is a hand-copied track beside this one: a switch that stopped
+ * travelling in one of two spellings is exactly the failure `console-chrome`'s
+ * constants exist to prevent.
+ */
+type Size = "md" | "sm" | "row";
 
 export function KtcBoardKeys({
   board,
@@ -65,6 +78,7 @@ export function KtcBoardKeys({
   disabled = false,
   className = "",
   size = "md",
+  legend = false,
   taken,
 }: {
   board: KtcBoardChoice;
@@ -85,20 +99,26 @@ export function KtcBoardKeys({
   /** Extra classes for the housing, so a caller can place it in its own row. */
   className?: string;
   size?: Size;
+  /** Draw the axis's name beside the track — see {@link SwitchTrack}. */
+  legend?: boolean;
   /** Options another bay already holds — see {@link SwitchTrack}. */
   taken?: (board: KtcBoardChoice) => boolean;
 }) {
   return (
     <SwitchTrack
       label="Market"
+      legend={legend}
       options={KTC_BOARD_CHOICES}
       value={board}
       onChange={onChange}
-      labels={size === "sm" ? MARKET_LABELS_SM : MARKET_LABELS}
+      labels={size === "md" ? MARKET_LABELS : MARKET_LABELS_SM}
       className={className}
       size={size}
       disabled={disabled}
-      taken={taken}
+      unavailable={
+        taken &&
+        ((board: KtcBoardChoice) => (taken(board) ? BOARD_TAKEN : null))
+      }
     />
   );
 }
@@ -108,38 +128,58 @@ export function KtcLineupKeys({
   onChange,
   className = "",
   size = "sm",
+  legend = false,
   taken,
 }: {
   lineup: KtcLineupChoice;
   onChange: (lineup: KtcLineupChoice) => void;
   className?: string;
   size?: Size;
+  legend?: boolean;
   taken?: (lineup: KtcLineupChoice) => boolean;
 }) {
   return (
     <SwitchTrack
-      label="Lineup"
+      label={legend ? "QB board" : "Lineup"}
+      legend={legend}
       options={KTC_LINEUP_CHOICES}
       value={lineup}
       onChange={onChange}
       labels={LINEUP_LABELS}
       className={className}
       size={size}
-      taken={taken}
+      unavailable={
+        taken &&
+        ((lineup: KtcLineupChoice) => (taken(lineup) ? BOARD_TAKEN : null))
+      }
     />
   );
 }
 
 /**
- * One switch: a recessed track holding one raised key and two flush ones.
+ * One switch: a recessed track holding one raised key and the rest flush.
  *
- * Generic over the option type so the two axes share the grammar rather than
- * the vocabulary — a market is `dynasty`/`redraft` and a lineup is
- * `oneqb`/`sf`, and mixing the two lists is a state neither parser would
- * reject.
+ * Generic over the option type so its readers share the grammar rather than
+ * the vocabulary — a market is `dynasty`/`redraft`, a lineup is `oneqb`/`sf`
+ * and the columns dialog's own axes are neither, and mixing two lists is a
+ * state no parser would reject.
+ *
+ * **Exported, because the columns dialog's Value and Scope axes are the same
+ * switch.** They were going to be a second track written beside this one, and
+ * that is the duplication the module note above rules out: four tracks in one
+ * panel where one of them has stopped travelling is a panel nobody can see is
+ * broken.
+ *
+ * Two things generalised with it, and each is a state the two KTC axes never
+ * had. `value` may be **null** — an empty bay lights nothing, where a market
+ * always has an answer — and `unavailable` returns a *reason* rather than a
+ * boolean, because a key can now be off for reasons that are not "another bay
+ * holds it": there is no whole-roster projection, and only KeepTradeCut prices
+ * a pick. A key that is off says which in its title.
  */
-function SwitchTrack<T extends string>({
+export function SwitchTrack<T extends string>({
   label,
+  legend = false,
   options,
   value,
   onChange,
@@ -147,11 +187,14 @@ function SwitchTrack<T extends string>({
   className,
   size,
   disabled = false,
-  taken,
+  unavailable,
 }: {
   label: string;
+  /** Draw the label beside the track. Otherwise it is the group's name alone. */
+  legend?: boolean;
   options: readonly T[];
-  value: T;
+  /** The lit option, or null where the switch is standing off every detent. */
+  value: T | null;
   onChange: (value: T) => void;
   labels: Record<T, string>;
   className: string;
@@ -159,29 +202,30 @@ function SwitchTrack<T extends string>({
   /** Whether the axis is in force at all — see {@link KtcBoardKeys.disabled}. */
   disabled?: boolean;
   /**
-   * Which options are already spoken for elsewhere, and therefore greyed.
+   * Why an option cannot be pressed, or null where it can.
    *
    * **Disabling rather than correcting**, which is the rule the columns dialog
-   * already enforces its budget by: the two bays on one metric differ only by
-   * these six keys, so a press that landed on the pricing the other bay holds
-   * would have to either lose a column or exchange the two — one silent, the
-   * other a key that appears dead once the canonical order puts them back where
-   * they were. Greyed, the reader can see that the board is taken and by which
-   * of the two switches.
+   * already enforces its budget by: two bays on one metric differ only by these
+   * keys, so a press that landed on the pricing the other bay holds would have
+   * to either lose a column or exchange the two — one silent, the other a key
+   * that appears dead once the canonical order puts them back where they were.
+   * The reason is the key's `title`, so a reader can find out *why* it is off
+   * rather than being left to guess between "taken" and "does not exist".
    */
-  taken?: (option: T) => boolean;
+  unavailable?: (option: T) => string | null;
 }) {
-  const small = size === "sm";
-  return (
+  const row = size === "row";
+  const small = size === "sm" || row;
+  const keys = (
     <div
       role="group"
       aria-label={label}
       className={`${CONSOLE_TRACK} ${
         small ? "flex gap-0.5 p-[0.1875rem]" : "inline-flex gap-1 p-1"
-      } ${className}`}
+      } ${row ? "min-w-0 flex-1" : ""} ${className}`}
     >
       {options.map((option) => {
-        const spoken = option !== value && (taken?.(option) ?? false);
+        const why = option === value ? null : (unavailable?.(option) ?? null);
         return (
         <button
           key={option}
@@ -189,22 +233,25 @@ function SwitchTrack<T extends string>({
           onClick={() => onChange(option)}
           aria-pressed={value === option}
           // Two different reasons a key can be off, and only one of them is
-          // about this key: `spoken` means another bay holds that pricing,
-          // where `disabled` means the whole axis is out of force. The first
-          // explains itself in a title; the second is explained by whatever
-          // turned the track off, so a title here would be a second answer.
-          disabled={disabled || spoken}
-          title={spoken ? "Another bay is on this board" : undefined}
+          // about this key: `why` is about this option — another bay holds the
+          // pricing, or the pairing has no metric behind it — where `disabled`
+          // means the whole axis is out of force. The first explains itself in
+          // a title; the second is explained by whatever turned the track off,
+          // so a title here would be a second answer.
+          disabled={disabled || why !== null}
+          title={why ?? undefined}
           className={
-            `rounded-full border font-mono uppercase transition-[color,box-shadow] duration-150 ` +
+            `min-w-0 truncate rounded-full border font-mono uppercase transition-[color,box-shadow] duration-150 ` +
             "focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-active/60 " +
             "disabled:cursor-not-allowed " +
-            (small
-              ? "flex-1 px-1 py-[0.1875rem] text-[length:var(--fs-8-5)] tracking-[0.1em] "
-              : "px-3 py-1.5 text-[length:var(--fs-10)] tracking-[0.16em] ") +
+            (row
+              ? "flex-1 px-1 py-[0.3125rem] text-[length:var(--fs-10)] tracking-[0.04em] "
+              : small
+                ? "flex-1 px-1 py-[0.1875rem] text-[length:var(--fs-8-5)] tracking-[0.1em] "
+                : "px-3 py-1.5 text-[length:var(--fs-10)] tracking-[0.16em] ") +
             (value === option
               ? "border-active/45 bg-[image:var(--key-bg)] text-readout shadow-[var(--key-shadow)] [text-shadow:var(--readout-text-glow)]"
-              : spoken
+              : why !== null
                 ? "cursor-not-allowed border-transparent text-foreground/25"
                 : "border-transparent text-foreground/58 hover:text-readout")
           }
@@ -213,6 +260,23 @@ function SwitchTrack<T extends string>({
         </button>
         );
       })}
+    </div>
+  );
+
+  if (!legend) return keys;
+
+  // The legend is `aria-hidden` because the group it labels already carries
+  // the same string as its accessible name — a visible copy on top of that
+  // would announce the axis twice.
+  return (
+    <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:gap-2.5">
+      <span
+        aria-hidden
+        className="font-mono text-[length:var(--fs-11)] uppercase tracking-[0.08em] text-foreground/72 sm:w-[4.375rem] sm:shrink-0"
+      >
+        {label}
+      </span>
+      {keys}
     </div>
   );
 }
