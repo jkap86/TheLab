@@ -43,12 +43,12 @@ export function PicktrackerBoard({ leagueId }: { leagueId: string }) {
         {error ? (
           <p
             role="alert"
-            className="rounded-xl border border-foreground/10 bg-[image:var(--alert-bg)] px-5 py-4 text-sm text-foreground/80"
+            className="rounded-xl border border-foreground/10 bg-[image:var(--alert-bg)] px-5 py-4 text-[length:var(--fs-14)] text-foreground/80"
           >
             {error}
           </p>
         ) : (
-          <p role="status" className="font-mono text-sm text-foreground/55">
+          <p role="status" className="font-mono text-[length:var(--fs-14)] text-foreground/55">
             Reading the draft…
           </p>
         )}
@@ -93,20 +93,20 @@ export function PicktrackerBoard({ leagueId }: { leagueId: string }) {
 
         {/* A note beside a usable board, never in place of one. */}
         {stale && !complete && (
-          <p role="status" className="mt-3 font-mono text-[0.6875rem] uppercase tracking-[0.14em] text-foreground/50">
+          <p role="status" className="mt-3 font-mono text-[length:var(--fs-11)] uppercase tracking-[0.14em] text-foreground/50">
             {stale}
           </p>
         )}
 
         <div className={`${CONSOLE_WELL} mt-4 overflow-hidden`}>
-          <div className={`${ROW} border-b border-foreground/8 font-mono text-[0.5625rem] uppercase tracking-[0.18em] text-foreground/[0.42]`}>
+          <div className={`${ROW} border-b border-foreground/8 font-mono text-[length:var(--fs-9)] uppercase tracking-[0.18em] text-foreground/[0.42]`}>
             <span>Pick</span>
             <span>Manager</span>
             <span>Kicker</span>
           </div>
 
           {data.picks.length === 0 ? (
-            <p className="px-4 py-10 text-center font-mono text-sm text-foreground/50">
+            <p className="px-4 py-10 text-center font-mono text-[length:var(--fs-14)] text-foreground/50">
               No kickers drafted yet.
             </p>
           ) : (
@@ -120,7 +120,7 @@ export function PicktrackerBoard({ leagueId }: { leagueId: string }) {
 
         {/* The whole explanation of the tool, and the reason the numbers on
             this board do not match the ones Sleeper shows. */}
-        <p className="mt-3 font-mono text-[0.625rem] leading-relaxed text-foreground/45">
+        <p className="mt-3 font-mono text-[length:var(--fs-10)] leading-relaxed text-foreground/45">
           Numbered by order among kickers ({data.teams} per round), not by draft
           slot — the Nth kicker off the board is rookie pick N.
         </p>
@@ -137,7 +137,7 @@ function PickRow({ pick }: { pick: PicktrackerPickPayload }) {
   return (
     <li className={`${ROW} border-b border-foreground/[0.06] last:border-b-0`}>
       <span
-        className={`${CONSOLE_WINDOW} inline-flex justify-center rounded-md px-1.5 py-1 font-mono text-[0.75rem] tabular-nums text-readout [text-shadow:var(--readout-text-glow)]`}
+        className={`${CONSOLE_WINDOW} inline-flex justify-center rounded-md px-1.5 py-1 font-mono text-[length:var(--fs-12)] tabular-nums text-readout [text-shadow:var(--readout-text-glow)]`}
       >
         <Scanlines />
         <span className="relative">{pick.pick}</span>
@@ -146,17 +146,17 @@ function PickRow({ pick }: { pick: PicktrackerPickPayload }) {
       {pick.picked_by ? (
         <span className="flex min-w-0 items-center gap-2">
           <Avatar url={pick.picked_by.avatar_url} name={pick.picked_by.display_name} size="sm" />
-          <span className="min-w-0 truncate font-mono text-[0.8125rem] text-foreground/85">
+          <span className="min-w-0 truncate font-mono text-[length:var(--fs-13)] text-foreground/85">
             {pick.picked_by.display_name}
           </span>
         </span>
       ) : (
         /* An autopick carries no user id, and a guessed manager would be a
            claim. The em dash is the app's third answer: not zero, not a name. */
-        <span className="font-mono text-[0.8125rem] text-foreground/35">—</span>
+        <span className="font-mono text-[length:var(--fs-13)] text-foreground/35">—</span>
       )}
 
-      <span className="min-w-0 truncate font-mono text-[0.8125rem] text-foreground/70">
+      <span className="min-w-0 truncate font-mono text-[length:var(--fs-13)] text-foreground/70">
         {pick.player_name}
       </span>
     </li>
@@ -187,7 +187,7 @@ function LiveState({
   const lit = !complete && connected && !stale;
 
   return (
-    <span className="inline-flex items-center gap-2 font-mono text-[0.625rem] uppercase tracking-[0.16em] text-foreground/55">
+    <span className="inline-flex items-center gap-2 font-mono text-[length:var(--fs-10)] uppercase tracking-[0.16em] text-foreground/55">
       <span
         aria-hidden
         className={`h-1.5 w-1.5 rounded-full ${
@@ -205,7 +205,7 @@ function BackLink() {
   return (
     <Link
       href="/picktracker"
-      className="font-mono text-[0.6875rem] uppercase tracking-[0.16em] text-foreground/55 hover:text-readout"
+      className="font-mono text-[length:var(--fs-11)] uppercase tracking-[0.16em] text-foreground/55 hover:text-readout"
     >
       ← Track another league
     </Link>

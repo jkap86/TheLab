@@ -51,12 +51,12 @@ import type { LogRow } from "../helpers/facets";
 
 const CELL = "px-3 py-2 align-top";
 const HEAD =
-  "px-3 py-2 text-left font-mono text-[0.625rem] uppercase tracking-[0.16em] text-readout-label";
+  "px-3 py-2 text-left font-mono text-[length:var(--fs-10)] uppercase tracking-[0.16em] text-readout-label";
 
 export function LogsTable({ rows }: { rows: readonly LogRow[] }) {
   return (
     <div className="lab-scroll max-h-[65svh] overflow-y-auto overscroll-contain rounded-[0.75rem]">
-      <table className="w-full table-fixed border-collapse text-[0.8125rem]">
+      <table className="w-full table-fixed border-collapse text-[length:var(--fs-13)]">
         <caption className="sr-only">
           Visits, newest first. Columns: time, tool and route, subject (wide
           viewports only), and address.
@@ -97,7 +97,7 @@ function Row({ row }: { row: LogRow }) {
   const time = when.toLocaleTimeString(undefined, { hourCycle: "h23" });
   return (
     <tr className="border-b border-foreground/8 last:border-b-0">
-      <td className={`${CELL} font-mono text-[0.6875rem] text-readout-muted`}>
+      <td className={`${CELL} font-mono text-[length:var(--fs-11)] text-readout-muted`}>
         {when.toLocaleDateString()}
         <br />
         <span className="text-readout-line">{time}</span>
@@ -106,14 +106,14 @@ function Row({ row }: { row: LogRow }) {
         <span className="text-readout-line">{row.tool || <Dash />}</span>
         {/* The full path, because the columns beside it are a reading of it and
             a reading can only show what it knows how to name. */}
-        <span className="mt-0.5 block break-all font-mono text-[0.625rem] text-readout-muted">
+        <span className="mt-0.5 block break-all font-mono text-[length:var(--fs-10)] text-readout-muted">
           {row.route}
         </span>
       </td>
       <td className={`${CELL} hidden break-all text-readout-line sm:table-cell`}>
         {row.subject ?? <Dash />}
       </td>
-      <td className={`${CELL} break-all font-mono text-[0.6875rem] text-readout-muted`}>
+      <td className={`${CELL} break-all font-mono text-[length:var(--fs-11)] text-readout-muted`}>
         {row.ip ?? <Dash />}
       </td>
     </tr>
@@ -147,10 +147,10 @@ export function TotalWindow({
       className={`relative overflow-hidden rounded-[0.625rem] border border-black/85 bg-[image:var(--readout-bg)] px-3 py-2 shadow-[var(--window-shadow)] ${className}`}
     >
       <Scanlines />
-      <span className="relative block font-mono text-[0.5625rem] uppercase tracking-[0.16em] text-readout-label">
+      <span className="relative block font-mono text-[length:var(--fs-9)] uppercase tracking-[0.16em] text-readout-label">
         {label}
       </span>
-      <span className="relative mt-0.5 block font-mono text-[1.0625rem] tabular-nums text-readout [text-shadow:var(--readout-text-glow)]">
+      <span className="relative mt-0.5 block font-mono text-[length:var(--fs-17)] tabular-nums text-readout [text-shadow:var(--readout-text-glow)]">
         {value.toLocaleString()}
       </span>
     </div>

@@ -86,7 +86,7 @@ export function LeagueSyncKey({
         <span
           aria-hidden
           title={note.title}
-          className={`min-w-0 truncate font-mono text-[0.6875rem] uppercase tracking-[0.14em] ${
+          className={`min-w-0 truncate font-mono text-[length:var(--fs-11)] uppercase tracking-[0.14em] ${
             note.alert ? "text-error" : "text-foreground/60"
           }`}
         >

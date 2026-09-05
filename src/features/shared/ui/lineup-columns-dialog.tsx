@@ -163,7 +163,7 @@ export function LineupColumnsDialog({
             className="pointer-events-none absolute inset-0 bg-[image:var(--panel-grain)]"
           />
           <div className="flex items-center justify-between gap-3">
-            <h2 className="m-0 font-display text-base font-semibold tracking-[-0.01em]">
+            <h2 className="m-0 font-display text-[length:var(--fs-16)] font-semibold tracking-[-0.01em]">
               Card columns
             </h2>
             {/* The budget, on glass: it is a number that moves as you press,
@@ -177,13 +177,13 @@ export function LineupColumnsDialog({
               />
               <span
                 aria-live="polite"
-                className="relative font-mono text-[0.6875rem] tabular-nums text-readout [text-shadow:var(--readout-text-glow)]"
+                className="relative font-mono text-[length:var(--fs-11)] tabular-nums text-readout [text-shadow:var(--readout-text-glow)]"
               >
                 {columns.length} / {MAX_LINEUP_COLUMNS}
               </span>
             </span>
           </div>
-          <p className="mt-1.5 font-mono text-[0.6875rem] leading-normal text-foreground/58">
+          <p className="mt-1.5 font-mono text-[length:var(--fs-11)] leading-normal text-foreground/58">
             Four bays, ranked against the rest of each league. A KTC bay sets its
             own market and lineup; Auto follows the league.
           </p>
@@ -225,7 +225,7 @@ export function LineupColumnsDialog({
                 type="button"
                 onClick={() => setTab(id)}
                 aria-pressed={tab === id}
-                className={`flex-1 rounded-full border px-3 py-1.5 font-mono text-[0.625rem] uppercase tracking-[0.16em] transition-[color,box-shadow] duration-150 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-active/60 sm:flex-none ${
+                className={`flex-1 rounded-full border px-3 py-1.5 font-mono text-[length:var(--fs-10)] uppercase tracking-[0.16em] transition-[color,box-shadow] duration-150 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-active/60 sm:flex-none ${
                   tab === id
                     ? "border-active/45 bg-[image:var(--key-bg)] text-readout shadow-[var(--key-shadow)] [text-shadow:var(--readout-text-glow)]"
                     : "border-transparent text-foreground/58 hover:text-readout"
@@ -262,7 +262,7 @@ export function LineupColumnsDialog({
             {/* What was read and when — silent where nothing could be, since
                 the KTC columns already say so with their em dashes. */}
             {ktc.length > 0 && (
-              <p className="m-0 font-mono text-[0.625rem] uppercase tracking-[0.16em] text-foreground/45">
+              <p className="m-0 font-mono text-[length:var(--fs-10)] uppercase tracking-[0.16em] text-foreground/45">
                 KTC scraped
                 {ktc.map((board) => (
                   <span key={board.format}>
@@ -276,7 +276,7 @@ export function LineupColumnsDialog({
             <button
               type="button"
               onClick={() => ref.current?.close()}
-              className={`${CONSOLE_KEY_BLOCK} ml-auto border-active/50 bg-[image:var(--key-bg)] px-5 text-[0.625rem] text-readout shadow-[var(--key-shadow),0_0_22px_-8px_var(--accent-glow)] [text-shadow:var(--readout-text-glow)]`}
+              className={`${CONSOLE_KEY_BLOCK} ml-auto border-active/50 bg-[image:var(--key-bg)] px-5 text-[length:var(--fs-10)] text-readout shadow-[var(--key-shadow),0_0_22px_-8px_var(--accent-glow)] [text-shadow:var(--readout-text-glow)]`}
             >
               Done
             </button>
@@ -321,14 +321,14 @@ function Bay({
     <div className={`${CONSOLE_WINDOW} h-full rounded-[0.625rem] px-2.5 py-2`}>
       <Scanlines />
       <div className="relative flex items-center justify-between gap-2">
-        <span className="font-mono text-[0.5625rem] tracking-[0.18em] text-readout-label">
+        <span className="font-mono text-[length:var(--fs-9)] tracking-[0.18em] text-readout-label">
           {bayNumber(index)}
         </span>
         <button
           type="button"
           onClick={onClear ?? undefined}
           disabled={!onClear}
-          className="font-mono text-[0.8125rem] leading-none text-readout-muted transition-colors hover:text-readout disabled:cursor-not-allowed disabled:opacity-40 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-active/60"
+          className="font-mono text-[length:var(--fs-13)] leading-none text-readout-muted transition-colors hover:text-readout disabled:cursor-not-allowed disabled:opacity-40 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-active/60"
         >
           <span className="sr-only">Clear bay {bayNumber(index)}</span>
           <span aria-hidden>×</span>
@@ -336,15 +336,15 @@ function Bay({
       </div>
 
       <div className="relative mt-[0.4375rem] border-l border-active/35 pl-2">
-        <p className="m-0 font-mono text-[0.5625rem] uppercase leading-[1.2] tracking-[0.1em] text-readout-label">
+        <p className="m-0 font-mono text-[length:var(--fs-9)] uppercase leading-[1.2] tracking-[0.1em] text-readout-label">
           {words.unit}
         </p>
-        <p className="m-0 mt-px min-h-[0.6875rem] font-mono text-[0.5625rem] uppercase leading-[1.2] tracking-[0.12em] text-readout [text-shadow:var(--readout-text-glow)]">
+        <p className="m-0 mt-px min-h-[0.6875rem] font-mono text-[length:var(--fs-9)] uppercase leading-[1.2] tracking-[0.12em] text-readout [text-shadow:var(--readout-text-glow)]">
           {ktc ? ktcChoiceLabel(col) : words.scope}
         </p>
       </div>
 
-      <p className="relative m-0 mt-[0.4375rem] font-mono text-[0.65625rem] leading-[1.35] text-readout-line">
+      <p className="relative m-0 mt-[0.4375rem] font-mono text-[length:var(--fs-10-5)] leading-[1.35] text-readout-line">
         {words.option}
         {ktc && ` ${boardClause(col)}`}
       </p>
@@ -378,13 +378,13 @@ function Bay({
 function EmptyBay({ index }: { index: number }) {
   return (
     <div className="flex h-full flex-col rounded-[0.625rem] border border-dashed border-foreground/16 bg-[image:var(--key-bg)] px-2.5 py-2 shadow-[var(--track-shadow)]">
-      <span className="font-mono text-[0.5625rem] tracking-[0.18em] text-foreground/30">
+      <span className="font-mono text-[length:var(--fs-9)] tracking-[0.18em] text-foreground/30">
         {bayNumber(index)}
       </span>
-      <span className="mt-[0.4375rem] font-mono text-[0.78125rem] text-foreground/34">
+      <span className="mt-[0.4375rem] font-mono text-[length:var(--fs-12-5)] text-foreground/34">
         Open bay
       </span>
-      <span className="mt-px font-mono text-[0.5625rem] uppercase tracking-[0.1em] text-foreground/28">
+      <span className="mt-px font-mono text-[length:var(--fs-9)] uppercase tracking-[0.1em] text-foreground/28">
         Opens on Auto · Auto
       </span>
     </div>
@@ -448,14 +448,14 @@ function MetricKey({
     >
       <span aria-hidden className="min-w-0 flex-1">
         <span
-          className={`block font-display text-[0.8125rem] font-semibold ${
+          className={`block font-display text-[length:var(--fs-13)] font-semibold ${
             held ? "text-readout" : "text-foreground/88"
           }`}
         >
           {words.column}
         </span>
         <span
-          className={`block font-mono text-[0.65625rem] ${
+          className={`block font-mono text-[length:var(--fs-10-5)] ${
             held ? "text-readout-muted" : "text-foreground/52"
           }`}
         >
@@ -465,7 +465,7 @@ function MetricKey({
       {held && (
         <span
           aria-hidden
-          className="shrink-0 font-mono text-[0.5625rem] tracking-[0.18em] text-readout-label"
+          className="shrink-0 font-mono text-[length:var(--fs-9)] tracking-[0.18em] text-readout-label"
         >
           {bays.join(" ")}
         </span>
@@ -473,7 +473,7 @@ function MetricKey({
       {canAdd && (
         <span
           aria-hidden
-          className="shrink-0 font-mono text-[0.9375rem] leading-none text-readout-label"
+          className="shrink-0 font-mono text-[length:var(--fs-15)] leading-none text-readout-label"
         >
           +
         </span>

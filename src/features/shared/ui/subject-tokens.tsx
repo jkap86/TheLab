@@ -40,7 +40,7 @@ export function SubjectTokens({
     <div
       className={`${CONSOLE_WELL} relative mb-6 flex flex-wrap items-center gap-2 p-2.5`}
     >
-      <span className="px-1 font-mono text-[0.625rem] uppercase tracking-[0.16em] text-foreground/50">
+      <span className="px-1 font-mono text-[length:var(--fs-10)] uppercase tracking-[0.16em] text-foreground/50">
         Holding
       </span>
 
@@ -55,7 +55,7 @@ export function SubjectTokens({
           className={`${CONSOLE_KEY_PILL} inline-flex items-center gap-2 border-active/45 bg-[image:var(--key-bg)] normal-case tracking-normal text-readout shadow-[var(--key-shadow)]`}
         >
           <span className="max-w-[12rem] truncate">{names(subject)}</span>
-          <span aria-hidden className="text-[0.75rem] leading-none text-active">
+          <span aria-hidden className="text-[length:var(--fs-12)] leading-none text-active">
             ×
           </span>
         </button>

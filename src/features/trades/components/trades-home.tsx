@@ -142,7 +142,7 @@ export function TradesHome({
       <header className="relative flex flex-wrap items-center gap-4">
         <div className="min-w-0">
           {heading}
-          <p className="mt-1 font-mono text-[0.6875rem] uppercase tracking-[0.16em] text-foreground/60">
+          <p className="mt-1 font-mono text-[length:var(--fs-11)] uppercase tracking-[0.16em] text-foreground/60">
             {season}
           </p>
         </div>
@@ -175,7 +175,7 @@ export function TradesHome({
         />
         <p
           role="status"
-          className="font-mono text-[0.6875rem] uppercase tracking-[0.16em] tabular-nums text-foreground/70"
+          className="font-mono text-[length:var(--fs-11)] uppercase tracking-[0.16em] tabular-nums text-foreground/70"
         >
           <TradeCount data={data} loading={loading} />
         </p>
@@ -220,7 +220,7 @@ export function TradesHome({
           so — and it says the *relation* ("X gave Y"), which is the one part of
           a bay selection that has nowhere else to surface. */}
       {(narrowingLeagues || selection) && (
-        <p className="relative -mt-3 mb-6 truncate font-mono text-[0.6875rem] uppercase tracking-[0.16em] text-active">
+        <p className="relative -mt-3 mb-6 truncate font-mono text-[length:var(--fs-11)] uppercase tracking-[0.16em] text-active">
           {[narrowingLeagues ? filterSummary(leagueFilters) : null, selection]
             .filter(Boolean)
             .join(" · ")}
@@ -241,7 +241,7 @@ export function TradesHome({
         // The leagues request failing costs the cards their league *names* and
         // the dialog its options; the trades are a different request and are
         // unaffected, so this is a note rather than the page.
-        <p className="relative mb-5 font-mono text-[0.6875rem] uppercase tracking-[0.16em] text-foreground/60">
+        <p className="relative mb-5 font-mono text-[length:var(--fs-11)] uppercase tracking-[0.16em] text-foreground/60">
           League names unavailable — {leaguesError}
         </p>
       )}
@@ -249,7 +249,7 @@ export function TradesHome({
       {error ? (
         <p
           role="alert"
-          className="relative inline-flex items-center gap-3 rounded-full border border-error/28 bg-[image:var(--alert-bg)] px-5 py-2.5 font-mono text-[0.8125rem] text-error shadow-[inset_0_1px_0_rgba(255,255,255,0.12),0_3px_0_rgba(0,0,0,0.7)]"
+          className="relative inline-flex items-center gap-3 rounded-full border border-error/28 bg-[image:var(--alert-bg)] px-5 py-2.5 font-mono text-[length:var(--fs-13)] text-error shadow-[inset_0_1px_0_rgba(255,255,255,0.12),0_3px_0_rgba(0,0,0,0.7)]"
         >
           <span
             aria-hidden
@@ -258,7 +258,7 @@ export function TradesHome({
           {error}
         </p>
       ) : loading ? (
-        <p className="relative font-mono text-[0.6875rem] uppercase tracking-[0.16em] text-foreground/60">
+        <p className="relative font-mono text-[length:var(--fs-11)] uppercase tracking-[0.16em] text-foreground/60">
           Reading the board…
         </p>
       ) : !data || data.trades.length === 0 ? (
@@ -329,7 +329,7 @@ function EmptyBoard({
 }) {
   if (!narrowed && !circle) {
     return (
-      <p className="relative font-mono text-[0.6875rem] uppercase tracking-[0.16em] text-foreground/60">
+      <p className="relative font-mono text-[length:var(--fs-11)] uppercase tracking-[0.16em] text-foreground/60">
         No trades stored for this season — look a manager up on Tools to sync
         their leagues.
       </p>
@@ -338,7 +338,7 @@ function EmptyBoard({
 
   return (
     <div className="relative flex flex-wrap items-center gap-4">
-      <p className="font-mono text-[0.6875rem] uppercase tracking-[0.16em] text-foreground/60">
+      <p className="font-mono text-[length:var(--fs-11)] uppercase tracking-[0.16em] text-foreground/60">
         {circle && !narrowed
           ? "No trades in this circle."
           : "No trades match these filters."}
@@ -347,7 +347,7 @@ function EmptyBoard({
         <button
           type="button"
           onClick={onClear}
-          className="shrink-0 rounded-full border border-foreground/10 bg-[image:var(--key-bg)] px-4 py-2 font-mono text-[0.6875rem] uppercase tracking-[0.16em] text-foreground/80 shadow-[var(--key-shadow)] hover:text-readout active:translate-y-0.5"
+          className="shrink-0 rounded-full border border-foreground/10 bg-[image:var(--key-bg)] px-4 py-2 font-mono text-[length:var(--fs-11)] uppercase tracking-[0.16em] text-foreground/80 shadow-[var(--key-shadow)] hover:text-readout active:translate-y-0.5"
         >
           Clear filters
         </button>

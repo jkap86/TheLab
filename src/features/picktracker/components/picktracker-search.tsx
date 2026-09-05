@@ -43,7 +43,7 @@ export function PicktrackerSearch() {
         value={value}
         placeholder="Sleeper league ID"
         onChange={(event) => setValue(event.target.value)}
-        className={`${CONSOLE_WELL} min-w-0 flex-1 px-4 py-2.5 text-[16px] text-foreground/90 outline-none placeholder:text-foreground/35 focus-visible:border-active/45 @md:text-sm`}
+        className={`${CONSOLE_WELL} min-w-0 flex-1 px-4 py-2.5 text-[16px] text-foreground/90 outline-none placeholder:text-foreground/35 focus-visible:border-active/45 @md:text-[length:var(--fs-14)]`}
       />
       <button type="submit" disabled={!trimmed} className={`${CONSOLE_KEY} disabled:opacity-40`}>
         Track

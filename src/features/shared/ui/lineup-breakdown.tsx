@@ -157,7 +157,7 @@ export function LineupLensKeys({
           // An unselected option is bare text *on the track*, not a second
           // key: three raised faces in one channel is a row of buttons, where
           // one raised and the rest flush is a switch showing its position.
-          className={`flex-1 rounded-full border px-3 py-1.5 font-mono text-[0.625rem] uppercase tracking-[0.16em] transition-[color,box-shadow] duration-150 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-active/60 sm:flex-none ${
+          className={`flex-1 rounded-full border px-3 py-1.5 font-mono text-[length:var(--fs-10)] uppercase tracking-[0.16em] transition-[color,box-shadow] duration-150 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-active/60 sm:flex-none ${
             lens === option
               ? "border-active/45 bg-[image:var(--key-bg)] text-readout shadow-[var(--key-shadow)] [text-shadow:var(--readout-text-glow)]"
               : "border-transparent text-foreground/58 hover:text-readout"
@@ -220,7 +220,7 @@ function SeatRow({
           left at the reading colour where there is nothing to compare — a dash
           is not a defeat. */}
       <span
-        className={`block w-full truncate text-[0.8125rem] lg:order-2 lg:min-w-0 lg:flex-1 ${
+        className={`block w-full truncate text-[length:var(--fs-13)] lg:order-2 lg:min-w-0 lg:flex-1 ${
           compare.standing === "ahead"
             ? "text-readout"
             : compare.standing === "behind"
@@ -234,10 +234,10 @@ function SeatRow({
       {/* The seat's figures. One node, two layouts: a line of its own below
           `lg`, and five cells of the row above it. */}
       <span className="flex w-full items-baseline gap-2 lg:contents">
-        <span className="shrink-0 font-mono text-[0.625rem] tracking-[0.1em] text-readout/60 lg:order-1 lg:w-[30px] lg:text-[0.6875rem] lg:tracking-[0.12em]">
+        <span className="shrink-0 font-mono text-[length:var(--fs-10)] tracking-[0.1em] text-readout/60 lg:order-1 lg:w-[30px] lg:text-[length:var(--fs-11)] lg:tracking-[0.12em]">
           {SLOT_LABELS[slot] ?? slot}
         </span>
-        <span className="flex-1 text-right font-mono text-xs tabular-nums text-readout lg:order-3 lg:w-[54px] lg:flex-none lg:text-[0.6875rem]">
+        <span className="flex-1 text-right font-mono text-[length:var(--fs-12)] tabular-nums text-readout lg:order-3 lg:w-[54px] lg:flex-none lg:text-[length:var(--fs-11)]">
           {cell(player, lens)}
         </span>
         <span
@@ -252,13 +252,13 @@ function SeatRow({
         >
           <span className="block h-1 rounded-r-full" style={bar("ghost")} />
         </span>
-        <span className="hidden w-[52px] shrink-0 text-right font-mono text-[0.6875rem] tabular-nums text-readout-muted lg:order-6 lg:block">
+        <span className="hidden w-[52px] shrink-0 text-right font-mono text-[length:var(--fs-11)] tabular-nums text-readout-muted lg:order-6 lg:block">
           {figure(compare.ghost, lens)}
         </span>
         {/* Below `lg` the ghost and its two tracks are one signed number: three
             numeric affordances is a desktop luxury. */}
         <span
-          className="shrink-0 font-mono text-[0.6875rem] tabular-nums text-readout-muted lg:hidden"
+          className="shrink-0 font-mono text-[length:var(--fs-11)] tabular-nums text-readout-muted lg:hidden"
           style={tone ? { color: tone } : undefined}
         >
           {compare.delta === null
@@ -281,14 +281,14 @@ function SeatRow({
 function BenchRow({ player, lens }: { player: LineupPlayer; lens: Lens }) {
   return (
     <li className="relative flex h-11 flex-col justify-center gap-[3px] border-b border-active/8 last:border-b-0 lg:h-8 lg:flex-row lg:items-center lg:gap-[9px]">
-      <span className="block w-full truncate text-[0.8125rem] text-foreground/85 lg:order-2 lg:min-w-0 lg:flex-1">
+      <span className="block w-full truncate text-[length:var(--fs-13)] text-foreground/85 lg:order-2 lg:min-w-0 lg:flex-1">
         {player.name ?? player.player_id}
       </span>
       <span className="flex w-full items-baseline gap-2 lg:contents">
-        <span className="shrink-0 font-mono text-[0.625rem] tracking-[0.1em] text-readout-label lg:order-1 lg:w-[30px] lg:tracking-[0.12em]">
+        <span className="shrink-0 font-mono text-[length:var(--fs-10)] tracking-[0.1em] text-readout-label lg:order-1 lg:w-[30px] lg:tracking-[0.12em]">
           {player.positions[0] ?? "—"}
         </span>
-        <span className="flex-1 text-right font-mono text-xs tabular-nums text-readout lg:order-3 lg:w-[54px] lg:flex-none lg:text-[0.6875rem]">
+        <span className="flex-1 text-right font-mono text-[length:var(--fs-12)] tabular-nums text-readout lg:order-3 lg:w-[54px] lg:flex-none lg:text-[length:var(--fs-11)]">
           {cell(player, lens)}
         </span>
         <span aria-hidden className="hidden lg:order-4 lg:block lg:w-[174px]" />
@@ -345,14 +345,14 @@ export function LineupBreakdown({
 
       {lineup.unknown_slots.length > 0 && (
         // A partial lineup must say so — see `unknown_slots` on the contract.
-        <p className="relative m-0 py-2 font-mono text-[0.6875rem] uppercase tracking-[0.14em] text-foreground/60">
+        <p className="relative m-0 py-2 font-mono text-[length:var(--fs-11)] uppercase tracking-[0.14em] text-foreground/60">
           Not shown: {lineup.unknown_slots.join(", ")}
         </p>
       )}
 
       {lineup.bench.length > 0 && (
         <details className="group/bench relative">
-          <summary className="flex h-11 cursor-pointer list-none items-center gap-1.5 font-mono text-[0.625rem] uppercase tracking-[0.12em] text-foreground/60 transition-colors hover:text-readout lg:h-[38px] lg:gap-2.5 lg:text-[0.6875rem] lg:tracking-[0.14em]">
+          <summary className="flex h-11 cursor-pointer list-none items-center gap-1.5 font-mono text-[length:var(--fs-10)] uppercase tracking-[0.12em] text-foreground/60 transition-colors hover:text-readout lg:h-[38px] lg:gap-2.5 lg:text-[length:var(--fs-11)] lg:tracking-[0.14em]">
             <span className="flex-1">Bench {lineup.bench.length}</span>
             {bench && (
               <>

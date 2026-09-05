@@ -6,14 +6,14 @@
  * stays at its base size. `lg` and `xl` are fixed and need no container.
  */
 const SIZES = {
-  sm: "h-5 w-5 text-[0.6rem] @lg:h-6 @lg:w-6 @lg:text-xs",
-  md: "h-7 w-7 text-xs @lg:h-9 @lg:w-9 @lg:text-sm",
+  sm: "h-5 w-5 text-[length:var(--fs-9-6)] @lg:h-6 @lg:w-6 @lg:text-[length:var(--fs-12)]",
+  md: "h-7 w-7 text-[length:var(--fs-12)] @lg:h-9 @lg:w-9 @lg:text-[length:var(--fs-14)]",
   // An identity plate: big enough to anchor a card, small enough to share a
   // phone-width row with whatever sits beside it.
-  lg: "h-11 w-11 text-lg",
+  lg: "h-11 w-11 text-[length:var(--fs-18)]",
   // A page that is *about* one account — the tools lookup — where the avatar is
   // the subject rather than a label on a row.
-  xl: "h-16 w-16 text-2xl",
+  xl: "h-16 w-16 text-[length:var(--fs-24)]",
 } as const;
 
 export default function Avatar({

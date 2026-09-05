@@ -114,7 +114,7 @@ export const TradeCard = memo(function TradeCard({
             avatarUrl={league?.avatar_url}
           />
           <ReadingPlate>
-            <span className="font-mono text-[0.625rem] uppercase tracking-[0.16em] tabular-nums text-foreground/60">
+            <span className="font-mono text-[length:var(--fs-10)] uppercase tracking-[0.16em] tabular-nums text-foreground/60">
               <TradeDate at={trade.completed_at} />
             </span>
           </ReadingPlate>
@@ -211,7 +211,7 @@ function SideColumn({
       <Scanlines />
 
       <header className="relative mb-[13px] flex min-w-0 items-baseline gap-2.5">
-        <span className="min-w-0 truncate font-mono text-xs uppercase tracking-[0.12em] text-readout">
+        <span className="min-w-0 truncate font-mono text-[length:var(--fs-12)] uppercase tracking-[0.12em] text-readout">
           {/* Sleeper lets a display name go missing and leaves orphan rosters
               with no owner at all, so the roster number is the fallback — a
               real label, not a placeholder. */}
@@ -222,7 +222,7 @@ function SideColumn({
             indistinguishable from one that moved. It is the same rule the
             manager card's lens keys live by — three figures on three scales
             never share a column without one. */}
-        <span className="ml-auto shrink-0 font-mono text-[0.5625rem] uppercase tracking-[0.18em] text-readout-label">
+        <span className="ml-auto shrink-0 font-mono text-[length:var(--fs-9)] uppercase tracking-[0.18em] text-readout-label">
           {TRADE_BASIS_UNITS[lens.basis]}
         </span>
         {/* What the haul is worth, or `—` where nothing in it could be priced.
@@ -232,7 +232,7 @@ function SideColumn({
             colour on this card is a statement about one asset's standing among
             its league's; a coloured total would be a statement about who won
             the trade, which this card rules out by name above. */}
-        <span className="shrink-0 font-mono text-lg tabular-nums text-readout [text-shadow:var(--readout-text-glow)]">
+        <span className="shrink-0 font-mono text-[length:var(--fs-18)] tabular-nums text-readout [text-shadow:var(--readout-text-glow)]">
           {formatAssetValue(
             bundleValue(trade.league_id, received, data.assetValues, lens),
           )}
@@ -303,7 +303,7 @@ function AssetTrack({
   // figure. `items-baseline` on a two-row grid would align the meter to the
   // text baseline of a row it is not on, so the alignment moves onto the cells
   // that need it.
-  const row = `grid grid-cols-[11px_minmax(0,1fr)_auto] gap-x-2 gap-y-[5px] text-[0.8125rem] ${
+  const row = `grid grid-cols-[11px_minmax(0,1fr)_auto] gap-x-2 gap-y-[5px] text-[length:var(--fs-13)] ${
     inbound ? "text-readout-line" : "text-readout-muted"
   }`;
   const signTone = inbound ? "text-active" : "text-readout-muted";
@@ -314,7 +314,7 @@ function AssetTrack({
     // nothing back from that participant. Saying "nothing" is the answer; an
     // absent track would read as a card that failed to draw.
     return (
-      <p className="relative m-0 font-mono text-[0.625rem] uppercase tracking-[0.14em] text-readout-label">
+      <p className="relative m-0 font-mono text-[length:var(--fs-10)] uppercase tracking-[0.14em] text-readout-label">
         {inbound ? "Received nothing" : "Gave nothing"}
       </p>
     );
@@ -335,7 +335,7 @@ function AssetTrack({
                   Sleeper's. */}
               {player?.name ?? id}
               {inbound && player?.position && (
-                <span className="ml-[7px] font-mono text-[0.625rem] uppercase tracking-[0.14em] text-readout-label">
+                <span className="ml-[7px] font-mono text-[length:var(--fs-10)] uppercase tracking-[0.14em] text-readout-label">
                   {player.position}
                   {player.team ? ` · ${player.team}` : ""}
                 </span>
@@ -383,7 +383,7 @@ function AssetTrack({
             <span className="truncate">
               {pickLabel(pick, slot)}
               {inbound && origin !== null && (
-                <span className="ml-[7px] font-mono text-[0.625rem] uppercase tracking-[0.14em] text-readout-label">
+                <span className="ml-[7px] font-mono text-[length:var(--fs-10)] uppercase tracking-[0.14em] text-readout-label">
                   {/* Named as a *person*: "from" points at who traded it away,
                       where the side header prefers whatever the manager is
                       called. A roster with no stored owner keeps its number. */}
@@ -454,7 +454,7 @@ function AssetFigure({
   return (
     <>
       <span
-        className="font-mono text-[0.78125rem] tabular-nums"
+        className="font-mono text-[length:var(--fs-12-5)] tabular-nums"
         style={
           lit && percentile !== null
             ? { color: colour, textShadow: `0 0 10px ${rankColor(percentile, 0.55)}` }

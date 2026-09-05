@@ -75,7 +75,7 @@ export function TimelineRail({
       <span className="flex min-w-[11rem] flex-1 items-center gap-2 rounded-full border border-foreground/8 py-1 pl-3.5 pr-2 shadow-[var(--track-shadow)]">
         <span
           aria-hidden
-          className="shrink-0 font-mono text-[0.625rem] uppercase tracking-[0.16em] text-foreground/45"
+          className="shrink-0 font-mono text-[length:var(--fs-10)] uppercase tracking-[0.16em] text-foreground/45"
         >
           History
         </span>
@@ -137,11 +137,11 @@ export function TimelineRail({
           aria-hidden
           className="pointer-events-none absolute inset-0 bg-[image:var(--readout-scanlines)]"
         />
-        <span className="relative font-mono text-[0.75rem] tabular-nums text-readout [text-shadow:var(--readout-text-glow)]">
+        <span className="relative font-mono text-[length:var(--fs-12)] tabular-nums text-readout [text-shadow:var(--readout-text-glow)]">
           {atNow ? "Now" : formatInstantDate(stop.at)}
         </span>
         {!atNow && stop.at !== null && (
-          <span className="relative font-mono text-[0.625rem] tabular-nums text-readout-muted">
+          <span className="relative font-mono text-[length:var(--fs-10)] tabular-nums text-readout-muted">
             {formatInstantTime(stop.at)}
           </span>
         )}
@@ -198,7 +198,7 @@ function EndKey({
       title={title}
       aria-pressed={on}
       onClick={onClick}
-      className={`rounded-full border px-2.5 py-1 font-mono text-[0.625rem] uppercase tracking-[0.16em] transition-[color,box-shadow] duration-150 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-active/60 ${
+      className={`rounded-full border px-2.5 py-1 font-mono text-[length:var(--fs-10)] uppercase tracking-[0.16em] transition-[color,box-shadow] duration-150 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-active/60 ${
         on
           ? "border-active/45 bg-[image:var(--key-bg)] text-readout shadow-[var(--key-shadow)] [text-shadow:var(--readout-text-glow)]"
           : "border-transparent text-foreground/58 hover:text-readout"
@@ -235,7 +235,7 @@ function StepKey({
       title={label}
       disabled={disabled}
       onClick={onClick}
-      className={`grid size-6 shrink-0 place-items-center rounded-full border text-xs leading-none transition-[color,box-shadow,transform] duration-150 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-active/60 ${
+      className={`grid size-6 shrink-0 place-items-center rounded-full border text-[length:var(--fs-12)] leading-none transition-[color,box-shadow,transform] duration-150 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-active/60 ${
         disabled
           ? "border-transparent text-foreground/20"
           : "border-foreground/10 bg-[image:var(--key-bg)] text-foreground/70 shadow-[var(--key-shadow)] hover:text-readout active:translate-y-0.5 active:shadow-[var(--key-shadow-pressed)]"

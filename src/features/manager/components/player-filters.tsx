@@ -118,7 +118,7 @@ export function PlayerFilters({
               onChange={(e) => {
                 if (e.target.value) set({ teams: toggleFacet(filters.teams, e.target.value) });
               }}
-              className={`${CONSOLE_KEY_PILL} appearance-none border-foreground/10 bg-[image:var(--key-bg)] px-[0.5625rem] py-[0.3125rem] text-[0.625rem] tracking-[0.1em] text-foreground/75 shadow-[var(--key-shadow)]`}
+              className={`${CONSOLE_KEY_PILL} appearance-none border-foreground/10 bg-[image:var(--key-bg)] px-[0.5625rem] py-[0.3125rem] text-[length:var(--fs-10)] tracking-[0.1em] text-foreground/75 shadow-[var(--key-shadow)]`}
             >
               <option value="">+ Add team</option>
               {teams.map(([value, count]) => (
@@ -134,13 +134,13 @@ export function PlayerFilters({
                 type="button"
                 title={`Remove ${value}`}
                 onClick={() => set({ teams: toggleFacet(filters.teams, value) })}
-                className={`${CONSOLE_KEY_PILL} inline-flex items-center gap-1.5 border-active/45 bg-[image:var(--key-bg)] px-[0.5625rem] py-1 text-[0.625rem] tracking-[0.14em] text-readout shadow-[var(--key-shadow)] [text-shadow:var(--readout-text-glow)]`}
+                className={`${CONSOLE_KEY_PILL} inline-flex items-center gap-1.5 border-active/45 bg-[image:var(--key-bg)] px-[0.5625rem] py-1 text-[length:var(--fs-10)] tracking-[0.14em] text-readout shadow-[var(--key-shadow)] [text-shadow:var(--readout-text-glow)]`}
               >
                 {value}
                 <span className="tabular-nums text-foreground/45">
                   {teamCounts.get(value) ?? 0}
                 </span>
-                <span aria-hidden className="text-[0.5625rem] text-foreground/55">
+                <span aria-hidden className="text-[length:var(--fs-9)] text-foreground/55">
                   ✕
                 </span>
               </button>
@@ -149,7 +149,7 @@ export function PlayerFilters({
             {filters.teams.length === 0 && (
               // Read off the options rather than written down: a literal here
               // is a claim, and it drifts the first time the population does.
-              <span className="font-mono text-[0.5625rem] uppercase tracking-[0.14em] text-foreground/36">
+              <span className="font-mono text-[length:var(--fs-9)] uppercase tracking-[0.14em] text-foreground/36">
                 All {teams.length} teams
               </span>
             )}
@@ -180,14 +180,14 @@ export function PlayerFilters({
           )}
 
           <div className="flex items-center justify-between gap-2">
-            <span className="min-w-0 truncate font-mono text-[0.5625rem] uppercase tracking-[0.14em] text-foreground/42">
+            <span className="min-w-0 truncate font-mono text-[length:var(--fs-9)] uppercase tracking-[0.14em] text-foreground/42">
               {summary ?? "Nothing narrowed"}
             </span>
             <button
               type="button"
               disabled={active === 0}
               onClick={() => onChange({ positions: [], teams: [], age: null, draftClass: null })}
-              className={`${CONSOLE_KEY_PILL} border-foreground/10 bg-[image:var(--key-bg)] px-[0.5625rem] py-1 text-[0.625rem] tracking-[0.14em] shadow-[var(--key-shadow)] ${
+              className={`${CONSOLE_KEY_PILL} border-foreground/10 bg-[image:var(--key-bg)] px-[0.5625rem] py-1 text-[length:var(--fs-10)] tracking-[0.14em] shadow-[var(--key-shadow)] ${
                 active === 0
                   ? "cursor-default text-foreground/30"
                   : "text-foreground/80 hover:text-readout"
@@ -298,7 +298,7 @@ function FiltersKey({
       aria-expanded={open}
       aria-controls={controls}
       onClick={onPress}
-      className={`${CONSOLE_KEY_PILL} inline-flex items-center gap-1.5 bg-[image:var(--key-bg)] px-[0.5625rem] py-[0.4375rem] text-[0.625rem] tracking-[0.14em] shadow-[var(--key-shadow)] ${
+      className={`${CONSOLE_KEY_PILL} inline-flex items-center gap-1.5 bg-[image:var(--key-bg)] px-[0.5625rem] py-[0.4375rem] text-[length:var(--fs-10)] tracking-[0.14em] shadow-[var(--key-shadow)] ${
         open || count > 0
           ? "border-active/45 text-readout"
           : "border-foreground/10 text-foreground/75 hover:text-readout"
@@ -306,7 +306,7 @@ function FiltersKey({
     >
       <span
         aria-hidden
-        className={`lab-anim inline-block text-[0.5rem] leading-none transition-transform duration-[260ms] ease-[cubic-bezier(0.2,0.9,0.3,1)] ${
+        className={`lab-anim inline-block text-[length:var(--fs-8)] leading-none transition-transform duration-[260ms] ease-[cubic-bezier(0.2,0.9,0.3,1)] ${
           open ? "rotate-90" : "rotate-0"
         }`}
       >
@@ -325,7 +325,7 @@ function FiltersKey({
 function FacetRow({ label, children }: { label: string; children: ReactNode }) {
   return (
     <div className="flex items-start gap-[0.5625rem]">
-      <span className="w-[2.375rem] shrink-0 pt-[0.3125rem] font-mono text-[0.5625rem] uppercase tracking-[0.16em] text-foreground/48">
+      <span className="w-[2.375rem] shrink-0 pt-[0.3125rem] font-mono text-[length:var(--fs-9)] uppercase tracking-[0.16em] text-foreground/48">
         {label}
       </span>
       <div className="flex min-w-0 flex-1 flex-wrap items-center gap-1.5">{children}</div>
@@ -363,7 +363,7 @@ function Chip({
       type="button"
       onClick={onPick}
       aria-pressed={on}
-      className={`${CONSOLE_KEY_PILL} inline-flex items-center bg-[image:var(--key-bg)] px-[0.5625rem] py-1 text-[0.625rem] tracking-[0.14em] shadow-[var(--key-shadow)] ${
+      className={`${CONSOLE_KEY_PILL} inline-flex items-center bg-[image:var(--key-bg)] px-[0.5625rem] py-1 text-[length:var(--fs-10)] tracking-[0.14em] shadow-[var(--key-shadow)] ${
         on
           ? "border-active/45 text-readout"
           : "border-foreground/10 text-foreground/75 hover:text-readout"
@@ -414,7 +414,7 @@ function RangeRow({
 
   return (
     <div className="flex items-center gap-[0.5625rem]">
-      <span className="w-[2.375rem] shrink-0 font-mono text-[0.5625rem] uppercase tracking-[0.16em] text-foreground/48">
+      <span className="w-[2.375rem] shrink-0 font-mono text-[length:var(--fs-9)] uppercase tracking-[0.16em] text-foreground/48">
         {label}
       </span>
 
@@ -459,7 +459,7 @@ function RangeRow({
       >
         <Scanlines />
         <span
-          className={`relative whitespace-nowrap font-mono text-[0.6875rem] tabular-nums ${
+          className={`relative whitespace-nowrap font-mono text-[length:var(--fs-11)] tabular-nums ${
             active ? "text-readout [text-shadow:var(--readout-text-glow)]" : "text-readout-label"
           }`}
         >

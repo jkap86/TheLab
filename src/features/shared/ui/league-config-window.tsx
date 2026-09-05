@@ -68,6 +68,19 @@ import { Scanlines } from "./card-plate";
  * two of them, not five — which is what lets the window's own `gap-x` space
  * them and keeps a divider from ever ending a wrapped line.
  *
+ * **The lineup group is the one exception, below `lg`.** Three ladders and the
+ * TE premium are the widest of the three and they are the group that outgrew
+ * the window: at a phone's width, with the page's type scaled up, the row
+ * measures wider than the card and `TE prem` is clipped by the window's own
+ * edge — silently, because a `whitespace-nowrap` span in a wrapping row simply
+ * overflows. So this one group wraps internally there and `TE prem` drops to a
+ * line under the ladders, which is the field that reads correctly on a line of
+ * its own: it is a fact about the TE slot rather than another number on the
+ * league's scale, so it does not have to sit beside the ladder to be read.
+ * `gap-y-2` is what keeps the two lines from touching. Above `lg` nothing
+ * changed — the group is `flex-nowrap whitespace-nowrap` again, and the
+ * boundaries between the three groups are untouched at every width.
+ *
  * Like every lit surface on the card it carries its own scanlines, and like
  * every one of them the layer is a child rather than a second background,
  * because CSS has no way to spell the overlay on an element that already has
@@ -156,7 +169,7 @@ export function LeagueConfigWindow({
           about the slot beside it, not another number on the league's own
           scale — which is also why it is inside this group rather than a fourth
           thing loose in the row. */}
-      <span className="relative inline-flex flex-nowrap items-center gap-3.5 whitespace-nowrap">
+      <span className="relative inline-flex flex-wrap items-center gap-x-3.5 gap-y-2 lg:flex-nowrap lg:whitespace-nowrap">
         <Ladder label="QB" slots={qb} />
         <Ladder label="SF" slots={sf} />
         <Ladder label="TE" slots={te} />
@@ -178,7 +191,7 @@ function Tag({ children, lit }: { children: string; lit?: boolean }) {
   return (
     <span
       className={
-        "rounded-[0.3125rem] border px-[0.4375rem] py-[0.1875rem] font-mono text-[0.625rem] uppercase tracking-[0.14em] " +
+        "rounded-[0.3125rem] border px-[0.4375rem] py-[0.1875rem] font-mono text-[length:var(--fs-10)] uppercase tracking-[0.14em] " +
         (lit
           ? "border-active/40 text-readout [text-shadow:var(--readout-text-glow)] shadow-[inset_0_0_12px_var(--accent-glow)]"
           : "border-active/22 text-readout-muted")
@@ -214,10 +227,10 @@ function Field({
 }) {
   return (
     <span className="relative inline-flex items-baseline gap-1.5">
-      <span className="font-mono text-[0.5625rem] uppercase tracking-[0.16em] text-readout-label">
+      <span className="font-mono text-[length:var(--fs-9)] uppercase tracking-[0.16em] text-readout-label">
         {label}
       </span>
-      <span className="font-mono text-[0.8125rem] tabular-nums text-readout-line">
+      <span className="font-mono text-[length:var(--fs-13)] tabular-nums text-readout-line">
         {children}
       </span>
     </span>
@@ -241,7 +254,7 @@ function Ladder({ label, slots }: { label: string; slots: number | null }) {
 
   return (
     <span className="relative inline-flex items-center gap-[0.4375rem]">
-      <span className="font-mono text-[0.5625rem] uppercase tracking-[0.16em] text-readout-label">
+      <span className="font-mono text-[length:var(--fs-9)] uppercase tracking-[0.16em] text-readout-label">
         {label}
       </span>
       {total > 0 && (
@@ -259,7 +272,7 @@ function Ladder({ label, slots }: { label: string; slots: number | null }) {
           ))}
         </span>
       )}
-      <span className="font-mono text-[0.75rem] tabular-nums text-readout-line">
+      <span className="font-mono text-[length:var(--fs-12)] tabular-nums text-readout-line">
         {slots ?? "—"}
       </span>
     </span>

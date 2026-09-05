@@ -48,7 +48,7 @@ export function DraftPicks({ picks }: { picks: readonly RosterPick[] }) {
 
   return (
     <div className="mt-4 border-t border-foreground/10 pt-4">
-      <p className="m-0 mb-2.5 font-mono text-[0.6875rem] uppercase tracking-[0.14em] text-foreground/60">
+      <p className="m-0 mb-2.5 font-mono text-[length:var(--fs-11)] uppercase tracking-[0.14em] text-foreground/60">
         Draft picks
       </p>
       <ul className="m-0 grid list-none grid-cols-1 gap-2.5 p-0 sm:grid-cols-2 lg:grid-cols-3">
@@ -57,7 +57,7 @@ export function DraftPicks({ picks }: { picks: readonly RosterPick[] }) {
             key={season}
             className="rounded-xl border border-foreground/8 bg-[image:var(--plate-bg)] px-3.5 py-3 shadow-[var(--plate-shadow)]"
           >
-            <p className="m-0 mb-2.5 font-mono text-[0.6875rem] uppercase tracking-[0.14em] text-foreground/60">
+            <p className="m-0 mb-2.5 font-mono text-[length:var(--fs-11)] uppercase tracking-[0.14em] text-foreground/60">
               {season}
             </p>
             <span className="flex min-w-0 flex-wrap gap-1.5">
@@ -68,7 +68,7 @@ export function DraftPicks({ picks }: { picks: readonly RosterPick[] }) {
                   // name, so nothing on the pick itself is unique.
                   key={i}
                   title={pick.from ? `from ${pick.from}` : undefined}
-                  className={`inline-flex items-baseline gap-1.5 rounded-full px-2.5 py-1 font-mono text-[0.6875rem] shadow-[inset_0_1px_0_rgba(255,255,255,0.14)] ${
+                  className={`inline-flex items-baseline gap-1.5 rounded-full px-2.5 py-1 font-mono text-[length:var(--fs-11)] shadow-[inset_0_1px_0_rgba(255,255,255,0.14)] ${
                     pick.from
                       ? "bg-active/14 text-readout"
                       : "bg-foreground/[0.06] text-foreground/72"

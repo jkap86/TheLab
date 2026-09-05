@@ -155,7 +155,7 @@ function Bay({
 
   return (
     <section className="min-w-0 rounded-xl border border-foreground/8 bg-foreground/[0.02] p-3">
-      <h3 className="mb-2 font-mono text-[0.625rem] uppercase tracking-[0.16em] text-foreground/60">
+      <h3 className="mb-2 font-mono text-[length:var(--fs-10)] uppercase tracking-[0.16em] text-foreground/60">
         {/* The label is the *relation*, not a fixed "side 1": with a manager
             named opposite, this bay is what that manager gave. */}
         {sideLabel(filters, index, names)}
@@ -216,7 +216,7 @@ function Bay({
               of the two. Shown only where the bay names an asset — with
               nothing named it has nothing to exclude *to*, which is the same
               guard the parser and the SQL builder apply. */}
-          <label className="mt-2.5 flex items-center gap-2 font-mono text-[0.625rem] uppercase tracking-[0.16em] text-foreground/60">
+          <label className="mt-2.5 flex items-center gap-2 font-mono text-[length:var(--fs-10)] uppercase tracking-[0.16em] text-foreground/60">
             <input
               type="checkbox"
               checked={side.only}
@@ -243,7 +243,7 @@ function Token({
       <button
         type="button"
         onClick={onRemove}
-        className="inline-flex max-w-full items-center gap-1.5 rounded-full border border-active/30 bg-active/10 px-2.5 py-1 text-[0.75rem] text-foreground/85 hover:border-active/50"
+        className="inline-flex max-w-full items-center gap-1.5 rounded-full border border-active/30 bg-active/10 px-2.5 py-1 text-[length:var(--fs-12)] text-foreground/85 hover:border-active/50"
       >
         <span className="truncate">{label}</span>
         <span aria-hidden className="text-foreground/60">

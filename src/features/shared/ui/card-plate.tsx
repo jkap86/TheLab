@@ -65,8 +65,8 @@ export function LeaguePlate({
       <span
         className={`min-w-0 truncate font-mono uppercase text-foreground/95 ${
           size === "lg"
-            ? "text-base tracking-[0.08em]"
-            : "text-sm tracking-[0.1em]"
+            ? "text-[length:var(--fs-16)] tracking-[0.08em]"
+            : "text-[length:var(--fs-14)] tracking-[0.1em]"
         }`}
       >
         {name}
@@ -94,7 +94,7 @@ function LeagueMark({ name, url }: { name: string; url: string | null | undefine
       {url ? (
         <Avatar url={url} name={name} size="sm" />
       ) : (
-        <span className="font-mono text-[0.6875rem] text-readout [text-shadow:var(--readout-text-glow)]">
+        <span className="font-mono text-[length:var(--fs-11)] text-readout [text-shadow:var(--readout-text-glow)]">
           {name.charAt(0).toUpperCase()}
         </span>
       )}
@@ -117,8 +117,16 @@ export function ReadingPlate({
 }) {
   return (
     <span
-      className={`${CONSOLE_PLATE} ml-auto inline-flex shrink-0 items-center gap-2.5 whitespace-nowrap py-1.5 pl-4 ${
-        tight ? "pr-[7px]" : "pr-4"
+      // **The plate is tighter below `sm`, and that is the league name's
+      // width rather than this plate's taste.** It sits opposite a name that
+      // truncates, so every pixel the plate spends is a character the card's
+      // own subject loses — and the page's type scale grew the figures here by
+      // ~12px at a phone's width without growing the card. Taking it back out
+      // of the padding and the gap keeps what the plate *says* intact, where
+      // dropping a field would not. Above `sm` the card has width to spare and
+      // every number is what it was.
+      className={`${CONSOLE_PLATE} ml-auto inline-flex shrink-0 items-center gap-2 whitespace-nowrap py-1.5 pl-3 sm:gap-2.5 sm:pl-4 ${
+        tight ? "pr-[5px] sm:pr-[7px]" : "pr-3 sm:pr-4"
       }`}
     >
       {children}
@@ -165,10 +173,10 @@ export function PlateField({
 }) {
   return (
     <span className="inline-flex items-baseline gap-[5px] sm:gap-[0.375rem]">
-      <span className="font-mono text-[0.5rem] uppercase tracking-[0.18em] text-foreground/[0.42] sm:text-[0.625rem]">
+      <span className="font-mono text-[length:var(--fs-8)] uppercase tracking-[0.18em] text-foreground/[0.42] sm:text-[length:var(--fs-10)]">
         {label}
       </span>
-      <span className="font-mono text-[0.8125rem] font-medium tabular-nums text-foreground/[0.97] sm:text-[1.0625rem]">
+      <span className="font-mono text-[length:var(--fs-13)] font-medium tabular-nums text-foreground/[0.97] sm:text-[length:var(--fs-17)]">
         {children}
       </span>
     </span>

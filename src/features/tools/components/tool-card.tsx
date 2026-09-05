@@ -64,7 +64,7 @@ export function ToolCardContent({
           scheme sinks the type with black where the light one lifts it with
           white. The hover glow is the second token rather than an appended
           filter, since `filter` does not compose across two declarations. */}
-      <span className="relative mt-1 bg-[image:var(--chrome-face)] bg-clip-text font-display text-[1.75rem] font-semibold leading-[1.06] tracking-[-0.04em] text-transparent text-balance [filter:var(--card-title-depth)] [transform:translateZ(44px)] transition-[filter] duration-[450ms] group-hover:[filter:var(--card-title-depth-hover)]">
+      <span className="relative mt-1 bg-[image:var(--chrome-face)] bg-clip-text font-display text-[length:var(--fs-28)] font-semibold leading-[1.06] tracking-[-0.04em] text-transparent text-balance [filter:var(--card-title-depth)] [transform:translateZ(44px)] transition-[filter] duration-[450ms] group-hover:[filter:var(--card-title-depth-hover)]">
         {text}
       </span>
 
@@ -74,7 +74,7 @@ export function ToolCardContent({
         className="relative mt-3.5 block h-px w-9 bg-gradient-to-r from-active/50 to-transparent transition-[width] duration-[450ms] [transform:translateZ(36px)] group-hover:w-[5.75rem] group-hover:from-active"
       />
 
-      <p className="relative mt-[0.9375rem] text-[0.8125rem] leading-normal text-foreground/60 transition-colors duration-[450ms] text-pretty [transform:translateZ(14px)] group-hover:text-foreground/[0.78]">
+      <p className="relative mt-[0.9375rem] text-[length:var(--fs-13)] leading-normal text-foreground/60 transition-colors duration-[450ms] text-pretty [transform:translateZ(14px)] group-hover:text-foreground/[0.78]">
         {description}
       </p>
 
@@ -83,7 +83,7 @@ export function ToolCardContent({
           them. */}
       <span
         aria-hidden
-        className="relative mt-auto flex items-center gap-2 pt-6 text-xs tracking-[0.03em] text-foreground/60 transition-colors duration-[450ms] [transform:translateZ(22px)] group-hover:text-active"
+        className="relative mt-auto flex items-center gap-2 pt-6 text-[length:var(--fs-12)] tracking-[0.03em] text-foreground/60 transition-colors duration-[450ms] [transform:translateZ(22px)] group-hover:text-active"
       >
         <span className="h-px w-4 bg-current transition-[width] duration-[450ms] group-hover:w-11" />
         Open

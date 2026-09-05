@@ -49,6 +49,22 @@ import { Avatar } from "../avatar";
  * by a milled *cut* read horizontally — a dark hairline with a light one under
  * it — rather than by `--groove`, which is the vertical channel beside the
  * avatar and would read as a rule turned on its side.
+ *
+ * **`compactStrip` is the phone pass, and it is the third seam.** On a 402px
+ * screen the plate was ~270px tall — a third of the viewport spent before a
+ * single league card — because it stacked a name row, a season row and a
+ * controls row, each at desktop padding. Below `sm` the padding and the gaps
+ * step down, the avatar and the engraved name step down with them, and the
+ * season and the controls become **one** strip: `Leagues · Filters │ Record │
+ * dial`. That is ~135px, and the key ends up beside the figure it narrows
+ * rather than a row below it.
+ *
+ * It is opt-in because the merge is not something the plate can do to a caller
+ * that has not been written for it — see the prop, and see `SeasonSummary` for
+ * the `display: contents` and the `order` it costs the caller's own blocks. The
+ * lineup checker deliberately does not take it: its week figures and its
+ * attention window are a phone row on their own, and merging a key into them
+ * would be a redesign of a page rather than a compaction of this one.
  */
 export function ManagerPlate({
   name,
@@ -56,6 +72,7 @@ export function ManagerPlate({
   eyebrow,
   children,
   controls,
+  compactStrip = false,
 }: {
   /** Display name, or the username where Sleeper has no display name. */
   name: string;
@@ -75,18 +92,30 @@ export function ManagerPlate({
    * plate's full-width box, which only a plate carrying a season has.
    */
   controls?: ReactNode;
+  /**
+   * Below `sm`, put the figures and the controls on **one** strip rather than
+   * two — see the module note. Opt-in rather than the default because it is a
+   * claim about the caller's own two blocks: they have to be written for it
+   * (`display: contents` and an `order` each), and a caller that has not been
+   * gets two strips, which is what every plate did before this existed.
+   */
+  compactStrip?: boolean;
 }) {
   return (
+    // The padding and the gaps step up at `sm`, which is the whole of the phone
+    // pass at this level: a plate that spent 12px of padding and 16px of gutter
+    // on a 402px screen was ~270px of an 874px viewport before a single league
+    // card. Above `sm` every number is exactly what it was.
     <div
-      className={`items-center gap-4 rounded-xl border border-foreground/8 bg-[image:var(--plate-bg)] py-3 pl-3 shadow-[var(--plate-shadow)] ${
+      className={`items-center gap-3 rounded-xl border border-foreground/8 bg-[image:var(--plate-bg)] py-2.5 pl-3 shadow-[var(--plate-shadow)] sm:gap-4 sm:py-3 ${
         children
-          ? "flex w-full flex-wrap gap-y-5 pr-[1.125rem]"
-          : "inline-flex max-w-full pr-6"
+          ? "flex w-full flex-wrap gap-y-3 pr-3 sm:gap-y-5 sm:pr-[1.125rem]"
+          : "inline-flex max-w-full pr-3 sm:pr-6"
       }`}
     >
       <span
         aria-hidden
-        className="inline-flex size-14 shrink-0 items-center justify-center rounded-full border border-foreground/10 bg-[image:var(--bezel-bg)] shadow-[var(--bezel-shadow)]"
+        className="inline-flex size-10 shrink-0 items-center justify-center rounded-full border border-foreground/10 bg-[image:var(--bezel-bg)] shadow-[var(--bezel-shadow)] sm:size-14"
       >
         <Avatar url={avatarUrl} name={name} size="lg" />
       </span>
@@ -100,9 +129,12 @@ export function ManagerPlate({
 
       {/* Divs, not spans, for `LabWordmark`'s reason: the `<h1>` below is flow
           content, which a span cannot legally hold. */}
-      <div className="flex min-w-0 flex-col gap-1.5">
+      {/* `flex-1` below `sm` is what lets the name column take the row's slack
+          rather than leaving it at the plate's right edge — there is nothing
+          beside it there, the season having moved to a strip of its own. */}
+      <div className="flex min-w-0 flex-1 flex-col gap-1 sm:flex-[0_1_auto] sm:gap-1.5">
         {eyebrow}
-        <div className="relative inline-block font-display text-[1.5rem] font-bold uppercase leading-none tracking-[0.07em] sm:text-[2rem]">
+        <div className="relative inline-block font-display text-[length:var(--fs-21)] font-bold uppercase leading-none tracking-[0.06em] sm:text-[length:var(--fs-32)] sm:tracking-[0.07em]">
           <span
             aria-hidden
             className="absolute left-0 top-0 text-[var(--chrome-extrude)] [text-shadow:var(--chrome-extrude-shadow)]"
@@ -115,16 +147,50 @@ export function ManagerPlate({
         </div>
       </div>
 
-      {children}
+      {/*
+        The two lower blocks, and `compactStrip` is which shape they take.
 
-      {/* `w-full` is what makes this a strip and not a fourth column: the plate
-          is `flex w-full flex-wrap` whenever it has children, so a full-width
-          item takes its own line under them. The border pair is the plate's
-          milled cut read horizontally — see the module note. */}
-      {controls && (
-        <div className="flex w-full flex-wrap items-center gap-3 border-t border-black/55 pt-3.5 shadow-[0_-1px_0_rgba(255,255,255,0.05)]">
-          {controls}
+        Two strips (the default): the season is a full-width item, the controls
+        are a second one under it, and the controls carry the milled cut. That
+        is what the plate has always drawn and what the lineup checker still
+        wants — its week figures and its attention window fill a phone's row on
+        their own.
+
+        One strip (`compactStrip`, below `sm`): a wrapper takes the cut and both
+        blocks go `display: contents` inside it, so the figures and the keys are
+        items of the *same* flex row and an `order` each can interleave them —
+        which is how `/manager` gets `Leagues · Filters │ Record │ dial` on one
+        line. Rendering the key twice and hiding one would be the other way to
+        do it, and it would mount two `<dialog>`s: the rack settled that
+        argument the same way, with `display: contents` rather than a copy.
+
+        `sm:contents` is what makes the wrapper vanish above the breakpoint, so
+        at every width from `sm` up the two blocks are plate items again and
+        nothing about the desktop plate moved.
+      */}
+      {compactStrip ? (
+        <div className="flex w-full flex-wrap items-stretch gap-x-1.5 gap-y-2 border-t border-black/55 pt-2.5 shadow-[0_-1px_0_rgba(255,255,255,0.05)] sm:contents">
+          {children}
+          {controls && (
+            <div className="contents sm:flex sm:w-full sm:flex-wrap sm:items-center sm:gap-3 sm:border-t sm:border-black/55 sm:pt-3.5 sm:shadow-[0_-1px_0_rgba(255,255,255,0.05)]">
+              {controls}
+            </div>
+          )}
         </div>
+      ) : (
+        <>
+          {children}
+
+          {/* `w-full` is what makes this a strip and not a fourth column: the
+              plate is `flex w-full flex-wrap` whenever it has children, so a
+              full-width item takes its own line under them. The border pair is
+              the plate's milled cut read horizontally — see the module note. */}
+          {controls && (
+            <div className="flex w-full flex-wrap items-center gap-3 border-t border-black/55 pt-3.5 shadow-[0_-1px_0_rgba(255,255,255,0.05)]">
+              {controls}
+            </div>
+          )}
+        </>
       )}
     </div>
   );

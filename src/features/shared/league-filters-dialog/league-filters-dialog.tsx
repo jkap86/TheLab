@@ -53,6 +53,7 @@ export function LeagueFiltersDialog({
   onChange,
   leagues,
   triggerClassName = `${CONSOLE_KEY_PILL} inline-flex items-center`,
+  triggerChrome = "bg-[image:var(--key-bg)] shadow-[var(--key-shadow)]",
 }: {
   filters: LeagueFilters;
   onChange: (filters: LeagueFilters) => void;
@@ -66,6 +67,21 @@ export function LeagueFiltersDialog({
    * knows which is true.
    */
   triggerClassName?: string;
+  /**
+   * The trigger's *surface*, separately from its geometry.
+   *
+   * A key is a raised object by default and that is what this string says. It
+   * is a prop rather than part of `triggerClassName` because the two are
+   * overridden for different reasons and at different times: geometry is where
+   * the key sits, and chrome is what it is made of. `/manager`'s phone strip is
+   * the one caller that changes it — a key standing proud among engraved
+   * figures reads as dropped onto them, so there it is etched into the plate
+   * instead. Overriding it *through* `triggerClassName` would not work anyway:
+   * a `bg-none` appended to a string this component already spells
+   * `bg-[image:…]` in is decided by Tailwind's emit order, which is the coin
+   * flip `CONSOLE_KEY_PILL` exists to keep a key out of.
+   */
+  triggerChrome?: string;
 }) {
   const ref = useRef<HTMLDialogElement>(null);
   const [draft, setDraft] = useState(filters);
@@ -124,9 +140,11 @@ export function LeagueFiltersDialog({
         type="button"
         onClick={open}
         aria-haspopup="dialog"
-        // Raised in both states: what "something is filtering" changes is the
-        // key's border and its legend, not whether it is a key.
-        className={`${triggerClassName} bg-[image:var(--key-bg)] shadow-[var(--key-shadow)] ${
+        // The *state* is the key's border and its legend — what "something is
+        // filtering" changes is never whether it is a key. Which surface it
+        // wears is the caller's, and both states are drawn on whichever one it
+        // picked; see `triggerChrome`.
+        className={`${triggerClassName} ${triggerChrome} ${
           active > 0
             ? "border-active/40 text-readout"
             : "border-foreground/10 text-foreground/80 hover:text-readout"
@@ -136,7 +154,7 @@ export function LeagueFiltersDialog({
         {/* The badge is the count of *rails and rules* that are narrowing, not
             of leagues — the readout beside it is the leagues. */}
         {active > 0 && (
-          <span className="ml-2 min-w-[1.125rem] rounded bg-active/22 px-1 text-center text-[0.625rem] font-bold tabular-nums">
+          <span className="ml-2 min-w-[1.125rem] rounded bg-active/22 px-1 text-center text-[length:var(--fs-10)] font-bold tabular-nums">
             {active}
           </span>
         )}
@@ -166,7 +184,7 @@ export function LeagueFiltersDialog({
               and nothing on screen said so. The label stays, because the bar's
               text is decoration for a screen reader that already has one. */}
           <div className="flex shrink-0 items-center gap-3 border-b border-foreground/9 px-5 py-3.5">
-            <span className="font-mono text-[0.625rem] uppercase tracking-[0.16em] text-active">
+            <span className="font-mono text-[length:var(--fs-10)] uppercase tracking-[0.16em] text-active">
               League filters
             </span>
             <span
@@ -270,14 +288,14 @@ export function LeagueFiltersDialog({
           </div>
 
           <div className="flex shrink-0 items-center justify-between gap-3 border-t border-foreground/9 px-5 py-3.5">
-            <p className="m-0 font-mono text-[0.6875rem] text-foreground/60">
+            <p className="m-0 font-mono text-[length:var(--fs-11)] text-foreground/60">
               {matched.length} of {leagues.length} leagues
             </p>
             <div className="flex gap-2">
               <button
                 type="button"
                 onClick={() => setDraft(DEFAULT_LEAGUE_FILTERS)}
-                className={`${CONSOLE_KEY_BLOCK} border-foreground/10 bg-[image:var(--key-bg)] px-4 text-[0.625rem] text-foreground/80 shadow-[var(--key-shadow)] hover:text-readout`}
+                className={`${CONSOLE_KEY_BLOCK} border-foreground/10 bg-[image:var(--key-bg)] px-4 text-[length:var(--fs-10)] text-foreground/80 shadow-[var(--key-shadow)] hover:text-readout`}
               >
                 Reset
               </button>
@@ -287,7 +305,7 @@ export function LeagueFiltersDialog({
               <button
                 type="button"
                 onClick={apply}
-                className={`${CONSOLE_KEY_BLOCK} border-active/50 bg-[image:var(--key-bg)] px-5 text-[0.625rem] text-readout shadow-[var(--key-shadow),0_0_22px_-8px_var(--accent-glow)] [text-shadow:var(--readout-text-glow)]`}
+                className={`${CONSOLE_KEY_BLOCK} border-active/50 bg-[image:var(--key-bg)] px-5 text-[length:var(--fs-10)] text-readout shadow-[var(--key-shadow),0_0_22px_-8px_var(--accent-glow)] [text-shadow:var(--readout-text-glow)]`}
               >
                 Apply
               </button>

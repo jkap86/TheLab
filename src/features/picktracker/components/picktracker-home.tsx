@@ -33,7 +33,7 @@ export function PicktrackerHome({ heading }: { heading: ReactNode }) {
   return (
     <div className="space-y-8">
       {heading}
-      <p className="max-w-prose text-sm leading-relaxed text-foreground/60">
+      <p className="max-w-prose text-[length:var(--fs-14)] leading-relaxed text-foreground/60">
         Leagues that trade next year&rsquo;s rookie picks during a startup draft
         take kickers as stand-ins, because those rookies are not in
         Sleeper&rsquo;s player pool yet. This reads a draft back the way the
@@ -44,7 +44,7 @@ export function PicktrackerHome({ heading }: { heading: ReactNode }) {
         <Leagues username={username} />
       ) : (
         <Section title="No account connected">
-          <p className="text-sm text-foreground/60">
+          <p className="text-[length:var(--fs-14)] text-foreground/60">
             Connect a Sleeper account on the tools page to pick from your own
             leagues, or track any league by its ID below.
           </p>
@@ -75,7 +75,7 @@ function Leagues({ username }: { username: string }) {
   return (
     <Section title={`Your leagues @${username}`}>
       {error ? (
-        <p role="alert" className="text-sm text-foreground/70">
+        <p role="alert" className="text-[length:var(--fs-14)] text-foreground/70">
           {error}
         </p>
       ) : (
@@ -94,7 +94,7 @@ function Leagues({ username }: { username: string }) {
 function Section({ title, children }: { title: string; children: ReactNode }) {
   return (
     <section className="space-y-3">
-      <h2 className="font-mono text-[0.6875rem] uppercase tracking-[0.16em] text-foreground/50">
+      <h2 className="font-mono text-[length:var(--fs-11)] uppercase tracking-[0.16em] text-foreground/50">
         {title}
       </h2>
       {children}

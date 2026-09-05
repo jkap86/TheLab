@@ -114,12 +114,12 @@ export function RuleRow({
   const slot =
     "min-w-0 cursor-pointer appearance-none rounded-lg bg-[image:var(--key-bg)] py-1.5 pl-2 pr-5 " +
     "font-mono text-[16px] text-foreground/88 shadow-[var(--well-shadow)] outline-none " +
-    "focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-active/60 @md:text-[0.6875rem]";
+    "focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-active/60 @md:text-[length:var(--fs-11)]";
   /** `appearance-none` takes the native caret with it; this draws one back. */
   const caret = (
     <span
       aria-hidden
-      className="pointer-events-none absolute right-2 text-[0.5rem] leading-none text-foreground/45"
+      className="pointer-events-none absolute right-2 text-[length:var(--fs-8)] leading-none text-foreground/45"
     >
       ▼
     </span>
@@ -213,7 +213,7 @@ export function RuleRow({
               });
             }}
             onBlur={() => setEdit(null)}
-            className="relative w-full min-w-0 bg-transparent px-2 py-1.5 text-right font-mono text-[16px] tabular-nums text-readout outline-none [text-shadow:var(--readout-text-glow)] disabled:opacity-40 @md:text-[0.6875rem]"
+            className="relative w-full min-w-0 bg-transparent px-2 py-1.5 text-right font-mono text-[16px] tabular-nums text-readout outline-none [text-shadow:var(--readout-text-glow)] disabled:opacity-40 @md:text-[length:var(--fs-11)]"
           />
         </span>
       )}
@@ -230,7 +230,7 @@ export function RuleRow({
                 : { ...rule, op: "eq", value: sentinel.value },
             )
           }
-          className={`shrink-0 whitespace-nowrap rounded-lg border px-2 py-1.5 font-mono text-[0.6875rem] transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-active/60 ${
+          className={`shrink-0 whitespace-nowrap rounded-lg border px-2 py-1.5 font-mono text-[length:var(--fs-11)] transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-active/60 ${
             onSentinel
               ? "border-active/45 bg-active/14 text-readout"
               : "border-foreground/12 text-foreground/55 hover:text-readout"
@@ -242,7 +242,7 @@ export function RuleRow({
 
       <span
         title="Leagues matching this rule on its own"
-        className="ml-auto shrink-0 font-mono text-[0.6875rem] tabular-nums text-foreground/45"
+        className="ml-auto shrink-0 font-mono text-[length:var(--fs-11)] tabular-nums text-foreground/45"
       >
         {count}
       </span>
@@ -251,7 +251,7 @@ export function RuleRow({
         type="button"
         aria-label="Remove rule"
         onClick={onRemove}
-        className="shrink-0 rounded-md px-1.5 py-1 font-mono text-sm leading-none text-foreground/45 transition-colors hover:bg-foreground/[0.06] hover:text-error focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-active/60"
+        className="shrink-0 rounded-md px-1.5 py-1 font-mono text-[length:var(--fs-14)] leading-none text-foreground/45 transition-colors hover:bg-foreground/[0.06] hover:text-error focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-active/60"
       >
         ×
       </button>

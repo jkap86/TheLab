@@ -133,24 +133,24 @@ export function TimelineView({
                 390 it breaks mid-word, and a sentence cut to "…through its
                 stored …" reads as a rendering fault where the key beside it
                 already says what it does. */}
-            <span className="hidden min-w-0 truncate text-[0.75rem] text-foreground/45 sm:inline">
+            <span className="hidden min-w-0 truncate text-[length:var(--fs-12)] text-foreground/45 sm:inline">
               Rewind this league, priced at today&rsquo;s values
             </span>
           </>
         )}
 
         {opened && loading && (
-          <span className="font-mono text-[0.6875rem] uppercase tracking-[0.16em] text-readout-label">
+          <span className="font-mono text-[length:var(--fs-11)] uppercase tracking-[0.16em] text-readout-label">
             Reading history…
           </span>
         )}
 
         {opened && error !== null && (
-          <span className="text-[0.75rem] text-error">{error}</span>
+          <span className="text-[length:var(--fs-12)] text-error">{error}</span>
         )}
 
         {opened && !loading && error === null && moves === 0 && (
-          <span className="font-mono text-[0.6875rem] uppercase tracking-[0.16em] text-readout-label">
+          <span className="font-mono text-[length:var(--fs-11)] uppercase tracking-[0.16em] text-readout-label">
             No stored moves to rewind through
           </span>
         )}
@@ -172,7 +172,7 @@ export function TimelineView({
           is why it is not on the rail a scroll away — and it is drawn only in
           the past, because at "now" there is nothing to caveat. */}
       {past && (
-        <p className="m-0 mt-4 text-[0.7rem] leading-relaxed text-foreground/45">
+        <p className="m-0 mt-4 text-[length:var(--fs-11-2)] leading-relaxed text-foreground/45">
           {/* `this point` rather than the formatter's own `date unknown`, which
               reads as a broken sentence in the one place the two spellings
               differ — a caveat has to stay a sentence. Unreachable in practice,

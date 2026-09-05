@@ -60,7 +60,7 @@ export function ColumnsStrip({
     <div
       className={`${CONSOLE_WELL} relative mt-3.5 flex flex-wrap items-center gap-2 p-2`}
     >
-      <span className="pl-1.5 pr-2 font-mono text-[0.5625rem] uppercase tracking-[0.18em] text-foreground/[0.42]">
+      <span className="pl-1.5 pr-2 font-mono text-[length:var(--fs-9)] uppercase tracking-[0.18em] text-foreground/[0.42]">
         Columns
       </span>
 
@@ -87,7 +87,7 @@ export function ColumnsStrip({
               them. */}
           <span className="sr-only">Remove {chipLabel(col)}</span>
           <span aria-hidden>{chipLabel(col)}</span>
-          <span aria-hidden className="text-[0.75rem] leading-none text-readout-muted">
+          <span aria-hidden className="text-[length:var(--fs-12)] leading-none text-readout-muted">
             ×
           </span>
         </button>

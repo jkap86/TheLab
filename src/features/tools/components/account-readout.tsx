@@ -37,7 +37,7 @@ export function AccountReadout({
         </span>
         {/* Sleeper lets a display name go missing, so the username is the
             fallback everywhere this pair is shown. */}
-        <span className="relative font-mono text-[0.9375rem] tracking-[0.01em] text-readout [text-shadow:var(--readout-text-glow)]">
+        <span className="relative font-mono text-[length:var(--fs-15)] tracking-[0.01em] text-readout [text-shadow:var(--readout-text-glow)]">
           {user.display_name || user.username}
         </span>
         {/* The dot's expanding ring animates via `tools-pulse` and freezes

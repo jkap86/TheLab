@@ -143,7 +143,7 @@ export function LeagueTeams({ entry }: { entry: LeagueLineupEntry }) {
         <label className="inline-flex min-w-0 items-center gap-1.5 rounded-full border border-foreground/8 py-1.5 pl-3 pr-1.5 shadow-[var(--track-shadow)] sm:gap-2 sm:pl-3.5">
           <span
             aria-hidden
-            className="shrink-0 font-mono text-[0.5625rem] uppercase tracking-[0.16em] text-foreground/45 sm:text-[0.625rem]"
+            className="shrink-0 font-mono text-[length:var(--fs-9)] uppercase tracking-[0.16em] text-foreground/45 sm:text-[length:var(--fs-10)]"
           >
             Rank by
           </span>
@@ -152,7 +152,7 @@ export function LeagueTeams({ entry }: { entry: LeagueLineupEntry }) {
             <select
               value={metric}
               onChange={(e) => setMetric(e.target.value as LineupMetricId)}
-              className="min-w-0 cursor-pointer appearance-none rounded-full bg-[image:var(--key-bg)] py-1.5 pl-2.5 pr-6.5 font-mono text-[0.625rem] uppercase tracking-[0.14em] text-readout shadow-[var(--key-shadow)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-active/60 sm:pl-3 sm:pr-7 sm:text-[0.6875rem] sm:tracking-[0.16em]"
+              className="min-w-0 cursor-pointer appearance-none rounded-full bg-[image:var(--key-bg)] py-1.5 pl-2.5 pr-6.5 font-mono text-[length:var(--fs-10)] uppercase tracking-[0.14em] text-readout shadow-[var(--key-shadow)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-active/60 sm:pl-3 sm:pr-7 sm:text-[length:var(--fs-11)] sm:tracking-[0.16em]"
             >
               {LINEUP_METRIC_IDS.map((id) => (
                 <option key={id} value={id}>
@@ -164,7 +164,7 @@ export function LeagueTeams({ entry }: { entry: LeagueLineupEntry }) {
                 gets one drawn back in the accent. */}
             <span
               aria-hidden
-              className="pointer-events-none absolute right-2.5 text-[0.5rem] leading-none text-active sm:right-3"
+              className="pointer-events-none absolute right-2.5 text-[length:var(--fs-8)] leading-none text-active sm:right-3"
             >
               ▼
             </span>
@@ -187,10 +187,10 @@ export function LeagueTeams({ entry }: { entry: LeagueLineupEntry }) {
                 aria-hidden
                 className="pointer-events-none absolute inset-0 bg-[image:var(--readout-scanlines)]"
               />
-              <span className="relative font-mono text-sm tabular-nums text-readout [text-shadow:var(--readout-text-glow)] sm:text-base">
+              <span className="relative font-mono text-[length:var(--fs-14)] tabular-nums text-readout [text-shadow:var(--readout-text-glow)] sm:text-[length:var(--fs-16)]">
                 {total}
               </span>
-              <span className="relative font-mono text-[0.5625rem] uppercase tracking-[0.16em] text-readout/60 sm:text-[0.625rem]">
+              <span className="relative font-mono text-[length:var(--fs-9)] uppercase tracking-[0.16em] text-readout/60 sm:text-[length:var(--fs-10)]">
                 {lensUnit(lens)}
               </span>
             </span>
@@ -211,22 +211,22 @@ export function LeagueTeams({ entry }: { entry: LeagueLineupEntry }) {
           <div className="flex items-center gap-1.5 px-1 pb-1.5 lg:gap-2 lg:px-2.5">
             <span
               aria-hidden
-              className="hidden w-6 shrink-0 font-mono text-[0.5625rem] tracking-[0.14em] text-readout-label lg:block"
+              className="hidden w-6 shrink-0 font-mono text-[length:var(--fs-9)] tracking-[0.14em] text-readout-label lg:block"
             >
               #
             </span>
-            <span className="min-w-0 flex-1 font-mono text-[0.5625rem] uppercase tracking-[0.14em] text-foreground/60 lg:text-[0.6875rem]">
+            <span className="min-w-0 flex-1 font-mono text-[length:var(--fs-9)] uppercase tracking-[0.14em] text-foreground/60 lg:text-[length:var(--fs-11)]">
               Teams
             </span>
             <span
               aria-hidden
-              className="hidden w-[62px] shrink-0 text-right font-mono text-[0.5625rem] uppercase tracking-[0.14em] text-readout-label lg:block"
+              className="hidden w-[62px] shrink-0 text-right font-mono text-[length:var(--fs-9)] uppercase tracking-[0.14em] text-readout-label lg:block"
             >
               Gap
             </span>
             <span
               aria-hidden
-              className="hidden w-16 shrink-0 text-right font-mono text-[0.5625rem] uppercase tracking-[0.14em] text-readout-label lg:block"
+              className="hidden w-16 shrink-0 text-right font-mono text-[length:var(--fs-9)] uppercase tracking-[0.14em] text-readout-label lg:block"
             >
               Total
             </span>
@@ -272,7 +272,7 @@ export function LeagueTeams({ entry }: { entry: LeagueLineupEntry }) {
                     {/* Full opacity on the readout colour, as everywhere it is
                         text. The manager's own team is the only one lit. */}
                     <span
-                      className={`block w-full truncate text-[0.8125rem] lg:order-2 lg:min-w-0 lg:flex-1 ${
+                      className={`block w-full truncate text-[length:var(--fs-13)] lg:order-2 lg:min-w-0 lg:flex-1 ${
                         team.is_manager
                           ? "font-semibold text-readout"
                           : "text-foreground/80"
@@ -281,11 +281,11 @@ export function LeagueTeams({ entry }: { entry: LeagueLineupEntry }) {
                       {team.name}
                     </span>
                     <span className="flex w-full items-center gap-1.5 lg:contents">
-                      <span className="shrink-0 font-mono text-[0.625rem] tabular-nums text-readout-label lg:order-1 lg:w-6 lg:text-readout-line">
+                      <span className="shrink-0 font-mono text-[length:var(--fs-10)] tabular-nums text-readout-label lg:order-1 lg:w-6 lg:text-readout-line">
                         {ordinal(place.rank)}
                       </span>
                       <span
-                        className="hidden w-[62px] shrink-0 text-right font-mono text-[0.625rem] tabular-nums text-readout/60 lg:order-3 lg:block"
+                        className="hidden w-[62px] shrink-0 text-right font-mono text-[length:var(--fs-10)] tabular-nums text-readout/60 lg:order-3 lg:block"
                         style={gapTone ? { color: gapTone } : undefined}
                       >
                         {team.roster_id === manager?.roster_id
@@ -295,7 +295,7 @@ export function LeagueTeams({ entry }: { entry: LeagueLineupEntry }) {
                             : `${delta > 0 ? "+" : delta < 0 ? "−" : ""}${formatTotal(metric, Math.abs(delta))}`}
                       </span>
                       <span
-                        className="order-3 shrink-0 text-right font-mono text-[0.6875rem] tabular-nums lg:order-4 lg:w-16 lg:text-xs"
+                        className="order-3 shrink-0 text-right font-mono text-[length:var(--fs-11)] tabular-nums lg:order-4 lg:w-16 lg:text-[length:var(--fs-12)]"
                         style={{ color: tone }}
                       >
                         {anyNonZero
@@ -328,7 +328,7 @@ export function LeagueTeams({ entry }: { entry: LeagueLineupEntry }) {
               has no header of its own and the figures in it would otherwise be
               unattributed. */}
           <div className="flex flex-col gap-0.5 pb-1.5 lg:flex-row lg:items-baseline lg:gap-2">
-            <span className="min-w-0 truncate font-mono text-[0.625rem] uppercase tracking-[0.12em] text-readout lg:text-[0.6875rem] lg:tracking-[0.14em]">
+            <span className="min-w-0 truncate font-mono text-[length:var(--fs-10)] uppercase tracking-[0.12em] text-readout lg:text-[length:var(--fs-11)] lg:tracking-[0.14em]">
               {selected.name}
             </span>
             {/* Two names and a preposition do not fit a 188px pane on one
@@ -337,10 +337,10 @@ export function LeagueTeams({ entry }: { entry: LeagueLineupEntry }) {
                 So it takes a line of its own below `sm`, the same answer every
                 row in both panes gives. */}
             <span className="flex min-w-0 items-baseline gap-1 lg:contents">
-              <span className="shrink-0 font-mono text-[0.5625rem] uppercase tracking-[0.14em] text-readout-label lg:ml-auto">
+              <span className="shrink-0 font-mono text-[length:var(--fs-9)] uppercase tracking-[0.14em] text-readout-label lg:ml-auto">
                 vs
               </span>
-              <span className="min-w-0 truncate font-mono text-[0.5625rem] uppercase tracking-[0.14em] text-foreground/60 lg:max-w-[190px] lg:shrink-0">
+              <span className="min-w-0 truncate font-mono text-[length:var(--fs-9)] uppercase tracking-[0.14em] text-foreground/60 lg:max-w-[190px] lg:shrink-0">
                 {opponent ? opponent.name : "Best in league"}
               </span>
             </span>
@@ -355,7 +355,7 @@ export function LeagueTeams({ entry }: { entry: LeagueLineupEntry }) {
           ) : (
             // No seatable lineup (an empty or wholly unknown roster) still has
             // its name above, so the picks below aren't attributed to nobody.
-            <p className="m-0 font-mono text-[0.6875rem] uppercase tracking-[0.14em] text-foreground/60">
+            <p className="m-0 font-mono text-[length:var(--fs-11)] uppercase tracking-[0.14em] text-foreground/60">
               No seatable lineup
             </p>
           )}

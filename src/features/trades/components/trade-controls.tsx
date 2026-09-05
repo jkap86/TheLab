@@ -55,7 +55,7 @@ export function CircleStepper({
           aria-hidden
           className="pointer-events-none absolute inset-0 bg-[image:var(--readout-scanlines)]"
         />
-        <span className="relative truncate font-mono text-[0.6875rem] uppercase tracking-[0.16em] text-readout">
+        <span className="relative truncate font-mono text-[length:var(--fs-11)] uppercase tracking-[0.16em] text-readout">
           {option.label}
         </span>
         {/* The pips are the radius made visible: four notches, lit up to the
@@ -106,7 +106,7 @@ export function CircleNote({
   return (
     <p
       id={CIRCLE_NOTE_ID}
-      className="font-mono text-[0.6875rem] uppercase tracking-[0.16em] text-foreground/60"
+      className="font-mono text-[length:var(--fs-11)] uppercase tracking-[0.16em] text-foreground/60"
     >
       {option.note}
       {/* Said once, where the inert keys are: without an account there is no

@@ -327,7 +327,7 @@ function Checker({
                     the strip and then drop to its own line rather than
                     truncating the moment the keys grow. */}
                 {narrowing && (
-                  <p className="m-0 min-w-0 flex-[1_1_12rem] truncate font-mono text-[0.6875rem] uppercase tracking-[0.16em] text-active">
+                  <p className="m-0 min-w-0 flex-[1_1_12rem] truncate font-mono text-[length:var(--fs-11)] uppercase tracking-[0.16em] text-active">
                     {filterSummary(filters)} · {visible.length} of {leagues.length}
                   </p>
                 )}
@@ -338,7 +338,7 @@ function Checker({
             <span className="flex items-baseline gap-2">
               {heading}
               {state.season && (
-                <span className="font-mono text-[0.6875rem] uppercase tracking-[0.16em] text-foreground/60">
+                <span className="font-mono text-[length:var(--fs-11)] uppercase tracking-[0.16em] text-foreground/60">
                   · {state.season}
                 </span>
               )}
@@ -403,14 +403,14 @@ function Checker({
           )}
           {check?.week === null && (
             <Plate>
-              <p className="m-0 font-mono text-[0.8125rem] text-foreground/72">
+              <p className="m-0 font-mono text-[length:var(--fs-13)] text-foreground/72">
                 No week left to check in {check.season} — the season is over.
               </p>
             </Plate>
           )}
           {leagues.length === 0 ? (
             <Plate>
-              <p className="m-0 font-mono text-[0.8125rem] text-foreground/72">
+              <p className="m-0 font-mono text-[length:var(--fs-13)] text-foreground/72">
                 No leagues found{state.season ? ` for ${state.season}` : ""}.
               </p>
             </Plate>
@@ -418,10 +418,10 @@ function Checker({
             // A different claim from the one above: that one is about the
             // manager, this one is about the selection.
             <Plate>
-              <p className="m-0 font-mono text-[0.8125rem] text-foreground/72">
+              <p className="m-0 font-mono text-[length:var(--fs-13)] text-foreground/72">
                 No leagues match these filters.
               </p>
-              <p className="mt-2 truncate font-mono text-[0.6875rem] uppercase tracking-[0.16em] text-active">
+              <p className="mt-2 truncate font-mono text-[length:var(--fs-11)] uppercase tracking-[0.16em] text-active">
                 {filterSummary(filters)}
               </p>
             </Plate>
@@ -512,12 +512,12 @@ function AttentionWindow({
     >
       <Scanlines />
       <span className="relative flex items-baseline justify-between gap-2.5">
-        <span className="text-[0.5625rem] uppercase tracking-[0.18em] text-readout-label">
+        <span className="text-[length:var(--fs-9)] uppercase tracking-[0.18em] text-readout-label">
           Need a look
         </span>
         <span
           aria-live="polite"
-          className={`text-[1.0625rem] leading-none tabular-nums ${
+          className={`text-[length:var(--fs-17)] leading-none tabular-nums ${
             !pending && attention > 0
               ? "text-error [text-shadow:0_0_12px_rgba(252,165,165,0.45)]"
               : "text-readout [text-shadow:var(--readout-text-glow)]"
@@ -561,14 +561,14 @@ function ReasonRow({ label, count }: { label: string; count: number | null }) {
         }`}
       />
       <span
-        className={`flex-1 whitespace-nowrap text-[0.625rem] uppercase tracking-[0.14em] ${
+        className={`flex-1 whitespace-nowrap text-[length:var(--fs-10)] uppercase tracking-[0.14em] ${
           lit ? "text-readout-line" : "text-readout-muted"
         }`}
       >
         {label}
       </span>
       <span
-        className={`text-[0.8125rem] leading-none tabular-nums ${
+        className={`text-[length:var(--fs-13)] leading-none tabular-nums ${
           lit
             ? "text-error [text-shadow:0_0_10px_rgba(252,165,165,0.5)]"
             : "text-readout-muted"
@@ -593,7 +593,7 @@ function Alert({ children }: { children: ReactNode }) {
   return (
     <p
       role="alert"
-      className="relative mb-6 inline-flex items-center gap-3 rounded-full border border-error/28 bg-[image:var(--alert-bg)] px-5 py-2.5 font-mono text-[0.8125rem] text-error shadow-[inset_0_1px_0_rgba(255,255,255,0.12),0_3px_0_rgba(0,0,0,0.7)]"
+      className="relative mb-6 inline-flex items-center gap-3 rounded-full border border-error/28 bg-[image:var(--alert-bg)] px-5 py-2.5 font-mono text-[length:var(--fs-13)] text-error shadow-[inset_0_1px_0_rgba(255,255,255,0.12),0_3px_0_rgba(0,0,0,0.7)]"
     >
       <span
         aria-hidden
@@ -622,13 +622,13 @@ function ColdProgress({
       />
       <div className="relative flex flex-wrap items-baseline justify-between gap-4">
         <p
-          className="m-0 font-mono text-[0.9375rem] text-readout [text-shadow:var(--readout-text-glow)]"
+          className="m-0 font-mono text-[length:var(--fs-15)] text-readout [text-shadow:var(--readout-text-glow)]"
           aria-live="polite"
         >
           Syncing leagues from Sleeper…
         </p>
         {total > 0 && (
-          <p className="m-0 font-mono text-[0.9375rem] tabular-nums text-readout [text-shadow:var(--readout-text-glow)]">
+          <p className="m-0 font-mono text-[length:var(--fs-15)] tabular-nums text-readout [text-shadow:var(--readout-text-glow)]">
             {loaded} / {total}
           </p>
         )}

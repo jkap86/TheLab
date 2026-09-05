@@ -22,14 +22,16 @@ import { ToolsMenu } from "./tools-menu";
  *
  * The app had no navigation at all before this — every page was reached from
  * the tool grid or from a typed URL — so the rack is the one genuinely new
- * object in the console rather than a restyling of an old one. It floats with
- * a visible gap on all sides and is not welded to the viewport edge: it is a
- * rack unit sitting *on* the ground, which is what the full-bleed background
- * under it is for.
+ * object in the console rather than a restyling of an old one. It sits flush
+ * against the top edge in a gutter of its own: a rack unit racked *into* the
+ * ground rather than a bar spanning it, which is what the full-bleed background
+ * around it is for.
  *
- * **It is `fixed` now, and the whole of that is the outer wrapper.** `mt-6`
- * became `top-6`, so the same 24px gap that framed it in flow frames it against
- * the viewport. What that buys is the reason the controls could move up here at
+ * **It is `fixed`, and the whole of that is the outer wrapper.** `mt-6` became
+ * `top-6` when it was pinned, and `top-6` became `top-0` when it went flush:
+ * the gap above a fixed rack is ground the page can never use, where the gutter
+ * either side is what still makes it a unit. What pinning buys is the reason
+ * the controls could move up here at
  * all: on a hundred-league page the header scrolls away after two cards, and a
  * Filters key that has scrolled away is a Filters key you have to scroll back
  * for. Being out of flow, it leaves nothing behind — the shell's top padding
@@ -95,9 +97,13 @@ export function AppRack() {
   const showMenu = currentBase !== "/tools";
 
   return (
-    // Pinned, and the gap is the same on all four sides — 24px against the
-    // viewport rather than 24px under whatever preceded it.
-    <div className="fixed inset-x-0 top-6 z-50 mx-auto w-full max-w-6xl px-3.5 md:px-4">
+    // Pinned and **flush**: `top-0`, where it used to float clear at `top-6`.
+    // The horizontal gutter and the pill shape stay, so it still reads as a
+    // rack unit rather than as a bar welded across the top — what goes is the
+    // 24px of ground showing above it, which on a scrolling page was a strip
+    // of console nothing ever occupied. `--rack-clear` lost the same 1.5rem on
+    // all three arms, so the gap *under* the rack is unchanged.
+    <div className="fixed inset-x-0 top-0 z-50 mx-auto w-full max-w-6xl px-3.5 md:px-4">
       {/*
         Below `md` the rack is two stacked objects — a brand pill and the nav
         track under it — and above it they are one row. Rather than render two
@@ -127,15 +133,33 @@ export function AppRack() {
             >
               <FlaskMark />
             </span>
-            {/* The same two-layer engraving as the plate: an extrusion under a
-                gradient clipped to the glyphs. `nowrap` on both, for
-                `LabWordmark`'s reason — a face that wraps under an extrusion
-                that cannot leaves a ghost "LAB" beside it. */}
-            <span className="relative inline-block whitespace-nowrap font-display text-[0.9375rem] font-bold uppercase leading-none tracking-[0.09em] md:text-[1.125rem]">
-              <span
-                aria-hidden
-                className="absolute left-0 top-0 text-[var(--chrome-extrude)] [text-shadow:var(--chrome-extrude-shadow)]"
-              >
+            {/* The link's name, at every width — the engraving below is
+                `aria-hidden` because it is two copies of this string and only
+                one of them is ever a word. */}
+            <span className="sr-only">The Lab</span>
+            {/*
+              The same two-layer engraving as the plate: an extrusion under a
+              gradient clipped to the glyphs. `nowrap` on both, for
+              `LabWordmark`'s reason — a face that wraps under an extrusion that
+              cannot leaves a ghost "LAB" beside it.
+
+              **It is the flask alone below `sm`, and that is a measurement.**
+              The rack is one row at every width — a constraint rather than an
+              observation, since `--rack-clear` is three values and not five —
+              so a row that does not fit does not wrap, it overflows the pill.
+              With the wordmark on, the row's content is ~370px against a
+              362px pill at 390: it fits from ~412px up and not below, which is
+              most phones. The wordmark is what goes, on the theme key's own
+              precedent that the legend is the first thing to drop — the flask
+              *is* the mark, and it stays. `sm` rather than a bespoke 412px
+              because the house has one vocabulary of breakpoints and a tablet
+              has room for both.
+            */}
+            <span
+              aria-hidden
+              className="relative hidden whitespace-nowrap font-display text-[length:var(--fs-15)] font-bold uppercase leading-none tracking-[0.09em] sm:inline-block md:text-[length:var(--fs-18)]"
+            >
+              <span className="absolute left-0 top-0 text-[var(--chrome-extrude)] [text-shadow:var(--chrome-extrude-shadow)]">
                 The Lab
               </span>
               <span className="relative inline-block bg-[image:var(--chrome-face)] bg-clip-text text-transparent [filter:var(--wordmark-depth)]">
@@ -168,7 +192,7 @@ export function AppRack() {
             <ThemeToggle
               className={
                 "inline-flex items-center gap-2 rounded-full bg-[image:var(--key-bg)] p-[0.4375rem] " +
-                "font-mono text-[0.6875rem] uppercase tracking-[0.16em] text-foreground/80 " +
+                "font-mono text-[length:var(--fs-11)] uppercase tracking-[0.16em] text-foreground/80 " +
                 "shadow-[var(--key-shadow)] transition-[transform,box-shadow,color] duration-150 " +
                 "hover:text-readout active:translate-y-0.5 active:shadow-[var(--key-shadow-pressed)] " +
                 "focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-active/60 " +

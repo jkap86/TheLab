@@ -79,7 +79,7 @@ export function SeekKey({
             max={today}
             onChange={(event) => onChange(event.target.value || null)}
             aria-label="Show trades up to"
-            className="rounded-lg border border-foreground/12 bg-foreground/[0.04] px-2.5 py-1.5 font-mono text-[0.75rem] text-foreground/85 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-active/60"
+            className="rounded-lg border border-foreground/12 bg-foreground/[0.04] px-2.5 py-1.5 font-mono text-[length:var(--fs-12)] text-foreground/85 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-active/60"
           />
           <button
             type="button"

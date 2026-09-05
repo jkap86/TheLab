@@ -49,7 +49,7 @@ export function WeekStepper({
           className="pointer-events-none absolute inset-0 bg-[image:var(--readout-scanlines)]"
         />
         <span
-          className="relative whitespace-nowrap font-mono text-[0.8125rem] tabular-nums text-readout [text-shadow:var(--readout-text-glow)]"
+          className="relative whitespace-nowrap font-mono text-[length:var(--fs-13)] tabular-nums text-readout [text-shadow:var(--readout-text-glow)]"
           aria-live="polite"
         >
           {week === null ? "Week —" : `Week ${week}`}

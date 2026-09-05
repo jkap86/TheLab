@@ -146,7 +146,7 @@ export function LineupCheckCard({
               claim this tool must not make silently. It kept its own line when
               the identity line went, for exactly that reason. */}
           {entry?.as_of === "current" && (
-            <p className="relative mt-3 font-mono text-[0.6875rem] uppercase tracking-[0.16em] text-foreground/[0.78] pointer-fine:[transform:translateZ(14px)]">
+            <p className="relative mt-3 font-mono text-[length:var(--fs-11)] uppercase tracking-[0.16em] text-foreground/[0.78] pointer-fine:[transform:translateZ(14px)]">
               Lineup as set now
             </p>
           )}
@@ -190,7 +190,7 @@ export function LineupCheckCard({
           {entry ? (
             <LineupDetail entry={entry} />
           ) : (
-            <p className="relative m-0 py-2.5 font-mono text-[0.6875rem] uppercase tracking-[0.16em] text-readout-label">
+            <p className="relative m-0 py-2.5 font-mono text-[length:var(--fs-11)] uppercase tracking-[0.16em] text-readout-label">
               No lineup read for this league this week
             </p>
           )}
@@ -236,7 +236,7 @@ function ProjectionPlate({ entry }: { entry?: LineupCheckLeague | null }) {
         {mine.toFixed(1)}–{theirs.toFixed(1)}
       </PlateField>
       <span
-        className="inline-flex h-[22px] w-[22px] items-center justify-center rounded-full border border-active/45 bg-[image:var(--readout-bg)] font-mono text-[0.8125rem] font-medium shadow-[inset_0_0_12px_var(--accent-glow)]"
+        className="inline-flex h-[22px] w-[22px] items-center justify-center rounded-full border border-active/45 bg-[image:var(--readout-bg)] font-mono text-[length:var(--fs-13)] font-medium shadow-[inset_0_0_12px_var(--accent-glow)]"
         style={{ color: tone, textShadow: `0 0 10px ${rankColor(outcome * 100, 0.6)}` }}
       >
         <span className="sr-only">
@@ -275,7 +275,7 @@ function MetricTile({ label, cell }: { label: string; cell: MetricCell }) {
       {/* Teal rather than the housing's foreground: on a housing the windows
           are the only lit surface, so a label in the metal's own colour would
           read as belonging to the metal rather than to the glass. */}
-      <p className="relative m-0 truncate font-mono text-[0.625rem] uppercase tracking-[0.14em] text-readout-label">
+      <p className="relative m-0 truncate font-mono text-[length:var(--fs-10)] uppercase tracking-[0.14em] text-readout-label">
         {label}
       </p>
       <div className="relative max-w-[8.25rem]">
@@ -285,7 +285,7 @@ function MetricTile({ label, cell }: { label: string; cell: MetricCell }) {
           // Full opacity on every tone: the light-mode teal is only ~5:1
           // against the page, and an alpha drops it below AA.
           <p
-            className={`m-0 mt-2 truncate font-mono text-[1.0625rem] leading-none tabular-nums ${
+            className={`m-0 mt-2 truncate font-mono text-[length:var(--fs-17)] leading-none tabular-nums ${
               cell.state === "alert"
                 ? "text-error [text-shadow:0_0_12px_rgba(252,165,165,0.45)]"
                 : cell.state === "count"
@@ -357,14 +357,14 @@ function LineupDetail({ entry }: { entry: LineupCheckLeague }) {
 
       {entry.unknown_slots.length > 0 && (
         // A partial lineup must say so — see `unknown_slots` on the contract.
-        <p className="relative m-0 py-2 font-mono text-[0.6875rem] uppercase tracking-[0.14em] text-readout-label">
+        <p className="relative m-0 py-2 font-mono text-[length:var(--fs-11)] uppercase tracking-[0.14em] text-readout-label">
           Not shown: {entry.unknown_slots.join(", ")}
         </p>
       )}
 
       {entry.bench.length > 0 && (
         <details className="group/bench relative">
-          <summary className="flex h-[34px] cursor-pointer list-none items-center font-mono text-[0.6875rem] uppercase tracking-[0.14em] text-readout-label transition-colors hover:text-readout">
+          <summary className="flex h-[34px] cursor-pointer list-none items-center font-mono text-[length:var(--fs-11)] uppercase tracking-[0.14em] text-readout-label transition-colors hover:text-readout">
             <span className="group-open/bench:hidden">
               Bench ({entry.bench.length}) ▸
             </span>
@@ -407,16 +407,16 @@ function SeatRow({
   return (
     <li className="relative flex h-[34px] items-center gap-2.5 border-b border-active/9 last:border-b-0">
       {slot !== undefined && (
-        <span className="w-[34px] shrink-0 font-mono text-[0.6875rem] tracking-[0.12em] text-readout-label">
+        <span className="w-[34px] shrink-0 font-mono text-[length:var(--fs-11)] tracking-[0.12em] text-readout-label">
           {slotLabel(slot)}
         </span>
       )}
-      <span className="min-w-0 flex-1 truncate font-mono text-[0.8125rem] text-readout-line">
+      <span className="min-w-0 flex-1 truncate font-mono text-[length:var(--fs-13)] text-readout-line">
         {player ? (player.name ?? player.player_id) : "Empty"}
         {/* A played game is not a recommendation the reader can act on, so it
             is marked rather than left to look like an oversight. */}
         {player?.locked && (
-          <span className="ml-1.5 font-mono text-[0.625rem] uppercase tracking-[0.12em] text-readout-muted">
+          <span className="ml-1.5 font-mono text-[length:var(--fs-10)] uppercase tracking-[0.12em] text-readout-muted">
             <span className="sr-only">Locked — </span>
             <span aria-hidden>locked</span>
           </span>
@@ -430,7 +430,7 @@ function SeatRow({
           from, so the badge and these marks cannot disagree. */}
       {moveTo && (
         <span
-          className="shrink-0 font-mono text-[0.6875rem] font-medium tracking-[0.04em] text-active"
+          className="shrink-0 font-mono text-[length:var(--fs-11)] font-medium tracking-[0.04em] text-active"
           title={`Kickoff order — seat him at ${slotLabel(moveTo)} and the more flexible slot stays open for the later game`}
         >
           <span className="sr-only">Re-seat at </span>
@@ -440,11 +440,11 @@ function SeatRow({
       )}
 
       {kickoff && (
-        <span className="hidden shrink-0 font-mono text-[0.625rem] uppercase tracking-[0.1em] text-readout-muted sm:inline">
+        <span className="hidden shrink-0 font-mono text-[length:var(--fs-10)] uppercase tracking-[0.1em] text-readout-muted sm:inline">
           {kickoff}
         </span>
       )}
-      <span className="w-[46px] shrink-0 text-right font-mono text-xs tabular-nums text-readout">
+      <span className="w-[46px] shrink-0 text-right font-mono text-[length:var(--fs-12)] tabular-nums text-readout">
         {/* Null is "the feed has no row for him" and reads as nothing; a real
             projected zero reads as `0.0`. */}
         {player?.points == null ? "—" : player.points.toFixed(1)}
@@ -462,7 +462,7 @@ function Mark({
 }) {
   return (
     <span
-      className={`shrink-0 rounded-full border px-1.5 py-0.5 font-mono text-[0.5625rem] uppercase tracking-[0.12em] ${
+      className={`shrink-0 rounded-full border px-1.5 py-0.5 font-mono text-[length:var(--fs-9)] uppercase tracking-[0.12em] ${
         tone === "active"
           ? "border-active/40 text-active"
           : "border-error/40 text-error"

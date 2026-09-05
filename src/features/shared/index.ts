@@ -19,8 +19,11 @@ export {
   CONSOLE_PLATE,
   CONSOLE_READOUT,
   CONSOLE_TRACK,
+  CONSOLE_TRACK_SM,
   CONSOLE_WELL,
   CONSOLE_WINDOW,
+  PLATE_KEY,
+  PLATE_KEY_CHROME,
 } from "./console-chrome";
 export { errorMessage } from "./error-message";
 export { storeKtcBoard, useKtcBoard } from "./ktc-board";

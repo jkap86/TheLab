@@ -4769,6 +4769,185 @@ number above is a fixture. What a render cannot check is the server half — tha
 a forced board's four ranks actually differ from the base nine over a real
 account, and what a second market read costs on the 113-league page.
 
+### Flush, larger, and the open card freezes
+
+Four changes finishing the manager page, from a design handoff: the rack goes
+flush to the viewport's top edge, the page's type goes up ~14–16%, an open
+league card's housing pins under the rack while its team browser scrolls past,
+and the identity plate is halved on a phone. **No route, query, contract type or
+payload field moved for any of it** — this is chrome, top to bottom.
+
+**The rack is `top-0` and every arm of `--rack-clear` lost the same 1.5rem.** It
+floated at `top-6`, which was 24px of ground above a *fixed* element — ground
+the page could never use and which, once the rack stopped scrolling away, was
+just a strip of nothing. The gutter either side stays, so it still reads as a
+rack unit rather than a bar welded across the top. The number that had to move
+with it is the shell's clearance, and it is one token for the reason its own
+comment gives: measured after, the rack's top edge is at 0 and the identity
+plate clears its bottom edge by **exactly 28px at `md`**, which is the gap it
+had before and the design's own figure.
+
+**The type is one multiplier and every size derived from it.** The page spelled
+~20 distinct arbitrary sizes across four dozen files, so a scale bumped literal
+by literal is four dozen chances to miss one — and a missed one is a label a
+hair off the readout it names, with nothing on screen saying which edit it was.
+`--fs-8` … `--fs-40` are `calc(<the literal it replaced> * var(--type-scale))`,
+which makes the safety of it exact: at `--type-scale: 1` the page is what it was
+byte for byte, so the scale lands and tunes as **one number**. It is `1.14` on
+`:root` and `1.16` from `sm` up — mobile-first, the smaller figure first, the
+way the rack's own three arms are already written — because the phone is tighter
+on width and the plate and dial fits below `sm` were measured at `1.14`.
+
+**Tailwind's own `text-xs`/`sm`/`base` went into the same table**, which was not
+in the handoff and is the difference between one scale and two. Thirty-one of
+them sat *inside* the console — a seat row at `text-xs` beside a figure at
+`--fs-11`, a league plate at `text-base` beside a scaled `PlateField` — and left
+alone they would have inverted the relationships the components were drawn with
+at exactly one breakpoint each.
+
+**The scale is app-wide rather than scoped to `/manager`.** The alternative was
+to raise it on this route alone, and it is worse in the way that has no symptom:
+`ManagerPlate`, `card-plate`, `league-config-window`, `league-teams` and the
+console key constants are read by four pages, so a scoped bump is a trade card
+whose plate is 16% larger than the board around it. Every other console page was
+re-measured at 390 and 1280 in both schemes rather than assumed — see Verified.
+
+**Three fixed-width boxes did not scale with the type in them, and all three had
+to be re-measured**, which is the failure class this kind of change has: type in
+flow reflows and type in a circle clips.
+
+- **Both win-rate dials.** The manager's is 88px with a 56px lit window, the
+  checker's 88px with a 62px one, and neither grew. What a figure inside them
+  has to clear is **the chord at its own height, not the window's diameter** —
+  a line of digits sits below the `Win` label and crosses a shorter part of the
+  circle. At the new scale `--fs-17` cut `53.7%` on the manager dial, an
+  ordinary reading rather than a worst case, so it steps `--fs-15` at five
+  characters and `--fs-12` at six; the checker's six-character step moved
+  `--fs-15` → `--fs-13`. The rule is the one `WeekSummary` already had and the
+  manager's dial never did — which is why `100.0%`, what a small account
+  projects when every league is a win, was clipping there before this pass too.
+  Verified by eye at 4× rather than by arithmetic: a box measurement says the
+  ink is wider than it is, and the handoff's own estimate for this figure (~51px
+  where it renders at 59) is what a formula gets you.
+- **The card's reading plate.** It sits opposite a league name that truncates,
+  so every pixel it spends is a character off the card's own subject — and it
+  grew ~12px at a phone's width without the card growing. It is `gap-2 pl-3
+  pr-3` below `sm` now, which takes exactly that back out of the padding: the
+  name is 10 characters at 402 against 8 without it, clearing the handoff's own
+  "nine characters" claim. Nothing the plate *says* changed, which dropping a
+  field would have cost.
+- **The rack.** With the wordmark on, its row is ~370px against a 362px pill at
+  390 — it fits from ~412px up and not below. So **the wordmark is the flask
+  alone below `sm`**, with an `sr-only` "The Lab" carrying the link's name at
+  every width. That is the fix this file already nominated for this exact
+  situation, on the theme key's precedent that the legend is the first thing to
+  go, and it also closes a fault that predates the scale: `/lineupchecker`'s
+  rack was 54px over its pill at 390 and nobody had measured it.
+
+**The open card's housing freezes**, which is `group-open/card:sticky` at
+`--card-freeze-top` and nothing else. A twelve-team browser is taller than the
+viewport, so a reader three scrolls into one had nothing on screen naming the
+league — the name is on a plate at the card's top edge and the top edge was
+gone. It must be the **`<summary>`**: the `<li>` and the `<details>` are the
+whole card, taller than the viewport, and sticky on a box that never fits does
+nothing at all. The summary's sticky containing block *is* the `<details>`,
+which is exactly the range the housing should stay over — it parks at the offset
+and releases when the card's own bottom edge catches it, so it never outlives
+its league. It also depends on no ancestor gaining `overflow: hidden`, which
+makes the decorative clip's scoping to its own absolutely-positioned span
+load-bearing a second time.
+
+#### The plate on a phone, and the seam it cost
+
+Below `sm` the plate stacked a name row, a season row and a controls row at
+desktop padding — ~270px of an 874px screen before a single card. It is one
+name row and one strip now, `Leagues · Filters │ Record │ dial`, at ~160px,
+which is the design reference's own 157px to within three.
+
+**The Filters key had to be in two places and is one element.** It rides the
+season strip below `sm`, beside the figure it narrows, and the plate's own
+controls strip from `sm` up. Rendering it twice and hiding one would mount two
+`<dialog>`s — the argument the rack already settled the same way — so
+`ManagerPlate` gained **`compactStrip`**: a wrapper takes the milled cut, both
+lower blocks go `display: contents` inside it, and an `order` each interleaves
+the figures and the keys into one flex row. `sm:contents` makes the wrapper
+vanish above the breakpoint, so the desktop plate is untouched.
+
+It is **opt-in**, and that is not caution: the merge is not something the plate
+can do to a caller that has not been written for it, since the caller's own two
+blocks carry the `contents` and the orders. The lineup checker deliberately does
+not take it — its week figures and its attention window are a phone row on their
+own, and merging a key into them is a redesign of a page rather than a
+compaction of this one. What it *does* take is everything else in the phone
+pass, the padding, the gaps, the avatar and the engraved name having always been
+the plate's own.
+
+**The key is etched below `sm`, not raised** (`PLATE_KEY` / `PLATE_KEY_CHROME`).
+A key standing 3px proud among engraved figures reads as an object dropped onto
+the plate rather than as part of it, so on a phone it is a hairline and a hint
+of inset light. Geometry and chrome are two constants for `CONSOLE_KEY_PILL`'s
+reason, and the surface reaches the dialog as its own **`triggerChrome`** prop
+rather than through `triggerClassName`: appending `bg-none` to a string that
+component already spells `bg-[image:…]` in is decided by Tailwind's emit order,
+which is the coin flip that split exists to keep a key out of.
+
+**One wrap point was added to the config window** and no group boundary moved.
+Three ladders and the TE premium are the widest of its three groups and the one
+that outgrows a phone-width card; below `lg` that group wraps internally and
+`TE prem` drops under the ladders, which is the field that reads correctly on a
+line of its own — it is a fact about the TE slot rather than another number on
+the league's scale.
+
+#### Verified
+
+Rendered through a temporary `/preview` route against the real components,
+tokens and Tailwind build — the method the console-card, shares, rack and
+timeline passes established, since no database is reachable from where this was
+built — then driven over CDP at 1280, 402 and 390 in both schemes and deleted.
+The mechanics are unchanged: `--no-proxy-server`, `localhost` rather than
+`127.0.0.1`, and a phone viewport from `Emulation.setDeviceMetricsOverride`.
+The fixtures are three leagues — a dynasty superflex solved over twelve rosters,
+a 14-team best-ball redraft, and a keeper league whose `roster_positions` and
+`settings` never synced — plus an all-wins account for the dial's worst case.
+
+The rack: top edge at `y = 0` at every width, and `plateTop − rackBottom = 28`
+exactly at `md`. Rack content against its pill measured **9px of slack** at 390,
+402 and 375 on `/manager`, `/trades`, `/picktracker` and `/lineupchecker` — the
+last of which was 54px *over* before this pass, at the scale it already shipped.
+
+The freeze, at 1280 and 402: `position: sticky`, `top: 74px`, `z-index: 20`; at
+700px of scroll the housing sits at exactly 74 against a rack bottom of 62 and
+54.8, **overlapping neither**; at the page's foot the summary's bottom edge
+equals the `<details>`' own, which is the release. No horizontal overflow with a
+card open.
+
+The phone plate: 160.3px against the reference's 157, the strip reading
+`Leagues 3 · Filters │ Record │ dial` on one line with the key at x=87.5
+immediately after the `Leagues` figure and no groove between them, `background-image:
+none` on the key (etched), the dial at 72px with a 46px window, and `100.0%`
+measuring 41px inside it. The 40px bezel, the `--fs-9` eyebrow and the `--fs-21`
+name are all the handoff's numbers.
+
+Both dials were checked as pixels at 4×, which is the only check that answers
+this: every reading now clears its circle at both sizes, where `53.7%` (manager)
+and `100.0%` (both) were cut before.
+
+At every width and in both schemes, on `/tools`, `/trades`, `/picktracker`,
+`/lineupchecker` and `/manager`: `document.documentElement.scrollWidth` equal to
+the viewport, **zero** elements past it, exactly one `<h1>`, and **no console
+output of any kind**. 1,203 unit tests pass; `lint`, `typecheck` and `build` are
+clean.
+
+**Not verified against real data**, which is the gap to close first: every number
+above is a fixture, and three things a render cannot check. Whether a real
+account's league names truncate acceptably at 402 now that the plate spends ~12px
+more on its figures — the fixtures' names are long by construction and the
+handoff's are short. Whether the freeze still reads on a 113-league page, where
+the sticky housings are one per card and the browser under one of them is a real
+twelve-team solve. And whether `1.16` is the right figure against real content
+rather than against three fixture leagues, which is exactly what the one-number
+scale exists to make cheap to answer.
+
 ## The console card
 
 One card carries a league across three tools — `/trades`, `/manager` and

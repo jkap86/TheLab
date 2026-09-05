@@ -7,13 +7,14 @@ import {
   DEFAULT_LEAGUE_FILTERS,
   filterSummary,
   CONSOLE_KEY,
-  CONSOLE_KEY_PILL,
-  CONSOLE_TRACK,
+  CONSOLE_TRACK_SM,
   LeagueFiltersDialog,
   ManagerPlate,
   matchesFilters,
   matchesSubjects,
   NO_SUBJECTS,
+  PLATE_KEY,
+  PLATE_KEY_CHROME,
   removeSubject,
   SubjectTokens,
   toggleSubject,
@@ -267,15 +268,31 @@ export function LeaguesHome({
             it the filtered one would collapse each of the dialog's own menus to
             the selection already made.
           */
+          /*
+            **Below `sm` this strip is not a strip.** `compactStrip` merges it
+            into the season's own row, so the pieces here carry an `order` each
+            and the housing they sit in is `display: contents` there — the key
+            lands between `Leagues` and the groove before `Record`, which is the
+            figure it moves. Above `sm` every one of them is a no-op and the
+            strip is exactly what it was.
+          */
+          compactStrip
           controls={
             leagues.length > 0 ? (
               <>
-                <span className={`${CONSOLE_TRACK} flex items-center gap-1.5 p-1`}>
+                {/* The track is the recess a raised key travels in, and below
+                    `sm` there is no raised key to recess — the keys are etched
+                    into the plate there, so the housing goes and this is a bare
+                    pair of items in the strip's own flow. */}
+                <span
+                  className={`order-2 flex items-center gap-1.5 self-center sm:order-none sm:self-auto sm:p-1 ${CONSOLE_TRACK_SM}`}
+                >
                   <LeagueFiltersDialog
                     filters={filters}
                     onChange={setFilters}
                     leagues={leagues}
-                    triggerClassName={`${CONSOLE_KEY_PILL} inline-flex items-center`}
+                    triggerClassName={PLATE_KEY}
+                    triggerChrome={PLATE_KEY_CHROME}
                   />
                   {/* Only while there is something to clear: a key that is a
                       no-op three quarters of the time is a key a reader stops
@@ -284,7 +301,7 @@ export function LeaguesHome({
                     <button
                       type="button"
                       onClick={() => setFilters(DEFAULT_LEAGUE_FILTERS)}
-                      className={CONSOLE_KEY}
+                      className={`${PLATE_KEY} ${PLATE_KEY_CHROME} border-foreground/10 text-foreground/80 hover:text-readout`}
                     >
                       Clear
                     </button>
@@ -298,7 +315,7 @@ export function LeaguesHome({
                     the strip and then drop to its own line rather than
                     truncating the moment the keys grow. */}
                 {leagueNarrowing && (
-                  <p className="m-0 min-w-0 flex-[1_1_12rem] truncate font-mono text-[0.6875rem] uppercase tracking-[0.16em] text-active">
+                  <p className="order-6 m-0 w-full min-w-0 truncate font-mono text-[length:var(--fs-9)] uppercase tracking-[0.16em] text-active sm:order-none sm:w-auto sm:flex-[1_1_12rem] sm:text-[length:var(--fs-11)]">
                     {leagueNarrowing}
                   </p>
                 )}
@@ -306,10 +323,10 @@ export function LeaguesHome({
             ) : undefined
           }
           eyebrow={
-            <span className="flex items-baseline gap-2">
+            <span className="flex items-baseline gap-1.5 sm:gap-2">
               {heading}
               {state.season && (
-                <span className="font-mono text-[0.6875rem] uppercase tracking-[0.16em] text-foreground/60">
+                <span className="font-mono text-[length:var(--fs-9)] uppercase tracking-[0.16em] text-foreground/60 sm:text-[length:var(--fs-11)]">
                   · {state.season}
                 </span>
               )}
@@ -362,7 +379,7 @@ export function LeaguesHome({
       {error ? (
         <p
           role="alert"
-          className="relative inline-flex items-center gap-3 rounded-full border border-error/28 bg-[image:var(--alert-bg)] px-5 py-2.5 font-mono text-[0.8125rem] text-error shadow-[inset_0_1px_0_rgba(255,255,255,0.12),0_3px_0_rgba(0,0,0,0.7)]"
+          className="relative inline-flex items-center gap-3 rounded-full border border-error/28 bg-[image:var(--alert-bg)] px-5 py-2.5 font-mono text-[length:var(--fs-13)] text-error shadow-[inset_0_1px_0_rgba(255,255,255,0.12),0_3px_0_rgba(0,0,0,0.7)]"
         >
           <span aria-hidden className="size-[0.4375rem] rounded-full bg-error shadow-[0_0_10px_var(--error)]" />
           {error}
@@ -386,13 +403,13 @@ export function LeaguesHome({
                   className="lab-anim relative size-[0.4375rem] rounded-full bg-active shadow-[0_0_10px_var(--accent-glow)]"
                   style={{ animation: "tools-pulse 2.4s ease-out infinite" }}
                 />
-                <span className="relative font-mono text-[0.8125rem] text-readout [text-shadow:var(--readout-text-glow)]">
+                <span className="relative font-mono text-[length:var(--fs-13)] text-readout [text-shadow:var(--readout-text-glow)]">
                   {progress && progress.total > 0
                     ? `Refreshing ${progress.loaded} of ${progress.total}…`
                     : "Refreshing…"}
                 </span>
               </span>
-              <span className="font-mono text-[0.6875rem] uppercase tracking-[0.16em] text-foreground/60">
+              <span className="font-mono text-[length:var(--fs-11)] uppercase tracking-[0.16em] text-foreground/60">
                 Leagues below are what was stored
               </span>
             </p>
@@ -403,7 +420,7 @@ export function LeaguesHome({
           {refreshError && (
             <p
               role="alert"
-              className="relative mb-6 inline-flex items-center gap-3 rounded-full border border-error/28 bg-[image:var(--alert-bg)] px-5 py-2.5 font-mono text-[0.8125rem] text-error shadow-[inset_0_1px_0_rgba(255,255,255,0.12),0_3px_0_rgba(0,0,0,0.7)]"
+              className="relative mb-6 inline-flex items-center gap-3 rounded-full border border-error/28 bg-[image:var(--alert-bg)] px-5 py-2.5 font-mono text-[length:var(--fs-13)] text-error shadow-[inset_0_1px_0_rgba(255,255,255,0.12),0_3px_0_rgba(0,0,0,0.7)]"
             >
               <span aria-hidden className="size-[0.4375rem] rounded-full bg-error shadow-[0_0_10px_var(--error)]" />
               {refreshError}
@@ -411,7 +428,7 @@ export function LeaguesHome({
           )}
           {leagues.length === 0 ? (
             <Plate>
-              <p className="m-0 font-mono text-[0.8125rem] text-foreground/72">
+              <p className="m-0 font-mono text-[length:var(--fs-13)] text-foreground/72">
                 No leagues found{state.season ? ` for ${state.season}` : ""}.
               </p>
             </Plate>
@@ -422,10 +439,10 @@ export function LeaguesHome({
             <Plate>
               <div className="flex flex-wrap items-center justify-between gap-5">
                 <div>
-                  <p className="m-0 font-mono text-[0.8125rem] text-foreground/72">
+                  <p className="m-0 font-mono text-[length:var(--fs-13)] text-foreground/72">
                     No leagues match these filters.
                   </p>
-                  <p className="mt-2 truncate font-mono text-[0.6875rem] uppercase tracking-[0.16em] text-active">
+                  <p className="mt-2 truncate font-mono text-[length:var(--fs-11)] uppercase tracking-[0.16em] text-active">
                     {filterSummary(filters)}
                   </p>
                 </div>
@@ -546,13 +563,13 @@ function ColdProgress({
       />
       <div className="relative flex flex-wrap items-baseline justify-between gap-4">
         <p
-          className="m-0 font-mono text-[0.9375rem] text-readout [text-shadow:var(--readout-text-glow)]"
+          className="m-0 font-mono text-[length:var(--fs-15)] text-readout [text-shadow:var(--readout-text-glow)]"
           aria-live="polite"
         >
           Syncing leagues from Sleeper…
         </p>
         {total > 0 && (
-          <p className="m-0 font-mono text-[0.9375rem] tabular-nums text-readout [text-shadow:var(--readout-text-glow)]">
+          <p className="m-0 font-mono text-[length:var(--fs-15)] tabular-nums text-readout [text-shadow:var(--readout-text-glow)]">
             {loaded} / {total}
           </p>
         )}
@@ -574,7 +591,7 @@ function ColdProgress({
         // Reported while it runs rather than only at the end: these leagues are
         // not coming back on this pass, and the list about to appear is short by
         // exactly this many.
-        <p className="relative mt-3 font-mono text-[0.6875rem] uppercase tracking-[0.16em] text-error">
+        <p className="relative mt-3 font-mono text-[length:var(--fs-11)] uppercase tracking-[0.16em] text-error">
           {progress.failed} league{progress.failed === 1 ? "" : "s"} failed to
           sync
         </p>

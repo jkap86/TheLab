@@ -36,7 +36,7 @@ export default async function ManagerPage({
           heading={
             // A `span`, not a heading: the page's one `<h1>` is the engraved
             // name inside the plate, and this sits above it as an eyebrow.
-            <span className="font-mono text-[0.6875rem] uppercase tracking-[0.16em] text-foreground/60">
+            <span className="font-mono text-[length:var(--fs-9)] uppercase tracking-[0.16em] text-foreground/60 sm:text-[length:var(--fs-11)]">
               Manager
             </span>
           }

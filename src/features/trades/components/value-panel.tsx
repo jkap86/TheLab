@@ -133,7 +133,7 @@ export function ValuePanel({
           />
           <div className="relative">
             <div className="flex items-center justify-between gap-3">
-              <h2 className="m-0 font-display text-base font-semibold tracking-[-0.01em]">
+              <h2 className="m-0 font-display text-[length:var(--fs-16)] font-semibold tracking-[-0.01em]">
                 Asset value
               </h2>
               {/* The unit in force, on glass: the one thing on this panel that
@@ -145,12 +145,12 @@ export function ValuePanel({
                   aria-hidden
                   className="pointer-events-none absolute inset-0 bg-[image:var(--readout-scanlines)]"
                 />
-                <span className="relative font-mono text-[0.6875rem] uppercase tracking-[0.16em] text-readout [text-shadow:var(--readout-text-glow)]">
+                <span className="relative font-mono text-[length:var(--fs-11)] uppercase tracking-[0.16em] text-readout [text-shadow:var(--readout-text-glow)]">
                   {BASES[basis].unit}
                 </span>
               </span>
             </div>
-            <p className="mt-1.5 font-mono text-[0.6875rem] leading-normal text-foreground/58">
+            <p className="mt-1.5 font-mono text-[length:var(--fs-11)] leading-normal text-foreground/58">
               One basis at a time. Every value on the board is on it, and the
               colour is that asset&rsquo;s place among the priced assets in its
               own league.
@@ -175,7 +175,7 @@ export function ValuePanel({
 
             <div className="mt-4 border-t border-foreground/10 pt-4">
               <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1.5">
-                <span className="font-mono text-[0.625rem] uppercase tracking-[0.16em] text-foreground/50">
+                <span className="font-mono text-[length:var(--fs-10)] uppercase tracking-[0.16em] text-foreground/50">
                   KTC board
                 </span>
                 {/* What answered and when, the courtesy the manager page's own
@@ -184,7 +184,7 @@ export function ValuePanel({
                     the board is already a column of em dashes and saying it
                     twice adds nothing. */}
                 {sources?.ktc && (
-                  <span className="font-mono text-[0.625rem] uppercase tracking-[0.16em] text-foreground/45">
+                  <span className="font-mono text-[length:var(--fs-10)] uppercase tracking-[0.16em] text-foreground/45">
                     {board === "auto" ? sources.ktc.auto_board : board}
                     {scrapedLabel(board, sources.ktc)}
                   </span>
@@ -206,7 +206,7 @@ export function ValuePanel({
                 disabled={!ktcBasis}
                 className={`mt-2 ${ktcBasis ? "" : "opacity-40"}`}
               />
-              <p className="mt-2 font-mono text-[0.6875rem] leading-normal text-foreground/52">
+              <p className="mt-2 font-mono text-[length:var(--fs-11)] leading-normal text-foreground/52">
                 {ktcBasis
                   ? "Auto reads a dynasty league on the dynasty board and everything else on redraft."
                   : "Only the KTC basis reads a board."}
@@ -214,7 +214,7 @@ export function ValuePanel({
             </div>
 
             <div className="mt-4 border-t border-foreground/10 pt-4">
-              <span className="font-mono text-[0.625rem] uppercase tracking-[0.16em] text-foreground/50">
+              <span className="font-mono text-[length:var(--fs-10)] uppercase tracking-[0.16em] text-foreground/50">
                 Colour
               </span>
               {/* The ramp is read from `rankColor` rather than transcribed as
@@ -229,12 +229,12 @@ export function ValuePanel({
                   backgroundImage: `linear-gradient(to right, ${rankColor(0)}, ${rankColor(50)}, ${rankColor(100)})`,
                 }}
               />
-              <div className="mt-1.5 flex items-baseline justify-between gap-2 font-mono text-[0.5625rem] uppercase tracking-[0.18em] text-foreground/45">
+              <div className="mt-1.5 flex items-baseline justify-between gap-2 font-mono text-[length:var(--fs-9)] uppercase tracking-[0.18em] text-foreground/45">
                 <span>Last in the league</span>
                 <span>Mid-pack</span>
                 <span>First</span>
               </div>
-              <p className="mt-2 font-mono text-[0.6875rem] leading-normal text-foreground/52">
+              <p className="mt-2 font-mono text-[length:var(--fs-11)] leading-normal text-foreground/52">
                 The manager page&rsquo;s rank ramp. It colours what a side{" "}
                 <em className="not-italic text-foreground/70">received</em> only
                 — the give track stays muted, and no total is coloured.
@@ -248,7 +248,7 @@ export function ValuePanel({
                   setOpen(false);
                   trigger.current?.focus();
                 }}
-                className={`${CONSOLE_KEY_PILL} border-active/50 bg-[image:var(--key-bg)] px-5 text-[0.625rem] text-readout shadow-[var(--key-shadow),0_0_22px_-8px_var(--accent-glow)] [text-shadow:var(--readout-text-glow)]`}
+                className={`${CONSOLE_KEY_PILL} border-active/50 bg-[image:var(--key-bg)] px-5 text-[length:var(--fs-10)] text-readout shadow-[var(--key-shadow),0_0_22px_-8px_var(--accent-glow)] [text-shadow:var(--readout-text-glow)]`}
               >
                 Done
               </button>
@@ -388,17 +388,17 @@ function BasisLamp({
       </span>
       <span className="min-w-0 flex-1">
         <span
-          className={`block font-display text-[0.8125rem] font-semibold ${
+          className={`block font-display text-[length:var(--fs-13)] font-semibold ${
             lit ? "text-readout" : "text-foreground/88"
           }`}
         >
           {BASES[id].title}
         </span>
-        <span className="block font-mono text-[0.6875rem] leading-normal text-foreground/52">
+        <span className="block font-mono text-[length:var(--fs-11)] leading-normal text-foreground/52">
           {BASES[id].note}
         </span>
         {empty && (
-          <span className="mt-0.5 block font-mono text-[0.625rem] uppercase tracking-[0.16em] text-foreground/45">
+          <span className="mt-0.5 block font-mono text-[length:var(--fs-10)] uppercase tracking-[0.16em] text-foreground/45">
             Nothing stored to price against
           </span>
         )}

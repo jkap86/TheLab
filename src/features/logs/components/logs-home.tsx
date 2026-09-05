@@ -100,7 +100,7 @@ export function LogsHome({
               type="button"
               onClick={() => setHours(option.hours)}
               aria-pressed={hours === option.hours}
-              className={`rounded-full border px-3 py-1.5 font-mono text-[0.625rem] uppercase tracking-[0.16em] transition-[color,box-shadow] duration-150 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-active/60 ${
+              className={`rounded-full border px-3 py-1.5 font-mono text-[length:var(--fs-10)] uppercase tracking-[0.16em] transition-[color,box-shadow] duration-150 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-active/60 ${
                 hours === option.hours
                   ? "border-active/45 bg-[image:var(--key-bg)] text-readout shadow-[var(--key-shadow)] [text-shadow:var(--readout-text-glow)]"
                   : "border-transparent text-foreground/58 hover:text-readout"
@@ -120,7 +120,7 @@ export function LogsHome({
           <div className="min-w-0 flex-1 basis-52">
             <label
               htmlFor={searchId}
-              className="mb-1 block font-mono text-[0.5625rem] uppercase tracking-[0.16em] text-foreground/60"
+              className="mb-1 block font-mono text-[length:var(--fs-9)] uppercase tracking-[0.16em] text-foreground/60"
             >
               Search
             </label>
@@ -131,7 +131,7 @@ export function LogsHome({
               onChange={(e) => setQuery(e.target.value)}
               placeholder="route or address"
               // 16px or iOS Safari zooms the page on focus.
-              className="w-full rounded-[0.5rem] border border-black/85 bg-[image:var(--readout-bg)] px-3 py-2 text-[16px] text-readout shadow-[var(--window-shadow)] placeholder:text-readout-muted focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-active/60 sm:text-[0.8125rem]"
+              className="w-full rounded-[0.5rem] border border-black/85 bg-[image:var(--readout-bg)] px-3 py-2 text-[16px] text-readout shadow-[var(--window-shadow)] placeholder:text-readout-muted focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-active/60 sm:text-[length:var(--fs-13)]"
             />
           </div>
           {FACET_KEYS.map((key) => (
@@ -175,7 +175,7 @@ export function LogsHome({
           an empty result are announced through one channel rather than three. */}
       <p
         role="status"
-        className="mt-3 min-h-5 font-mono text-[0.6875rem] text-foreground/60"
+        className="mt-3 min-h-5 font-mono text-[length:var(--fs-11)] text-foreground/60"
       >
         {error
           ? error
@@ -192,7 +192,7 @@ export function LogsHome({
         {loading || error ? null : shown.length === 0 ? (
           // Two empty states, because they are two claims: one is about the
           // window, the other about the selection.
-          <p className="px-2 py-8 text-center text-sm text-foreground/60">
+          <p className="px-2 py-8 text-center text-[length:var(--fs-14)] text-foreground/60">
             {rows.length === 0
               ? "No visits recorded in this window."
               : "No visits match these filters."}
@@ -231,7 +231,7 @@ function Facet({
     <div className="min-w-0 basis-36">
       <label
         htmlFor={id}
-        className="mb-1 block font-mono text-[0.5625rem] uppercase tracking-[0.16em] text-foreground/60"
+        className="mb-1 block font-mono text-[length:var(--fs-9)] uppercase tracking-[0.16em] text-foreground/60"
       >
         {label}
       </label>
@@ -239,7 +239,7 @@ function Facet({
         id={id}
         value={value}
         onChange={(e) => onChange(e.target.value)}
-        className="w-full rounded-[0.5rem] border border-foreground/12 bg-[image:var(--key-bg)] px-2 py-2 text-[16px] text-foreground/85 shadow-[var(--key-shadow)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-active/60 sm:text-[0.8125rem]"
+        className="w-full rounded-[0.5rem] border border-foreground/12 bg-[image:var(--key-bg)] px-2 py-2 text-[16px] text-foreground/85 shadow-[var(--key-shadow)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-active/60 sm:text-[length:var(--fs-13)]"
       >
         <option value="">All</option>
         {options.map((option) => (

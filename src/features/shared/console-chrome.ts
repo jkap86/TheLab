@@ -37,7 +37,7 @@ const KEY_PRESS =
  */
 export const CONSOLE_KEY_PILL =
   "shrink-0 rounded-full border px-4 py-2 " +
-  `font-mono text-[0.6875rem] uppercase tracking-[0.16em] ${KEY_PRESS}`;
+  `font-mono text-[length:var(--fs-11)] uppercase tracking-[0.16em] ${KEY_PRESS}`;
 
 /** The everyday key: the pill above, unlit. */
 export const CONSOLE_KEY =
@@ -50,7 +50,7 @@ export const CONSOLE_KEY =
  */
 export const CONSOLE_KEY_BLOCK =
   "inline-flex items-center rounded-[0.625rem] border px-3 py-2 " +
-  `font-mono text-[0.6875rem] uppercase tracking-[0.16em] ${KEY_PRESS}`;
+  `font-mono text-[length:var(--fs-11)] uppercase tracking-[0.16em] ${KEY_PRESS}`;
 
 /** The machined housing a key or a readout is mounted in. */
 export const CONSOLE_HOUSING =
@@ -60,6 +60,45 @@ export const CONSOLE_HOUSING =
 /** The deep channel a single raised key sits in — the nav track, a lens toggle. */
 export const CONSOLE_TRACK =
   "rounded-full bg-[image:var(--key-bg)] shadow-[var(--track-shadow)]";
+
+/**
+ * The same channel, from `sm` up only.
+ *
+ * A recess exists to hold a key that stands proud of it, so a key drawn
+ * *etched* on a phone (see {@link PLATE_KEY}) has nothing to be recessed from
+ * and the track goes with it. Derived from {@link CONSOLE_TRACK} by hand rather
+ * than by a prefixing helper, because Tailwind scans class strings statically
+ * and a computed prefix produces no CSS at all — the two have to be kept in
+ * step, which is why they sit together.
+ */
+export const CONSOLE_TRACK_SM =
+  "sm:rounded-full sm:bg-[image:var(--key-bg)] sm:shadow-[var(--track-shadow)]";
+
+/**
+ * A key **etched into a plate** rather than raised on one, below `sm`, and an
+ * ordinary {@link CONSOLE_KEY_PILL} from `sm` up.
+ *
+ * The manager plate's phone strip is what asks for it: `Leagues · Filters │
+ * Record` is one engraved reading with a control in the middle of it, and a key
+ * standing 3px proud among engraved figures reads as an object dropped onto the
+ * plate rather than as part of it. So on a phone it is a hairline and a
+ * hint of inset light — cut in, not sat on — and the geometry steps down with
+ * the figures beside it.
+ *
+ * Geometry and chrome are two constants for {@link CONSOLE_KEY_PILL}'s reason:
+ * a key with states composes as `shape + state`, and a shape that names a
+ * colour makes which one wins a matter of Tailwind's emit order. The travel and
+ * the focus ring are the same at both widths — an etched key still presses.
+ */
+export const PLATE_KEY =
+  "inline-flex shrink-0 items-center rounded-full border px-2 py-[0.3125rem] " +
+  "font-mono text-[length:var(--fs-9)] uppercase tracking-[0.16em] " +
+  `sm:px-4 sm:py-2 sm:text-[length:var(--fs-11)] ${KEY_PRESS}`;
+
+/** {@link PLATE_KEY}'s surface: cut into the plate below `sm`, raised above it. */
+export const PLATE_KEY_CHROME =
+  "bg-foreground/[0.03] shadow-[inset_0_1px_0_rgba(255,255,255,0.05)] " +
+  "sm:bg-[image:var(--key-bg)] sm:shadow-[var(--key-shadow)]";
 
 /** The shallow tray a panel of controls sits in — a filter rail, a rule bay. */
 export const CONSOLE_WELL =

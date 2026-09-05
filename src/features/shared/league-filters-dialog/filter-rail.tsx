@@ -51,7 +51,7 @@ export function FilterRail<T extends string>({
       aria-label={label}
       className="flex flex-wrap items-center gap-x-3 gap-y-1.5 px-2 py-1.5"
     >
-      <span className="w-13 shrink-0 font-mono text-[0.625rem] uppercase tracking-[0.16em] text-foreground/45">
+      <span className="w-13 shrink-0 font-mono text-[length:var(--fs-10)] uppercase tracking-[0.16em] text-foreground/45">
         {label}
       </span>
       <div className="flex min-w-0 flex-wrap gap-1.5">
@@ -66,7 +66,7 @@ export function FilterRail<T extends string>({
               // Every chip is a key — raised, and it travels when pressed.
               // What picking one changes is its border and its legend, not
               // whether it is a key: they are one row of the same control.
-              className={`inline-flex items-baseline gap-1.5 whitespace-nowrap rounded-full border bg-[image:var(--key-bg)] px-[0.6875rem] py-[0.3125rem] font-mono text-[0.6875rem] shadow-[var(--key-shadow)] transition-[transform,box-shadow,color] duration-150 active:translate-y-0.5 active:shadow-[var(--key-shadow-pressed)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-active/60 ${
+              className={`inline-flex items-baseline gap-1.5 whitespace-nowrap rounded-full border bg-[image:var(--key-bg)] px-[0.6875rem] py-[0.3125rem] font-mono text-[length:var(--fs-11)] shadow-[var(--key-shadow)] transition-[transform,box-shadow,color] duration-150 active:translate-y-0.5 active:shadow-[var(--key-shadow-pressed)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-active/60 ${
                 selected
                   ? "border-active/45 text-readout [text-shadow:var(--readout-text-glow)]"
                   : "border-foreground/10 text-foreground/70 hover:text-readout"
@@ -80,7 +80,7 @@ export function FilterRail<T extends string>({
                   handoff spells this one at 75%; the rule wins, since it is
                   the same colour and the same failure.) */}
               <span
-                className={`font-mono text-[0.625rem] tabular-nums ${
+                className={`font-mono text-[length:var(--fs-10)] tabular-nums ${
                   selected ? "text-readout" : "text-foreground/45"
                 }`}
               >

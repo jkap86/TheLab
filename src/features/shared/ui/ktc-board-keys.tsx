@@ -200,8 +200,8 @@ function SwitchTrack<T extends string>({
             "focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-active/60 " +
             "disabled:cursor-not-allowed " +
             (small
-              ? "flex-1 px-1 py-[0.1875rem] text-[0.53125rem] tracking-[0.1em] "
-              : "px-3 py-1.5 text-[0.625rem] tracking-[0.16em] ") +
+              ? "flex-1 px-1 py-[0.1875rem] text-[length:var(--fs-8-5)] tracking-[0.1em] "
+              : "px-3 py-1.5 text-[length:var(--fs-10)] tracking-[0.16em] ") +
             (value === option
               ? "border-active/45 bg-[image:var(--key-bg)] text-readout shadow-[var(--key-shadow)] [text-shadow:var(--readout-text-glow)]"
               : spoken

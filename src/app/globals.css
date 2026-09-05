@@ -45,6 +45,60 @@
 
   --surface-shadow: rgba(0, 0, 0, 0.7);
 
+  /* ---- Type scale --------------------------------------------------- */
+
+  /*
+   * One multiplier, and every size on the page derived from it.
+   *
+   * The app's type is spelled as arbitrary values — `text-[0.6875rem]` and its
+   * two dozen siblings — because the console's sizes are not Tailwind's. That
+   * was fine while nobody moved them, and a dozen chances to miss one the
+   * moment anybody did: a scale bumped literal by literal drifts, and the
+   * symptom is a label a hair off the readout it names with nothing on screen
+   * saying which of the twelve edits was the one that missed.
+   *
+   * So the literals became tokens and the tokens are `calc(base * scale)`. The
+   * bases are exactly the values the page shipped with, which is the whole
+   * safety of it: `--type-scale: 1` reproduces the old page byte for byte, so
+   * the scale can be landed and tuned as one number rather than as a
+   * find-and-replace.
+   *
+   * **The names are the px the base is**, not a t-shirt size, because that is
+   * what the class strings said before and what a reader comparing this to a
+   * design will be holding. The odd ones (`--fs-8-5` and friends) are the
+   * half-pixel sizes a few controls were drawn at; they are tokens for the same
+   * reason the round ones are, not because anything wants more of them.
+   *
+   * `1.16` is the desktop figure and `1.14` the phone figure — the phone is
+   * tighter on width, and the plate and dial fits below `sm` are measured at
+   * `1.14`. Mobile-first, so the smaller one is the default and `sm` raises it,
+   * which matches how the rack's own three arms are written further down.
+   */
+  --type-scale: 1.14;
+
+  --fs-8: calc(0.5rem * var(--type-scale));
+  --fs-8-5: calc(0.53125rem * var(--type-scale));
+  --fs-9: calc(0.5625rem * var(--type-scale));
+  --fs-9-6: calc(0.6rem * var(--type-scale));
+  --fs-10: calc(0.625rem * var(--type-scale));
+  --fs-10-5: calc(0.65625rem * var(--type-scale));
+  --fs-11: calc(0.6875rem * var(--type-scale));
+  --fs-11-2: calc(0.7rem * var(--type-scale));
+  --fs-12: calc(0.75rem * var(--type-scale));
+  --fs-12-5: calc(0.78125rem * var(--type-scale));
+  --fs-13: calc(0.8125rem * var(--type-scale));
+  --fs-14: calc(0.875rem * var(--type-scale));
+  --fs-15: calc(0.9375rem * var(--type-scale));
+  --fs-16: calc(1rem * var(--type-scale));
+  --fs-17: calc(1.0625rem * var(--type-scale));
+  --fs-18: calc(1.125rem * var(--type-scale));
+  --fs-21: calc(1.3125rem * var(--type-scale));
+  --fs-24: calc(1.5rem * var(--type-scale));
+  --fs-26: calc(1.625rem * var(--type-scale));
+  --fs-28: calc(1.75rem * var(--type-scale));
+  --fs-32: calc(2rem * var(--type-scale));
+  --fs-40: calc(2.5rem * var(--type-scale));
+
   /* ---- The pinned rack --------------------------------------------- */
 
   /*
@@ -61,25 +115,49 @@
    * Measured rather than guessed, at each of the three widths the rack has:
    *
    * - base — a 52.5px brand pill (a 36px bezel in 6px of padding, plus its
-   *   border). `24 + 52.5 + 24`, rounded to 100px, reproduces the gap a phone
-   *   had when the rack was in flow at `mt-6` above a shell at `pt-6`.
+   *   border), and the gap under it.
    * - `sm` — the same rack, and the shell's own `pt-11` under it.
    * - `md` — a 62px rack (a 44px bezel in 8px of padding, plus its border).
    *   The gap under it is the design's own 28px, and 62px is the height the
    *   handoff predicted to the pixel.
+   *
+   * **All three lost 1.5rem when the rack went flush.** It used to float at
+   * `top-6`, and that 24px was part of every arm; the rack sits at `top-0` now
+   * — still a rack unit in its own gutter, just not one hovering clear of the
+   * edge — so the clearance is the rack's height plus the gap under it and
+   * nothing above it. The gap under it is unchanged, which is the thing to
+   * check after any edit here: the identity plate clears the rack by the same
+   * 28px at `md` that it always did.
    *
    * The rack is one row at every width, which is a constraint rather than an
    * observation: the two control tracks fold behind a single key below `lg`
    * precisely so this number stays three values rather than five. See
    * `rack-controls-keys.tsx`.
    */
-  --rack-clear: 6.25rem;
+  --rack-clear: 4.75rem;
 
   /*
    * The shadow a pinned rack casts on the page passing under it. It did not
    * need one in flow, where nothing ever went behind it.
    */
   --rack-cast: 0 18px 40px -18px #000;
+
+  /*
+   * Where an **open** league card's housing parks while its expanded half
+   * scrolls under it — see `league-card.tsx`, which is the only reader.
+   *
+   * 74px is the rack's 62px `md` height plus 12px of breath, so a frozen
+   * housing stands just clear of the rack rather than butting against it. It
+   * is a second spelling of that height and is written as one deliberately:
+   * `calc(var(--rack-clear) - 2.5rem)` reproduces it at `md` and not at the
+   * other two arms, where the shell's own padding is doing something else, and
+   * a derivation that is only right at one breakpoint is worse than a number.
+   *
+   * One value at every width. The card is one per row and its housing is the
+   * same height on a phone as on a desktop, so a per-arm offset would be three
+   * spellings of one gap.
+   */
+  --card-freeze-top: 4.625rem;
 
   /* ---- Instrument chrome (dark) ------------------------------------ */
 
@@ -430,13 +508,18 @@ body {
  */
 @media (min-width: 40rem) {
   :root {
-    --rack-clear: 7.5rem;
+    --rack-clear: 6rem;
+
+    /* The desktop figure. Below `sm` the page is tighter on width and the
+       plate, the dial and the card's four rank tiles are all measured at
+       `1.14` — see the token's own note. */
+    --type-scale: 1.16;
   }
 }
 
 @media (min-width: 48rem) {
   :root {
-    --rack-clear: 7.125rem;
+    --rack-clear: 5.625rem;
   }
 }
 

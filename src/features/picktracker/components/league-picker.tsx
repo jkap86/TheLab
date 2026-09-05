@@ -135,7 +135,7 @@ export function LeaguePicker({
         }}
         onFocus={() => setOpen(true)}
         onKeyDown={handleKeyDown}
-        className={`${CONSOLE_WELL} w-full px-4 py-2.5 text-[16px] text-foreground/90 outline-none placeholder:text-foreground/35 focus-visible:border-active/45 disabled:text-foreground/40 @md:text-sm`}
+        className={`${CONSOLE_WELL} w-full px-4 py-2.5 text-[16px] text-foreground/90 outline-none placeholder:text-foreground/35 focus-visible:border-active/45 disabled:text-foreground/40 @md:text-[length:var(--fs-14)]`}
       />
 
       {open && !disabled && (
@@ -145,7 +145,7 @@ export function LeaguePicker({
                options, and an empty-state row is not one. */
             <p
               role="presentation"
-              className="px-4 py-3 font-mono text-[0.75rem] text-foreground/45"
+              className="px-4 py-3 font-mono text-[length:var(--fs-12)] text-foreground/45"
             >
               No leagues match “{query.trim()}”.
             </p>
@@ -169,7 +169,7 @@ export function LeaguePicker({
                     onSelect(league.league_id);
                   }}
                   onMouseEnter={() => setActiveIndex(index)}
-                  className={`cursor-pointer truncate px-4 py-2.5 font-mono text-[0.8125rem] ${
+                  className={`cursor-pointer truncate px-4 py-2.5 font-mono text-[length:var(--fs-13)] ${
                     index === activeIndex
                       ? "bg-active/12 text-readout"
                       : "text-foreground/75"

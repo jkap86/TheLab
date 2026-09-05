@@ -87,17 +87,27 @@ export function WeekSummary({
               aria-hidden
               className="pointer-events-none absolute inset-0 bg-[image:var(--readout-scanlines)]"
             />
-            <span className="relative font-mono text-[0.5625rem] uppercase tracking-[0.16em] text-readout/60">
+            <span className="relative font-mono text-[length:var(--fs-9)] uppercase tracking-[0.16em] text-readout/60">
               Win
             </span>
-            {/* 17px, stepping down at six characters. `100.0%` measures
-                61.2px inside a 62px window whose widest chord is 60.8px at the
-                figure's own height, so the one value a small account is most
-                likely to project — every league a win — is the one that would
-                clip. Every shorter reading keeps the design's own size. */}
+            {/* Stepping down at six characters, because `100.0%` — the one
+                value a small account is most likely to project, every league a
+                win — is the reading that would clip. Every shorter one keeps
+                the design's own size.
+
+                **The step is two sizes, not one, and the page's type scale is
+                why.** The dial is a fixed 88px box where the figure inside it
+                is scaled type, so a scale that grows the digits and not the
+                circle eats the margin this step was measured against: at
+                `--fs-15` the six-character reading crossed the window's edge.
+                The window is a *circle*, so what the figure has to clear is
+                the chord at its own height rather than the 62px diameter —
+                which is the measurement to redo, by eye, if the scale moves
+                again. `SeasonSummary`'s dial carries the same rule one step
+                tighter, its window being 56px against this one's 62. */}
             <span
               className={`relative mt-0.5 font-mono leading-none text-readout [text-shadow:var(--readout-text-glow)] ${
-                pct.length > 5 ? "text-[0.9375rem]" : "text-[1.0625rem]"
+                pct.length > 5 ? "text-[length:var(--fs-13)]" : "text-[length:var(--fs-17)]"
               }`}
             >
               {pct}
@@ -107,7 +117,7 @@ export function WeekSummary({
         {/* Dropped below `sm` on the manager plate's own measurement: the whole
             block has to fit a 332px plate there, and the lit window inside the
             dial already reads "WIN 50.0%". */}
-        <span className="hidden max-w-16 font-mono text-[0.6875rem] uppercase tracking-[0.16em] text-foreground/60 sm:inline">
+        <span className="hidden max-w-16 font-mono text-[length:var(--fs-11)] uppercase tracking-[0.16em] text-foreground/60 sm:inline">
           Proj win
         </span>
       </div>
@@ -127,12 +137,12 @@ export function WeekSummary({
 function Figure({ label, children }: { label: string; children: string }) {
   return (
     <dl className="m-0 flex flex-col justify-center gap-2 px-2 sm:px-4">
-      <dt className="font-mono text-[0.6875rem] uppercase tracking-[0.16em] text-foreground/60">
+      <dt className="font-mono text-[length:var(--fs-11)] uppercase tracking-[0.16em] text-foreground/60">
         {label}
       </dt>
       {/* `nowrap`: the en dash in `8–5` is a line-break opportunity, and a
           record split across two lines reads as two numbers. */}
-      <dd className="m-0 whitespace-nowrap font-display text-[1.625rem] font-semibold leading-none tracking-[-0.03em] tabular-nums">
+      <dd className="m-0 whitespace-nowrap font-display text-[length:var(--fs-26)] font-semibold leading-none tracking-[-0.03em] tabular-nums">
         {children}
       </dd>
     </dl>

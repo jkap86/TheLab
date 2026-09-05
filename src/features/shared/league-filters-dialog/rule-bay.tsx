@@ -85,7 +85,7 @@ export function RuleBay({
       <div className="flex items-center gap-2.5">
         {/* Full opacity on the accent: light mode's teal is only ~5:1 against
             the page, and an alpha drops a label below AA. */}
-        <span className="font-mono text-[0.625rem] font-bold uppercase tracking-[0.16em] text-active">
+        <span className="font-mono text-[length:var(--fs-10)] font-bold uppercase tracking-[0.16em] text-active">
           {label}
         </span>
         {/* A cut hairline rather than a drawn one: the dark line under it is
@@ -95,7 +95,7 @@ export function RuleBay({
           className="h-px flex-1 bg-gradient-to-r from-active/30 via-foreground/[0.06] to-transparent shadow-[0_1px_0_rgba(0,0,0,0.6)]"
         />
         {rules.length > 0 && (
-          <span className="font-mono text-[0.625rem] tabular-nums text-foreground/45">
+          <span className="font-mono text-[length:var(--fs-10)] tabular-nums text-foreground/45">
             {rules.length}
           </span>
         )}
@@ -103,7 +103,7 @@ export function RuleBay({
 
       <div className="flex flex-col gap-1.5">
         {rules.length === 0 && (
-          <p className="m-0 font-mono text-[0.6875rem] leading-normal text-foreground/45">
+          <p className="m-0 font-mono text-[length:var(--fs-11)] leading-normal text-foreground/45">
             {empty}
           </p>
         )}
@@ -131,9 +131,9 @@ export function RuleBay({
           // "Rule" — which says what the control is *about* rather than what
           // pressing it does.
           aria-label={`Add ${label.toLowerCase()} rule`}
-          className="flex w-full items-center justify-center gap-1.5 rounded-lg border border-dashed border-active/38 bg-active/[0.07] py-1.5 font-mono text-[0.625rem] font-bold uppercase tracking-[0.16em] text-active transition-colors hover:bg-active/15 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-active/60"
+          className="flex w-full items-center justify-center gap-1.5 rounded-lg border border-dashed border-active/38 bg-active/[0.07] py-1.5 font-mono text-[length:var(--fs-10)] font-bold uppercase tracking-[0.16em] text-active transition-colors hover:bg-active/15 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-active/60"
         >
-          <span aria-hidden="true" className="text-sm leading-none">
+          <span aria-hidden="true" className="text-[length:var(--fs-14)] leading-none">
             +
           </span>
           Rule
@@ -141,7 +141,7 @@ export function RuleBay({
       </div>
 
       <div className="flex flex-wrap items-center gap-1.5">
-        <span className="font-mono text-[0.625rem] uppercase tracking-[0.14em] text-foreground/45">
+        <span className="font-mono text-[length:var(--fs-10)] uppercase tracking-[0.14em] text-foreground/45">
           Quick add
         </span>
         {presets.map((preset) => {
@@ -155,7 +155,7 @@ export function RuleBay({
                 if (already) return;
                 onChange([...rules, preset.rule]);
               }}
-              className={`rounded-[0.4375rem] border px-2 py-[0.1875rem] font-mono text-[0.6875rem] transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-active/60 ${
+              className={`rounded-[0.4375rem] border px-2 py-[0.1875rem] font-mono text-[length:var(--fs-11)] transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-active/60 ${
                 already
                   ? "cursor-default border-active/45 bg-active/14 text-readout"
                   : "border-foreground/12 bg-foreground/[0.04] text-foreground/65 hover:text-readout"

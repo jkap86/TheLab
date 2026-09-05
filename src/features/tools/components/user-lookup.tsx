@@ -104,7 +104,7 @@ export function UserLookup({
             placeholder="Sleeper username"
             value={username}
             onChange={(e) => setUsername(e.target.value)}
-            className="relative w-full min-w-0 bg-transparent px-4 py-2 font-mono text-[0.9375rem] text-readout placeholder:text-foreground/35 focus:outline-none sm:w-56"
+            className="relative w-full min-w-0 bg-transparent px-4 py-2 font-mono text-[length:var(--fs-15)] text-readout placeholder:text-foreground/35 focus:outline-none sm:w-56"
           />
         </div>
 
@@ -123,7 +123,7 @@ export function UserLookup({
       </form>
 
       {error && (
-        <p role="alert" className="text-sm text-error">
+        <p role="alert" className="text-[length:var(--fs-14)] text-error">
           {error}
         </p>
       )}

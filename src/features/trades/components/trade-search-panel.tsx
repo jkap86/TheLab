@@ -111,7 +111,7 @@ export function TradeSearchPanel({
           onChange={(event) => setQuery(event.target.value)}
           placeholder={`Search ${slot.kind === "manager" ? "managers" : slot.kind}`}
           aria-label={`Search ${slot.kind === "manager" ? "managers" : slot.kind}`}
-          className="min-w-0 flex-1 rounded-lg border border-foreground/12 bg-foreground/[0.04] px-3 py-1.5 text-[0.8125rem] text-foreground/85 placeholder:text-foreground/60 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-active/60"
+          className="min-w-0 flex-1 rounded-lg border border-foreground/12 bg-foreground/[0.04] px-3 py-1.5 text-[length:var(--fs-13)] text-foreground/85 placeholder:text-foreground/60 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-active/60"
         />
         <button type="button" onClick={onClose} className={CONSOLE_KEY}>
           Done
@@ -119,18 +119,18 @@ export function TradeSearchPanel({
       </div>
 
       {loading ? (
-        <p className="py-3 font-mono text-[0.6875rem] uppercase tracking-[0.16em] text-foreground/60">
+        <p className="py-3 font-mono text-[length:var(--fs-11)] uppercase tracking-[0.16em] text-foreground/60">
           Counting…
         </p>
       ) : error ? (
         <p
           role="alert"
-          className="py-3 font-mono text-[0.6875rem] uppercase tracking-[0.16em] text-error"
+          className="py-3 font-mono text-[length:var(--fs-11)] uppercase tracking-[0.16em] text-error"
         >
           {error}
         </p>
       ) : shown.length === 0 ? (
-        <p className="py-3 font-mono text-[0.6875rem] uppercase tracking-[0.16em] text-foreground/60">
+        <p className="py-3 font-mono text-[length:var(--fs-11)] uppercase tracking-[0.16em] text-foreground/60">
           {/* Two different claims: nothing was traded in this scope at all, or
               nothing here matches what was typed. */}
           {options.length === 0 ? "Nothing traded here" : "No matches"}
@@ -145,7 +145,7 @@ export function TradeSearchPanel({
                   type="button"
                   onClick={() => onPick(option.value)}
                   aria-pressed={on}
-                  className={`flex w-full items-center gap-2 rounded-lg px-2.5 py-1.5 text-left text-[0.8125rem] hover:bg-foreground/[0.05] ${
+                  className={`flex w-full items-center gap-2 rounded-lg px-2.5 py-1.5 text-left text-[length:var(--fs-13)] hover:bg-foreground/[0.05] ${
                     // An added option is drawn *lit* rather than dimmed: the
                     // theme rule against alpha on the accent as text, and it
                     // has the advantage of being true — pressing again removes
@@ -156,12 +156,12 @@ export function TradeSearchPanel({
                   <span className="min-w-0 flex-1 truncate">
                     {option.label}
                     {option.note && (
-                      <span className="ml-1.5 font-mono text-[0.625rem] uppercase tracking-[0.12em] text-foreground/60">
+                      <span className="ml-1.5 font-mono text-[length:var(--fs-10)] uppercase tracking-[0.12em] text-foreground/60">
                         {option.note}
                       </span>
                     )}
                   </span>
-                  <span className="shrink-0 font-mono text-[0.6875rem] tabular-nums text-foreground/60">
+                  <span className="shrink-0 font-mono text-[length:var(--fs-11)] tabular-nums text-foreground/60">
                     {option.count}
                   </span>
                 </button>
@@ -172,7 +172,7 @@ export function TradeSearchPanel({
       )}
 
       {options.length > shown.length && (
-        <p className="mt-2 font-mono text-[0.625rem] uppercase tracking-[0.16em] text-foreground/60">
+        <p className="mt-2 font-mono text-[length:var(--fs-10)] uppercase tracking-[0.16em] text-foreground/60">
           {options.length - shown.length} more — narrow with the search field
         </p>
       )}

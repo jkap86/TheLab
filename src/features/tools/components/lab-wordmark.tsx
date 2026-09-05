@@ -39,7 +39,7 @@ export function LabWordmark() {
 
       {/* A `div`, not a `span`: the `<h1>` inside it is flow content, which a
           span cannot legally hold. `inline-block` keeps the box identical. */}
-      <div className="relative inline-block whitespace-nowrap font-display text-[1.75rem] font-bold uppercase leading-none tracking-[0.09em] sm:text-[2.5rem]">
+      <div className="relative inline-block whitespace-nowrap font-display text-[length:var(--fs-28)] font-bold uppercase leading-none tracking-[0.09em] sm:text-[length:var(--fs-40)]">
         <span
           aria-hidden
           className="absolute left-0 top-0 text-[var(--chrome-extrude)] [text-shadow:var(--chrome-extrude-shadow)]"

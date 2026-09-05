@@ -87,7 +87,7 @@ export function ToolsMenu({
         aria-haspopup="menu"
         aria-expanded={open}
         onClick={() => setOpen((value) => !value)}
-        className="inline-flex shrink-0 items-center gap-2.5 whitespace-nowrap rounded-full bg-[image:var(--key-bg)] py-[0.4375rem] pl-3 pr-2.5 font-mono text-[0.6875rem] uppercase tracking-[0.14em] text-readout shadow-[var(--key-shadow)] [text-shadow:var(--readout-text-glow)] transition-[transform,box-shadow,color] duration-150 active:translate-y-0.5 active:shadow-[var(--key-shadow-pressed)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-active/60 md:px-3.5 md:py-2 md:tracking-[0.16em]"
+        className="inline-flex shrink-0 items-center gap-2.5 whitespace-nowrap rounded-full bg-[image:var(--key-bg)] py-[0.4375rem] pl-3 pr-2.5 font-mono text-[length:var(--fs-11)] uppercase tracking-[0.14em] text-readout shadow-[var(--key-shadow)] [text-shadow:var(--readout-text-glow)] transition-[transform,box-shadow,color] duration-150 active:translate-y-0.5 active:shadow-[var(--key-shadow-pressed)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-active/60 md:px-3.5 md:py-2 md:tracking-[0.16em]"
       >
         {current?.text ?? "Tools"}
         <ChevronMark open={open} />
@@ -115,7 +115,7 @@ export function ToolsMenu({
                 // current page's own entry navigates nowhere, so nothing else
                 // would dismiss it.
                 onClick={() => setOpen(false)}
-                className={`mt-0.5 flex w-full items-center justify-between gap-3 rounded-[0.625rem] border px-3 py-2.5 font-mono text-[0.6875rem] uppercase tracking-[0.16em] transition-[color,background-color] duration-150 first:mt-0 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-active/60 ${
+                className={`mt-0.5 flex w-full items-center justify-between gap-3 rounded-[0.625rem] border px-3 py-2.5 font-mono text-[length:var(--fs-11)] uppercase tracking-[0.16em] transition-[color,background-color] duration-150 first:mt-0 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-active/60 ${
                   isCurrent
                     ? "border-foreground/10 bg-[image:var(--key-bg)] text-readout shadow-[var(--key-shadow)] [text-shadow:var(--readout-text-glow)]"
                     : "border-transparent text-foreground/60 hover:bg-foreground/[0.04] hover:text-readout"

@@ -14,7 +14,7 @@ export default async function PicktrackerLeaguePage({
     <>
       <ConsoleGround />
       <PageShell width="console">
-        <h1 className="mb-6 font-mono text-[0.6875rem] uppercase tracking-[0.16em] text-foreground/60">
+        <h1 className="mb-6 font-mono text-[length:var(--fs-11)] uppercase tracking-[0.16em] text-foreground/60">
           Pick Tracker
         </h1>
         {/* **The key is load-bearing.** Navigating league to league remounts

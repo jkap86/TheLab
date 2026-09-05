@@ -76,17 +76,17 @@ export function DecisionsDeck({
         <button
           type="button"
           onClick={onBack}
-          className={`${CONSOLE_KEY_PILL} inline-flex shrink-0 items-center gap-1.5 border-foreground/12 bg-[image:var(--key-bg)] px-3 py-[5px] text-[0.625rem] text-foreground/80 shadow-[var(--key-shadow)] hover:text-readout`}
+          className={`${CONSOLE_KEY_PILL} inline-flex shrink-0 items-center gap-1.5 border-foreground/12 bg-[image:var(--key-bg)] px-3 py-[5px] text-[length:var(--fs-10)] text-foreground/80 shadow-[var(--key-shadow)] hover:text-readout`}
         >
           <span aria-hidden>◀</span> Back
         </button>
 
         <span className="min-w-0 flex-1">
-          <span className="block truncate text-[0.875rem] font-semibold tracking-[-0.005em] text-foreground/95">
+          <span className="block truncate text-[length:var(--fs-14)] font-semibold tracking-[-0.005em] text-foreground/95">
             {name}
           </span>
           {note && (
-            <span className="block truncate font-mono text-[0.5625rem] uppercase tracking-[0.16em] text-foreground/46">
+            <span className="block truncate font-mono text-[length:var(--fs-9)] uppercase tracking-[0.16em] text-foreground/46">
               {note}
             </span>
           )}
@@ -96,10 +96,10 @@ export function DecisionsDeck({
           className={`${CONSOLE_WINDOW} inline-flex shrink-0 items-baseline gap-1.5 rounded-lg px-2.5 py-[0.3125rem]`}
         >
           <Scanlines />
-          <span className="relative font-mono text-[0.5625rem] uppercase tracking-[0.14em] text-readout-label">
+          <span className="relative font-mono text-[length:var(--fs-9)] uppercase tracking-[0.14em] text-readout-label">
             Proj
           </span>
-          <span className="relative font-mono text-[0.8125rem] tabular-nums text-readout [text-shadow:var(--readout-text-glow)]">
+          <span className="relative font-mono text-[length:var(--fs-13)] tabular-nums text-readout [text-shadow:var(--readout-text-glow)]">
             {points === null ? "—" : points.toFixed(1)}
           </span>
         </span>
@@ -108,7 +108,7 @@ export function DecisionsDeck({
       {/* The population line: what the view is showing, and the one thing that
           changes when a counterpart is picked. Full width so it never competes
           with the key or the readout for the row above. */}
-      <p className="m-0 truncate font-mono text-[0.5625rem] uppercase tracking-[0.14em] text-readout-label">
+      <p className="m-0 truncate font-mono text-[length:var(--fs-9)] uppercase tracking-[0.14em] text-readout-label">
         {line}
       </p>
     </>
@@ -128,7 +128,7 @@ export function DecisionsList({
 }) {
   if (groups.length === 0) {
     return (
-      <p className="m-0 py-6 pl-2 font-mono text-[0.8125rem] text-foreground/60">
+      <p className="m-0 py-6 pl-2 font-mono text-[length:var(--fs-13)] text-foreground/60">
         No start-or-sit call this week — nobody on these rosters could have
         taken his seat.
       </p>
@@ -194,7 +194,7 @@ function CounterpartCard({
       >
         <span
           aria-hidden
-          className={`inline-flex size-6 shrink-0 items-center justify-center rounded-[0.3125rem] border border-foreground/12 bg-[image:var(--bezel-bg)] font-mono text-[0.5rem] uppercase tracking-[0.06em] shadow-[var(--bezel-shadow)] ${
+          className={`inline-flex size-6 shrink-0 items-center justify-center rounded-[0.3125rem] border border-foreground/12 bg-[image:var(--bezel-bg)] font-mono text-[length:var(--fs-8)] uppercase tracking-[0.06em] shadow-[var(--bezel-shadow)] ${
             picked ? "text-readout" : "text-foreground/68"
           }`}
         >
@@ -203,7 +203,7 @@ function CounterpartCard({
 
         <span className="min-w-0 flex-1">
           <span
-            className={`block truncate text-[0.8125rem] tracking-[-0.005em] ${
+            className={`block truncate text-[length:var(--fs-13)] tracking-[-0.005em] ${
               picked ? "font-semibold text-readout" : "text-foreground/85"
             }`}
           >
@@ -213,7 +213,7 @@ function CounterpartCard({
               is read for, and at 390 a truncated caption cuts them off exactly
               where they start. One line at every width the panel is wide
               enough for. */}
-          <span className="block font-mono text-[0.5625rem] uppercase tracking-[0.14em] text-foreground/46">
+          <span className="block font-mono text-[length:var(--fs-9)] uppercase tracking-[0.14em] text-foreground/46">
             {caption}
           </span>
         </span>
@@ -222,10 +222,10 @@ function CounterpartCard({
           className={`${CONSOLE_WINDOW} inline-flex shrink-0 items-baseline gap-1 rounded-[0.4375rem] px-2 py-1`}
         >
           <Scanlines />
-          <span className="relative font-mono text-[0.5rem] uppercase tracking-[0.14em] text-readout-label">
+          <span className="relative font-mono text-[length:var(--fs-8)] uppercase tracking-[0.14em] text-readout-label">
             Proj
           </span>
-          <span className="relative font-mono text-[0.6875rem] tabular-nums text-readout [text-shadow:var(--readout-text-glow)]">
+          <span className="relative font-mono text-[length:var(--fs-11)] tabular-nums text-readout [text-shadow:var(--readout-text-glow)]">
             {group.points === null ? "—" : group.points.toFixed(1)}
           </span>
         </span>
@@ -251,7 +251,7 @@ function LeagueRow({ row }: { row: DecisionRow }) {
     // one panel up, and the height is a floor rather than a fixed 30px so a
     // wrapped row can be two lines without its own contents overflowing it.
     <li className="flex min-h-[30px] min-w-0 flex-wrap items-center gap-x-2 gap-y-0.5 border-t border-active/9 py-1 @md:flex-nowrap @md:py-0">
-      <span className="min-w-0 flex-1 basis-full truncate font-mono text-[0.625rem] uppercase tracking-[0.12em] text-readout-line @md:basis-auto">
+      <span className="min-w-0 flex-1 basis-full truncate font-mono text-[length:var(--fs-10)] uppercase tracking-[0.12em] text-readout-line @md:basis-auto">
         {row.league_name}
       </span>
 
@@ -259,7 +259,7 @@ function LeagueRow({ row }: { row: DecisionRow }) {
           statement, the unlit one its opposite. `Started` is lit because it is
           the call the lineup actually made for this player. */}
       <span
-        className={`shrink-0 rounded-[0.3125rem] border px-[0.4375rem] py-0.5 font-mono text-[0.5625rem] uppercase tracking-[0.14em] ${
+        className={`shrink-0 rounded-[0.3125rem] border px-[0.4375rem] py-0.5 font-mono text-[length:var(--fs-9)] uppercase tracking-[0.14em] ${
           row.started
             ? "border-active/40 text-readout shadow-[inset_0_0_12px_var(--accent-glow)] [text-shadow:var(--readout-text-glow)]"
             : "border-active/22 text-readout-muted"
@@ -268,12 +268,12 @@ function LeagueRow({ row }: { row: DecisionRow }) {
         {row.started ? "Started" : "Benched"}
       </span>
 
-      <span className="w-8 shrink-0 text-right font-mono text-[0.5625rem] uppercase tracking-[0.12em] text-readout-label">
+      <span className="w-8 shrink-0 text-right font-mono text-[length:var(--fs-9)] uppercase tracking-[0.12em] text-readout-label">
         {seatLabel(row)}
       </span>
 
       <span
-        className={`shrink-0 rounded-full border px-[0.4375rem] py-0.5 font-mono text-[0.5625rem] uppercase tracking-[0.12em] ${
+        className={`shrink-0 rounded-full border px-[0.4375rem] py-0.5 font-mono text-[length:var(--fs-9)] uppercase tracking-[0.12em] ${
           row.route.direct
             ? "border-active/40 text-active"
             : "border-foreground/16 text-foreground/55"
@@ -287,7 +287,7 @@ function LeagueRow({ row }: { row: DecisionRow }) {
           column a decoration rather than a warning. An absent delta is an em
           dash and never a zero — see `DecisionRow.delta`. */}
       <span
-        className={`ml-auto w-[3.25rem] shrink-0 text-right font-mono text-[0.6875rem] tabular-nums ${
+        className={`ml-auto w-[3.25rem] shrink-0 text-right font-mono text-[length:var(--fs-11)] tabular-nums ${
           row.lost
             ? "text-error [text-shadow:0_0_10px_rgba(252,165,165,0.45)]"
             : "text-readout-muted"

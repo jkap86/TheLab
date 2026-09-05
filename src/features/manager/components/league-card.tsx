@@ -87,6 +87,28 @@ import {
  * 2. The card must be `flex-1` inside a `flex` `<li>`, never `h-full`. A
  *    percentage height cannot resolve against an auto-sized grid row.
  *
+ * **An open card's housing pins under the rack while the browser scrolls past
+ * it.** A twelve-team table is taller than the viewport, so a reader three
+ * scrolls into one had nothing on screen saying which league they were reading
+ * — the name is on a plate at the card's top edge and the top edge was gone.
+ * Three variants and one token do it: `group-open/card:sticky` at
+ * `--card-freeze-top`, which is the rack's own height plus a little breath.
+ *
+ * It has to be the **`<summary>`**, and the two obvious alternatives both fail
+ * silently. The `<li>` is the whole card, expanded half included, and is taller
+ * than the viewport — sticky on a box that never fits has nothing to stick
+ * within. The `<details>` is the same box. The summary's sticky containing
+ * block is the `<details>`, which is exactly the range the housing should stay
+ * over: it parks when the card's top reaches the offset and releases when the
+ * card's own bottom edge catches up with it, so it never outlives its league.
+ *
+ * The `z-20` is against the card's own expanded half rather than against the
+ * rack, which is `z-50` and stays above it; the `<li>`'s existing
+ * `has-[details[open]]:z-10` still orders the open card above its neighbours.
+ * And the freeze depends on no ancestor gaining `overflow: hidden` — the
+ * decorative clip is already scoped to its own absolutely-positioned span, for
+ * the `preserve-3d` reason above, and that is now load-bearing twice.
+ *
  * The card stays hook-free, as before: the one interaction it owns is the
  * disclosure, and the state a card does need lives below it — which team and
  * which metric in `LeagueTeams`, and where in the league's history the reader
@@ -173,6 +195,9 @@ export function LeagueCard({
         <summary
           className={
             `lab-card-3d ${CONSOLE_CARD} flex flex-1 cursor-pointer list-none flex-col font-mono ` +
+            // **The open card's housing freezes under the rack.** See the note
+            // below the component on why it is the `summary` and nothing else.
+            "group-open/card:sticky group-open/card:top-[var(--card-freeze-top)] group-open/card:z-20 " +
             "pointer-fine:[transform-style:preserve-3d] [transform-origin:center_bottom] " +
             "pointer-fine:[transform:translateZ(0)_rotateX(3deg)] " +
             "pointer-fine:hover:[transform:translateZ(30px)_rotateX(0deg)] " +
@@ -277,7 +302,7 @@ export function LeagueCard({
                 entry?.teams.find((t) => t.is_manager)?.roster_id ?? null
               }
             >
-              <p className="m-0 font-mono text-[0.6875rem] uppercase tracking-[0.16em] text-readout-label">
+              <p className="m-0 font-mono text-[length:var(--fs-11)] uppercase tracking-[0.16em] text-readout-label">
                 No rosters read for this league yet
               </p>
             </TimelineView>
@@ -398,17 +423,17 @@ function MetricTile({
           beside a one-line label would otherwise push its own figure down and
           the strip would read as four tiles at four heights. */}
       <div className="relative min-h-[1.5rem]">
-        <p className="m-0 truncate font-mono text-[0.5625rem] uppercase leading-[1.2] tracking-[0.1em] text-readout-label">
+        <p className="m-0 truncate font-mono text-[length:var(--fs-9)] uppercase leading-[1.2] tracking-[0.1em] text-readout-label">
           {words.unit}
         </p>
-        <p className="m-0 mt-px min-h-[0.6875rem] truncate font-mono text-[0.5625rem] uppercase leading-[1.2] tracking-[0.12em] text-readout [text-shadow:var(--readout-text-glow)]">
+        <p className="m-0 mt-px min-h-[0.6875rem] truncate font-mono text-[length:var(--fs-9)] uppercase leading-[1.2] tracking-[0.12em] text-readout [text-shadow:var(--readout-text-glow)]">
           {tileScope(column, league)}
         </p>
       </div>
       {/* A computed colour, so it goes through `style` — the ramp is
           continuous and there is no utility class to generate for it. */}
       <p
-        className="relative m-0 mt-2 truncate font-mono text-[1.3125rem] font-medium leading-none tabular-nums"
+        className="relative m-0 mt-2 truncate font-mono text-[length:var(--fs-21)] font-medium leading-none tabular-nums"
         style={{
           color: tone,
           textShadow: `0 0 12px ${rankColor(percentile, 0.5)}`,
@@ -491,7 +516,7 @@ function RankedOf({
   if (sizes.size !== 1) return null;
 
   return (
-    <p className="relative m-0 mt-2 text-right font-mono text-[0.5625rem] uppercase tracking-[0.16em] text-readout-label">
+    <p className="relative m-0 mt-2 text-right font-mono text-[length:var(--fs-9)] uppercase tracking-[0.16em] text-readout-label">
       Ranked of {[...sizes][0]}
     </p>
   );

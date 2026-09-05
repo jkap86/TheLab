@@ -181,13 +181,13 @@ const SORT_ASCENDING: Record<SharesColumnId, boolean> = {
 
 /** The main figure's size, per metric — a record and a share carry two lines. */
 const CELL_TEXT: Record<SharesColumnId, string> = {
-  value: "text-[0.8125rem]",
-  age: "text-[0.8125rem]",
-  class: "text-[0.8125rem]",
-  record: "text-[0.6875rem]",
-  share: "text-[0.6875rem]",
-  start: "text-[0.6875rem]",
-  bench: "text-[0.6875rem]",
+  value: "text-[length:var(--fs-13)]",
+  age: "text-[length:var(--fs-13)]",
+  class: "text-[length:var(--fs-13)]",
+  record: "text-[length:var(--fs-11)]",
+  share: "text-[length:var(--fs-11)]",
+  start: "text-[length:var(--fs-11)]",
+  bench: "text-[length:var(--fs-11)]",
 };
 
 /** A row with its folded percentages, ready to be sorted and drawn. */
@@ -447,7 +447,7 @@ export function SharesDrawer({
               className={`${CONSOLE_WINDOW} order-last flex min-w-0 basis-full items-center rounded-lg px-2.5 py-[0.3125rem] @md:order-none @md:basis-auto @md:flex-[1_1_0]`}
             >
               <Scanlines />
-              <span className="relative truncate font-mono text-[0.5625rem] uppercase tracking-[0.14em] text-readout-line">
+              <span className="relative truncate font-mono text-[length:var(--fs-9)] uppercase tracking-[0.14em] text-readout-line">
                 {population(
                   leagueCount,
                   leagueTotal,
@@ -461,7 +461,7 @@ export function SharesDrawer({
               type="button"
               aria-label="Close"
               onClick={close}
-              className={`${CONSOLE_KEY_PILL} ml-auto border-foreground/12 bg-[image:var(--key-bg)] px-[0.6875rem] py-1 text-[0.625rem] text-foreground/78 shadow-[var(--key-shadow)] hover:text-readout @md:ml-0`}
+              className={`${CONSOLE_KEY_PILL} ml-auto border-foreground/12 bg-[image:var(--key-bg)] px-[0.6875rem] py-1 text-[length:var(--fs-10)] text-foreground/78 shadow-[var(--key-shadow)] hover:text-readout @md:ml-0`}
             >
               Esc
             </button>
@@ -494,14 +494,14 @@ export function SharesDrawer({
                 placeholder={`Search ${noun}`}
                 aria-label={`Search ${noun}`}
                 // 16px or iOS Safari zooms the page on focus.
-                className="min-w-0 flex-1 rounded-xl border border-black/60 bg-[image:var(--key-bg)] px-[0.6875rem] py-[0.3125rem] text-[16px] text-foreground/88 shadow-[var(--track-shadow)] placeholder:text-foreground/45 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-active/60 @md:text-[0.8125rem]"
+                className="min-w-0 flex-1 rounded-xl border border-black/60 bg-[image:var(--key-bg)] px-[0.6875rem] py-[0.3125rem] text-[16px] text-foreground/88 shadow-[var(--track-shadow)] placeholder:text-foreground/45 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-active/60 @md:text-[length:var(--fs-13)]"
               />
               <span
                 className={`${CONSOLE_WINDOW} inline-flex shrink-0 items-center rounded-xl px-[0.6875rem] py-[0.4375rem]`}
                 role="status"
               >
                 <Scanlines />
-                <span className="relative font-mono text-[0.8125rem] tabular-nums text-readout [text-shadow:var(--readout-text-glow)]">
+                <span className="relative font-mono text-[length:var(--fs-13)] tabular-nums text-readout [text-shadow:var(--readout-text-glow)]">
                   {shown.length}
                 </span>
               </span>
@@ -549,7 +549,7 @@ export function SharesDrawer({
                   <span
                     key={id}
                     style={{ width: SHARES_COLUMN_WIDTHS[id] }}
-                    className={`shrink-0 whitespace-nowrap font-mono text-[0.5rem] uppercase tracking-[0.18em] ${
+                    className={`shrink-0 whitespace-nowrap font-mono text-[length:var(--fs-8)] uppercase tracking-[0.18em] ${
                       sortKey === id ? "text-active" : "text-foreground/40"
                     }`}
                   >
@@ -584,7 +584,7 @@ export function SharesDrawer({
             ) : error ? (
               <p
                 role="alert"
-                className="m-0 py-6 font-mono text-[0.8125rem] text-error"
+                className="m-0 py-6 font-mono text-[length:var(--fs-13)] text-error"
               >
                 {error}
               </p>
@@ -708,7 +708,7 @@ function EngravedTitle({ id, children }: { id: string; children: string }) {
   return (
     <span
       id={id}
-      className="relative inline-block shrink-0 whitespace-nowrap text-[0.8125rem] font-bold uppercase leading-none tracking-[0.16em]"
+      className="relative inline-block shrink-0 whitespace-nowrap text-[length:var(--fs-13)] font-bold uppercase leading-none tracking-[0.16em]"
     >
       <span
         aria-hidden
@@ -750,7 +750,7 @@ function SortTrack({
 
   return (
     <span className="inline-flex items-center gap-[0.4375rem]">
-      <span className="shrink-0 font-mono text-[0.5rem] uppercase tracking-[0.18em] text-foreground/42">
+      <span className="shrink-0 font-mono text-[length:var(--fs-8)] uppercase tracking-[0.18em] text-foreground/42">
         Sort
       </span>
       <span className={`${CONSOLE_TRACK} inline-flex items-center gap-1 p-1`}>
@@ -763,7 +763,7 @@ function SortTrack({
               onClick={() => onPick(key)}
               aria-pressed={on}
               className={
-                "inline-flex shrink-0 items-center gap-[0.3125rem] rounded-full border px-2.5 py-[0.3125rem] font-mono text-[0.625rem] uppercase tracking-[0.14em] transition-colors duration-150 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-active/60 " +
+                "inline-flex shrink-0 items-center gap-[0.3125rem] rounded-full border px-2.5 py-[0.3125rem] font-mono text-[length:var(--fs-10)] uppercase tracking-[0.14em] transition-colors duration-150 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-active/60 " +
                 (on
                   ? "border-active/55 bg-[image:var(--key-bg)] text-readout [text-shadow:var(--readout-text-glow)] shadow-[var(--key-shadow),inset_0_0_14px_color-mix(in_srgb,var(--accent)_16%,transparent)]"
                   : "border-transparent text-foreground/58 hover:text-readout")
@@ -771,7 +771,7 @@ function SortTrack({
             >
               {label}
               {on && (
-                <span aria-hidden className="text-[0.5rem] text-active">
+                <span aria-hidden className="text-[length:var(--fs-8)] text-active">
                   {key === "name" ? "▲" : "▼"}
                 </span>
               )}
@@ -856,7 +856,7 @@ function ColumnsStrip({
 
   return (
     <span className="inline-flex min-w-0 items-center gap-[0.4375rem]">
-      <span className="shrink-0 font-mono text-[0.5rem] uppercase tracking-[0.18em] text-foreground/42">
+      <span className="shrink-0 font-mono text-[length:var(--fs-8)] uppercase tracking-[0.18em] text-foreground/42">
         Columns
       </span>
       {/* `CONSOLE_WELL`'s surface at this strip's own radius, spelled rather
@@ -883,7 +883,7 @@ function ColumnsStrip({
                   aria-label={on ? "Cancel move" : `Move ${sharesColumnLabel(id)}`}
                   aria-pressed={on}
                   onClick={() => onLift(on ? null : id)}
-                  className={`cursor-pointer px-px font-mono text-[0.5rem] leading-[0.8] tracking-[-0.06em] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-active/60 ${
+                  className={`cursor-pointer px-px font-mono text-[length:var(--fs-8)] leading-[0.8] tracking-[-0.06em] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-active/60 ${
                     on ? "text-active" : "text-foreground/38"
                   }`}
                 >
@@ -897,7 +897,7 @@ function ColumnsStrip({
                     onChange(cols.filter((k) => k !== id));
                     onLift(null);
                   }}
-                  className={`whitespace-nowrap font-mono text-[0.625rem] uppercase tracking-[0.14em] text-readout [text-shadow:var(--readout-text-glow)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-active/60 ${
+                  className={`whitespace-nowrap font-mono text-[length:var(--fs-10)] uppercase tracking-[0.14em] text-readout [text-shadow:var(--readout-text-glow)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-active/60 ${
                     locked ? "cursor-default" : "cursor-pointer"
                   }`}
                 >
@@ -927,7 +927,7 @@ function ColumnsStrip({
                 : `Add ${sharesColumnLabel(id)}`
             }
             onClick={() => onChange([...cols, id])}
-            className={`shrink-0 whitespace-nowrap rounded-lg border border-foreground/9 px-[0.5625rem] py-[0.3125rem] font-mono text-[0.625rem] uppercase tracking-[0.14em] transition-colors duration-150 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-active/60 ${
+            className={`shrink-0 whitespace-nowrap rounded-lg border border-foreground/9 px-[0.5625rem] py-[0.3125rem] font-mono text-[length:var(--fs-10)] uppercase tracking-[0.14em] transition-colors duration-150 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-active/60 ${
               full
                 ? "cursor-not-allowed text-foreground/26"
                 : "text-foreground/58 hover:text-readout"
@@ -943,7 +943,7 @@ function ColumnsStrip({
 
 function Message({ children }: { children: ReactNode }) {
   return (
-    <p className="m-0 py-6 pl-2 font-mono text-[0.8125rem] text-foreground/60">
+    <p className="m-0 py-6 pl-2 font-mono text-[length:var(--fs-13)] text-foreground/60">
       {children}
     </p>
   );
@@ -1012,14 +1012,14 @@ function ShareRow({
           {/* Full opacity on the accent as text, per the theme rule: an alpha
               on it drops light mode's teal below AA. */}
           <span
-            className={`block truncate text-[0.8125rem] tracking-[-0.005em] ${
+            className={`block truncate text-[length:var(--fs-13)] tracking-[-0.005em] ${
               selected ? "font-semibold text-readout" : "text-foreground/85"
             }`}
           >
             {row.name}
           </span>
           {row.note && (
-            <span className="block truncate font-mono text-[0.5625rem] uppercase tracking-[0.16em] text-foreground/46">
+            <span className="block truncate font-mono text-[length:var(--fs-9)] uppercase tracking-[0.16em] text-foreground/46">
               {row.note}
             </span>
           )}
@@ -1063,8 +1063,8 @@ function Badge({
       aria-hidden
       className={`inline-flex size-[1.875rem] shrink-0 items-center justify-center overflow-hidden border border-foreground/12 bg-[image:var(--bezel-bg)] shadow-[var(--bezel-shadow)] ${shape} ${
         badge.round
-          ? "text-[0.75rem] font-semibold"
-          : "font-mono text-[0.5625rem] uppercase tracking-[0.06em]"
+          ? "text-[length:var(--fs-12)] font-semibold"
+          : "font-mono text-[length:var(--fs-9)] uppercase tracking-[0.06em]"
       } ${selected ? "text-readout" : "text-foreground/68"}`}
     >
       {badge.imageUrl ? (
@@ -1170,10 +1170,10 @@ function Cell({
         }`}
       >
         <span>{main}</span>
-        {trail && <span className="text-[0.5625rem] text-readout-label">{trail}</span>}
+        {trail && <span className="text-[length:var(--fs-9)] text-readout-label">{trail}</span>}
       </span>
       {sub && (
-        <span className="relative font-mono text-[0.5625rem] leading-[1.2] tabular-nums text-readout-label">
+        <span className="relative font-mono text-[length:var(--fs-9)] leading-[1.2] tabular-nums text-readout-label">
           {sub}
         </span>
       )}
