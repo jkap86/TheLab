@@ -21,6 +21,8 @@ function league(over: Partial<LineupCheckLeague> = {}): LineupCheckLeague {
     opponent_points: null,
     opponent_lineup: null,
     opponent_bench: null,
+    opponent_optimal_points: null,
+    opponent_team_name: null,
     optimal_points: 120,
     points_left: 0,
     start: [],
@@ -277,7 +279,12 @@ describe("rosterCell", () => {
     const cell = rosterCell(
       league({ roster_count: 10, roster_max: 10, ir_count: 4, ir_max: 3 }),
     );
-    assert.equal(cell.text, "IR 4/3");
+    // Counted as an overage rather than printed as a ratio, so it reads in the
+    // same grammar as `1 over` above and fits the phone tile that `4/3` at
+    // `--fs-17` does not. The ratio survives in the title.
+    assert.equal(cell.text, "1 over IR");
+    assert.equal(cell.figure, "1");
+    assert.equal(cell.unit, "over IR");
     assert.equal(cell.state, "alert");
   });
 
@@ -337,5 +344,99 @@ describe("attentionByReason", () => {
       superflex: 0,
       roster: 0,
     });
+  });
+});
+
+/**
+ * The phone's split and the desktop's scope line.
+ *
+ * Pinned as the whole quartet per arm rather than as a relation between the
+ * fields, because there is no relation: `text` is the reading with room for it
+ * and `figure`/`unit` is the same reading without, and the two are written side
+ * by side precisely so no rule has to turn one into the other. What a test can
+ * catch is one of them being edited and the other left.
+ */
+describe("a tile's two shapes", () => {
+  test("the gap splits into a numeral and its unit, and names its scope", () => {
+    const cell = gapCell(league({ current_points: 120, optimal_points: 126.6, points_left: 6.6 }));
+    assert.equal(cell.text, "−6.6");
+    assert.equal(cell.figure, "−6.6");
+    // The one unit the desktop leaves off — see the arm's own note.
+    assert.equal(cell.unit, "pts");
+    assert.equal(cell.scope, "Best reachable");
+  });
+
+  test("a cleared check has no figure, because the mark is the figure", () => {
+    // `text` survives as the mark's accessible name and `unit` is what the
+    // phone prints under it; neither may go, and the numeral is what does.
+    for (const cell of [
+      gapCell(league()),
+      kickoffCell(league({ kickoff_moves: 0 })),
+      superflexCell(league({ lineup: [seat("SUPER_FLEX", ["QB"])] })),
+      rosterCell(league({ roster_count: 10, roster_max: 10 })),
+    ]) {
+      assert.equal(cell.state, "clear");
+      assert.equal(cell.figure, "");
+      assert.notEqual(cell.unit, "");
+      assert.notEqual(cell.text, "");
+    }
+  });
+
+  test("a league nothing could be read for names no scope at all", () => {
+    // Empty rather than the population it *would* have measured: a line saying
+    // what was checked is a claim that something was.
+    for (const cell of [
+      gapCell(undefined),
+      kickoffCell(undefined),
+      superflexCell(undefined),
+      rosterCell(league({ roster_max: null })),
+    ]) {
+      assert.equal(cell.state, "none");
+      assert.equal(cell.figure, "—");
+      assert.equal(cell.scope, "");
+    }
+  });
+
+  test("the two absences a kickoff tile has are told apart on the scope line", () => {
+    // Both draw an em dash. Only the scope says which — a best-ball league has
+    // no seat order to set, where an ordinary one is waiting on Sleeper.
+    assert.equal(kickoffCell(league({ best_ball: true, kickoff_moves: null })).scope, "Sleeper seats it");
+    assert.equal(kickoffCell(league({ kickoff_moves: null })).scope, "No kickoff times");
+  });
+
+  test("superflex names the population its figure counts a subset of", () => {
+    // `1 non-QB` reads very differently against one seat than against three,
+    // and the seats are the one thing a reader cannot see from the tile.
+    const one = superflexCell(league({ lineup: [seat("SUPER_FLEX", ["RB"])] }));
+    assert.equal(one.figure, "1");
+    assert.equal(one.unit, "non-QB");
+    assert.equal(one.scope, "1 QB seat");
+
+    const two = superflexCell(
+      league({ lineup: [seat("SUPER_FLEX", ["RB"]), seat("SUPER_FLEX", ["QB"])] }),
+    );
+    assert.equal(two.scope, "2 QB seats");
+  });
+
+  test("the roster scope is the population, not the figure", () => {
+    // Every roster arm is read against the same pair, so no arm restates it.
+    for (const cell of [
+      rosterCell(league({ roster_count: 8, roster_max: 10 })),
+      rosterCell(league({ roster_count: 11, roster_max: 10 })),
+      rosterCell(league({ roster_count: 10, roster_max: 10 })),
+    ]) {
+      assert.equal(cell.scope, `${cell.scope.split(" ")[0]} of 10 held`);
+    }
+    assert.equal(rosterCell(league({ roster_count: 8, roster_max: 10 })).scope, "8 of 10 held");
+  });
+
+  test("best ball draws a dash and says why underneath", () => {
+    // `Best ball` at `--fs-17` is wider than the phone tile, so the words go
+    // to the unit line and the figure is the dash every no-answer draws.
+    const cell = gapCell(league({ best_ball: true }));
+    assert.equal(cell.text, "Best ball");
+    assert.equal(cell.figure, "—");
+    assert.equal(cell.unit, "best ball");
+    assert.equal(cell.scope, "Sleeper seats it");
   });
 });

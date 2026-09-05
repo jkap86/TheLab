@@ -106,6 +106,31 @@ export type LineupCheckLeague = {
   /** Everyone else on the opponent's roster, best first. Null with the above. */
   opponent_bench: LineupCheckPlayer[] | null;
   /**
+   * What the best lineup still reachable for *them* projects. Null with the
+   * three above.
+   *
+   * It is the same `compareLineup` answer `optimal_points` is, on the same
+   * board — the week view prints the two pairs side by side, `SET` against
+   * `OPT` per pane, and a reader comparing them is comparing one measurement
+   * of two rosters. Shipped rather than derived because it cannot be: the
+   * plate above the card carries the two *set* totals, and the opponent's
+   * optimal is nowhere on the wire without this.
+   *
+   * There is deliberately no `points_left` beside it. That figure is a debt
+   * the reader can pay by moving somebody, and nobody can move the opponent's
+   * lineup — the pane prints the two totals and lets the difference be read.
+   */
+  opponent_optimal_points: number | null;
+  /**
+   * What the opponent calls themselves — team name, else the owner's display
+   * name, else `Roster N`, on `leagueTeamName`'s one spelling of that rule.
+   *
+   * Null with the three above, and **never a placeholder**: a pane headed
+   * "Opponent" over a roster nobody has been scheduled against yet is the
+   * claim the null is here to refuse, exactly as it is for the totals.
+   */
+  opponent_team_name: string | null;
+  /**
    * What the best lineup **still reachable** projects — seats held by a player
    * whose game has kicked off stay as they are, the rest are solved. Part-way
    * through a week that is a different number from the best lineup outright,

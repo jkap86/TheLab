@@ -1028,6 +1028,8 @@ type ManagerWeekLineupSqlRow = Omit<
   week_starters: string[] | null;
   week_players: string[] | null;
   opponent_roster_id: number | null;
+  opponent_team_name: string | null;
+  opponent_display_name: string | null;
   opponent_starters: string[] | null;
   opponent_players: string[] | null;
   opponent_week_starters: string[] | null;
@@ -1087,6 +1089,8 @@ export async function getManagerWeekLineups(
             m.starters AS week_starters,
             m.players  AS week_players,
             om.roster_id AS opponent_roster_id,
+            olu.team_name    AS opponent_team_name,
+            olu.display_name AS opponent_display_name,
             oor.starters AS opponent_starters,
             oor.players  AS opponent_players,
             om.starters  AS opponent_week_starters,
@@ -1105,6 +1109,13 @@ export async function getManagerWeekLineups(
         AND om.matchup_id = m.matchup_id AND om.roster_id <> r.roster_id
        LEFT JOIN rosters oor
          ON oor.league_id = l.league_id AND oor.roster_id = om.roster_id
+       -- What the opponent calls themselves, for the week view's pane header.
+       -- Their *member* row, not their roster: rosters.owner_id is null on a
+       -- commissioner-held or orphaned team, so this simply finds nothing there
+       -- and the name falls to "Roster N" rather than the join dropping the
+       -- opponent — a LEFT JOIN either side of it for exactly that reason.
+       LEFT JOIN league_users olu
+         ON olu.league_id = l.league_id AND olu.user_id = oor.owner_id
       WHERE l.season = $2
         AND ($4::varchar IS NULL OR l.league_id = $4)
         AND ${MANAGER_LEAGUE_SQL}
@@ -1157,6 +1168,14 @@ function toOpponent(row: ManagerWeekLineupSqlRow): WeekLineupOpponent | null {
   if (!starters || starters.length === 0) return null;
   return {
     roster_id: row.opponent_roster_id,
+    // `leagueTeamName`'s rule, spelled over two columns and a roster id rather
+    // than over a users array: this query has the two columns and no array to
+    // search. Blanks fold in with absent — Sleeper stores `""` for a team
+    // nobody has named — so a plate never reads as an empty pair of quotes.
+    team_name:
+      row.opponent_team_name?.trim() ||
+      row.opponent_display_name?.trim() ||
+      `Roster ${row.opponent_roster_id}`,
     starters,
     players: stored
       ? (row.opponent_week_players ?? row.opponent_players)

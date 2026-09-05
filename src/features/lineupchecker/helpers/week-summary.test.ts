@@ -18,6 +18,8 @@ function league(over: Partial<LineupCheckLeague> = {}): LineupCheckLeague {
     opponent_points: null,
     opponent_lineup: null,
     opponent_bench: null,
+    opponent_optimal_points: null,
+    opponent_team_name: null,
     optimal_points: 120,
     points_left: 0,
     start: [],

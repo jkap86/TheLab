@@ -36,14 +36,49 @@ import { SLOT_POSITIONS } from "../../../shared/projections/slots.ts";
  * to place a fifth tone before it will compile.
  */
 
-/** One tile's reading. */
+/**
+ * One tile's reading, in the two shapes a tile is drawn in.
+ *
+ * **A desktop tile has room for the whole reading on one line and a phone tile
+ * does not.** Four tiles across a 390pt card is ~72px of content each, where
+ * `2 to move` at `--fs-21` is half again that — so the phone splits the reading
+ * into a numeral it can set large and the words under it, and the desktop
+ * prints it whole. Same measurement, two rooms.
+ *
+ * The four fields are produced side by side, once per arm, which is the whole
+ * guarantee that they agree: there is no rule turning one into another and
+ * therefore no rule to get wrong. `lineup-check-metrics.test.ts` pins the
+ * quartet per arm rather than a relation between them.
+ */
 export type MetricCell = {
   /**
-   * The figure or word to print — and, in the `clear` state, the checkmark's
-   * `sr-only` name rather than nothing at all: the mark is the whole of what a
-   * sighted reader gets, so the word has to stay for everyone else.
+   * The whole reading, as the desktop prints it — and, in the `clear` state,
+   * the checkmark's `sr-only` name rather than nothing at all: the mark is the
+   * whole of what a sighted reader gets, so the word has to stay for everyone
+   * else.
    */
   text: string;
+  /**
+   * The numeral the phone sets large, or an em dash where there is no number
+   * to set. Unread in the `clear` state, where the mark *is* the figure.
+   */
+  figure: string;
+  /**
+   * The words the phone prints under the figure — `pts`, `to move`, `open`.
+   * Empty where the figure needs none.
+   */
+  unit: string;
+  /**
+   * The tile's second label line, under its name: **what the figure was
+   * measured over**, and empty where nothing was measured.
+   *
+   * Empty is a real state rather than a gap in the copy. A tile that cannot
+   * answer has no population to name, and a line saying what it *would* have
+   * measured reads as a claim that it did — which is the same distinction the
+   * em dash draws one line down. The tile reserves the height either way, so
+   * the figures across a row stay on one baseline.
+   */
+  scope: string;
   /** Which of the four things this tile is saying — see the module note. */
   state: MetricState;
   /** The hover and screen-reader gloss, which is where the units live. */
@@ -59,6 +94,9 @@ const points = (n: number): string => n.toFixed(1);
 /** What every tile prints where the league could not be projected at all. */
 const NO_ANSWER: MetricCell = {
   text: "—",
+  figure: "—",
+  unit: "",
+  scope: "",
   state: "none",
   title: "No projection for this week",
 };
@@ -85,6 +123,12 @@ export function gapCell(league: LineupCheckLeague | null | undefined): MetricCel
       // A word rather than a check: nothing was *checked*, so a mark claiming
       // the lineup came back clear would be an answer nobody solved for.
       text: "Best ball",
+      // The phone sets an em dash and says why underneath, where the desktop
+      // has the room to say it on one line: `Best ball` at `--fs-17` is a third
+      // wider than the tile it would have to fit in.
+      figure: "—",
+      unit: "best ball",
+      scope: "Sleeper seats it",
       state: "none",
       title: `Starting ${starting} — Sleeper seats a best-ball lineup itself, so there is nothing to move`,
     };
@@ -92,12 +136,21 @@ export function gapCell(league: LineupCheckLeague | null | undefined): MetricCel
   if (league.points_left === 0) {
     return {
       text: "Set",
+      figure: "",
+      unit: "set",
+      scope: "Best reachable",
       state: "clear",
       title: `Starting ${starting}, which is the best lineup still reachable`,
     };
   }
   return {
     text: `−${points(league.points_left)}`,
+    figure: `−${points(league.points_left)}`,
+    // The one unit the desktop leaves off: `−6.6` under `Vs optimal / Best
+    // reachable` is already a complete reading, where the phone's bare numeral
+    // has nothing above it naming what was counted.
+    unit: "pts",
+    scope: "Best reachable",
     state: "alert",
     title:
       `Starting ${starting} against ${points(league.optimal_points)} still reachable — ` +
@@ -121,6 +174,10 @@ export function kickoffCell(
   if (moves === null) {
     return {
       ...NO_ANSWER,
+      // Two different absences, and the scope line is where they part: one is
+      // a league with no seat order to set and the other is a week Sleeper has
+      // not published kickoffs for. The em dash above is the same either way.
+      scope: league.best_ball ? "Sleeper seats it" : "No kickoff times",
       title: league.best_ball
         ? "No seat order to set — Sleeper seats a best-ball lineup after the games"
         : "No kickoff order for this week — Sleeper has published no kickoff times",
@@ -129,6 +186,9 @@ export function kickoffCell(
   if (moves === 0) {
     return {
       text: "In order",
+      figure: "",
+      unit: "in order",
+      scope: "Seat order",
       state: "clear",
       title:
         "Every starter is already seated for kickoff — strict slots lock first, " +
@@ -137,6 +197,9 @@ export function kickoffCell(
   }
   return {
     text: `${moves} to move`,
+    figure: `${moves}`,
+    unit: "to move",
+    scope: "Seat order",
     state: "alert",
     title:
       `${moves} starter${moves === 1 ? "" : "s"} could trade seats so the flexes lock last — ` +
@@ -202,11 +265,17 @@ export function superflexCell(
   if (seats.length === 0 || league.best_ball) {
     return {
       ...NO_ANSWER,
+      scope: league.best_ball ? "Sleeper seats it" : "No superflex slot",
       title: league.best_ball
         ? "No seat to spend — Sleeper seats a best-ball lineup after the games"
         : "No superflex slot in this league",
     };
   }
+
+  // The population, named on the scope line: this is the one check whose
+  // figure counts a subset of something the reader cannot otherwise see, and
+  // `1 non-QB` reads very differently against one seat than against three.
+  const checked = `${seats.length} QB seat${seats.length === 1 ? "" : "s"}`;
 
   const spent = seats.filter(
     (seat) => seat.player !== null && !seat.player.positions.includes("QB"),
@@ -214,6 +283,9 @@ export function superflexCell(
   if (spent.length === 0) {
     return {
       text: "QB seated",
+      figure: "",
+      unit: "seated",
+      scope: checked,
       state: "clear",
       title: `Every superflex seat is a quarterback — ${seats.length} seat${
         seats.length === 1 ? "" : "s"
@@ -223,6 +295,9 @@ export function superflexCell(
 
   return {
     text: `${spent.length} non-QB`,
+    figure: `${spent.length}`,
+    unit: "non-QB",
+    scope: checked,
     state: "alert",
     title:
       `${spent.length} superflex seat${spent.length === 1 ? "" : "s"} not held by a quarterback: ` +
@@ -260,6 +335,9 @@ export function rosterCell(
   }
 
   const held = `${league.roster_count} of ${league.roster_max} roster spots`;
+  // The scope line: the population every figure below is read against, and the
+  // reason none of them has to restate it.
+  const scope = `${league.roster_count} of ${league.roster_max} held`;
   const spare = [
     league.ir_max === null ? null : `IR ${league.ir_count}/${league.ir_max}`,
     league.taxi_max === null ? null : `taxi ${league.taxi_count}/${league.taxi_max}`,
@@ -272,6 +350,9 @@ export function rosterCell(
     const over = league.roster_count - league.roster_max;
     return {
       text: `${over} over`,
+      figure: `${over}`,
+      unit: "over",
+      scope,
       state: "alert",
       title:
         `${held} filled — ${over} over the limit, and Sleeper will refuse an add ` +
@@ -284,10 +365,19 @@ export function rosterCell(
   const overIr = league.ir_max !== null && league.ir_count > league.ir_max;
   const overTaxi = league.taxi_max !== null && league.taxi_count > league.taxi_max;
   if (overIr || overTaxi) {
+    // **Counted as an overage rather than printed as a ratio**, which is what
+    // makes it fit beside the three figures above it: `1 over IR` is the same
+    // fact as `IR 3/2` in the grammar every other arm is written in, and the
+    // ratio survives in the title where there is room for it. A `3/2` set at
+    // `--fs-17` in a 72px phone tile does not fit at all.
+    const spareOver = overIr
+      ? league.ir_count - (league.ir_max ?? 0)
+      : league.taxi_count - (league.taxi_max ?? 0);
     return {
-      text: overIr
-        ? `IR ${league.ir_count}/${league.ir_max}`
-        : `Taxi ${league.taxi_count}/${league.taxi_max}`,
+      text: `${spareOver} over ${overIr ? "IR" : "taxi"}`,
+      figure: `${spareOver}`,
+      unit: overIr ? "over IR" : "over taxi",
+      scope,
       state: "alert",
       title:
         `${overIr ? "IR" : "Taxi"} is over its own allowance — an ineligible player is parked there. ` +
@@ -299,6 +389,9 @@ export function rosterCell(
     const open = league.roster_max - league.roster_count;
     return {
       text: `${open} open`,
+      figure: `${open}`,
+      unit: "open",
+      scope,
       state: "count",
       title: `${open} roster spot${open === 1 ? "" : "s"} open — ${held} filled${rest}`,
     };
@@ -306,6 +399,9 @@ export function rosterCell(
 
   return {
     text: "Full",
+    figure: "",
+    unit: "full",
+    scope,
     state: "clear",
     title: `Every roster spot is filled — ${held}${rest}`,
   };

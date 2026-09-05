@@ -59,6 +59,7 @@ const NO_LOCKS = new Set<string>();
 /** The other side of the same game, starting the two best players on the board. */
 const OPPONENT = {
   roster_id: 2,
+  team_name: "Sunday Scaries",
   starters: ["qb", "rb", "wr", "flexhigh"],
   players: ["qb", "rb", "wr", "flexhigh"],
 };
@@ -296,6 +297,46 @@ describe("solveWeekLineup against a scheduled opponent", () => {
     );
     // flexhigh (20) is seated over the flexlow (5) that was nominally started.
     assert.equal(solved?.opponent_points, 50);
+  });
+
+  test("ships the opponent's own optimal beside what they have set", () => {
+    // The week view prints the two as one pane's SET against its OPT, which is
+    // the only place a reader can see that the lineup beating them is itself
+    // not the best that roster could field. It is the same `compareLineup`
+    // answer the manager's own `optimal_points` is.
+    const solved = solveWeekLineup(
+      league({
+        opponent: {
+          ...OPPONENT,
+          starters: ["qb", "rb", "wr", "flexlow"],
+          players: ["qb", "rb", "wr", "flexlow", "flexhigh"],
+        },
+      }),
+      board(),
+      NO_LOCKS,
+      null,
+    );
+    assert.equal(solved?.opponent_points, 35);
+    assert.equal(solved?.opponent_optimal_points, 50);
+  });
+
+  test("names the opponent, and answers null for all four with no opponent", () => {
+    // Null rather than a placeholder, on the contract's own rule: a pane headed
+    // "Opponent" over a game nobody has been scheduled is the claim these nulls
+    // refuse. All four travel together.
+    const named = solveWeekLineup(
+      league({ opponent: OPPONENT }),
+      board(),
+      NO_LOCKS,
+      null,
+    );
+    assert.equal(named?.opponent_team_name, "Sunday Scaries");
+
+    const none = solveWeekLineup(league(), board(), NO_LOCKS, null);
+    assert.equal(none?.opponent_points, null);
+    assert.equal(none?.opponent_optimal_points, null);
+    assert.equal(none?.opponent_lineup, null);
+    assert.equal(none?.opponent_team_name, null);
   });
 });
 

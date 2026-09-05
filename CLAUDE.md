@@ -2981,6 +2981,192 @@ The superflex finding has no row-level mark in the expanded lineup table. The
 `sit`/`start`/`move_to` marks are the precedent — a `non-qb` mark on the SF seat
 row would let a reader act without counting seats.
 
+### The week view, and the seat that answers back
+
+The card's expanded half was a flat table of the manager's own seats. It is two
+panes now — your lineup against the one it plays, with a gap meter per seat —
+and pressing a seat turns the **opposite** pane into that seat's legal options.
+The tiles above took the manager card's type hierarchy, the housing took a
+brushed-metal finish, and the open card's housing freezes under the rack the way
+`/manager`'s already did. Applied from a design handoff.
+
+**It needed no migration**, and two fields on the wire. Everything the panes
+draw was already stored — `matchups`, `rosters` and `leagues.roster_positions`
+have carried it since the league-graph migration, and `opponent_lineup` /
+`opponent_bench` have been on the contract since the console-card pass.
+
+**The two fields are the ones the design asks for that could not be derived.**
+The handoff says "no new data fetching" and that the pane totals are "the same
+pair already shown on the card's projection plate"; that is right for three of
+the four and wrong for the fourth. The plate carries the two *set* totals, and
+a pane reads `SET` against `OPT` — so **`opponent_optimal_points`** is genuinely
+new, and it costs nothing: `solveOpponentLineup` already runs the whole
+`compareLineup` and was discarding the figure. **`opponent_team_name`** is the
+other, a `league_users` join on the opponent's roster owner, spelled by
+`leagueTeamName`'s own rule over two columns rather than over a users array —
+the query has the columns and no array to search. Both are null wherever
+`opponent_points` is, and for its three reasons: a pane headed "Opponent" over a
+game nobody has been scheduled is the claim those nulls exist to refuse.
+
+**The options land opposite the press, and they belong to the side that was
+pressed.** Pressing your own RB shows *your* alternatives at RB where the
+opponent's lineup was; pressing theirs shows theirs where yours was. The lineup
+being reasoned about never moves out from under the press — only the far pane
+changes — and the header names whose options they are rather than leaving it to
+be read off position. With **no opponent** the second column does not exist
+until a press has something to put in it, which is the same promise kept the
+only way it can be: replacing the single pane would move the lineup.
+
+**The state is one field and it lives in `WeekPanes`, not on the card.**
+`LineupCheckCard` stays hook-free — its own stated design, and `LeagueSyncKey`'s
+precedent — and the pick gets its per-card scoping for free: it is an *index
+into one lineup* and means nothing outside it, so a second league opening cannot
+inherit the first's when the component holding it is mounted per card.
+
+**`helpers/seat-options.ts` is where the rules are, pure and under Node's
+runner**, for `lineup-check-metrics.ts`'s reason and `seat-compare`'s before it:
+an ineligible player offered as a choice, a gap drawn on the wrong side and a
+null scored as a zero all render perfectly and say something untrue.
+
+- **Eligibility is the seat's, not the two players'**, and it reads
+  `SLOT_POSITIONS` — the app's own vocabulary, the list the solver seats from —
+  so the day the solver learns Sleeper's `OP` this offers it. An **unrecognised
+  slot takes nobody**, which is the call `compareLineup` already makes when it
+  drops one into `unknown_slots`.
+- **A locked player is not a choice at either end.** A locked seat answers with
+  the note and an empty list rather than moves Sleeper would refuse, and a
+  locked player on the bench is out of the pool for every *other* seat — the
+  contract's own wording.
+- **The holder is always listed, chipped `in seat`, whatever his positions
+  say.** He is in the seat; a list that dropped him answers a different question
+  from the one the header asks.
+- **An empty seat is a real zero and an unpriced player is an absence**, which
+  is the contract's `points` grammar one level up — and it is the one place this
+  parts company with `features/shared/seat-compare`, which answers null for its
+  own empty seat. Not the same question: that pane reads a *season* lens, where
+  an empty seat has no capital and no market price to be zero of, and this reads
+  a week's points, which an empty seat scores none of. So an option's delta
+  against an empty seat is his whole projection, which is the number a reader
+  with an empty seat wants.
+- **The meter is `seat-compare`'s own arithmetic** — `|delta| / max(1, both) ×
+  1.4`, clamped — because two grains of one comparison on two pages must be one
+  spelling. Its two colours are `rankColor(100)` and `rankColor(0)`, the rank
+  ramp's ends, rather than the handoff's `--good`/`--bad` literals: the ramp is
+  the same two hues and it is what inverts for light mode. **No new colour
+  tokens were added**, and that is the diff-against-the-tree rule the console
+  pass already recorded — `--glass-rule`, `--acc-rule`, `--sit-rule`,
+  `--row-rule`, `--ink-row` and `--key-ink` in the handoff are all utilities
+  this app already spells (`border-black/85`, `border-active/40`,
+  `border-error/40`, `border-active/9`, `text-readout-line`,
+  `text-foreground/80`), and an `rgba()` over `--foreground` cannot invert where
+  the readout inks can.
+
+**The metal finish is three token overrides and not one element of markup.**
+`CONSOLE_METAL` moves `--housing-bg`, `--plate-raised-bg` and `--key-bg` (with
+their shadows) to the `*-metal` set on the card's own `<details>`, and every
+surface inside already names them, so the cascade applies it. The grain is a
+**background layer** rather than an overlaid span for the reason the decorative
+wrapper exists at all: a brush drawn as an element would have to be clipped, and
+a clip collapses the card's `preserve-3d` with no error to say so. Three
+surfaces because three have readers — the handoff's `--plate-recessed-metal` is
+the page header's and `--bezel-metal` is the avatar mount's, neither of which is
+inside a card, and a token nothing reads is the dead weight this file's own
+history is written about. `--housing-inset-shadow` is new and does have one: the
+expanded half is a **housing set inside a housing** (every seat below it is a
+window, and a lit card inside a lit pane reads as glass on glass), which is
+`--housing-shadow` with its three drop shadows taken off — a card stands on a
+page and throws light onto it, where this sits in the card's recess and has
+nothing to throw onto.
+
+**The tiles split their reading in two, and that is what put four across a
+phone.** `MetricCell` gained a `scope` line and a `figure`/`unit` pair beside
+its `text`: a desktop tile reads *name over scope* then the whole reading
+(`Vs optimal` / `Best reachable` / `−6.6`), and a phone tile drops the scope —
+the quietest of the three, and the only one that is a gloss rather than an
+answer — and sets the numeral alone over its unit (`Kickoff` / `2` / `to move`).
+`2 to move` at `--fs-21` does not fit 72px on any line, which is why the row was
+two-up before. The four fields are produced side by side per arm rather than
+derived from one another, so there is no rule to get wrong, and the test pins
+the quartet. **`scope` is empty where nothing was measured** — a line naming the
+population a tile *would* have counted is a claim that it did — and the two
+absences a kickoff tile has are told apart there rather than in the title alone.
+One arm changed wording for the split: `IR 3/2` became `1 over IR`, counted as
+an overage like every arm beside it, because `3/2` at `--fs-17` does not fit a
+phone tile at all. The ratio survives in the title.
+
+**Three things a render changed, each because a render showed it.**
+
+- **The seat card turns at `lg`, not `sm`.** Below it the name takes a line of
+  its own and the slot, points and gap wrap under it; above it they are one row
+  with the two-track meter. The panes stay side by side at *every* width — the
+  comparison is the point — so the only question is the row, and `LeagueTeams`
+  measured the same breakpoint one tool over for the same reason.
+- **Name and chips are one line below `lg`, through `lg:contents`.** Left loose
+  in the wrap a `sit` badge went to the second line, where a slot, a figure and
+  a gap already fill 143px, and took the row to three — and a three-line card in
+  one pane against a two-line card in the other is two lineups that no longer
+  read across, which is the whole purpose of the view. Measured after: every row
+  59–60px and **zero drift** between the panes at 390, 640, 768 and 1023. The
+  pane header needed the same treatment for the same reason: `vs` left loose
+  took a line of its own and put the two heads at two heights.
+- **The right pane's third column collapses rather than being reserved**, which
+  reverses the first cut of this file. Holding it at 98px lines the two `Pts`
+  columns up at the same distance from their own right edges — worth it until a
+  render at 1024 priced it: the right pane is 404px, its card spends 30 on the
+  slot, 46 on the points, 90 on the kickoff and 98 on a column drawing nothing,
+  and **the name is left 79px, eight characters, on every opponent**. That is
+  the failure this file has recorded at three other grains, and a numeric
+  column's alignment does not buy it. An **option row carries no kickoff** for
+  the same 90px: when a game starts is a fact about the lineup as it stands,
+  where an options list is a comparison of projections.
+
+**Best ball presses nothing.** Sleeper seats that lineup itself after the games,
+so every alternative is a move nobody makes — the same reason the gap and
+kickoff tiles answer nothing there — and the seats render as plain rows rather
+than as keys that would do something.
+
+#### Verified
+
+Rendered through a temporary `/preview` route against the real components,
+tokens and Tailwind build — the method the console-card, shares, rack and
+timeline passes established, since no database is reachable from where this was
+built — then driven over CDP at 1280, 1024, 1023, 768, 640 and 390 in both
+schemes and deleted. The mechanics are unchanged: `--no-proxy-server`, and
+`localhost` rather than `127.0.0.1`. The fixtures are four leagues — a dynasty
+superflex with a scheduled opponent, a locked seat, an unprojected starter, an
+empty opposing seat and a `sit` mark; a league with no opponent whose four
+checks are all clear; a best-ball league two over its roster; and a league
+nothing could be read for.
+
+Every arm landed. Pressing the manager's RB2 put `Your options · RB` in the
+**right** pane with the left untouched, the pressed seat lit by border and halo
+(never a fill), `Travis Etienne +6.6` at the head, `Kyren Williams` chipped
+`in seat` with no delta against himself, and the unprojected `Zach Charbonnet`
+**last** with an em dash and no delta. Pressing the opponent's SF at 390 put
+`Their options · SF` in the **left** pane — the swap in the same direction at
+both widths — and `Back` restored the comparison with nothing left pressed. The
+no-opponent card opened its second column on a press and closed it on `Back`,
+its lineup never moving. Best ball rendered **zero** pressable seats.
+
+The meters are 12 at 1024 and 1280 and **0 at 1023 and below**, where the same
+number is the signed figure; the grid is `1fr 0.78fr` at `lg` and `1fr 1fr`
+under it. The frozen housing computes `position: sticky`, `top: 74px`,
+`z-index: 20` and sits clear of a rack whose bottom is 53. At every width and in
+both schemes: `document.documentElement.scrollWidth` equal to the viewport,
+**zero** elements past it, one `<h1>`, and **no console output of any kind**.
+The only visible truncation anywhere is at 390, on the seat rows carrying a chip
+and on a deliberately over-long fixture league name — which is the trade the
+`lg:contents` note above states.
+
+**Not verified against real data**, which is the gap to close first: every
+number above is a fixture. Three things a render cannot check — whether
+`opponent_team_name` is populated as widely as `opponent_points` already is on a
+real corpus; what a real week's option lists actually look like where a bench is
+deep and a league runs three flexes; and whether the brushed metal reads as
+intended beside the *flat* housings of `/manager` and `/trades`, which a reader
+walking between the two tools sees one after the other and which no single-page
+render can put side by side.
+
 ### Starters and Opponents
 
 Two more Browse keys in the rack, each opening a side panel of *week* shares:

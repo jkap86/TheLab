@@ -76,6 +76,13 @@ export type WeekLineupLeague = {
  */
 export type WeekLineupOpponent = {
   roster_id: number;
+  /**
+   * What they call themselves, on `leagueTeamName`'s rule — resolved by the
+   * query, which is the half that can see `league_users`. Null where no member
+   * row is stored for the owner, which the pane draws as no name rather than
+   * as "Opponent".
+   */
+  team_name: string | null;
   /** The week's own lineup where one is stored, else the roster's live one. */
   starters: string[] | null;
   players: string[] | null;
@@ -173,6 +180,12 @@ export function solveWeekLineup(
     opponent_points: opponent?.points ?? null,
     opponent_lineup: opponent?.lineup ?? null,
     opponent_bench: opponent?.bench ?? null,
+    opponent_optimal_points: opponent?.optimal_points ?? null,
+    // The name is the query's answer rather than this module's: only it can
+    // see `league_users`, and `?? null` here would turn a missing member row
+    // and a missing opponent into the same thing — which they are, for a pane
+    // that draws neither.
+    opponent_team_name: league.opponent?.team_name ?? null,
     optimal_points: comparison.optimal_points,
     points_left: comparison.points_left,
     start: comparison.start,
@@ -358,7 +371,12 @@ function solveOpponentLineup(
   board: WeekProjections,
   locked: ReadonlySet<string>,
   kickoffs: ReadonlyMap<string, number> | null,
-): { points: number; lineup: LineupCheckSeat[]; bench: LineupCheckPlayer[] } {
+): {
+  points: number;
+  optimal_points: number;
+  lineup: LineupCheckSeat[];
+  bench: LineupCheckPlayer[];
+} {
   const starters = opponent.starters ?? [];
   const priced = priceRoster(
     opponent.players,
@@ -379,6 +397,11 @@ function solveOpponentLineup(
 
   return {
     points: comparison.current_points,
+    // Already computed by the comparison above and previously discarded. The
+    // week view prints it as the pane's `OPT` against the same pane's `SET`,
+    // which is the one place on the page a reader can see that a lineup they
+    // are losing to is itself not the best that roster could field.
+    optimal_points: comparison.optimal_points,
     lineup: comparison.current.map((seat) => ({
       slot: seat.slot,
       player: seat.player_id ? (byId.get(seat.player_id) ?? null) : null,

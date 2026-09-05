@@ -175,3 +175,77 @@ export const CONSOLE_PLATE =
 export const CONSOLE_READOUT =
   "relative overflow-hidden border border-black/85 bg-[image:var(--readout-bg)] " +
   "shadow-[var(--readout-shadow)]";
+
+/**
+ * A housing set *inside* a housing, with its own padding: the lineup checker's
+ * expanded week view.
+ *
+ * Not a {@link CONSOLE_WINDOW}, and that is the decision rather than the
+ * spelling. Every seat inside it is a window, and a lit card inside a lit pane
+ * reads as glass on glass — so the pane is the bezel those windows are set
+ * into, which is the manager card's grammar one plane down. The 12px radius is
+ * the inner one; a nested surface repeating its parent's 18px reads as a card
+ * that has slipped out of its own frame.
+ *
+ * Its shadow is `--housing-inset-shadow` rather than `--housing-shadow`: see
+ * the token, which is that stack with the three drop shadows taken off. It is
+ * `relative overflow-hidden` on {@link CONSOLE_WINDOW}'s contract, and its
+ * `overflow: hidden` is safe here for the reason it is not on the card — this
+ * sits *outside* the summary's `preserve-3d` subtree, where a clip has no
+ * depth to collapse.
+ */
+export const CONSOLE_HOUSING_INSET =
+  "relative overflow-hidden rounded-xl border border-foreground/10 " +
+  "bg-[image:var(--housing-bg)] shadow-[var(--housing-inset-shadow)]";
+
+/**
+ * The metal finish, as a set of token overrides on a card's own container.
+ *
+ * A card wearing this reads as a machined face rather than a moulded one: the
+ * housing, the plates straddling its edge and the keys mounted on it all pick
+ * up the rolled banding and the fine vertical brush, and **not one element
+ * moves to get it**. Every surface inside already names `--housing-bg`,
+ * `--plate-raised-bg` or `--key-bg`, so overriding those three here is the
+ * whole of the application — the cascade does the rest, and the grain is a
+ * background layer rather than an overlaid span, which is what keeps it clear
+ * of the `preserve-3d` constraint the card is built under (a clip collapses
+ * the depth, with no error to say so).
+ *
+ * **Three surfaces, because three surfaces have readers.** `--plate-bg` and
+ * `--bezel-bg` have metal counterparts in the design and no reader on this
+ * card — the recessed plate is the page header's and the turned bezel is the
+ * avatar mount's, both of which sit outside a card. A token nothing reads is
+ * the dead weight this file's own history is written about, so they arrive
+ * with the surface that wants them.
+ *
+ * It is a *finish*, not a shape: nothing here names a radius, a padding or a
+ * colour of type. Compose it with {@link CONSOLE_CARD} or its shell.
+ */
+export const CONSOLE_METAL =
+  "[--housing-bg:var(--housing-metal)] [--housing-shadow:var(--housing-metal-shadow)] " +
+  "[--plate-raised-bg:var(--plate-metal)] [--plate-raised-shadow:var(--plate-metal-shadow)] " +
+  "[--key-bg:var(--key-metal)]";
+
+/**
+ * A lit window a reader can *press*: the seat cards in the lineup checker's
+ * week view.
+ *
+ * {@link CONSOLE_WINDOW}'s surface with the scanlines folded in as a second
+ * background layer rather than drawn as a child. A window normally carries its
+ * own `<Scanlines />` span, and here it cannot: the element is a `<button>`
+ * whose children are the row's content, and an absolutely-positioned overlay
+ * inside one would sit above the text unless every cell were given a stacking
+ * context of its own. Layered onto the background it costs nothing.
+ *
+ * **Colourless, for {@link CONSOLE_KEY_PILL}'s reason.** A pressed seat is lit
+ * by an accent border and a halo, and appending `border-active` to a string
+ * that already says `border-black/85` is decided by Tailwind's emit order
+ * rather than by the class attribute. The caller composes `shape + state`, and
+ * the state is a border colour and a shadow — **never a fill**, which would
+ * stop the card reading as a window at all.
+ */
+export const CONSOLE_WINDOW_KEY =
+  "relative flex w-full items-center rounded-[0.5625rem] border " +
+  "bg-[image:var(--readout-scanlines),var(--readout-bg)] text-left " +
+  "transition-[box-shadow,border-color] duration-150 " +
+  "focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-active/60";

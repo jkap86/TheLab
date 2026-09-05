@@ -220,6 +220,79 @@
   --key-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.28), 0 3px 0 rgba(0, 0, 0, 0.7),
     0 7px 14px -7px #000;
   --key-shadow-pressed: inset 0 1px 0 rgba(255, 255, 255, 0.28), 0 1px 0 rgba(0, 0, 0, 0.7);
+
+  /* ---- Brushed metal: the lineup checker's card (dark) --------------- */
+
+  /*
+   * The same three surfaces as the flat chrome above — the housing, the plate
+   * that straddles its edge, the key mounted on it — finished as *rolled
+   * metal* rather than as a plain vertical ramp.
+   *
+   * They are a second set rather than an edit to the first because only one
+   * card wears them. `--housing-bg` and its two siblings are read by all three
+   * league cards (trades, manager, lineup checker) and by the shared plate and
+   * key components under them, so moving those values would restyle four
+   * pages. A card that wants the finish overrides the flat token with the
+   * metal one on its own container (`CONSOLE_METAL` in `console-chrome.ts`)
+   * and every surface inside it follows through the cascade — which is what
+   * makes this no markup change at all.
+   *
+   * **The grain is a background *layer*, never an extra element.** A brush
+   * drawn as an overlaid span would have to be clipped, and a clip is exactly
+   * what collapses the card's `preserve-3d` context — the constraint
+   * `league-card.tsx` and `lineup-check-card.tsx` both carry. Layered onto the
+   * gradient it costs nothing and cannot break the depth.
+   *
+   * The endpoints are the flat tokens', so a card in metal reads as the same
+   * object under a different light rather than as a different object: what is
+   * added is the internal banding a rolled sheet has (the two oblique sweeps)
+   * and the fine vertical brush over it.
+   */
+  --brush-fine: repeating-linear-gradient(90deg, rgba(255, 255, 255, 0.06) 0 1px, transparent 1px 4px);
+
+  /*
+   * Four edge insets rather than one top highlight, and that is the whole
+   * difference between a bezel and a sheet: a bright top lip, a light left
+   * edge, a dark right edge and a deep bottom shade say which way the light
+   * is coming from. `--housing-shadow` states only the first and the last,
+   * which is right for a moulding and flat for a machined face.
+   */
+  /*
+   * A housing set *inside* a housing — the lineup checker's expanded week view,
+   * which holds a window per seat.
+   *
+   * `--housing-shadow` with its three drop shadows taken off, and that is the
+   * whole of it: a card stands on a page and throws light onto it, where this
+   * sits in the card's own recess and has nothing to throw onto. Keeping them
+   * would put a second card's worth of shadow inside a card.
+   *
+   * It is a housing rather than a window because every seat below it is one,
+   * and a lit card inside a lit pane reads as glass on glass — the manager
+   * card's bezel-and-windows grammar, one plane down.
+   */
+  --housing-inset-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.3),
+    inset 0 -2px 5px rgba(0, 0, 0, 0.72), 0 1px 0 rgba(255, 255, 255, 0.05);
+
+  --housing-metal: var(--brush-fine),
+    linear-gradient(102deg, transparent 12%, rgba(240, 248, 250, 0.12) 33%, transparent 48%),
+    linear-gradient(258deg, transparent 26%, rgba(240, 248, 250, 0.06) 44%, transparent 58%),
+    linear-gradient(180deg, #5b686d 0%, #4a575c 9%, #374348 30%, #495559 45%, #2d383c 56%,
+      #1a2225 74%, #12181a 100%);
+  --housing-metal-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.44),
+    inset 1px 0 0 rgba(255, 255, 255, 0.07), inset -1px 0 0 rgba(0, 0, 0, 0.5),
+    inset 0 -2px 4px rgba(0, 0, 0, 0.9), 0 8px 18px -8px #000, 0 40px 70px -44px #000,
+    0 0 26px -10px rgba(0, 255, 229, 0.35);
+
+  --plate-metal: var(--brush-fine),
+    linear-gradient(180deg, #89969c 0%, #6d7a80 15%, #4f5b61 43%, #5e6a70 55%, #3a4448 78%,
+      #272f33 100%);
+  --plate-metal-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.46),
+    inset -1px 0 0 rgba(0, 0, 0, 0.45), inset 0 -2px 4px rgba(0, 0, 0, 0.85),
+    0 10px 20px -12px #000;
+
+  --key-metal: var(--brush-fine),
+    linear-gradient(180deg, #78868c 0%, #616e74 17%, #454f54 51%, #525e63 62%, #333b3f 82%,
+      #252c30 100%);
   /*
    * The two recesses a key can be mounted in, and they are two because they
    * hold different things.
@@ -421,6 +494,46 @@
   --key-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.9), 0 3px 0 rgba(15, 23, 42, 0.14),
     0 7px 14px -7px rgba(15, 23, 42, 0.3);
   --key-shadow-pressed: inset 0 1px 0 rgba(255, 255, 255, 0.9), 0 1px 0 rgba(15, 23, 42, 0.14);
+
+  /* ---- Brushed metal (light) ---------------------------------------- */
+
+  /*
+   * Derived rather than designed, as the whole light scheme is — and the one
+   * thing that does not mirror is the brush itself. On the dark sheet the
+   * grain is white lines catching the light; drawn white on a near-white
+   * plate it is invisible, and drawn dark it reads as the same machining seen
+   * from the same angle. So the brush inverts to a slate alpha while the two
+   * oblique sweeps stay light, which is what keeps a rolled surface reading as
+   * rolled rather than as scratched.
+   *
+   * The endpoints are the light flat tokens' again, so the metal card is the
+   * same object under a different light in both schemes.
+   */
+  --brush-fine: repeating-linear-gradient(90deg, rgba(15, 23, 42, 0.05) 0 1px, transparent 1px 4px);
+
+  --housing-inset-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.9),
+    inset 0 -2px 5px rgba(15, 23, 42, 0.16), 0 1px 0 rgba(255, 255, 255, 0.6);
+
+  --housing-metal: var(--brush-fine),
+    linear-gradient(102deg, transparent 12%, rgba(255, 255, 255, 0.5) 33%, transparent 48%),
+    linear-gradient(258deg, transparent 26%, rgba(255, 255, 255, 0.28) 44%, transparent 58%),
+    linear-gradient(180deg, #dbe4e7 0%, #cfdadd 9%, #b6c4c9 30%, #c6d2d6 45%, #a9b9be 56%,
+      #97a9af 74%, #8d9fa5 100%);
+  --housing-metal-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.95),
+    inset 1px 0 0 rgba(255, 255, 255, 0.6), inset -1px 0 0 rgba(15, 23, 42, 0.16),
+    inset 0 -2px 4px rgba(15, 23, 42, 0.22), 0 8px 18px -8px rgba(15, 23, 42, 0.35),
+    0 40px 70px -44px rgba(15, 23, 42, 0.4), 0 0 26px -10px rgba(13, 148, 136, 0.3);
+
+  --plate-metal: var(--brush-fine),
+    linear-gradient(180deg, #ffffff 0%, #f2f6f7 15%, #dde7ea 43%, #e9f0f2 55%, #ccd9dd 78%,
+      #bccbd0 100%);
+  --plate-metal-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.98),
+    inset -1px 0 0 rgba(15, 23, 42, 0.14), inset 0 -2px 4px rgba(15, 23, 42, 0.2),
+    0 10px 20px -12px rgba(15, 23, 42, 0.35);
+
+  --key-metal: var(--brush-fine),
+    linear-gradient(180deg, #ffffff 0%, #f4f8f9 17%, #e0e9ec 51%, #ebf1f3 62%, #d2dde1 82%,
+      #c4d1d6 100%);
   /* Both recesses invert to slate: a cut channel on a light plate is a soft
      shadow, not the near-black the dark scheme can afford. */
   --track-shadow: inset 0 3px 8px rgba(15, 23, 42, 0.18);

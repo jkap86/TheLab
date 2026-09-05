@@ -2,7 +2,9 @@ import type { LineupCheckLeague, ManagerLeague } from "@/shared/contract";
 import {
   CardPlateRow,
   CardRule,
-  CONSOLE_CARD,
+  CONSOLE_CARD_SHELL,
+  CONSOLE_HOUSING_INSET,
+  CONSOLE_METAL,
   CONSOLE_WINDOW,
   LeagueConfigWindow,
   LeaguePlate,
@@ -15,12 +17,12 @@ import {
 import {
   gapCell,
   kickoffCell,
-  kickoffTime,
   rosterCell,
   superflexCell,
   type MetricCell,
 } from "../helpers/lineup-check-metrics";
 import { LeagueSyncKey } from "./league-sync-key";
+import { WeekPanes } from "./week-panes";
 
 /**
  * One league's week, as an instrument housing that rises toward the viewer.
@@ -48,8 +50,26 @@ import { LeagueSyncKey } from "./league-sync-key";
  *    the card's transform.
  *
  * Hook-free, like `LeagueCard`: the only interaction it owns is the disclosure.
- * `onSynced` is forwarded to `LeagueSyncKey` and never called here, which is
- * what keeps that true — the state a card needs lives below it.
+ * `onSynced` is forwarded to `LeagueSyncKey` and never called here, and the
+ * week view's seat pick lives inside `WeekPanes` — which is what keeps that
+ * true, and what makes the pick per-card for free: a pick is an index into one
+ * lineup and means nothing outside it, so a second league opening must not
+ * inherit the first's, and a component mounted per card cannot.
+ *
+ * **The card wears the metal finish** ({@link CONSOLE_METAL}), which is a set
+ * of token overrides on the `<details>` and not a single element of markup:
+ * the housing, both plates and every key inside already name the tokens it
+ * moves, so the cascade applies it. The grain is a background layer for the
+ * same reason the decorative span exists — an overlaid brush would have to be
+ * clipped, and a clip is what collapses the depth below.
+ *
+ * **The open card's housing freezes under the rack**, which is `LeagueCard`'s
+ * own arrangement and has to be the `<summary>`: the `<li>` and the
+ * `<details>` are the whole card, taller than the viewport, and sticky on a
+ * box that never fits does nothing at all. The summary's containing block is
+ * the `<details>`, which is exactly the range the tiles should stay over —
+ * it parks at the offset and releases when the card's own bottom edge catches
+ * it, so it never outlives its league.
  *
  * A fourth constraint travels with the card: the depth chrome rides
  * `pointer-fine:`, because one card per league times several composited planes
@@ -57,17 +77,6 @@ import { LeagueSyncKey } from "./league-sync-key";
  * the argument in full; the gate must stay on both, since this page renders the
  * same card over the same league list.
  */
-
-/** Sleeper's slot names, shortened to fit a chip. Unmapped ones render as-is. */
-const SLOT_LABELS: Record<string, string> = {
-  SUPER_FLEX: "SF",
-  WRRB_FLEX: "W/R",
-  REC_FLEX: "W/T",
-  IDP_FLEX: "IDP",
-  FLEX: "FLX",
-};
-
-const slotLabel = (slot: string): string => SLOT_LABELS[slot] ?? slot;
 
 export function LineupCheckCard({
   league,
@@ -93,10 +102,22 @@ export function LineupCheckCard({
           sit side by side at every width by design, which puts that
           min-content above 390. Without this the card is wider than the
           viewport and the whole page scrolls sideways. */}
-      <details className="group/card flex min-w-0 flex-1 flex-col">
+      <details className={`group/card ${CONSOLE_METAL} flex min-w-0 flex-1 flex-col`}>
         <summary
           className={
-            `lab-card-3d ${CONSOLE_CARD} flex flex-1 cursor-pointer list-none flex-col font-mono ` +
+            `lab-card-3d ${CONSOLE_CARD_SHELL} pb-[1.125rem] pt-[1.875rem] flex flex-1 cursor-pointer list-none flex-col font-mono ` +
+            // **The gutter is 14px below `sm`**, where the card takes 18px from
+            // `sm` up. Four tiles across a 362px card is what asks for it — the
+            // strip is the card's full width less this inset, and the four
+            // labels are the tightest thing on the page. It composes the
+            // *shell* rather than appending to `CONSOLE_CARD`, because two base
+            // `px-*` utilities are decided by Tailwind's emit order — see that
+            // constant's note. The manager card made the same measurement.
+            "px-3.5 sm:px-[1.125rem] " +
+            // **The open card's housing freezes under the rack**, so the four
+            // tiles stay in view while the panes scroll past — see the note
+            // above the component on why it is the `summary` and nothing else.
+            "group-open/card:sticky group-open/card:top-[var(--card-freeze-top)] group-open/card:z-20 " +
             "pointer-fine:[transform-style:preserve-3d] [transform-origin:center_bottom] " +
             "pointer-fine:[transform:translateZ(0)_rotateX(3deg)] " +
             "pointer-fine:hover:[transform:translateZ(30px)_rotateX(0deg)] " +
@@ -153,10 +174,13 @@ export function LineupCheckCard({
 
           {/* A direct child of the summary, so the `translateZ` survives: a
               plain wrapper here is a flat rendering context and the depth would
-              go with no error to say so. Two across on a phone and four from
-              `sm`, on the manager card's own `GRID_COLS[4]` rule — a four-way
-              split at 390 is 70px a tile, narrower than the reading it holds. */}
-          <div className="relative mt-3 grid grid-cols-2 gap-2.5 sm:grid-cols-4 pointer-fine:[transform:translateZ(22px)]">
+              go with no error to say so.
+
+              **Four across at every width, where it was two-up on a phone.**
+              What made that possible is the reading splitting in two: a phone
+              tile sets the numeral alone and its unit under it, so nothing has
+              to fit `2 to move` into ~72px on one line. See `MetricCell`. */}
+          <div className="relative mt-2.5 grid grid-cols-4 gap-1.5 sm:gap-2 pointer-fine:[transform:translateZ(22px)]">
             <MetricTile label="Vs optimal" cell={gap} />
             <MetricTile label="Kickoff" cell={kickoff} />
             <MetricTile label="Superflex" cell={superflex} />
@@ -166,21 +190,21 @@ export function LineupCheckCard({
 
         {/* Outside the 3D context on purpose: a lineup table inside a
             `preserve-3d` subtree pays for a composited layer per row and gains
-            nothing, since none of it is tilted. */}
-        <div className={`${CONSOLE_WINDOW} mt-3 rounded-xl px-3.5 py-0.5`}>
-          <Scanlines />
-          {/* Above the lineup rather than in the summary: a `<summary>` is a
+            nothing, since none of it is tilted. It is also what makes this
+            wrapper's own `overflow: hidden` safe — a clip inside the summary
+            would collapse the depth.
+
+            **A housing rather than one big window**, which is the change the
+            seats forced: every seat below is a lit window of its own now, and
+            a lit card inside a lit pane reads as glass on glass. This is the
+            manager card's bezel-and-windows grammar one plane down. */}
+        <div className={`${CONSOLE_HOUSING_INSET} mt-3 px-3 pb-3 pt-3.5 font-mono sm:px-[1.125rem] sm:pb-[1.125rem] sm:pt-4`}>
+          {/* Above the panes rather than in the summary: a `<summary>` is a
               leaf button to assistive technology, so a control nested in one is
               unreliably reachable and a live region inside it is swallowed into
               the disclosure's name. It also lands beside the empty state below,
-              which is the case a sync most often fixes.
-
-              It sits *inside* the lit window now rather than on the card body
-              the window replaced, so it needs `relative` to clear the
-              scanlines and a rule under it: the seat rows below draw their own
-              dividers, and a key resting straight on the first of them reads as
-              the lineup's own header row. */}
-          <div className="relative border-b border-active/9 py-1.5">
+              which is the case a sync most often fixes. */}
+          <div className="relative">
             <LeagueSyncKey
               leagueId={league.league_id}
               leagueName={league.name}
@@ -188,9 +212,19 @@ export function LineupCheckCard({
             />
           </div>
           {entry ? (
-            <LineupDetail entry={entry} />
+            <>
+              <WeekPanes entry={entry} teamName={league.team_name} />
+              {entry.unknown_slots.length > 0 && (
+                // A partial lineup must say so — see `unknown_slots` on the
+                // contract. Under both panes, because it is true of both: the
+                // opponent is solved through the same slots.
+                <p className="relative m-0 pt-3 font-mono text-[length:var(--fs-11)] uppercase tracking-[0.14em] text-readout-label">
+                  Not shown: {entry.unknown_slots.join(", ")}
+                </p>
+              )}
+            </>
           ) : (
-            <p className="relative m-0 py-2.5 font-mono text-[length:var(--fs-11)] uppercase tracking-[0.16em] text-readout-label">
+            <p className="relative m-0 font-mono text-[length:var(--fs-11)] uppercase tracking-[0.16em] text-readout-label">
               No lineup read for this league this week
             </p>
           )}
@@ -255,56 +289,97 @@ function ProjectionPlate({ entry }: { entry?: LineupCheckLeague | null }) {
 /**
  * One reading, as a lit window — the same surface as the console's readouts.
  *
- * **The label sits outside the content cap and the value inside it.** The cap
- * is 132px, which is what keeps a four-tile row from stretching a figure across
- * a 1014px card; a label capped with it clips "Vs optimal" to "Vs opti…", and
- * the label is the one thing on the tile that cannot be inferred from what is
- * under it.
+ * **Three lines on a desktop and three on a phone, and they are not the same
+ * three.** A desktop tile has room for the whole reading on one line, so it
+ * reads *name over scope*, then the figure: `Vs optimal` / `Best reachable` /
+ * `−6.6`. A phone tile is ~72px of content and cannot fit `2 to move` at
+ * `--fs-21` on any line at all, so it drops the scope — the quietest of the
+ * three, and the only one that is a gloss rather than an answer — and splits
+ * the figure into the numeral and its unit: `Kickoff` / `2` / `to move`.
+ *
+ * The two shapes come off one {@link MetricCell} and are drawn by one node
+ * with two layouts, not by two nodes with one hidden: a tile rendered twice is
+ * every reading in the DOM twice and read twice to anything listening.
+ *
+ * **The min-height is on the label block, not on either line**, which is what
+ * holds every figure in the row on one baseline — a two-line label beside a
+ * one-line label would otherwise push its own figure down and the strip would
+ * read as four tiles at four heights. On a phone the same job is done by
+ * `mt-auto` on the figure, which bottom-aligns them instead: there is no scope
+ * line there to make the labels uneven, and the unit under the figure is what
+ * has to end level.
+ *
+ * **The name leads and the scope follows it**, on the manager card's own
+ * hierarchy: the thing being qualified is `--fs-11` on `--readout-line` and
+ * the qualifier is `--fs-10` on `--readout-label`. Teal rather than the
+ * housing's foreground because on a housing the windows are the only lit
+ * surface, and a label in the metal's own colour would read as belonging to
+ * the metal rather than to the glass it is printed on.
  *
  * The value switches on the cell's own state rather than on a boolean, so the
- * four tones stay four — see `MetricCell`. A **clear** draws the checkmark and
- * nothing else, which is why `cell.text` survives as the mark's `sr-only` name.
+ * four tones stay four — see `MetricCell`. A **clear** draws the checkmark in
+ * place of the numeral, which is why `cell.text` survives as the mark's
+ * `sr-only` name and why the unit line still prints beneath it on a phone.
  */
 function MetricTile({ label, cell }: { label: string; cell: MetricCell }) {
+  const tone =
+    cell.state === "alert"
+      ? "text-error [text-shadow:0_0_12px_rgba(252,165,165,0.45)]"
+      : cell.state === "count"
+        ? "text-readout [text-shadow:var(--readout-text-glow)]"
+        : // No answer at all: the muted ink and no glow, because a lit em dash
+          // reads as a reading rather than as its absence.
+          "text-readout-muted";
+
   return (
     <div
-      className={`${CONSOLE_WINDOW} min-w-0 rounded-[0.625rem] px-3 py-2.5`}
+      className={`${CONSOLE_WINDOW} flex min-w-0 flex-col rounded-[0.625rem] px-[7px] py-2 sm:px-2 sm:py-2.5`}
       title={cell.title}
     >
       <Scanlines />
-      {/* Teal rather than the housing's foreground: on a housing the windows
-          are the only lit surface, so a label in the metal's own colour would
-          read as belonging to the metal rather than to the glass.
+      <div className="relative sm:min-h-[1.625rem]">
+        {/* **Untracked below `sm`, and that is a fit rather than a taste.**
+            At `tracking-[0.08em]` in the 65px a 79px tile leaves, `Vs optimal`
+            measures 70px and clips — which is the one label on the row that
+            cannot be inferred from the figure under it. Dropping the tracking
+            takes it to 61.6px. The manager card made the identical measurement
+            on its own four-up strip. */}
+        <p className="m-0 truncate font-mono text-[length:var(--fs-9)] uppercase leading-[1.2] text-readout-line sm:text-[length:var(--fs-11)] sm:tracking-[0.1em]">
+          {label}
+        </p>
+        {/* Desktop only, and the reserved height is what keeps the row level
+            when one tile has nothing to say — see `MetricCell.scope`, which is
+            empty rather than naming a population nothing was measured over. */}
+        <p className="m-0 mt-px hidden min-h-[0.6875rem] truncate font-mono text-[length:var(--fs-10)] uppercase leading-[1.2] tracking-[0.12em] text-readout-label sm:block">
+          {cell.scope}
+        </p>
+      </div>
 
-          **The tracking is 0.06em below `sm`** so the label reads as a word
-          rather than as spaced caps. It is cosmetic and nothing was clipping —
-          these tiles are two-up on a phone and the widest label (`Vs optimal`,
-          84.4px) has ~47px of slack in a 131px box, which is the opposite of
-          the manager card's four-up strip one tool over. */}
-      <p className="relative m-0 truncate font-mono text-[length:var(--fs-10)] uppercase tracking-[0.06em] text-readout-label sm:tracking-[0.14em]">
-        {label}
-      </p>
-      <div className="relative max-w-[8.25rem]">
+      {/* `mt-auto` is the phone's baseline rule and a no-op on a desktop,
+          where the label block's own min-height has already done it. */}
+      <div className="relative mt-auto pt-2">
         {cell.state === "clear" ? (
           <CheckMark text={cell.text} title={cell.title} />
         ) : (
           // Full opacity on every tone: the light-mode teal is only ~5:1
           // against the page, and an alpha drops it below AA.
           <p
-            className={`m-0 mt-2 truncate font-mono text-[length:var(--fs-17)] leading-none tabular-nums ${
-              cell.state === "alert"
-                ? "text-error [text-shadow:0_0_12px_rgba(252,165,165,0.45)]"
-                : cell.state === "count"
-                  ? "text-readout [text-shadow:var(--readout-text-glow)]"
-                  : // No answer at all: the muted ink and no glow, because a lit
-                    // em dash reads as a reading rather than as its absence.
-                    "text-readout-muted"
-            }`}
+            className={`m-0 truncate font-mono text-[length:var(--fs-17)] font-medium leading-none tabular-nums sm:text-[length:var(--fs-21)] ${tone}`}
           >
-            {cell.text}
+            {/* The desktop reading whole, the phone's numeral alone — one
+                measurement, two rooms. See `MetricCell`. */}
+            <span className="sm:hidden">{cell.figure}</span>
+            <span className="hidden sm:inline">{cell.text}</span>
           </p>
         )}
       </div>
+
+      {/* What the numeral counts, on a phone only: above `sm` the reading on
+          the line above already carries it. Empty where the figure needs none,
+          and the tile keeps the height either way. */}
+      <p className="relative m-0 mt-0.5 min-h-[0.6875rem] truncate font-mono text-[length:var(--fs-9)] uppercase tracking-[0.1em] text-readout-label sm:hidden">
+        {cell.unit}
+      </p>
       <span className="sr-only">{cell.title}</span>
     </div>
   );
@@ -341,140 +416,6 @@ function CheckMark({ text, title }: { text: string; title: string }) {
         <path d="M4.5 12.6l4.8 4.8L19.5 7.2" />
       </svg>
       <span className="sr-only">{text}</span>
-    </span>
-  );
-}
-
-/** The lineup as set, seat by seat, then the bench. */
-function LineupDetail({ entry }: { entry: LineupCheckLeague }) {
-  return (
-    <>
-      <ul className="relative m-0 list-none p-0">
-        {entry.lineup.map((seat, i) => (
-          <SeatRow
-            key={`${seat.slot}-${i}`}
-            slot={seat.slot}
-            player={seat.player}
-            moveTo={seat.move_to}
-            benched={seat.player ? entry.sit.includes(seat.player.player_id) : false}
-          />
-        ))}
-      </ul>
-
-      {entry.unknown_slots.length > 0 && (
-        // A partial lineup must say so — see `unknown_slots` on the contract.
-        <p className="relative m-0 py-2 font-mono text-[length:var(--fs-11)] uppercase tracking-[0.14em] text-readout-label">
-          Not shown: {entry.unknown_slots.join(", ")}
-        </p>
-      )}
-
-      {entry.bench.length > 0 && (
-        <details className="group/bench relative">
-          <summary className="flex h-[34px] cursor-pointer list-none items-center font-mono text-[length:var(--fs-11)] uppercase tracking-[0.14em] text-readout-label transition-colors hover:text-readout">
-            <span className="group-open/bench:hidden">
-              Bench ({entry.bench.length}) ▸
-            </span>
-            <span className="hidden group-open/bench:inline">
-              Bench ({entry.bench.length}) ▾
-            </span>
-          </summary>
-          <ul className="m-0 list-none border-t border-active/9 p-0">
-            {entry.bench.map((player) => (
-              <SeatRow
-                key={player.player_id}
-                player={player}
-                promoted={entry.start.includes(player.player_id)}
-              />
-            ))}
-          </ul>
-        </details>
-      )}
-    </>
-  );
-}
-
-function SeatRow({
-  slot,
-  player,
-  moveTo,
-  benched = false,
-  promoted = false,
-}: {
-  slot?: string;
-  player: LineupCheckLeague["lineup"][number]["player"];
-  moveTo?: string | null;
-  /** The optimal lineup sits him — a starter who should not be starting. */
-  benched?: boolean;
-  /** The optimal lineup starts him — a bench player who should be. */
-  promoted?: boolean;
-}) {
-  const kickoff = player ? kickoffTime(player.kickoff) : null;
-
-  return (
-    <li className="relative flex h-[34px] items-center gap-2.5 border-b border-active/9 last:border-b-0">
-      {slot !== undefined && (
-        <span className="w-[34px] shrink-0 font-mono text-[length:var(--fs-11)] tracking-[0.12em] text-readout-label">
-          {slotLabel(slot)}
-        </span>
-      )}
-      <span className="min-w-0 flex-1 truncate font-mono text-[length:var(--fs-13)] text-readout-line">
-        {player ? (player.name ?? player.player_id) : "Empty"}
-        {/* A played game is not a recommendation the reader can act on, so it
-            is marked rather than left to look like an oversight. */}
-        {player?.locked && (
-          <span className="ml-1.5 font-mono text-[length:var(--fs-10)] uppercase tracking-[0.12em] text-readout-muted">
-            <span className="sr-only">Locked — </span>
-            <span aria-hidden>locked</span>
-          </span>
-        )}
-      </span>
-
-      {promoted && <Mark tone="active">start</Mark>}
-      {benched && <Mark tone="error">sit</Mark>}
-      {/* The seat kickoff order wants him in. Read off `move_to`, which the
-          server derived with the same `kickoffMoves` the tile's count came
-          from, so the badge and these marks cannot disagree. */}
-      {moveTo && (
-        <span
-          className="shrink-0 font-mono text-[length:var(--fs-11)] font-medium tracking-[0.04em] text-active"
-          title={`Kickoff order — seat him at ${slotLabel(moveTo)} and the more flexible slot stays open for the later game`}
-        >
-          <span className="sr-only">Re-seat at </span>
-          <span aria-hidden>{"→ "}</span>
-          {slotLabel(moveTo)}
-        </span>
-      )}
-
-      {kickoff && (
-        <span className="hidden shrink-0 font-mono text-[length:var(--fs-10)] uppercase tracking-[0.1em] text-readout-muted sm:inline">
-          {kickoff}
-        </span>
-      )}
-      <span className="w-[46px] shrink-0 text-right font-mono text-[length:var(--fs-12)] tabular-nums text-readout">
-        {/* Null is "the feed has no row for him" and reads as nothing; a real
-            projected zero reads as `0.0`. */}
-        {player?.points == null ? "—" : player.points.toFixed(1)}
-      </span>
-    </li>
-  );
-}
-
-function Mark({
-  tone,
-  children,
-}: {
-  tone: "active" | "error";
-  children: string;
-}) {
-  return (
-    <span
-      className={`shrink-0 rounded-full border px-1.5 py-0.5 font-mono text-[length:var(--fs-9)] uppercase tracking-[0.12em] ${
-        tone === "active"
-          ? "border-active/40 text-active"
-          : "border-error/40 text-error"
-      }`}
-    >
-      {children}
     </span>
   );
 }
