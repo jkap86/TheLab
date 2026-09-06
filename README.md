@@ -66,13 +66,30 @@ matters for anything that reads the database; the rest are optional.
 | `MANAGER_SYNC_LIMIT` | `3` | Manager syncs one process runs at once. It *requests* a bound and cannot raise one — clamped to a third of the pool, because a sync holds an advisory-lock session across its whole Sleeper fan-out. |
 | `NFL_SEASON_OVERRIDE` | unset | Forces the active season. Read fresh on every call, so it takes effect on a running process. Overrides Sleeper's `state/nfl`. |
 | `SLEEPER_MAX_CONCURRENCY` | `24` | Ceiling on how many requests one process may have open to Sleeper at once. The knob to reach for on a 429, and the one to lower before touching any per-caller number — it is the only bound that applies to the process rather than to one call site. |
+| `COMPS_CORPUS_LOAD` | on | Set to `off` to stop the app loading the comps corpus on boot. The loop checks daily and loads only the seasons `player_seasons` is missing, so an ordinary boot fetches nothing; turn it off to keep the corpus entirely under `npm run comps:load-corpus`. |
 | `COMPS_SAMPLE_CORPUS` | allowed in development, denied in production | `on` or `off`. Whether `/comps` may answer from its built-in sample corpus when `player_seasons` is empty. Production refuses by default so a deployment cannot silently serve twenty-six invented seasons; set `on` for a demo build that wants it deliberately. Anything that is not `on` or `off` falls to the default for the environment. |
 
 ## The comps corpus
 
 `/comps` compares a player against historical player-seasons stored in
-`player_seasons`. Nothing in the app writes that table — the corpus changes
-once a year, when a season ends — so it is loaded by a script:
+`player_seasons`. **The app fills it on boot**, and on an ordinary boot that
+costs nothing: the loop reads the corpus's own metadata row and Sleeper's
+state, works out which finished seasons are missing, and loads only those — so
+the first boot against an empty database loads the default span, the boot after
+a season ends loads that one season, and every other boot logs a skip. It runs
+unawaited, so a load in flight never delays request serving, and it takes an
+advisory lock, so two instances booting together do not fetch the same seasons
+twice. `COMPS_CORPUS_LOAD=off` disables it.
+
+Two things the boot loop deliberately will not do. It **never backfills below
+the corpus's own earliest season**, so a corpus loaded with `--from 2021` stays
+that span instead of being widened back to the default on every boot. And it
+**never rewrites the corpus onto a different scoring basis** — it extends
+whatever basis the metadata row names, so a corpus loaded on PPR keeps growing
+on PPR.
+
+The script is still how a *chosen* span is loaded, and the way to load one
+before the app has ever booted:
 
 ```bash
 npm run comps:load-corpus                     # 2018 → the latest complete season
@@ -90,8 +107,9 @@ a whole load commits or none of it does. It refuses, by name, any season the
 NFL has not finished, and it writes a `comps_corpus_meta` row recording the
 source, the scoring basis and which seasons were loaded.
 
-Until it has run, `/comps` answers from a sample corpus in development and
-says "No comps corpus loaded" in production — see `COMPS_SAMPLE_CORPUS` above.
+Until a corpus exists — by either route — `/comps` answers from a sample corpus
+in development and says "No comps corpus loaded" in production; see
+`COMPS_SAMPLE_CORPUS` above.
 
 ## Layout
 

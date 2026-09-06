@@ -3965,14 +3965,17 @@ Sleeper's *current* map and a 2018 comp names players it never held. `player_id`
 is the Sleeper id where the loader can crosswalk one, not a foreign key, for
 the same reason.
 
-**Nothing in the *app* writes the table**, and for a while nothing at all did.
-The loader arrived with the production-readiness pass below — a script rather
-than a sync loop, because the corpus changes once a year when a season ends —
-and it is `npm run comps:load-corpus`. Until it has run the table is empty, and
-what the page does about that is now a **decision** rather than a fallback:
-`CompCorpusSource` has a third state, `unavailable`, and production refuses the
-sample by default. A database that cannot be *read* is still a 500, which is a
-different sentence again. See the pass below.
+**The app fills the table on boot, and this paragraph used to say it did not.**
+The loader arrived with the production-readiness pass below — as a script,
+`npm run comps:load-corpus`, on the argument that "the corpus changes once a
+year when a season ends, so a background tick would be a loop that does nothing
+for eleven months and then does something nobody is watching". That argument is
+intact and it is an argument against a loop that **loads** on a clock; the boot
+loop is not one. See The corpus loads itself, below. Until *some* corpus exists
+the table is empty, and what the page does about that is a **decision** rather
+than a fallback: `CompCorpusSource` has a third state, `unavailable`, and
+production refuses the sample by default. A database that cannot be *read* is
+still a 500, which is a different sentence again.
 
 **`buildCorpus` derives everything a table cannot state**, and `corpus.test.ts`
 pins it: a subject is a row of the latest season on file, entering the one
@@ -4275,6 +4278,121 @@ defensively and are the well-known ones, but they have not been seen from
 the loader's own skip counts are what will say so. Nor can a fixture say
 whether anchoring the median at 50 lands a good comp where a reader expects it
 over eight thousand rows.
+
+### The corpus loads itself
+
+The pass above left `/comps` behind a deploy checklist: production refuses the
+sample by default, so a fresh deployment rendered `NO COMPS CORPUS LOADED`
+until somebody remembered to run `npm run comps:load-corpus` against it. That
+is a page saying nothing because of a step nobody wrote down. The load runs
+from `instrumentation.ts` now, beside the KTC, players and crawl loops, and
+**an ordinary boot loads nothing at all**.
+
+**It needed no migration**, and that is the metadata row's doing rather than
+luck: `comps_corpus_meta` has recorded the covered seasons, the scoring basis
+and the loader version since the pass above put it in, which is exactly the
+three facts a "is anything missing" question is answered from.
+
+**The gate is `loader/refresh.ts`, and it is what makes this a boot task rather
+than a boot cost.** `loadCompsCorpus` is a whole-span fetch — eighteen weeks of
+Sleeper per season — so a boot hook that simply called it would spend minutes of
+upstream traffic on every deploy rewriting rows that have not changed since the
+last one. `corpusRefresh` asks the corpus what it holds and answers with the
+seasons it does not: a list, never a span, so a corpus missing 2019 and 2025 is
+two fetches rather than seven. It is pure, with the probe and the state's answer
+as arguments, because every arm of it renders a perfectly ordinary console line
+while being wrong.
+
+**Four decisions carry it, and two of them are the every-boot bug in different
+clothes.**
+
+- **The corpus extends forward and never backfills below its own floor.** An
+  operator who ran `--from 2021` chose that span, and a gate reading
+  `EARLIEST_SEASON` as the floor would re-fetch 2018–2020 on every boot for
+  ever, against their decision. The floor is the earliest season the corpus
+  *has*; only a corpus with nothing in it takes the default. One consequence
+  worth knowing, because it looks like a miss and is not: a season that fails at
+  the *front* of the span becomes the floor, so it is not retried — which is
+  right, since the commonest reason a leading season fails is that there is
+  nothing in it to load.
+- **Interior gaps are still due.** The floor decides where to start looking, not
+  what to ask for, so the answer is every uncovered season in the span. Asking
+  only for seasons past the newest stored one is how a hole would become
+  permanent the moment a later season succeeded — with the covered-season list
+  still reporting a healthy corpus, and every player of the season before the
+  hole reading as a retirement.
+- **The scoring basis is read from the corpus, never compared against it.**
+  Nothing downstream requires `DEFAULT_SCORING` — the page prints whichever
+  basis the metadata row names — so a corpus loaded on PPR is a deliberate
+  choice rather than a mismatch. Treating it as one would have the boot loop
+  rewrite the whole table in half-PPR on every boot. What the decision carries
+  instead is the basis to *extend* on, because a corpus whose seasons are on two
+  bases is not comparable to itself.
+- **A loader version that moved is a full reload, and that one is deliberate.**
+  `LOADER_VERSION` moves when the meaning of a written row changes, so extending
+  across it would be the same fault as mixing two scorings. It fires once per
+  bump, because a load that succeeds writes the new version.
+
+**A Sleeper outage is a skip, not an error line.** `latestCompleteSeason`
+already answers 0 for a state it cannot read and `corpusRefresh` already reads
+that as "nothing is loadable", so the tick's state read is folded to the empty
+state rather than left to throw — `getWeekKickoffs`' rule. Left throwing, the
+commonest tick there is (nothing to do, upstream down) printed an error against
+a corpus in perfectly good order; this was found by booting the server, where
+Sleeper is unreachable. On an *empty* corpus the same fold is the same right
+answer: a state nobody could read is not a licence to fetch seasons nobody has
+finished playing.
+
+**`firstRun` is unused, which is the one thing that differs from the other three
+loops.** KTC, the players map and the crawl all read it because their freshness
+is a TTL and the interval *is* the TTL, so the boot tick declines to force and
+the interval ticks force. Freshness here is not a clock — it is whether the
+corpus covers the seasons that have finished — so the boot tick and an interval
+tick ask the identical question. The interval is daily and is a *check* cadence
+rather than a TTL: what it bounds is how long a server already up when a season
+finishes waits before noticing, which is the one thing a boot-only hook cannot
+answer.
+
+**`CompsLoadRequest` gained a `seasons` list**, which wins over `from`/`to` when
+non-empty and is the whole of what the loader needed. `planLoad` still refuses
+every entry past the latest complete season by name, so a list carrying an
+unfinished season is declined exactly as a span running past one is.
+
+#### Verified
+
+Against a throwaway Postgres 16 cluster and a production build, since neither a
+live database nor `api.sleeper.app` is reachable from where this was built — the
+proxy denies that host by policy, which is the same limitation the pass above
+records. The Sleeper source and state are injected, which is what let the whole
+thing be driven with no network at all.
+
+The two-boot claim was driven end to end against the real table. A first pass
+over an empty corpus decided `due — no corpus is loaded`, asked for 2018–2025,
+and wrote 11 rows over 2020–2025 (2018 and 2019 failing on fixture players who
+did not exist yet, which is the loader's own refusal). **A second pass over the
+same database decided `due=false — 6 seasons on file through 2025` and fetched
+nothing**, which is the whole of what this exists to do. Every other arm was
+driven against real stored metadata: a state rolled to 2027 asked for `2026`
+alone; a stored `seasons` list with 2022 removed asked for `2022` alone, which
+is the interior-gap rule; a corpus stamped `ppr` was steady at
+`due=false` and, on a new season, asked for `2026 [ppr]` rather than rewriting
+it; a loader version bump asked for all six; and deleting the metadata row asked
+for 2020–2025 naming `no metadata row`, with the 11 rows still stored throughout.
+
+Through the production server: `[comps] Loop started (daily).` beside the other
+three, and — with Sleeper unreachable — `[comps] Corpus up to date (no season is
+known to be complete (the NFL state could not be read)), skipped.`, with the page
+still serving. `COMPS_CORPUS_LOAD=off` printed
+`[comps] Loop disabled (COMPS_CORPUS_LOAD=off).` and started nothing.
+
+1,455 unit tests pass (17 more than the pass above: 13 arms of the gate and 4 of
+the widened `planLoad`); `lint`, `typecheck` and `build` are clean.
+
+**Not verified against real data**, and the gap is the same one and no wider:
+the first real boot is still what confirms Sleeper's stat-row shape. What is
+new and unproven is only the *timing* of it — how long a cold first boot's
+eight-season fan-out actually takes behind the limiter, and therefore how long a
+fresh deployment shows `NO COMPS CORPUS LOADED` before the page fills in.
 
 ## Tracking placeholder picks
 

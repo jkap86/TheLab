@@ -1,7 +1,8 @@
 // The `player_seasons` loader. Server-only — `./load`, `./players` and
-// `./sleeper-source` reach Postgres and Sleeper. The three modules that carry
-// the rules (`./plan`, `./season-line`, `./facts`, `./rows`) are pure and
-// import relatively with `.ts`, so they resolve under Node's own test runner.
+// `./sleeper-source` reach Postgres and Sleeper. The modules that carry the
+// rules (`./plan`, `./refresh`, `./season-line`, `./facts`, `./rows`) are pure
+// and import relatively with `.ts`, so they resolve under Node's own test
+// runner.
 
 export { DEFAULT_MIN_GAMES, LOADER_VERSION, loadCompsCorpus } from "./load";
 export type { CompsLoadOptions, CompsLoadReport } from "./load";
@@ -13,6 +14,12 @@ export {
   playersMapSeason,
 } from "./plan";
 export type { CompsLoadPlan, CompsLoadRequest, NflSeasonState } from "./plan";
+export { corpusRefresh } from "./refresh";
+export type {
+  CorpusRefreshDecision,
+  CorpusRefreshInputs,
+  CorpusRefreshProbe,
+} from "./refresh";
 export {
   DEFAULT_SCORING,
   SCORING_KEYS,

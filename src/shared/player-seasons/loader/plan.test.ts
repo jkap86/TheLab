@@ -138,4 +138,31 @@ describe("planLoad", () => {
     assert.deepEqual(planLoad({ from: 2024, to: 2022 }, 2025).seasons, []);
     assert.deepEqual(planLoad({ from: 2024, to: 2024 }, 2025).seasons, [2024]);
   });
+
+  test("an explicit season list wins over the span and keeps its gaps", () => {
+    const plan = planLoad(
+      { from: 2018, to: 2025, seasons: [2023, 2019] },
+      2025,
+    );
+    assert.deepEqual(plan.seasons, [2019, 2023]);
+  });
+
+  test("an explicit list is deduplicated and sorted", () => {
+    const plan = planLoad({ from: null, to: null, seasons: [2022, 2020, 2022] }, 2025);
+    assert.deepEqual(plan.seasons, [2020, 2022]);
+  });
+
+  test("an empty explicit list falls back to the span rather than to nothing", () => {
+    const plan = planLoad({ from: 2023, to: 2024, seasons: [] }, 2025);
+    assert.deepEqual(plan.seasons, [2023, 2024]);
+  });
+
+  test("a season named in an explicit list is refused by name like any other", () => {
+    const plan = planLoad({ from: null, to: null, seasons: [2024, 2026] }, 2025);
+    assert.deepEqual(plan.seasons, [2024]);
+    assert.deepEqual(
+      plan.refused.map((r) => r.season),
+      [2026],
+    );
+  });
 });

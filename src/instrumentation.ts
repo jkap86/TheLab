@@ -10,10 +10,10 @@
  * code out of any non-Node bundle entirely.
  *
  * The background loops start here too, once migrations have applied — KTC
- * values, the Sleeper players map, and the league crawl. Each is started and
- * not awaited, and each guards its own ticks; a failure reaching one of these
- * catch blocks means the module itself failed to load. Further loops add their
- * own block below.
+ * values, the Sleeper players map, the league crawl, and the comps corpus.
+ * Each is started and not awaited, and each guards its own ticks; a failure
+ * reaching one of these catch blocks means the module itself failed to load.
+ * Further loops add their own block below.
  */
 export async function register(): Promise<void> {
   if (process.env.NEXT_RUNTIME !== "nodejs") return;
@@ -63,5 +63,22 @@ export async function register(): Promise<void> {
     startLeagueCrawler();
   } catch (error) {
     console.error("[crawl] Failed to start the league crawler:", error);
+  }
+
+  // The comps corpus, on the same terms once more — and this is the one of the
+  // four whose *ordinary* tick does nothing at all. A historical corpus changes
+  // when a season ends and at no other time, so the loop checks (one `count(*)`
+  // and one Sleeper state read) and loads only the seasons the stored corpus is
+  // actually missing; every boot after the first is a skip and a log line. The
+  // first boot against an empty database is the exception and is the reason
+  // this is here: `/comps` had no corpus until somebody remembered to run
+  // `npm run comps:load-corpus`, and a page that renders "no corpus loaded" is
+  // not a thing to leave to a deploy checklist. `COMPS_CORPUS_LOAD=off`
+  // disables it, on `KTC_SYNC`'s exact terms.
+  try {
+    const { startCompsCorpusScheduler } = await import("@/shared/player-seasons");
+    startCompsCorpusScheduler();
+  } catch (error) {
+    console.error("[comps] Failed to start the corpus loader:", error);
   }
 }

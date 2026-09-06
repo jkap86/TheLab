@@ -19,8 +19,13 @@ export {
   compsAnswerCache,
   compsAnswerKey,
 } from "./answer-cache";
-export { CORPUS_NAME } from "./queries";
+export { CORPUS_NAME, probeCorpus } from "./queries";
 export type { CorpusProbe } from "./queries";
+export {
+  COMPS_CORPUS_CHECK_MS,
+  COMPS_CORPUS_LOAD_VAR,
+  startCompsCorpusScheduler,
+} from "./scheduler";
 export {
   CORPUS_META_TTL_MS,
   CORPUS_TTL_MS,
@@ -38,6 +43,7 @@ export {
   SLEEPER_SOURCE_NAME,
   ageAt,
   buildSeasonRows,
+  corpusRefresh,
   draftPick,
   experienceAt,
   foldSeasonStats,
@@ -58,6 +64,9 @@ export type {
   CompsLoadReport,
   CompsLoadRequest,
   CompsScoring,
+  CorpusRefreshDecision,
+  CorpusRefreshInputs,
+  CorpusRefreshProbe,
   NflSeasonState,
   PlayerRecord,
   PlayerSeasonWrite,

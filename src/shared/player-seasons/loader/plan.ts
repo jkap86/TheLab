@@ -32,6 +32,20 @@ export type CompsLoadRequest = {
   from: number | null;
   /** The latest season to load. Null means the latest complete one. */
   to: number | null;
+  /**
+   * The exact seasons to load, where the caller already knows which — the boot
+   * loop, which asks `./refresh` what the corpus is missing and gets a list
+   * back rather than a span.
+   *
+   * It **wins over `from`/`to`** when non-empty, and it is a list rather than
+   * a narrower span for the case that makes the difference: a corpus missing
+   * 2019 and 2025 and holding everything between is one gap and one top-up,
+   * where the span covering both would re-fetch six seasons that are already
+   * on file. Every entry is still checked against the state one at a time, so
+   * a list carrying an unfinished season is refused by name exactly as a span
+   * running past one is.
+   */
+  seasons?: readonly number[] | null;
 };
 
 export type CompsLoadPlan = {
@@ -135,15 +149,13 @@ export function planLoad(
   latestComplete: number,
 ): CompsLoadPlan {
   const refused: { season: number; reason: string }[] = [];
-  const from = request.from ?? EARLIEST_SEASON;
-  const to = request.to ?? latestComplete;
-
-  if (!Number.isInteger(from) || !Number.isInteger(to)) {
+  const asked = requestedSeasons(request, latestComplete);
+  if (asked === null) {
     return { seasons: [], maxCompletedSeason: latestComplete, refused };
   }
 
   const seasons: number[] = [];
-  for (let season = from; season <= to; season++) {
+  for (const season of asked) {
     if (season > latestComplete) {
       refused.push({
         season,
@@ -158,4 +170,31 @@ export function planLoad(
   }
 
   return { seasons, maxCompletedSeason: latestComplete, refused };
+}
+
+/**
+ * The seasons a request names, ascending and deduplicated — or null where it
+ * names nothing readable.
+ *
+ * An explicit list wins over the span, and a list is filtered to whole numbers
+ * rather than refused wholesale: `planLoad`'s contract is that every season it
+ * declines is named on the console, and a value that is not a season has no
+ * name to give.
+ */
+function requestedSeasons(
+  request: CompsLoadRequest,
+  latestComplete: number,
+): number[] | null {
+  if (request.seasons && request.seasons.length > 0) {
+    const named = [...new Set(request.seasons.filter(Number.isInteger))];
+    return named.sort((a, b) => a - b);
+  }
+
+  const from = request.from ?? EARLIEST_SEASON;
+  const to = request.to ?? latestComplete;
+  if (!Number.isInteger(from) || !Number.isInteger(to)) return null;
+
+  const span: number[] = [];
+  for (let season = from; season <= to; season++) span.push(season);
+  return span;
 }
