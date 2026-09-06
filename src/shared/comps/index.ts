@@ -5,12 +5,15 @@
 // the half that drags `pg` in; the route composes the two.
 
 export {
+  COMP_POSITIONS,
   CRITERIA,
   CRITERION_IDS,
   DEFAULT_K,
   DEFAULT_PAIR_WEIGHT,
   K_MAX,
   K_MIN,
+  POSITION_CRITERIA,
+  POSITION_PRESETS,
   UDFA_PICK,
   WEIGHT_MAX,
   WEIGHT_MIN,
@@ -18,7 +21,10 @@ export {
   WINDOWS,
   WINDOW_FIELDS,
   WINDOW_IDS,
+  criterionAppliesTo,
   criterionById,
+  defaultCriteriaFor,
+  isCompPosition,
   isCriterionId,
   isStatField,
   isWindowId,
@@ -30,19 +36,31 @@ export type {
   CompCriterion,
   CompFactField,
   CompField,
+  CompPosition,
   CompWindow,
   WeightedWindow,
 } from "./criteria";
-export { windowTag, windowValue } from "./windows";
-export type { CompRow } from "./windows";
 export {
-  SIMILARITY_DECAY,
-  closenessBars,
-  isEligible,
-  rankComps,
+  COVERAGE_EPSILON,
+  MIN_WEIGHTED_COVERAGE,
+  meetsMinimumCoverage,
+  weightedCoverage,
+} from "./coverage";
+export { observationTag, windowTag, windowValue, windowReading } from "./windows";
+export type { CompRow, WindowReading } from "./windows";
+export {
+  SIMILARITY_ANCHOR_PERCENT,
+  SIMILARITY_ANCHOR_QUANTILE,
+  SIMILARITY_DECAY_MAX,
+  SIMILARITY_DECAY_MIN,
+  SIMILARITY_FALLBACK_DECAY,
+  SIMILARITY_MIN_SAMPLE,
+  calibrateSimilarity,
+  quantile,
   similarityPercent,
-  zStats,
-} from "./knn";
-export type { PoolBounds, PoolSeason, RankedComp } from "./knn";
+} from "./similarity";
+export type { SimilarityScale } from "./similarity";
+export { closenessBars, isEligible, rankComps, zStats } from "./knn";
+export type { CompRanking, PoolBounds, PoolSeason, RankedComp } from "./knn";
 export { compsQueryParams, parseCompsQuery } from "./params";
 export type { CompsRequest, ParsedCompsQuery } from "./params";

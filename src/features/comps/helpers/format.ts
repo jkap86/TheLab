@@ -1,4 +1,4 @@
-import type { CompCriterionId } from "@/shared/contract";
+import type { CompCorpusInfo, CompCriterionId } from "@/shared/contract";
 import { UDFA_PICK } from "../../../shared/comps/criteria.ts";
 
 /**
@@ -60,4 +60,62 @@ export function criterionValue(criterion: CompCriterionId, raw: number): string 
 /** A weight as the rail's readout prints it: `1.6×`. */
 export function weightLabel(weight: number): string {
   return `${weight.toFixed(1)}×`;
+}
+
+/**
+ * The one line beside the result count that says what answered.
+ *
+ * **The scoring basis is on it because nothing else on the page says which
+ * points these are.** Every PPG on a card is on one basis for the whole
+ * corpus, and a reader comparing them against a league they play in has no way
+ * to know which without it. It is four words in a caption rather than a panel,
+ * on the page's own rule about not putting technical metadata in front of
+ * somebody who came for a comp.
+ *
+ * The corpus's last complete season rides it for the same reason: "through
+ * 2024" is what tells a reader in 2026 that they are looking at history rather
+ * than at last season.
+ */
+export function corpusNote(info: CompCorpusInfo | null): string {
+  if (info === null) return "";
+  if (info.source === "unavailable") return "No corpus";
+  if (info.source === "sample") return "Sample corpus";
+
+  const parts = ["Stored corpus"];
+  if (info.through_season !== null) parts.push(`through ${info.through_season}`);
+  if (info.meta) parts.push(scoringLabel(info.meta.scoring));
+  return parts.join(" · ");
+}
+
+/** A scoring key as a reader spells it. An unknown key prints itself. */
+export function scoringLabel(scoring: string): string {
+  switch (scoring) {
+    case "half_ppr":
+      return "half PPR";
+    case "ppr":
+      return "PPR";
+    case "std":
+      return "standard";
+    default:
+      return scoring;
+  }
+}
+
+/**
+ * The coverage badge's text, or null where there is nothing to say.
+ *
+ * **Silent at full coverage**, which is the ordinary case and the one a badge
+ * would only clutter. Below it the figure is what a reader needs to weigh the
+ * comp: a season compared on three quarters of the criteria is a weaker
+ * statement than one compared on all of them, and the distance alone cannot
+ * say so — it is divided by the weight it *had*, which is exactly what makes
+ * a sparse row look confident.
+ *
+ * Rounded down, so a badge never claims more coverage than the row has.
+ */
+export function coverageLabel(coverage: number): string | null {
+  if (!Number.isFinite(coverage)) return null;
+  const percent = Math.floor(coverage * 100);
+  if (percent >= 100) return null;
+  return `${percent}% stat coverage`;
 }

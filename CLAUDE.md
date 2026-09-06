@@ -3862,32 +3862,42 @@ the two. The relative imports inside `shared/comps` carry `.ts`, which is what
 lets Node's runner resolve them — the arrangement `shared/trades/params.ts`
 already makes.
 
-**The port is verified against the prototype's own output, not against a
-reading of it.** `player-seasons/sample.test.ts` carries the rankings the
+**The port was verified against the prototype's own output, and no longer
+is.** `player-seasons/sample.test.ts` used to carry the rankings the
 prototype's `CORPUS`, `PREV`, `windowValue` and distance loop produce when
-extracted from `Comps.dc.html` and run under Node — three subjects under the
-default criteria and one under every criterion on every window — to six
-decimal places, with the per-pair gaps on the nearest comp. Nothing in that
-file was typed by hand, and the port agrees on every row.
+extracted from `Comps.dc.html` and run under Node, to six decimal places.
+Those figures no longer apply, because the prototype z-scored the candidate
+pool **plus the subject** and this does not — see The production-readiness
+pass below, where that is the first of nine corrections. The file now checks
+the module against a second, deliberately naive implementation of the formula
+as this file states it, which is a spec check where a frozen snapshot of the
+new numbers would only have said the code still does what it does.
 
-### The distance, and the four rules that are silent when wrong
+### The distance, and the rules that are silent when wrong
 
 Weighted KNN over z-scored features. For every `(field, window)` pair any
-requested criterion needs, the field is read over that window for every pool
-row plus the subject, and its mean and population SD over that set are what a
-z-score divides by; a field read over two windows is two scales and is cached
-twice. Per row, one term per **(criterion, window) pair** —
+requested criterion needs, the field is read over that window for **every pool
+row**, and its mean and population SD over *that* set are what a z-score
+divides by; a field read over two windows is two scales and is cached twice.
+Per row, one term per **(criterion, window) pair** —
 `pairGap = mean over the criterion's fields of |z(row) − z(subject)|`,
-`acc += weight × pairGap²`, `d = sqrt(acc / Σ weights)`. `knn.test.ts` pins
-each of the following, because every one renders perfectly when it is wrong:
+`acc += weight × pairGap²`, `d = sqrt(acc / Σ available weight)`.
+`knn.test.ts` pins each of the following, because every one renders perfectly
+when it is wrong:
 
+- **The scale is the candidate population's, and the subject is transformed by
+  it rather than part of it.** This is a correction rather than a refinement,
+  and it is invisible in exactly the wrong direction: an extreme subject
+  dropped into the standard deviation widens it, a widened scale shrinks every
+  gap on that criterion, and so the more unusual the player being comped, the
+  less the criterion he is unusual on counted.
 - **The weight lives on the pair, not the criterion.** PPG-last-year at 1.6
   and PPG-career-best at 0.8 are two dimensions with two influences, which is
   the whole reason the weight moved off the criterion.
 - **A multi-field criterion averages its fields**, so "Rec yd / rec" does not
   outweigh a single-column criterion by reading two columns.
-- **Dividing by the weight sum** keeps `d` comparable as pairs are switched on
-  and off, so the similarity readout does not lurch on a toggle.
+- **Dividing by the available weight sum** keeps `d` comparable as pairs are
+  switched on and off, so the similarity readout does not lurch on a toggle.
 - **A null is not a zero, and it costs the pair rather than the row.** Target
   share, YPRR and snap share are nullable in the schema because the source
   does not carry them for every season and position; where either side is
@@ -3896,6 +3906,12 @@ each of the following, because every one renders perfectly when it is wrong:
   bars and an em dash, and a row on which nothing could be read is not a comp.
   Verified on the stored path: a seeded row with a null target share ranked on
   its other pairs with that one chip dark.
+- **And a row that could not be read on enough of the question does not rank
+  at all.** Dropping a pair from numerator *and* denominator is the right
+  treatment of one null and the wrong treatment of a row that is nearly all
+  nulls, which otherwise reaches distance 0 on its one readable criterion.
+  `shared/comps/coverage` is that gate; see The production-readiness pass
+  below for why its denominator is the weight the *subject* can be read on.
 
 **The windows read only what is at or before the row**, and this is the
 easiest thing on the page to get quietly wrong. `last` is the row's own
@@ -3909,11 +3925,16 @@ everyone" is an ordinal position on the board rather than an absence, which is
 why it enters the distance where a null target share does not, and the page
 prints it as the word from the same constant.
 
-`sim% = round(100 × exp(−0.62 × d))` is a presentation transform, not a
-statistic, tuned so a good comp in the sample corpus lands in the 60s–80s
-rather than pinning at 99. **If a real corpus moves the distance distribution,
-retune `SIMILARITY_DECAY` and say so in its comment** — a readout drifting into
-always-90s is what a comp tool looks like right before nobody trusts it.
+`sim% = round(100 × exp(−λ × d))` is a presentation transform, not a statistic.
+**λ was `0.62`, hand-tuned so a good comp in the sample corpus landed in the
+60s–80s, and this file's own instruction was to retune it when a real corpus
+moved the distribution.** It is fitted per pool now instead — the eligible
+pool's median distance is anchored to 50, so a comp no better than the middle
+of the field it was drawn from reads as one. `shared/comps/similarity` is the
+whole of it, `SIMILARITY_FALLBACK_DECAY` is that old constant kept for pools
+too small to fit, and the readout ships from the server because the
+calibration is a statement about a population the browser holds only the top
+`k` of. See The production-readiness pass below.
 
 ### KTC is not a criterion — settled by the design
 
@@ -3944,24 +3965,26 @@ Sleeper's *current* map and a 2018 comp names players it never held. `player_id`
 is the Sleeper id where the loader can crosswalk one, not a foreign key, for
 the same reason.
 
-**Nothing in the app writes the table.** The source is nfl_data_py's seasonal
-data plus Sleeper's stats per the handoff, and the loader that joins them is a
-script rather than a sync loop — the corpus changes once a year. Until it runs
-the table is empty, and **the page answers from the sample corpus and says so**:
-`CompCorpusSource` rides both payloads and the result rule prints `Sample
-corpus` or `Stored corpus`. That fallback is on one condition only, an empty
-table; a database that cannot be read is a 500, because answering the sample in
-its place would put twenty-six invented comps under a page that looks healthy.
+**Nothing in the *app* writes the table**, and for a while nothing at all did.
+The loader arrived with the production-readiness pass below — a script rather
+than a sync loop, because the corpus changes once a year when a season ends —
+and it is `npm run comps:load-corpus`. Until it has run the table is empty, and
+what the page does about that is now a **decision** rather than a fallback:
+`CompCorpusSource` has a third state, `unavailable`, and production refuses the
+sample by default. A database that cannot be *read* is still a 500, which is a
+different sentence again. See the pass below.
 
 **`buildCorpus` derives everything a table cannot state**, and `corpus.test.ts`
-pins it: a comp is a season with the following season on file (a gap in a
-career is not bridged); a subject is a row of the latest season on file,
-entering the one after it, read off the data rather than a constant; and a
-row's series is its seasons at or before it, newest first. The positional
-finish (`WR12`) is a `rank()` over `(season, position)` in the read, because it
-is a statement about the whole position's population and the table is the only
-thing that knows what that is — so a season loaded for its top forty receivers
-ranks those forty among themselves, which a loader has to know.
+pins it: a subject is a row of the latest season on file, entering the one
+after it, read off the data rather than a constant; a row's series is its
+seasons at or before it, newest first; and a comp is a season whose following
+season the corpus can answer for — which is *not* the same as one with a
+following row, and the difference is the survivorship fix in the pass below.
+The positional finish (`WR12`) is a `rank()` over `(season, position)` in the
+read, because it is a statement about the whole position's population and the
+table is the only thing that knows what that is — so a season loaded for its
+top forty receivers ranks those forty among themselves, which is one of the two
+reasons the loader's activity floor is a game played rather than a top-N cut.
 
 ### The request, and the opposite of the trades board's rule
 
@@ -4062,10 +4085,196 @@ clean.
 
 **Not verified against real data**, which is the gap to close first: the
 stored corpus above is four seeded players. What a seed cannot check is the
-loader itself — the crosswalk from nfl_data_py names to Sleeper ids, which
-scoring basis the table is loaded on, and whether `SIMILARITY_DECAY` still
-lands a good comp in the 60s–80s over eight thousand rows rather than the
-sample's twenty-six.
+loader itself — the crosswalk from a stats source to Sleeper ids, which
+scoring basis the table is loaded on, and whether the similarity readout still
+lands a good comp where a reader expects it over eight thousand rows rather
+than the sample's twenty-six. **The first two of those have since been
+answered** — see the pass below, which is where the loader arrived.
+
+### The production-readiness pass
+
+The paragraph above ends "the gap to close first is the loader itself", and
+the loader did not exist: the migration promised one, the read fell back to a
+sample corpus when the table was empty, and the table was empty everywhere.
+That is the hole this pass fills, and eight other things fell out of taking it
+seriously — each of which rendered a perfectly ordinary board while being
+wrong. Nothing about the page's shape moved.
+
+**A loader, and a production that refuses the toy corpus.**
+`shared/player-seasons/loader` is `npm run comps:load-corpus`: Sleeper's own
+weekly stat rows, folded into one season per player, joined to the stored
+players map for the three facts, upserted with a metadata row that says what
+they are. The sample corpus is now a **decision** rather than a consequence of
+an empty table — allowed by default in development, denied by default in
+production, forced either way by `COMPS_SAMPLE_CORPUS` — because the failure it
+prevents is invisible: the board renders, the percentages look plausible, and
+the only thing on screen saying so is a four-word caption. Where neither corpus
+is available the source is `unavailable`, which is a **200 with empty lists**
+rather than an error, so the page can say what is missing and name the command
+that fixes it. A database that cannot be *read* is still a 500; "we have no
+corpus" and "we could not ask" are different sentences.
+
+**Survivorship, which was deleting the half of the outcome distribution a
+reader is there for.** A season was a comp only if the same player had a stored
+row the following year — so every retirement, every career-ending injury, every
+lost season and everyone who fell out of the league was silently removed, and
+what was left was a board whose comps' next years went better, on average, than
+a real player's do. An absent following season is now a **zero outcome**
+(`CompNextSeason.played: false`, and the card's payoff pane reads `did not
+play`) — but only where the corpus **covered** that season. That is the whole
+of the distinction and the only hard part: within a loaded season an absence is
+a measurement, outside one it is a hole, and a hole is not a comp at all. A
+season past the corpus's last *complete* one answers for nobody either way,
+present or absent, because a payoff column nine games short would read as a
+collapse for everybody in it.
+
+**Weighted comparison coverage, which is what stops a sparse row looking
+perfect.** Dropping an unreadable pair from numerator *and* denominator is the
+right treatment of a null and the wrong treatment of a row that is nearly all
+nulls: a season with target share and nothing else matches the subject's target
+share exactly, comes back at distance 0, and ranks above every complete season
+in the pool. Every row now reports the share of the requested weight it could
+actually be compared on, and a row under `MIN_WEIGHTED_COVERAGE` (0.75, one
+named constant in `shared/comps/coverage`) does not rank. **The denominator is
+the weight the subject can be read on**, not the full request — a criterion the
+corpus holds for nobody (yards per route, which no source here publishes) is
+unreadable on the subject too, and charged to the candidates it would empty the
+board with nothing saying why. That share ships as `subject_coverage` instead.
+
+**The scale is the candidate pool's, and the subject is transformed by it.**
+The prototype z-scored the pool *plus* the subject, which is backwards in a way
+that is invisible and exactly wrong: an extreme subject widens the standard
+deviation, and a widened scale shrinks every gap on that criterion — so the
+more unusual the player being comped, the less the criterion he is unusual on
+counted.
+
+**A window says how much of itself it actually read.** `avg2` over a season
+with target share and a season without is *one* observation, and presented as a
+two-year average it is a number a reader believes twice as much as they should.
+`windowReading` carries `used` and `of` beside the value, the chip prints `1 of
+2 yr` rather than `2 yr`, and a *collapsed* window (a rookie's two-year read)
+still says `1 yr`, because nothing was missing there — the series is the limit,
+which is a fact about the player rather than a gap in the data.
+
+**Position presets.** The defaults were receiving-centric for every position: a
+running back was compared on target share and yards per route with rushing
+switched *off*. `POSITION_PRESETS` is one table per position, `WR` byte-for-byte
+the vocabulary's own defaults so the two cannot drift. `POSITION_CRITERIA` is
+the second half and the one that matters for quarterbacks: the corpus carries no
+passing column, so receiving criteria are not merely weak for a QB but zero or
+null for every one of them, and they are **not offered** rather than quietly
+scored. A position outside `COMP_POSITIONS` is not offered as a subject at all
+and the route 404s it. The preset fires only while the criteria table is
+untouched — a reader's own weights being replaced when they pick a second
+player is a worse failure than the one being fixed — and `Reset` is what makes
+that reversible.
+
+**Similarity is calibrated against the pool it is describing.** `0.62` was
+fitted to twenty-six invented rows and its own comment said to retune it. The
+decay is now derived from the eligible pool's median distance, anchored so a
+comp at the middle of the field reads 50; the fallback is the old constant,
+named as what it is and used only where the pool is too small or too degenerate
+to fit. It stays exponential rather than becoming a bare percentile, which
+would make the nearest comp read ~100 whether or not it is any good and throw
+away the only absolute information the number carries.
+
+**Provenance, and caching that follows it.** `comps_corpus_meta` records the
+source, the scoring basis, the loader version, the seasons covered and the last
+complete one — because the migration's promise that the table is "on one
+scoring basis, which the loader states" was, until now, stated only in that
+comment. The corpus cache is keyed by a **version** rather than a clock: one
+cheap probe a minute decides whether the built corpus is still current, so a
+load lands within a minute rather than within a quarter of an hour and a quiet
+corpus is never rebuilt for nothing. A probe that fails over a build already
+held keeps serving it. Identical comps answers are held in a bounded, TTL'd
+cache whose key is the normalised query, the corpus version and the coverage
+threshold — safe because a corpus is immutable for a given version, and
+therefore never stale.
+
+**And the page says when it is showing an old answer.** `useComps` already kept
+the previous board on screen while the next request was in flight, which is
+right for a control that fires on every step of a drag and was indistinguishable
+from a board that had settled. There is an `Updating…` readout and the list
+dims; nothing is cleared, nothing shifts, and the controls stay live.
+
+**Deliberately still open, and each is a data limitation rather than a
+decision.** Sleeper publishes no routes run, so `yprr` is null across a
+Sleeper-loaded corpus and the criterion narrows the comparison rather than
+answering it — the coverage machinery is what makes that honest. It publishes
+no NFL draft position either, so `draft_pick` is null and the Draft criterion
+becomes a constant that orders nothing; the loader reports the fill rate rather
+than leaving it to be discovered, and the read is written so a source that does
+publish it (nflverse's ids file carries `draft_ovr` beside a `sleeper_id`) fills
+the column with no other change. And `experience` falls back from
+`metadata.rookie_year` to a `years_exp` derivation with a known failure mode — a
+player who missed a whole season — which the repo would normally decline; it is
+taken because the alternative here is dropping the row rather than blanking a
+cell, and the load report counts how many rows leaned on it.
+
+#### Verified
+
+Against a throwaway Postgres 16 cluster and a production build, since no live
+database or Sleeper access is reachable from where this was built. The Sleeper
+source is injected into the load, which is what let the whole loader be driven
+against hand-written weeks with no network at all.
+
+`migrate:up` applied `1788000000007`, `migrate:down -- 1 --dry-run` printed the
+mirror, and the round trip down-and-up left the table as declared. A first load
+over three fixture seasons wrote 10 rows and skipped the three seasons of a
+player with no birth date **by name**; a rerun updated 10 and inserted 0, and
+the metadata row was upserted rather than duplicated. A narrow reload of one
+season **merged** its season into the coverage rather than replacing it, which
+is what stops a later load turning every earlier absence back into an unknown.
+A load asked for 2024 and 2025 refused both on the console, naming the latest
+complete season. Read back: a retirement season and a mid-career missed season
+both came through as comps with `played: false`, a normal following season as
+`played: true`, and the skipped player was nowhere on either side.
+
+Two real bugs surfaced in that run and are fixed. `latestCompleteSeason` read
+Sleeper's `"pre"` and `"off"` as "the named season is finished", which is
+backwards for most of the calendar — `state.season` rolls to the upcoming year
+in the spring while `season_type` is still `"off"` — so it would have written a
+season nobody had played as a completed historical outcome. And the `years_exp`
+fallback was measured from the latest *complete* season rather than from the
+season Sleeper's map is current as of, which is a year of experience wrong on
+every row that reading answers for.
+
+Over HTTP against a production build: `/api/comps` shipped `pool: {eligible,
+total, ranked, excluded_low_coverage}`, `min_coverage`, `subject_coverage`
+(0.8276 — the YPRR pair unanswerable), `corpus_info.version` and
+`through_season`, a server-stamped `similarity` and `coverage` per match, and
+`used`/`of` on every pair reading. `?k=2`, `?from=abc` and `?c=ktc:last:1` are
+400s and an unknown subject is a 404. Reloading the corpus left the held build
+in place for the probe TTL and then moved the version — which is the answer
+cache invalidating without anything having to be swept — and killing Postgres
+mid-session left the server answering from the build it already had, which is
+the probe-failure fallback working.
+
+Over CDP at 1280 and 390: picking a player put `Updating…` beside the count
+within 120ms; moving a weight rail left the two existing cards on screen at
+`aria-busy="true"` and an opacity mid-transition, settling to `false` and 1.
+The retirement comp's payoff pane reads `DID NOT PLAY` over a column of zeroes.
+The corpus note reads `Stored corpus · through 2023 · half PPR`. Picking the
+running back moved the panel to `CRITERIA · RB DEFAULTS · 9 OF 11 ON` with
+rushing on. With the table emptied, the page drew `NO COMPS CORPUS LOADED` and
+named `npm run comps:load-corpus`. At every width: one `<h1>`, zero elements
+past the viewport, `documentElement.scrollWidth` equal to it, and **no console
+output of any kind**. One render changed the code — an empty corpus answers
+`subject_season: 0`, which `??` kept, so the page's opening sentence read "as
+he stands in 0".
+
+1,438 unit tests pass (203 of them comps-focused, against 51 before);
+`lint`, `typecheck` and `build` are clean.
+
+**Not verified against real data**, which is still the gap to close first and
+is now a narrower one: every number above is a fixture, and what a fixture
+cannot check is the shape of Sleeper's actual stat rows. The stat keys this
+folds on (`pts_half_ppr`, `rec_tgt`, `off_snp`, `tm_off_snp`, `gp`) are read
+defensively and are the well-known ones, but they have not been seen from
+`api.sleeper.com` from here — the first real load is what confirms them, and
+the loader's own skip counts are what will say so. Nor can a fixture say
+whether anchoring the median at 50 lands a good comp where a reader expects it
+over eight thousand rows.
 
 ## Tracking placeholder picks
 

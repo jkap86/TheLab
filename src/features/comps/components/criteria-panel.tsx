@@ -31,27 +31,53 @@ const LEFT_COLUMN = 6;
 export function CriteriaPanel({
   criteria,
   activeCount,
+  position,
   sampleCorpus,
+  resettable,
+  onReset,
   onToggle,
   onWindow,
   onWeight,
 }: {
   criteria: readonly CompCriterion[];
   activeCount: number;
+  /** The subject's position, or null before one is picked. */
+  position: string | null;
   /** Whether the copy's "two per player" clause applies. */
   sampleCorpus: boolean;
+  /** Whether the table has been edited away from the position's preset. */
+  resettable: boolean;
+  onReset: () => void;
   onToggle: (id: CompCriterionId) => void;
   onWindow: (id: CompCriterionId, window: CompWindowId) => void;
   onWeight: (id: CompCriterionId, window: CompWindowId, weight: number) => void;
 }) {
-  const columns = [criteria.slice(0, LEFT_COLUMN), criteria.slice(LEFT_COLUMN)];
+  const half = Math.min(LEFT_COLUMN, Math.ceil(criteria.length / 2));
+  const columns = [criteria.slice(0, half), criteria.slice(half)];
 
   return (
     <section className={`${CONSOLE_WELL} mt-7 p-3.5 font-mono`}>
-      <header className="flex items-baseline gap-2.5 px-1 pb-2.5">
+      <header className="flex flex-wrap items-baseline gap-2.5 px-1 pb-2.5">
         <h2 className="text-[length:var(--fs-11)] font-normal uppercase tracking-[0.16em] text-foreground/60">
           Criteria
         </h2>
+        {position && (
+          <span className={CAPTION}>
+            {position} defaults
+          </span>
+        )}
+        {/* The preset stops firing the moment the table is edited, which is
+            what keeps a reader's own weights — and what would otherwise strand
+            them on one position's criteria for the rest of the session. */}
+        {resettable && (
+          <button
+            type="button"
+            onClick={onReset}
+            className="rounded-[0.4375rem] border border-foreground/10 bg-[image:var(--key-bg)] px-2 py-1 font-mono text-[length:var(--fs-9)] uppercase tracking-[0.14em] text-foreground/70 shadow-[var(--key-shadow-pressed)] transition-[color,box-shadow,border-color] duration-150 hover:text-readout focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-active/60"
+          >
+            Reset{position ? ` to ${position}` : ""}
+          </button>
+        )}
         <span
           className={`ml-auto text-[length:var(--fs-10)] uppercase tracking-[0.16em] tabular-nums ${LIT}`}
         >
@@ -86,6 +112,11 @@ export function CriteriaPanel({
         {sampleCorpus
           ? " Career reads the seasons on file, two per player in this sample corpus."
           : " Career reads every season on file up to the one being compared."}
+        {" "}
+        A window that could not read every season it asked for says so on the
+        chip — <span className="whitespace-nowrap">1 of 2 yr</span> rather than
+        2 yr — and a criterion the corpus cannot answer for a season costs that
+        season stat coverage rather than counting as a zero.
       </p>
       {/* This line stands only while KTC is a plate figure and not a
           criterion — see `CRITERIA` for the decision it states. */}

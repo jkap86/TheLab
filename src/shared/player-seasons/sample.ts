@@ -167,7 +167,18 @@ function seasonOf(t: SeasonTuple): CorpusSeason {
     season,
     facts: { age, exp: rest[9], draft },
     history: prev ? [own, lineOf(prev)] : [own],
-    next: { ppg: rest[10], recyd: rest[11], rec: rest[12], gp: rest[13], finish: rest[14] },
+    // Every sample row's payoff is a season the transcription states, so all
+    // of them played. The sample carries no did-not-play outcome and cannot:
+    // its rows are twenty-six hand-picked good seasons, which is one more
+    // reason it is not a corpus to reason from — see the module note.
+    next: {
+      ppg: rest[10],
+      recyd: rest[11],
+      rec: rest[12],
+      gp: rest[13],
+      finish: rest[14],
+      played: true,
+    },
   };
 }
 
@@ -186,10 +197,21 @@ function subjectOf(t: SubjectTuple): CorpusSubject {
   };
 }
 
+/**
+ * Every season the sample speaks for: the comp seasons it transcribes plus the
+ * subjects' own. Stated rather than derived, because the sample is a list of
+ * selected players rather than a load of whole seasons — deriving coverage
+ * from the rows present would let `buildCorpus`' did-not-play rule fire over a
+ * transcription that never claimed to hold everybody.
+ */
+const SAMPLE_COVERED_SEASONS = [2018, 2019, 2020, 2021, 2022, 2023, 2024, 2025];
+
 /** The sample corpus, built once at module load. */
 export const SAMPLE_CORPUS: CompCorpus = {
   source: "sample",
   subject_season: SAMPLE_SUBJECT_SEASON,
+  covered_seasons: SAMPLE_COVERED_SEASONS,
+  max_completed_season: SAMPLE_SUBJECT_SEASON - 1,
   seasons: SEASONS.map(seasonOf),
   subjects: SUBJECTS.map(subjectOf),
 };

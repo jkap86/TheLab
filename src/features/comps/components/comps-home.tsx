@@ -13,7 +13,9 @@ import {
   setWeight,
   toggleCriterion,
   toggleWindow,
+  visibleCriteria,
 } from "../helpers/criteria-state";
+import { corpusNote } from "../helpers/format";
 import { useCompPlayers } from "../hooks/use-comp-players";
 import { useComps } from "../hooks/use-comps";
 import { CompCard } from "./comp-card";
@@ -38,6 +40,15 @@ import { SubjectHousing } from "./subject-housing";
  * off that same answer, which is why it is asked for even before a subject
  * is picked — the strip has a figure to show either way.
  *
+ * **The criteria preset to the subject's position, and stop doing so the
+ * moment the reader edits them.** A running back opening on a receiver's
+ * criteria is the thing `POSITION_PRESETS` exists to fix; a reader's own
+ * weights being silently replaced when they pick a second player is a worse
+ * failure than the one being fixed, so the preset only fires while the table
+ * is untouched. `Reset` is what makes that reversible, and it is the whole of
+ * why the key exists — without it a single nudged rail would strand a reader
+ * on one position's criteria for the rest of the session.
+ *
  * The three tweakables the prototype exposed are props with its defaults.
  */
 export function CompsHome({
@@ -60,7 +71,11 @@ export function CompsHome({
   const [query, setQuery] = useState("");
   const [subjectId, setSubjectId] = useState<string | null>(null);
   const [browsing, setBrowsing] = useState(false);
-  const [criteria, setCriteria] = useState(defaultCriteria);
+  const [criteria, setCriteria] = useState(() => defaultCriteria(null));
+  // Whether the reader has edited the table. Once true the preset never fires
+  // again on its own — see the note above.
+  const [criteriaTouched, setCriteriaTouched] = useState(false);
+  const [presetPosition, setPresetPosition] = useState<string | null>(null);
   const [posLock, setPosLock] = useState(true);
   const [excludeOwn, setExcludeOwn] = useState(true);
   // Null means the corpus's own edge, which the route reads off the data; the
@@ -73,6 +88,17 @@ export function CompsHome({
     () => players.payload?.players.find((p) => p.player_id === subjectId) ?? null,
     [players.payload, subjectId],
   );
+  const position = subject?.position ?? null;
+
+  // Preset during render rather than in an effect, the idiom
+  // `useManagerLeagues` documents: an effect would paint one frame of the new
+  // player's card under the previous position's criteria.
+  if (!criteriaTouched && position !== presetPosition) {
+    setPresetPosition(position);
+    setCriteria(defaultCriteria(position));
+  }
+
+  const unavailable = players.payload?.source === "unavailable";
   const bounds = players.payload?.corpus ?? null;
   const seasons = useMemo(() => {
     if (!bounds || bounds.seasons === 0) return [];
@@ -84,7 +110,8 @@ export function CompsHome({
   const toValue = to ?? bounds?.to ?? null;
   const kValue = k ?? defaultK;
 
-  const pairs = useMemo(() => activePairs(criteria), [criteria]);
+  const pairs = useMemo(() => activePairs(criteria, position), [criteria, position]);
+  const shown = useMemo(() => visibleCriteria(criteria, position), [criteria, position]);
   const request = useMemo<CompsRequest>(
     () => ({
       subject: subject?.player_id ?? null,
@@ -98,15 +125,31 @@ export function CompsHome({
     [subject, from, to, kValue, posLock, excludeOwn, pairs],
   );
   const requestKey = compsQueryParams(request).toString();
-  const comps = useComps(request, requestKey, players.payload !== null);
+  const comps = useComps(request, requestKey, players.payload !== null && !unavailable);
 
-  const active = activeCount(criteria);
+  const active = activeCount(criteria, position);
   const board = comps.payload;
   // The board answers the question it was asked, and the subject is the one
   // part of it a stale answer must not be shown under — see `useComps` for
   // the render-time reset that guarantees it.
   const results = board?.comps ?? [];
-  const subjectSeason = players.payload?.subject_season ?? null;
+  // Zero is what an empty corpus answers, and it is not a year. `??` keeps it,
+  // which put "as he stands in 0" in the page's own opening sentence.
+  const subjectSeason =
+    players.payload && players.payload.subject_season > 0
+      ? players.payload.subject_season
+      : null;
+
+  // An edit is what stops the position preset from firing again.
+  const edit = (next: typeof criteria) => {
+    setCriteriaTouched(true);
+    setCriteria(next);
+  };
+  const reset = () => {
+    setCriteriaTouched(false);
+    setPresetPosition(position);
+    setCriteria(defaultCriteria(position));
+  };
 
   // The two clamp each other: raising `from` past `to` pushes `to` up, and
   // lowering `to` past `from` pulls `from` down.
@@ -124,7 +167,9 @@ export function CompsHome({
     : active === 0
       ? "No criteria on — switch at least one on to run a comp."
       : board && board.subject === subject.player_id && results.length === 0
-        ? "No seasons in the pool. Widen the season range, or drop the position lock."
+        ? board.pool.excluded_low_coverage > 0 && board.pool.eligible > 0
+          ? `No season in the pool could be compared on enough of these criteria. ${board.pool.excluded_low_coverage} of ${board.pool.eligible} were dropped for thin stat coverage — switch a criterion off, or widen the season range.`
+          : "No seasons in the pool. Widen the season range, or drop the position lock."
         : null;
 
   return (
@@ -133,11 +178,13 @@ export function CompsHome({
         <div className="min-w-0">
           {heading}
           <p className="mt-1 font-mono text-[length:var(--fs-11)] uppercase tracking-[0.16em] text-foreground/60">
-            {players.payload && bounds
+            {players.payload && bounds && !unavailable
               ? `${players.payload.subject_season} subject · ${bounds.from} – ${bounds.to} corpus · ${bounds.seasons} player-seasons`
               : players.error
                 ? players.error
-                : "Loading the corpus…"}
+                : unavailable
+                  ? "No corpus loaded"
+                  : "Loading the corpus…"}
           </p>
         </div>
         <p className="ml-auto max-w-[26rem] font-display text-[length:var(--fs-13)] leading-normal text-foreground/[0.62] [text-wrap:pretty]">
@@ -148,97 +195,160 @@ export function CompsHome({
         </p>
       </header>
 
-      <SubjectHousing
-        subject={subject}
-        subjectSeason={subjectSeason}
-        players={players.payload?.players ?? []}
-        playersError={players.error}
-        query={query}
-        onQuery={(value) => {
-          setQuery(value);
-          setBrowsing(true);
-        }}
-        browsing={browsing}
-        onPick={(id) => {
-          setSubjectId(id);
-          setBrowsing(false);
-          setQuery("");
-        }}
-        onClear={() => {
-          setSubjectId(null);
-          setQuery("");
-          setBrowsing(true);
-        }}
-        posLock={posLock}
-        onPosLock={() => setPosLock((v) => !v)}
-        excludeOwn={excludeOwn}
-        onExcludeOwn={() => setExcludeOwn((v) => !v)}
-        seasons={seasons}
-        from={fromValue}
-        to={toValue}
-        onFrom={onFrom}
-        onTo={onTo}
-        k={kValue}
-        onK={setK}
-        pool={board?.pool ?? null}
-      />
-
-      <CriteriaPanel
-        criteria={criteria}
-        activeCount={active}
-        sampleCorpus={players.payload?.source !== "stored"}
-        onToggle={(id: CompCriterionId) => setCriteria((c) => toggleCriterion(c, id))}
-        onWindow={(id: CompCriterionId, window: CompWindowId) =>
-          setCriteria((c) => toggleWindow(c, id, window))
-        }
-        onWeight={(id, window, weight) => setCriteria((c) => setWeight(c, id, window, weight))}
-      />
-
-      <div className="relative my-7 flex flex-wrap items-center gap-3">
-        <span
-          aria-hidden
-          className="h-px flex-[1_1_3rem] bg-gradient-to-r from-active/35 via-foreground/5 to-transparent"
-        />
-        <p
-          role="status"
-          className="font-mono text-[length:var(--fs-11)] uppercase tracking-[0.16em] tabular-nums text-foreground/70"
-        >
-          {subject
-            ? `${results.length} comps · ${subject.name} · ${subjectSeason ?? ""}`
-            : "No subject"}
-        </p>
-        <p className="font-mono text-[length:var(--fs-10)] uppercase tracking-[0.16em] text-foreground/60">
-          {players.payload?.source === "stored" ? "Stored corpus" : "Sample corpus"}
-        </p>
-      </div>
-
-      {comps.error && (
-        <p className="mb-4 font-mono text-[length:var(--fs-11)] uppercase tracking-[0.16em] text-error">
-          {comps.error}
-        </p>
-      )}
-
-      {results.length > 0 ? (
-        <ul className="flex flex-col gap-7">
-          {results.map((comp, index) => (
-            <CompCard
-              key={`${comp.player_id}:${comp.season}`}
-              comp={comp}
-              place={index + 1}
-              of={results.length}
-              pairs={board?.pairs ?? []}
-              showPayoff={showPayoff}
-              similarityMode={similarityMode}
-            />
-          ))}
-        </ul>
+      {unavailable ? (
+        <CorpusUnavailable />
       ) : (
-        emptyNote && (
-          <p className="font-mono text-[length:var(--fs-11)] uppercase tracking-[0.16em] text-foreground/60">
-            {emptyNote}
-          </p>
-        )
+        <>
+          <SubjectHousing
+            subject={subject}
+            subjectSeason={subjectSeason}
+            players={players.payload?.players ?? []}
+            playersError={players.error}
+            query={query}
+            onQuery={(value) => {
+              setQuery(value);
+              setBrowsing(true);
+            }}
+            browsing={browsing}
+            onPick={(id) => {
+              setSubjectId(id);
+              setBrowsing(false);
+              setQuery("");
+            }}
+            onClear={() => {
+              setSubjectId(null);
+              setQuery("");
+              setBrowsing(true);
+            }}
+            posLock={posLock}
+            onPosLock={() => setPosLock((v) => !v)}
+            excludeOwn={excludeOwn}
+            onExcludeOwn={() => setExcludeOwn((v) => !v)}
+            seasons={seasons}
+            from={fromValue}
+            to={toValue}
+            onFrom={onFrom}
+            onTo={onTo}
+            k={kValue}
+            onK={setK}
+            pool={board?.pool ?? null}
+          />
+
+          <CriteriaPanel
+            criteria={shown}
+            activeCount={active}
+            position={position}
+            sampleCorpus={players.payload?.source === "sample"}
+            onReset={reset}
+            resettable={criteriaTouched}
+            onToggle={(id: CompCriterionId) => edit(toggleCriterion(criteria, id))}
+            onWindow={(id: CompCriterionId, window: CompWindowId) =>
+              edit(toggleWindow(criteria, id, window))
+            }
+            onWeight={(id, window, weight) => edit(setWeight(criteria, id, window, weight))}
+          />
+
+          <div className="relative my-7 flex flex-wrap items-center gap-3">
+            <span
+              aria-hidden
+              className="h-px flex-[1_1_3rem] bg-gradient-to-r from-active/35 via-foreground/5 to-transparent"
+            />
+            <p
+              role="status"
+              className="font-mono text-[length:var(--fs-11)] uppercase tracking-[0.16em] tabular-nums text-foreground/70"
+            >
+              {subject
+                ? `${results.length} comps · ${subject.name} · ${subjectSeason ?? ""}`
+                : "No subject"}
+            </p>
+            {/* The board on screen answers the previous question while the next
+                is in flight — see `useComps`, which keeps it there rather than
+                blanking on every step of a rail drag. Something has to say so,
+                or a reader reads the old numbers as the new ones. */}
+            {comps.pending && (
+              <p
+                role="status"
+                className="inline-flex items-center gap-1.5 font-mono text-[length:var(--fs-10)] uppercase tracking-[0.16em] text-readout [text-shadow:var(--readout-text-glow)]"
+              >
+                <span
+                  aria-hidden
+                  className="lab-anim h-1.5 w-1.5 shrink-0 animate-pulse rounded-full bg-active shadow-[0_0_8px_var(--accent-glow)]"
+                />
+                Updating…
+              </p>
+            )}
+            <p className="font-mono text-[length:var(--fs-10)] uppercase tracking-[0.16em] text-foreground/60">
+              {corpusNote(players.payload?.corpus_info ?? null)}
+            </p>
+          </div>
+
+          {comps.error && (
+            <p className="mb-4 font-mono text-[length:var(--fs-11)] uppercase tracking-[0.16em] text-error">
+              {comps.error}
+            </p>
+          )}
+
+          {results.length > 0 ? (
+            <ul
+              aria-busy={comps.pending}
+              // Dimmed rather than replaced or emptied: the layout must not
+              // shift under a control the reader is still dragging.
+              className={`lab-anim flex flex-col gap-7 transition-opacity duration-200 ${
+                comps.pending ? "opacity-60" : "opacity-100"
+              }`}
+            >
+              {results.map((comp, index) => (
+                <CompCard
+                  key={`${comp.player_id}:${comp.season}`}
+                  comp={comp}
+                  place={index + 1}
+                  of={results.length}
+                  pairs={board?.pairs ?? []}
+                  showPayoff={showPayoff}
+                  similarityMode={similarityMode}
+                />
+              ))}
+            </ul>
+          ) : (
+            emptyNote && (
+              <p className="font-mono text-[length:var(--fs-11)] uppercase tracking-[0.16em] text-foreground/60">
+                {emptyNote}
+              </p>
+            )
+          )}
+        </>
       )}
     </>
+  );
+}
+
+/**
+ * What the page draws when `player_seasons` has not been loaded and this
+ * deployment will not answer from the sample.
+ *
+ * A state rather than an error, and the difference is what the reader can do
+ * next: an error line says the page is broken, and this says what is missing
+ * and who fills it. It names the command rather than describing it, because
+ * the person who sees this in production is the person who can run it.
+ */
+function CorpusUnavailable() {
+  return (
+    <section className="mt-9 rounded-[0.875rem] border border-foreground/10 bg-foreground/[0.04] p-6 font-mono">
+      <h2 className="text-[length:var(--fs-13)] uppercase tracking-[0.16em] text-readout [text-shadow:var(--readout-text-glow)]">
+        No comps corpus loaded
+      </h2>
+      <p className="mt-2.5 max-w-[36rem] font-display text-[length:var(--fs-13)] leading-normal text-foreground/[0.72] [text-wrap:pretty]">
+        Comps run against a table of historical player-seasons, and this
+        deployment has none. Nothing is broken and nothing is missing from the
+        page — there is simply no history to compare against yet.
+      </p>
+      <p className="mt-2.5 max-w-[36rem] font-display text-[length:var(--fs-13)] leading-normal text-foreground/[0.62] [text-wrap:pretty]">
+        Load it with{" "}
+        <code className="rounded bg-foreground/10 px-1.5 py-0.5 font-mono text-[length:var(--fs-11)]">
+          npm run comps:load-corpus
+        </code>
+        .
+      </p>
+    </section>
   );
 }

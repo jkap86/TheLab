@@ -8,6 +8,7 @@ import {
   setWeight,
   toggleCriterion,
   toggleWindow,
+  visibleCriteria,
   windowKeyDisabled,
 } from "./criteria-state.ts";
 
@@ -88,5 +89,56 @@ describe("the criteria state", () => {
     assert.equal(windowKeyDisabled(find(list, "yprr"), "last"), false);
     assert.equal(windowKeyDisabled(find(list, "ppg"), "last"), false);
     assert.equal(windowKeyDisabled(find(list, "ppg"), "chigh"), false);
+  });
+});
+
+/**
+ * The panel and the request must agree about which criteria exist for a
+ * position. A criterion hidden from the panel and still in the request would
+ * be a board partly ranked on something with nothing on screen naming it.
+ */
+describe("the position filter", () => {
+  test("opens on the position's own preset", () => {
+    const rb = defaultCriteria("RB");
+    assert.equal(rb.find((c) => c.id === "rush")!.on, true);
+    const wr = defaultCriteria("WR");
+    assert.equal(wr.find((c) => c.id === "rush")!.on, false);
+  });
+
+  test("hides the criteria a position has no answer for", () => {
+    const shown = visibleCriteria(defaultCriteria("QB"), "QB").map((c) => c.id);
+    for (const hidden of ["recyd", "tgtsh", "yprr"]) {
+      assert.ok(!shown.includes(hidden as never), hidden);
+    }
+    assert.ok(shown.includes("rush"));
+  });
+
+  test("a hidden criterion cannot reach the request, however the state got that way", () => {
+    // A reader who leaves target share on for a receiver and then picks a
+    // quarterback must not be handed a board partly ranked on target share.
+    const carried = toggleCriterion(defaultCriteria("WR"), "tgtsh");
+    const stillOn = toggleCriterion(carried, "tgtsh");
+    assert.equal(stillOn.find((c) => c.id === "tgtsh")!.on, true);
+
+    const pairs = activePairs(stillOn, "QB").map((p) => p.criterion);
+    assert.ok(!pairs.includes("tgtsh"), "the request carries a hidden criterion");
+    assert.ok(!visibleCriteria(stillOn, "QB").some((c) => c.id === "tgtsh"));
+    // The count on the panel's header counts what the panel shows, so it and
+    // the pairs behind it cannot disagree either.
+    assert.equal(
+      activeCount(stillOn, "QB"),
+      new Set(pairs).size,
+    );
+  });
+
+  test("with no position nothing is hidden, which is the state before a subject is picked", () => {
+    const list = defaultCriteria();
+    assert.equal(visibleCriteria(list, null).length, list.length);
+    assert.equal(activeCount(list, null), activeCount(list));
+  });
+
+  test("an unknown position hides nothing rather than emptying the panel", () => {
+    const list = defaultCriteria();
+    assert.equal(visibleCriteria(list, "K").length, list.length);
   });
 });

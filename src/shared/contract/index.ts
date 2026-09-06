@@ -92,6 +92,9 @@ export {
   type CompPairReading,
   type CompMatch,
   type CompCorpusSource,
+  type CompCorpusMeta,
+  type CompCorpusInfo,
+  type CompPoolCounts,
   type CompPlayersPayload,
   type CompsPayload,
 } from "./comps";

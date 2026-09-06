@@ -45,6 +45,7 @@ database fails until it is set (in production a missing one is fatal instead).
 | `npm run typecheck` | `tsc --noEmit` |
 | `npm test` | Node's test runner over `src/**/*.test.ts` |
 | `npm run check` | All three of the above, in order |
+| `npm run comps:load-corpus` | Load historical player-seasons for `/comps` (see below) |
 | `npm run migrate:up` / `migrate:down` | Apply or roll back one migration |
 | `npm run migrate:create <name>` | New SQL migration in `db/migrations` |
 
@@ -65,6 +66,32 @@ matters for anything that reads the database; the rest are optional.
 | `MANAGER_SYNC_LIMIT` | `3` | Manager syncs one process runs at once. It *requests* a bound and cannot raise one — clamped to a third of the pool, because a sync holds an advisory-lock session across its whole Sleeper fan-out. |
 | `NFL_SEASON_OVERRIDE` | unset | Forces the active season. Read fresh on every call, so it takes effect on a running process. Overrides Sleeper's `state/nfl`. |
 | `SLEEPER_MAX_CONCURRENCY` | `24` | Ceiling on how many requests one process may have open to Sleeper at once. The knob to reach for on a 429, and the one to lower before touching any per-caller number — it is the only bound that applies to the process rather than to one call site. |
+| `COMPS_SAMPLE_CORPUS` | allowed in development, denied in production | `on` or `off`. Whether `/comps` may answer from its built-in sample corpus when `player_seasons` is empty. Production refuses by default so a deployment cannot silently serve twenty-six invented seasons; set `on` for a demo build that wants it deliberately. Anything that is not `on` or `off` falls to the default for the environment. |
+
+## The comps corpus
+
+`/comps` compares a player against historical player-seasons stored in
+`player_seasons`. Nothing in the app writes that table — the corpus changes
+once a year, when a season ends — so it is loaded by a script:
+
+```bash
+npm run comps:load-corpus                     # 2018 → the latest complete season
+npm run comps:load-corpus -- --from 2015
+npm run comps:load-corpus -- --scoring ppr    # half_ppr (default) | ppr | std
+npm run comps:load-corpus -- --positions WR,TE
+npm run comps:load-corpus -- --help
+```
+
+It reads Sleeper's weekly stats for each season and joins them to the stored
+**players map** for age, experience and draft capital, so run the app (or the
+players sync) at least once first — a load against an empty map skips every
+row and says so. It is safe to rerun: rows are upserted, never duplicated, and
+a whole load commits or none of it does. It refuses, by name, any season the
+NFL has not finished, and it writes a `comps_corpus_meta` row recording the
+source, the scoring basis and which seasons were loaded.
+
+Until it has run, `/comps` answers from a sample corpus in development and
+says "No comps corpus loaded" in production — see `COMPS_SAMPLE_CORPUS` above.
 
 ## Layout
 
