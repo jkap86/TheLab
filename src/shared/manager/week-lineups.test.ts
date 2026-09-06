@@ -23,6 +23,7 @@ function league(over: Partial<WeekLineupLeague> = {}): WeekLineupLeague {
     taxi: null,
     as_of: "week",
     opponent: null,
+    median_rosters: null,
     ...over,
   };
 }
@@ -410,5 +411,108 @@ describe("solveWeekLineup and the roster census", () => {
     const solved = solveWeekLineup(league(), board(), NO_LOCKS, null);
     assert.equal(solved?.taxi_max, 0);
     assert.equal(solved?.ir_max, 0);
+  });
+});
+
+describe("solveWeekLineup and the league median", () => {
+  /** A pool roster starting one player worth `yards` and nobody else. */
+  const scorer = (roster_id: number, id: string) => ({
+    roster_id,
+    starters: [id],
+    players: [id],
+  });
+
+  test("no median matchup is no median, not a zero", () => {
+    const solved = solveWeekLineup(league(), board(), NO_LOCKS, null);
+    assert.ok(solved);
+    assert.equal(solved.median_points, null);
+  });
+
+  test("an odd pool takes the middle score", () => {
+    // 35 (the manager, substituted), 20 and 5.
+    const solved = solveWeekLineup(
+      league({
+        median_rosters: [
+          { roster_id: 1, starters: null, players: null },
+          scorer(2, "flexhigh"),
+          scorer(3, "flexlow"),
+        ],
+      }),
+      board(),
+      NO_LOCKS,
+      null,
+    );
+    assert.ok(solved);
+    assert.equal(solved.current_points, 35);
+    assert.equal(solved.median_points, 20);
+  });
+
+  test("an even pool takes the mean of the two middle scores", () => {
+    // 35 (manager), 20, 10, 5 -> the middle pair is 20 and 10.
+    const solved = solveWeekLineup(
+      league({
+        median_rosters: [
+          { roster_id: 1, starters: null, players: null },
+          scorer(2, "flexhigh"),
+          scorer(3, "wr"),
+          scorer(4, "flexlow"),
+        ],
+      }),
+      board(),
+      NO_LOCKS,
+      null,
+    );
+    assert.ok(solved);
+    assert.equal(solved.median_points, 15);
+  });
+
+  test("the manager's own figure is the one on the plate, never re-solved", () => {
+    // The pool row for roster 1 names a *different* lineup on purpose: if the
+    // median re-solved it, the pool would carry 20 where the card carries 35,
+    // and the two numbers on one plate would be two measurements.
+    const solved = solveWeekLineup(
+      league({
+        median_rosters: [scorer(1, "flexhigh"), scorer(2, "flexlow"), scorer(3, "wr")],
+      }),
+      board(),
+      NO_LOCKS,
+      null,
+    );
+    assert.ok(solved);
+    // 35 (substituted), 10, 5 -> the middle is 10, not 20.
+    assert.equal(solved.median_points, 10);
+  });
+
+  test("a pool too small to have a middle answers null", () => {
+    for (const median_rosters of [[], [scorer(1, "wr")]]) {
+      const solved = solveWeekLineup(
+        league({ median_rosters }),
+        board(),
+        NO_LOCKS,
+        null,
+      );
+      assert.ok(solved);
+      assert.equal(solved.median_points, null);
+    }
+  });
+
+  test("a roster with nothing projected is a real zero in the pool", () => {
+    // `nobody` has a row and no game — a projected zero, not an absence — so it
+    // is the bottom of the pool rather than missing from it.
+    const solved = solveWeekLineup(
+      league({
+        median_rosters: [
+          { roster_id: 1, starters: null, players: null },
+          scorer(2, "nobody"),
+          scorer(3, "flexlow"),
+        ],
+      }),
+      board(),
+      NO_LOCKS,
+      null,
+    );
+    assert.ok(solved);
+    // 35, 5, 0 -> 5.
+    assert.equal(solved.median_points, 5);
   });
 });

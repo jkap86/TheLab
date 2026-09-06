@@ -8,7 +8,8 @@ import {
   CONSOLE_WINDOW,
   LeagueConfigWindow,
   LeaguePlate,
-  PlateField,
+  PlateBay,
+  PlateDivider,
   rankColor,
   ReadingPlate,
   Scanlines,
@@ -235,16 +236,31 @@ export function LineupCheckCard({
 }
 
 /**
- * The week's projected outcome: this lineup against the one it plays.
+ * The week's projected outcome: this lineup against the one it plays, and —
+ * where the league runs one — against the league's median beside it.
  *
- * **Two figures and a pip, or nothing at all.** There is no opponent for a
- * future week (the sync fetches matchups only up to the week being played), for
- * a week Sleeper filed without a pairing, or where the opponent's roster is not
+ * **One bay or two, or nothing at all.** There is no opponent for a future week
+ * (the sync fetches matchups only up to the week being played), for a week
+ * Sleeper filed without a pairing, or where the opponent's roster is not
  * stored — and the honest answer to all three is no plate, not `128.4–0` and a
  * W. `opponent_points` is null in every one of them and never zero, which is
- * what makes the distinction drawable at all.
+ * what makes the distinction drawable at all. A league that runs no median
+ * matchup draws **one** bay rather than an empty second one, on the same rule
+ * one grain down: `median_points` is null there and null is not a score.
  *
- * The pip takes its colour from `rankColor`, the same red→green ramp the
+ * The head-to-head bay is what gates the plate even where a median exists.
+ * That is deliberate: this plate is the week's *game*, and a median standing
+ * alone on it — over a lineup the card is already captioning "as set now" —
+ * would be a reading of a week nobody has been scheduled for.
+ *
+ * **The bays stack their label over their figure**, which is `PlateBay`'s whole
+ * argument: two readings side by side are 377px of a 620px card against 281px
+ * stacked, and the difference is exactly what the league name opposite was
+ * losing. Height is the one dimension nothing else on this card wants — at a
+ * *phone's* width there is none of it to spend either, which is why the second
+ * bay drops below `sm`; the measurement is on the branch that does it.
+ *
+ * Each pip takes its colour from `rankColor`, the same red→green ramp the
  * manager card's rank tiles run on, rather than from a second green and a
  * second red — one ramp, so a good outcome is the same green everywhere and
  * both ends invert for light mode together.
@@ -259,30 +275,86 @@ function ProjectionPlate({ entry }: { entry?: LineupCheckLeague | null }) {
 
   const mine = entry.current_points;
   const theirs = entry.opponent_points;
-  // 1 for a win, 0 for a loss, 0.5 for a tie — the ramp's own ends and middle.
-  const outcome = mine > theirs ? 1 : mine < theirs ? 0 : 0.5;
-  const letter = outcome === 1 ? "W" : outcome === 0 ? "L" : "T";
-  const tone = rankColor(outcome * 100);
+  const median = entry.median_points;
 
   return (
     <ReadingPlate tight>
-      <PlateField label="Proj">
+      <PlateBay label="Proj">
         {mine.toFixed(1)}–{theirs.toFixed(1)}
-      </PlateField>
-      <span
-        className="inline-flex h-[22px] w-[22px] items-center justify-center rounded-full border border-active/45 bg-[image:var(--readout-bg)] font-mono text-[length:var(--fs-13)] font-medium shadow-[inset_0_0_12px_var(--accent-glow)]"
-        style={{ color: tone, textShadow: `0 0 10px ${rankColor(outcome * 100, 0.6)}` }}
-      >
-        <span className="sr-only">
-          {letter === "W"
-            ? "Projected win"
-            : letter === "L"
-              ? "Projected loss"
-              : "Projected tie"}
-        </span>
-        <span aria-hidden>{letter}</span>
-      </span>
+        <OutcomePip mine={mine} against={theirs} />
+      </PlateBay>
+      {median !== null && (
+        // **The median bay drops below `sm`, and that is measured.** The plate
+        // sits opposite a league name that truncates, so every pixel it spends
+        // is a character off the card's own subject — and at 390 the two-bay
+        // plate is 233px of a 322px row, which leaves the name **20px: one
+        // character**. Dropped, a median league's plate is 145px and its name
+        // 108px, which is exactly what every other league on the page already
+        // gets. The alternative measured against it — keeping both bays and
+        // setting the head-to-head as `128.4` alone — buys the name back only
+        // to 74px *and* loses the opponent's total, which is a number the
+        // expanded half no longer states either.
+        //
+        // It is `hidden`/`sm:contents` rather than a second render, on
+        // `StandingPlate`'s own rule one card over: `display: none` takes the
+        // bay out of the accessibility tree as well as off the screen, so a
+        // phone reader is not read a figure nobody can see. `contents` rather
+        // than `inline-flex` because the plate is `items-stretch` and the
+        // divider has to be a flex item of the plate itself to run its height.
+        <>
+          <span className="hidden sm:contents">
+            {/* Stretched, so the cut runs the bays' own height — a fixed 17px
+                centred in a 34px stack reads as a dash rather than a
+                channel. */}
+            <PlateDivider stretch />
+          </span>
+          <span className="hidden sm:contents">
+            <PlateBay label="Med">
+              {median.toFixed(1)}
+              <OutcomePip mine={mine} against={median} median />
+            </PlateBay>
+          </span>
+        </>
+      )}
     </ReadingPlate>
+  );
+}
+
+/**
+ * The W/L/T lamp on a bay's own figure line.
+ *
+ * One component for both bays rather than two, because the two readings are
+ * the same question asked of two opponents — and a second spelling is how the
+ * median's tie could come to be drawn in a green the head-to-head's is not.
+ * `median` changes only the word a screen reader gets, since the letter is the
+ * same letter and the bay above it already says which comparison this is.
+ */
+function OutcomePip({
+  mine,
+  against,
+  median = false,
+}: {
+  mine: number;
+  against: number;
+  /** Whether this is the bay read against the league median. */
+  median?: boolean;
+}) {
+  // 1 for a win, 0 for a loss, 0.5 for a tie — the ramp's own ends and middle.
+  const outcome = mine > against ? 1 : mine < against ? 0 : 0.5;
+  const letter = outcome === 1 ? "W" : outcome === 0 ? "L" : "T";
+  const tone = rankColor(outcome * 100);
+  const result = outcome === 1 ? "win" : outcome === 0 ? "loss" : "tie";
+
+  return (
+    <span
+      className="inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full border border-active/45 bg-[image:var(--readout-bg)] font-mono text-[length:var(--fs-11)] font-medium shadow-[inset_0_0_12px_var(--accent-glow)]"
+      style={{ color: tone, textShadow: `0 0 10px ${rankColor(outcome * 100, 0.6)}` }}
+    >
+      <span className="sr-only">
+        {median ? `Projected ${result} against the median` : `Projected ${result}`}
+      </span>
+      <span aria-hidden>{letter}</span>
+    </span>
   );
 }
 
@@ -322,14 +394,21 @@ function ProjectionPlate({ entry }: { entry?: LineupCheckLeague | null }) {
  * `sr-only` name and why the unit line still prints beneath it on a phone.
  */
 function MetricTile({ label, cell }: { label: string; cell: MetricCell }) {
-  const tone =
-    cell.state === "alert"
-      ? "text-error [text-shadow:0_0_12px_rgba(252,165,165,0.45)]"
-      : cell.state === "count"
-        ? "text-readout [text-shadow:var(--readout-text-glow)]"
-        : // No answer at all: the muted ink and no glow, because a lit em dash
-          // reads as a reading rather than as its absence.
-          "text-readout-muted";
+  // **Two treatments where the state union has four**, and the difference is
+  // deliberate. `alert` and `count` are both *figures* — a number the reader
+  // is being handed — so they are struck the same way, in the red the page
+  // reads as "this tile is saying something"; `clear` is the mark, and `none`
+  // is the em dash. The union stays four-way regardless, because
+  // `needsAttention` and `attentionByReason` read `alert` alone: an open
+  // roster spot still sends nobody to a league that is in good order, which is
+  // the whole reason `count` exists and is a question about the header rather
+  // than about this tile's ink.
+  const figure =
+    cell.state === "none"
+      ? // No answer at all: the muted ink, flat, and no extrusion — a struck
+        // em dash reads as a reading rather than as its absence.
+        "text-readout-muted"
+      : STRUCK_FIGURE;
 
   return (
     <div
@@ -356,15 +435,15 @@ function MetricTile({ label, cell }: { label: string; cell: MetricCell }) {
       </div>
 
       {/* `mt-auto` is the phone's baseline rule and a no-op on a desktop,
-          where the label block's own min-height has already done it. */}
-      <div className="relative mt-auto pt-2">
+          where the label block's own min-height has already done it. The mark
+          takes two pixels less above it than a figure does: it is 40px against
+          the figure's 28 and eats most of the slack the old 24px pip left. */}
+      <div className={`relative mt-auto ${cell.state === "clear" ? "pt-1.5" : "pt-2"}`}>
         {cell.state === "clear" ? (
           <CheckMark text={cell.text} title={cell.title} />
         ) : (
-          // Full opacity on every tone: the light-mode teal is only ~5:1
-          // against the page, and an alpha drops it below AA.
           <p
-            className={`m-0 truncate font-mono text-[length:var(--fs-17)] font-medium leading-none tabular-nums sm:text-[length:var(--fs-21)] ${tone}`}
+            className={`m-0 truncate font-mono text-[length:var(--fs-18)] font-medium leading-none tabular-nums sm:text-[length:var(--fs-24)] ${figure}`}
           >
             {/* The desktop reading whole, the phone's numeral alone — one
                 measurement, two rooms. See `MetricCell`. */}
@@ -386,34 +465,199 @@ function MetricTile({ label, cell }: { label: string; cell: MetricCell }) {
 }
 
 /**
+ * A figure struck out of the glass, in the red the page reads as an answer.
+ *
+ * The same object as the mark opposite it, in the other medium: a gradient
+ * clipped to the glyphs with the extrusion behind it, so a tile showing a
+ * number and a tile showing the mark read as one row rather than as a mark
+ * beside three labels.
+ *
+ * **The extrusion is `filter: drop-shadow()` and never `text-shadow`**, and
+ * this is the thing to keep: with `background-clip: text` and a transparent
+ * fill the element's background paints first and a `text-shadow` paints
+ * *above* it, so the dark offset copies cover the gradient inside the glyph
+ * bodies and the word renders as flat maroon with a 1px lit rim. Chained
+ * `drop-shadow`s composite behind the clipped gradient — the same reason the
+ * mark's shoulders are separate SVG paths rather than a shadow on one stroke.
+ * Both halves of it are tokens, so light mode turns the whole stack over
+ * rather than dimming it; see `globals.css`.
+ *
+ * `text-transparent` is Tailwind's `color`, which is what a browser with no
+ * `background-clip: text` falls back to painting — so the fill is spelled as
+ * well, and a glyph is never invisible on a browser that ignores the clip.
+ */
+const STRUCK_FIGURE =
+  "bg-[image:var(--alert-face)] bg-clip-text text-transparent " +
+  "[-webkit-text-fill-color:transparent] [filter:var(--alert-depth)]";
+
+/**
+ * The mark's face gradient, declared once for the whole page.
+ *
+ * An SVG stroke cannot take a CSS gradient, so the face is a
+ * `<linearGradient>` referenced by `url(#…)` — and an SVG fragment reference
+ * is resolved against the *document*, not against the `<svg>` it is written
+ * in, which is what lets one declaration paint every mark on the page.
+ *
+ * **One declaration and not one per mark**, which is the whole reason this is
+ * a separate export. Four tiles a card times a hundred cards is four hundred
+ * identical `<defs>` blocks, and the alternative — a `useId` per instance —
+ * would put a hook in a leaf of a card whose own note says it owns no state,
+ * to buy four hundred gradients where one will do.
+ *
+ * The cost is a coupling worth stating: a page that mounts
+ * {@link LineupCheckCard} without mounting this gets marks whose face stroke
+ * resolves to nothing — the shoulders and the ridge draw and the neon does
+ * not, which is a mark that looks dim rather than one that looks broken. It is
+ * mounted beside the card list in `lineup-checker-home.tsx`.
+ *
+ * Zero-sized and absolutely positioned rather than `display: none`: a
+ * gradient in a `display: none` subtree resolves in every current engine and
+ * has not always, and a 0×0 box out of flow costs nothing to be sure.
+ */
+export function LineupMarkDefs() {
+  return (
+    <svg aria-hidden focusable="false" width={0} height={0} className="absolute">
+      <defs>
+        <linearGradient id={MARK_FACE_ID} x1="0" y1="0" x2="0.25" y2="1">
+          {MARK_FACE_STOPS.map((stop) => (
+            <stop
+              key={stop.offset}
+              offset={stop.offset}
+              // A CSS property rather than the `stop-color` attribute, which is
+              // what lets it name a token: a presentation attribute does not
+              // resolve `var()`.
+              style={{ stopColor: `var(${stop.token})` }}
+            />
+          ))}
+        </linearGradient>
+      </defs>
+    </svg>
+  );
+}
+
+/** The gradient's fragment id, spelled once — the mark and the defs share it. */
+const MARK_FACE_ID = "lineup-mark-face";
+
+/**
+ * The face ramp, as offsets here and colours in `globals.css`.
+ *
+ * **One list, both themes.** The stops are the *shape* of the ramp and the
+ * tokens are what it is made of, so the light scheme turns the colours over —
+ * see the token block — without this file knowing there are two schemes.
+ */
+const MARK_FACE_STOPS: readonly { offset: number; token: string }[] = [
+  { offset: 0, token: "--mark-face-0" },
+  { offset: 0.2, token: "--mark-face-1" },
+  { offset: 0.5, token: "--mark-face-2" },
+  { offset: 0.78, token: "--mark-face-3" },
+  { offset: 1, token: "--mark-face-4" },
+];
+
+/** The check, drawn once per copy: three shoulders, the face, and the ridge. */
+const MARK_PATH = "M7 22.5L17.5 33L39 8";
+
+/**
+ * The ridge along the stroke's top, inset from it.
+ *
+ * Two paths run it: the standing specular, and the glint that sweeps it once
+ * on mount. They are the same line because they are the same edge — a glint
+ * that crossed the box rather than following the stroke would read as a
+ * reflection on the glass behind the mark rather than on the mark.
+ */
+const MARK_RIDGE_PATH = "M8.4 21.6L17.6 30.8L37.8 7.2";
+
+/**
  * A cleared check: the mark instead of the word.
  *
- * Four tiles of words is four things to read on a card whose whole job is to be
- * scanned past; a mark is the one shape a reader can take in without reading.
- * **The word stays as the mark's `sr-only` name** — the mark is the whole of
- * what a sighted reader gets, so `Set` and `In order` have to remain available
- * to everyone else, and `title` carries the units as it does on every tile.
+ * Four tiles of words is four things to read on a card whose whole job is to
+ * be scanned past; a mark is the one shape a reader can take in without
+ * reading. **The word stays as the mark's `sr-only` name** — the mark is the
+ * whole of what a sighted reader gets, so `Set` and `In order` have to remain
+ * available to everyone else, and `title` carries the units as it does on
+ * every tile.
  *
- * The stroke resolves from `text-readout` on the wrapper, so the glyph inverts
- * with the theme rather than naming a colour of its own.
+ * **It has no housing at all**, which is the design's own conclusion after
+ * three that did — a ring, a lens, a milled billet. A mark inside a bezel on a
+ * card of bezels is one more instrument to read; struck straight onto the
+ * glass it is the only thing on the tile that is not an instrument, which is
+ * exactly what "there is nothing to do here" should look like.
+ *
+ * **It is four stacked strokes and a ridge, not a glyph with a shadow.** The
+ * three shoulders are copies of the same path offset downward behind the face,
+ * so the extrusion is *geometry* — a `filter` or a `text-shadow` on one stroke
+ * would paint above or below the whole mark rather than behind the face and
+ * in front of the shoulder under it. It is the same argument the red figure
+ * opposite makes about `drop-shadow` against `text-shadow`, one medium over.
+ *
+ * Every colour is a token, so the whole stack turns over for light mode
+ * without this file naming a scheme. The one literal is the glint, which is
+ * white on either ground because it is a specular flash rather than ink.
+ *
+ * The phone draws the same box scaled to 36×31 rather than a second drawing:
+ * the `viewBox` is unchanged, so the stroke keeps its ratio and the mark is
+ * the same object at two sizes. A tile is ~72px of content there and a 46px
+ * mark in it leaves the unit line under it nothing.
  */
 function CheckMark({ text, title }: { text: string; title: string }) {
   return (
-    <span
-      title={title}
-      className="mt-1.5 inline-flex size-6 items-center justify-center rounded-full border border-active/40 bg-[radial-gradient(closest-side,rgba(0,255,229,0.16),transparent)] text-readout shadow-[inset_0_0_12px_rgba(0,255,229,0.3),0_0_14px_-6px_rgba(0,255,229,0.6)]"
-    >
+    // `line-height: 0` is what keeps the SVG's own box from carrying leading:
+    // an inline replaced element sits on the text baseline, and the descender
+    // space under it is what would push the unit line off a phone tile.
+    <span title={title} className="inline-block leading-none">
       <svg
-        viewBox="0 0 24 24"
-        className="size-[15px] [filter:drop-shadow(0_0_6px_rgba(0,255,229,0.75))]"
+        width={46}
+        height={40}
+        viewBox="0 0 46 40"
         fill="none"
-        stroke="currentColor"
-        strokeWidth={2.6}
-        strokeLinecap="round"
-        strokeLinejoin="round"
         aria-hidden
+        focusable="false"
+        className="h-[31px] w-[36px] [filter:var(--mark-glow)] sm:h-10 sm:w-[46px]"
       >
-        <path d="M4.5 12.6l4.8 4.8L19.5 7.2" />
+        <g fill="none" strokeLinecap="round" strokeLinejoin="round">
+          {/* Back to front. The token is set as a CSS property rather than as
+              the `stroke` attribute, which does not resolve `var()`. */}
+          <path
+            d={MARK_PATH}
+            strokeWidth={8}
+            transform="translate(0,4)"
+            style={{ stroke: "var(--mark-shoulder-3)" }}
+          />
+          <path
+            d={MARK_PATH}
+            strokeWidth={8}
+            transform="translate(0,2.5)"
+            style={{ stroke: "var(--mark-shoulder-2)" }}
+          />
+          <path
+            d={MARK_PATH}
+            strokeWidth={8}
+            transform="translate(0,1.2)"
+            style={{ stroke: "var(--mark-shoulder-1)" }}
+          />
+          <path d={MARK_PATH} strokeWidth={8} stroke={`url(#${MARK_FACE_ID})`} />
+          <path
+            d={MARK_RIDGE_PATH}
+            strokeWidth={1.7}
+            style={{ stroke: "var(--mark-specular)" }}
+          />
+          {/* One sweep on mount and nothing after it. `both` fill is what makes
+              that true at both ends — invisible before the delay and invisible
+              after the run — so the mark needs no state either side of it.
+              `.lab-anim` is the app's one reduced-motion hook, and the
+              animation is set inline because that rule's `!important` is
+              written for exactly this. */}
+          <path
+            className="lab-anim"
+            d={MARK_RIDGE_PATH}
+            stroke="#ffffff"
+            strokeWidth={4}
+            strokeDasharray="12 60"
+            style={{
+              animation: "mark-glint 1.15s cubic-bezier(0.3,0.7,0.3,1) 0.35s 1 both",
+              filter: "blur(1px)",
+            }}
+          />
+        </g>
       </svg>
       <span className="sr-only">{text}</span>
     </span>

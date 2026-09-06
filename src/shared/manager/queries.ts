@@ -12,7 +12,7 @@ import type {
 import type { AdpEntry } from "./adp-value";
 import type { RankLeague } from "./league-ranks";
 import type { ManagerSyncState } from "./sync-freshness";
-import type { WeekLineupOpponent } from "./week-lineups";
+import type { WeekLineupOpponent, WeekLineupRoster } from "./week-lineups";
 
 /*
  * The reads behind the leagues route.
@@ -1018,13 +1018,20 @@ export type ManagerWeekLineupRow = {
    * draws a dash rather than a projected win.
    */
   opponent: WeekLineupOpponent | null;
+  /**
+   * Every roster in the league for this week, where the league runs a median
+   * matchup — see `medianProjection`. Null on every league that does not, which
+   * is what keeps the second read below narrow.
+   */
+  median_rosters: WeekLineupRoster[] | null;
 };
 
 type ManagerWeekLineupSqlRow = Omit<
   ManagerWeekLineupRow,
-  "best_ball" | "as_of" | "opponent"
+  "best_ball" | "as_of" | "opponent" | "median_rosters"
 > & {
   best_ball: boolean | null;
+  median_match: boolean | null;
   week_starters: string[] | null;
   week_players: string[] | null;
   opponent_roster_id: number | null;
@@ -1080,6 +1087,14 @@ export async function getManagerWeekLineups(
             l.settings,
             (CASE WHEN l.settings->>'best_ball' ~ '^[0-9]+$'
                   THEN (l.settings->>'best_ball')::int = 1 END) AS best_ball,
+            -- Sleeper's median matchup, spelled the way best_ball beside it
+            -- is: the blob is untyped, so the regex is what stops a cast on a
+            -- value that is not a number. It decides which leagues pay for the
+            -- second read below and nothing else. (No backticks in here: the
+            -- statement is a template literal.)
+            (CASE WHEN l.settings->>'league_average_match' ~ '^[0-9]+$'
+                  THEN (l.settings->>'league_average_match')::int = 1 END)
+              AS median_match,
             r.roster_id,
             r.starters AS starters,
             r.players  AS players,
@@ -1123,6 +1138,13 @@ export async function getManagerWeekLineups(
     [userId, season, week, leagueId ?? null],
   );
 
+  // Only the median leagues, and only where there are any — the common account
+  // has none, and this is a read of every roster of every league that does.
+  const medianRosters = await getWeekRosterPool(
+    rows.filter((row) => row.median_match === true).map((row) => row.league_id),
+    week,
+  );
+
   return rows.map((row) => {
     const stored = Array.isArray(row.week_starters) && row.week_starters.length > 0;
     return {
@@ -1144,8 +1166,81 @@ export async function getManagerWeekLineups(
       players: stored ? (row.week_players ?? row.players) : row.players,
       as_of: stored ? "week" : "current",
       opponent: toOpponent(row),
+      // Null where the league runs no median, and an empty array where it runs
+      // one and has no rosters stored — two states the solve tells apart, and
+      // a `?? null` here would fold them into one.
+      median_rosters:
+        row.median_match === true
+          ? (medianRosters.get(row.league_id) ?? [])
+          : null,
     };
   });
+}
+
+/**
+ * Every roster of the named leagues for one week — the median's whole input.
+ *
+ * **A second statement rather than a widening of the one above**, and the
+ * reason is what it costs: that query answers one roster per league, and this
+ * answers every roster of a league, so folding them together would multiply
+ * every column of the manager's own row by the league's size on a hundred
+ * leagues to serve the handful that run a median. Asked separately it is one
+ * read over the league ids that actually need it, and an account with none —
+ * which is most of them — never issues it at all.
+ *
+ * The `starters`/`players` preference is `getManagerWeekLineups`' own, spelled
+ * once in {@link weekRoster}: the week's stored lineup where there is one, the
+ * live roster otherwise, with a *stored-but-empty* `starters` counting as
+ * absent. Sleeper writes an empty array for a week a league never scheduled,
+ * so a bare coalesce would project half a league at zero and drag its median
+ * down with it.
+ */
+async function getWeekRosterPool(
+  leagueIds: readonly string[],
+  week: number,
+): Promise<Map<string, WeekLineupRoster[]>> {
+  const byLeague = new Map<string, WeekLineupRoster[]>();
+  if (leagueIds.length === 0) return byLeague;
+
+  const { rows } = await pool.query<WeekRosterPoolSqlRow>(
+    `SELECT r.league_id, r.roster_id,
+            r.starters AS starters,
+            r.players  AS players,
+            m.starters AS week_starters,
+            m.players  AS week_players
+       FROM rosters r
+       LEFT JOIN matchups m
+         ON m.league_id = r.league_id AND m.roster_id = r.roster_id AND m.week = $2
+      WHERE r.league_id = ANY($1::varchar[])
+      ORDER BY r.league_id, r.roster_id`,
+    [[...leagueIds], week],
+  );
+
+  for (const row of rows) {
+    const list = byLeague.get(row.league_id);
+    if (list) list.push(weekRoster(row));
+    else byLeague.set(row.league_id, [weekRoster(row)]);
+  }
+  return byLeague;
+}
+
+type WeekRosterPoolSqlRow = {
+  league_id: string;
+  roster_id: number;
+  starters: string[] | null;
+  players: string[] | null;
+  week_starters: string[] | null;
+  week_players: string[] | null;
+};
+
+/** One pool roster, on the manager row's own week-or-live preference. */
+function weekRoster(row: WeekRosterPoolSqlRow): WeekLineupRoster {
+  const stored = Array.isArray(row.week_starters) && row.week_starters.length > 0;
+  return {
+    roster_id: row.roster_id,
+    starters: stored ? row.week_starters : row.starters,
+    players: stored ? (row.week_players ?? row.players) : row.players,
+  };
 }
 
 /**

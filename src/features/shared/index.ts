@@ -140,6 +140,7 @@ export {
   LedgeName,
   LedgeWell,
   MilledHairline,
+  PlateBay,
   PlateDivider,
   PlateField,
   ReadingPlate,

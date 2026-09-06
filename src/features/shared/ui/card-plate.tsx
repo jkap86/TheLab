@@ -109,8 +109,25 @@ function LeagueMark({ name, url }: { name: string; url: string | null | undefine
 /**
  * The right-hand plate: one or more readings, on the same chrome as the league.
  *
- * `tight` exists for the lineup checker's win/loss pip, which is round and
- * needs less plate to the right of it than a run of text does.
+ * **`tight` is the lineup checker's plate and nothing else's**, which is why it
+ * carries a whole box rather than one override. It holds stacked bays and a
+ * round pip where every other reader holds a row of baseline-aligned fields,
+ * so it wants a shorter padding, a wider gap and — the load-bearing one —
+ * `items-stretch`, so the divider between two bays runs their full height
+ * instead of being centred at a fixed 13px against a 34px stack.
+ *
+ * The two boxes are written as two whole strings rather than as a base plus a
+ * `tight` amendment, on `CONSOLE_KEY_PILL`'s rule: two base `p*`/`items-*`
+ * utilities of the same specificity are decided by Tailwind's emit order, not
+ * by the class attribute, so an override written that way is a coin flip.
+ *
+ * **Both boxes are tighter below `sm`, and that is the league name's width
+ * rather than this plate's taste.** It sits opposite a name that truncates, so
+ * every pixel the plate spends is a character the card's own subject loses —
+ * and the page's type scale grew the figures here by ~12px at a phone's width
+ * without growing the card. Taking it back out of the padding and the gap keeps
+ * what the plate *says* intact, where dropping a field would not. Above `sm`
+ * the card has width to spare and every number is what it was.
  */
 export function ReadingPlate({
   children,
@@ -121,19 +138,54 @@ export function ReadingPlate({
 }) {
   return (
     <span
-      // **The plate is tighter below `sm`, and that is the league name's
-      // width rather than this plate's taste.** It sits opposite a name that
-      // truncates, so every pixel the plate spends is a character the card's
-      // own subject loses — and the page's type scale grew the figures here by
-      // ~12px at a phone's width without growing the card. Taking it back out
-      // of the padding and the gap keeps what the plate *says* intact, where
-      // dropping a field would not. Above `sm` the card has width to spare and
-      // every number is what it was.
-      className={`${CONSOLE_PLATE} ml-auto inline-flex shrink-0 items-center gap-2 whitespace-nowrap py-1.5 pl-3 sm:gap-2.5 sm:pl-4 ${
-        tight ? "pr-[5px] sm:pr-[7px]" : "pr-3 sm:pr-4"
+      className={`${CONSOLE_PLATE} ml-auto inline-flex shrink-0 whitespace-nowrap ${
+        tight
+          ? "items-stretch gap-2 py-[5px] pl-3 pr-1.5 sm:gap-[11px] sm:pl-[0.875rem] sm:pr-[9px]"
+          : "items-center gap-2 py-1.5 pl-3 pr-3 sm:gap-2.5 sm:pl-4 sm:pr-4"
       }`}
     >
       {children}
+    </span>
+  );
+}
+
+/**
+ * One bay of a reading plate: a stamped label **over** its figure.
+ *
+ * {@link PlateField} is the same two things side by side, and the difference is
+ * width against height. A plate carrying one reading has the room to set it on
+ * a line; a plate carrying two does not — measured on the lineup checker's own
+ * card at 620px, the pair side by side is 377px against 281px stacked, and the
+ * 96px is exactly what the league name opposite was losing (`DYNASTY
+ * WAREHOUSE` clipped to `DYNAS…`). So a second reading buys its place by
+ * spending the plate's height, which nothing else on the card is competing
+ * for.
+ *
+ * It is **not** {@link LedgeBay}, which is the same idea milled into the
+ * manager card's billet: that one is stamped into a machined part and this one
+ * is on a plate, so they take different type and different ink. Two components
+ * because they are two parts, not two spellings of one.
+ *
+ * `children` is the figure's whole line rather than a string, because the line
+ * is not always a figure: the lineup checker hangs its win/loss pip on the same
+ * baseline, which is what keeps a bay one reading rather than a number with
+ * something after it.
+ */
+export function PlateBay({
+  label,
+  children,
+}: {
+  label: string;
+  children: ReactNode;
+}) {
+  return (
+    <span className="inline-flex min-w-0 flex-col items-start justify-center gap-px">
+      <span className="font-mono text-[length:var(--fs-8)] uppercase leading-[1.1] tracking-[0.18em] text-foreground/[0.58] sm:text-[length:var(--fs-9)]">
+        {label}
+      </span>
+      <span className="inline-flex items-center gap-1.5 font-mono text-[length:var(--fs-13)] font-medium leading-[1.05] tabular-nums text-foreground/[0.97] sm:text-[length:var(--fs-16)]">
+        {children}
+      </span>
     </span>
   );
 }
@@ -193,12 +245,21 @@ export function PlateField({
  * `--groove` and its highlight rather than a hand-written pair, because it is
  * the same cut the console makes everywhere else and it already inverts for
  * light mode.
+ *
+ * **`stretch` runs it the bay's own height instead of a fixed one**, which is
+ * what a plate of stacked bays needs: a 17px cut centred in a 34px stack reads
+ * as a dash somebody left in the gap rather than as the channel between two
+ * parts. It is a prop rather than a second component because it is the same
+ * cut — the height is the only thing the two readings disagree about, and a
+ * second divider is how the two would come to disagree about the rest.
  */
-export function PlateDivider() {
+export function PlateDivider({ stretch = false }: { stretch?: boolean } = {}) {
   return (
     <span
       aria-hidden
-      className="h-[13px] w-px bg-[image:var(--groove)] shadow-[var(--groove-highlight)] sm:h-[17px]"
+      className={`w-px bg-[image:var(--groove)] shadow-[var(--groove-highlight)] ${
+        stretch ? "my-0.5 self-stretch" : "h-[13px] sm:h-[17px]"
+      }`}
     />
   );
 }
