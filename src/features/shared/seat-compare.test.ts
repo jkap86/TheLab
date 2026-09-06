@@ -3,7 +3,7 @@ import { describe, test } from "node:test";
 
 import type { LeagueTeam, LineupPlayer } from "@/shared/contract";
 
-import { lensValue, seatComparisons } from "./seat-compare.ts";
+import { lensValue, seatComparisons, slotMedians } from "./seat-compare.ts";
 
 function player(
   id: string,
@@ -159,5 +159,44 @@ describe("seatComparisons", () => {
     const seats = seatComparisons([short, them], them, short, "points");
     assert.equal(seats[1]?.ghost, null);
     assert.equal(seats[1]?.standing, null);
+  });
+});
+
+describe("slotMedians", () => {
+  test("one median per seat, taken across every roster at that index", () => {
+    const league = [
+      team(1, [10, 100]),
+      team(2, [20, 200]),
+      team(3, [30, 300]),
+    ];
+    assert.deepEqual(slotMedians(league, 2, "points"), [20, 200]);
+  });
+
+  test("**a null is left out, never counted as zero**", () => {
+    // Scored as zeroes the median here would be 5 and every real figure on the
+    // seat would read as clear of the league's middle.
+    const league = [team(1, [10]), team(2, [null]), team(3, [null])];
+    assert.deepEqual(slotMedians(league, 1, "points"), [10]);
+  });
+
+  test("a seat no roster has a figure for comes back 0 — nothing to compare", () => {
+    const league = [team(1, [null]), team(2, [null])];
+    assert.deepEqual(slotMedians(league, 1, "points"), [0]);
+  });
+
+  test("a lens the league is silent on answers zero rather than the other lens'", () => {
+    const league = [team(1, [10]), team(2, [20])];
+    assert.deepEqual(slotMedians(league, 1, "ktc"), [0]);
+  });
+
+  test("seats are matched by index, so a short roster does not shift the rest", () => {
+    const league = [team(1, [10, 100]), team(2, [30]), team(3, [50, 300])];
+    assert.deepEqual(slotMedians(league, 2, "points"), [30, 200]);
+  });
+
+  test("it answers for exactly the seats asked for", () => {
+    const league = [team(1, [10, 20, 30])];
+    assert.equal(slotMedians(league, 3, "points").length, 3);
+    assert.deepEqual(slotMedians(league, 5, "points"), [10, 20, 30, 0, 0]);
   });
 });

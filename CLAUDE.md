@@ -6962,6 +6962,232 @@ reads on a 113-league page, where the sticky plate is one per card over a real
 twelve-team browser; and whether the two cards still read as one object on a
 corpus where the manager plate is often three fields wide and the checker's is
 often absent.
+
+## The league card's expanded half
+
+The manager card's expanded half — the history rail, the standings pane, the
+roster pane and the draft picks — was a lit window holding more lit windows,
+which flattened four different things into one sheet of readings. It is an
+**inner housing holding raised parts** now, on the grammar the collapsed half
+above it and the lineup checker's week view already wear. Two changes ride
+along that are about what the numbers *mean* rather than how they look, and one
+that is neither: the phone header. Applied from a design handoff — its `1b`
+(desktop), `2b` (phone) and `3c` (phone header); `1a`/`2a` are the
+before-picture and `3a`/`3b` are rejected alternatives.
+
+**It needed no migration and nothing on the wire moved**: no route, no query,
+no contract type, no payload field. Both colour rules are derived in the
+browser from the `LeagueLineupEntry` the page already holds, which is the same
+trade the panes have always made — a rank across a league's rosters is
+something only the server can compute, and a *median* between them is
+arithmetic.
+
+### Two parts on a housing, and the controls came apart with them
+
+`CONSOLE_HOUSING_INSET_SHELL` at 14px with `p-3`, holding a **history bay**, the
+**two panes** and the **picks** on their own planes (4px, 7px, 3px behind
+`pointer-fine:`, on the summary's own per-device argument). Each pane is milled
+stock carrying a **ledge** and a sheet of **glass**, and every row is a channel
+cut into that glass with a smaller channel cut into it for the figure — one
+pattern at two depths, which is the whole of the depth: no gradient, no border,
+and nothing drawn with a rule.
+
+**The perspective reaches its parts only because the wrapper between them is
+gone**, and that is the half of it that is silent when missing. A `perspective`
+projects an element's *direct children*; an intermediate `<div>` is
+`transform-style: flat`, so every `translateZ` under one computes against no
+projection at all — a render is what caught it, with the housing drawing three
+boxes and a depth nobody could see. The old lit window needed a `relative` layer
+to hold its content above its scanlines; a housing has none, so it went, and
+`LeagueTeams` carries the `preserve-3d` that reaches its own two parts one level
+further down. **`perspective` survives a clip where `preserve-3d` does not**,
+which is what lets the housing keep both its depth and the `overflow: hidden`
+its radius needs — the distinction `league-card.tsx` has recorded from the other
+side since the tools page.
+
+**The shared control row is dissolved, and that is a comprehension fix rather
+than a rearrangement.** `Rank by` and the Points/Capital/KTC lens sat on one row
+above *both* panes, and neither said which half of the card it moved — a reader
+pressing `Capital` could not tell from the control's position whether the
+standings column or the seat figures were about to change. Each now sits on its
+own pane's **ledge**, which says so without a word.
+
+**The total readout went with that row.** It printed the selected roster's total
+under the current lens, which is the same figure the standings' Total column
+prints on that roster's own row four inches to the left — one number, twice, and
+the second copy had nowhere to sit once the row was dissolved. `lineupTotal` and
+`lensUnit` are kept with nothing reading them, on `peekActiveSeason`'s terms:
+they are the one place a lens total's rounding rule is written down.
+
+**And so did the comparison apparatus** — the standings' `Gap` column and rank
+meter, the seat rows' ghost figure and both bars. All four were one feature, the
+reader against the selected team, and with them gone the seat name collapses to
+a single ink: the lit/dimmed ahead-behind rule is deliberately **not** kept,
+because nothing left on screen decodes it and a name drawn two ways for reasons
+a reader cannot see is worse than a name drawn one. `seatComparisons` and its
+tests stay, with no caller — the line the chip rail and the billet ledge parts
+were kept on, and they would come back together.
+
+**Below `lg` the panes take the two-line rows they already had**, on
+`LeagueTeams`' own measurement, and the two controls compact to a single
+select-style pill each: three lens keys do not fit a ~165px pane. **The lens is
+therefore two elements for one value**, which this app otherwise refuses — safe
+here on `WeekStepper`'s exact terms, and only those: neither copy holds state
+(the lens and its handler are the caller's, so they cannot disagree) and both
+gates are `display: none`, which takes an element out of the accessibility tree
+as well as the flow. Exactly one exists at any width. A `<select>` cannot become
+three keys, so a control that changes shape was not available.
+
+### The colour is the reading, and a rank is the wrong input for both
+
+Two new inputs to the existing `rankColor` ramp, in `rank-ramp.ts`, both pure
+and both pinned by `rank-ramp.test.ts` because a table coloured off the wrong
+scale renders perfectly.
+
+**A standings total is coloured by the team's share of the league's points**
+(`sharePercentile`), anchored on the mean and saturating at ±10%. A rank ramp
+spends full red and full green in *every* league, because somebody is always
+first and somebody is always last — so twelve teams within a point of each other
+read as a blowout and the colour says nothing the ordinal beside it had not.
+Verified end to end against a fixture league whose twelve totals span 0.4
+points: every row comes back at chroma **0.0002** — dead neutral — against
+0.18 → 0.165 across a real spread.
+
+**A seat figure is coloured against the league's median at that slot**
+(`slotPercentile` over `slotMedians`), at ±20% — wider, because one slot spreads
+much further across a league than a whole roster does. That is what makes the
+colour worth printing: read on its own magnitude every quarterback is green and
+every kicker red, since the two are not on one scale; read against the twelve
+rosters' middle player *at that seat*, a green QB1 is one that actually beats
+the league's. **A null is left out of the median, never counted as zero** — the
+rule every field it reads is documented by, and folding absences in as zeroes
+would drag every median to the floor and paint half a league green against a
+middle nobody occupies. A seat no roster has a figure for answers 0, which
+`slotPercentile` reads as "nothing to compare" and draws neutral; a seat whose
+own figure is null draws an em dash and **no colour at all**.
+
+**The header standing takes the ramp too**, by two different rules and only on
+the phone strip: a place is its own percentile in the field (`rankFill`) and a
+record is its win share stretched across .250–.750 (`winSharePercentile`),
+because the raw share puts 8–5 and 7–6 a hair apart where the stretch puts them
+73 and 58. The desktop plate stays one ink — three ramp colours on a pill the
+width of a thumb is a bar chart rather than a reading.
+
+**The rank figures are engraved**: `--figure-engrave` plus the caller's own
+halo. A `text-shadow` is a comma list, so the static layers can be a token — and
+they have to be, because they *invert* wholesale for light mode rather than
+dimming: a stroke cut into a pale face is dark inside and throws its lit steps
+downward, so the lip above it is the dark line there and the steps below are the
+light ones. Written the other way round the figure reads as embossed, standing
+proud of glass it is meant to be cut into.
+
+### The phone header is a milled strip
+
+`LeaguePlate` and `StandingPlate` shared one row inside a 362px card, which left
+the league name — the card's whole subject — ~95px and truncated to "Dynasty
+Wa…", *after* `standingFields` had already dropped `Pts` from the plate opposite
+to buy that much. Below `sm` the row carries the **league plate alone at full
+width** and the standing comes down onto its own part under `CardRule`: all
+three fields are back, `standingFields`' `phone` rule is gone with the plate it
+was buying width from, and the name stops truncating.
+
+**Metal, not glass, deliberately.** Drawn on `--readout-bg` the strip read as
+one more thing the league reports about itself, next to the settings window that
+reports the rest — where a standing is the *reader's* result rather than the
+league's configuration. A plate bolted to the housing is a different class of
+object from a window cut into it, and the class is what carries the distinction.
+
+**Exactly one copy exists at any width**: the plate is `hidden sm:contents` (so
+`ReadingPlate` keeps its own `ml-auto` and stays a direct flex item of the row)
+and the strip is `sm:hidden`. `display: none` takes both out of the
+accessibility tree, so the same three figures are never read twice.
+
+### `--recess-bg`, and the rule it is the exception to
+
+This file's usual rule is that a recess is spelled `bg-black/N`, because a black
+alpha is darker than its surround in *both* schemes where a `--foreground` alpha
+is not. **That holds for a recess whose contents are lit and fails for one whose
+contents are ink on metal**, which a render caught: the pane ledges' control
+tracks, the rail's channel and the pick trays all carry `--billet-label` or a
+dark pill, and 34% black under a near-white ledge took that label to **3.4:1**.
+`--recess-bg` is that one cut as a token — `rgba(0,0,0,0.32)` dark, a shallower
+`rgba(15,23,42,0.1)` light — which keeps the recess reading as a recess and the
+label at 6.4:1. Everything else new here is a token for `globals.css`'s ordinary
+reason: `--row-well-*`, `--figure-well-*`, `--lit-bar-*`, `--rail-channel-shadow`,
+`--pick-pill-shadow*`, `--glass-lip-shadow`, `--figure-engrave`,
+`--standing-engrave`, `--standing-strip-shadow` and its well.
+
+**The bigger rail thumb is scoped to the bay** (`.lab-rail-bay`) rather than
+grown on `.lab-rail`, because that class has a second reader — the comps page's
+criteria weights — whose channel is a different height and whose input is
+stretched over it with `inset-0`. Growing the shared thumb moves the grip off
+its groove there, on a page this design does not cover.
+
+**A player's face is a background layer, not an `<img>`.** The handoff calls for
+an ordinary `<img>` on the grounds that the prototype's own reason for a
+background does not apply here, which is true — and a second reason does, which
+a render found. A great many of these ids have no thumbnail (a team defence's id
+is a team code, and Sleeper's board turns over faster than its art does), and a
+**broken `<img>` paints a glyph over the letter mount even at `alt=""`**, where a
+failed background paints nothing and the mount underneath is exactly the
+fallback it was put there to be. The element is `aria-hidden` decoration either
+way. **The NFL team code on the phone seat's second line is not shipped** and is
+flagged back rather than guessed at: `LineupPlayer` carries no team, the ROS
+fold drops the one the feed sends (`assembleRosProjections` keeps identity and
+stats; `week.ts` is the fold that keeps `team`), and putting it on the wire is a
+contract field on every player of every roster of every league for a phone-only
+label. The line reads slot-and-figure without it.
+
+### Verified
+
+Rendered through a temporary `/preview` route against the real components,
+tokens and Tailwind build — the method the console-card, shares, rack and
+timeline passes established, since no database is reachable from where this was
+built — then driven over CDP at 1280 and 390 in both schemes and deleted. Two
+mechanics of that method are unchanged (`--no-proxy-server`, and the
+`--blink-settings=availablePointerTypes=4,…` flags, without which headless
+Chrome reports `pointer: none` and every `pointer-fine:` rule on this card is
+inert) and **two are new**. The harness page must be a **client component**: the
+real caller is `leagues-home.tsx`, so the card and everything it imports are
+client modules there, where a server-component harness turns each `"use client"`
+import into a client *reference* — `typeof` function, no keys, and a
+`Cannot read properties of undefined` that looks like an app bug and is not. And
+`next start` **refuses to boot without `DATABASE_URL`** (the instrumentation
+hook rethrows, by design) while `next dev` mis-graphs that same client boundary,
+so what was driven is the artefact the production build emitted, served with its
+own `.next/static` by a twenty-line file server.
+
+The fixtures are four leagues: a dynasty superflex solved over twelve rosters
+with an empty seat and an unpriced starter, a league whose twelve totals span
+0.4 points, one where every roster totals zero on every metric, and one whose
+rosters, `settings` and `roster_positions` were never stored.
+
+Every arm landed. Housing radius 14px with `perspective: 1400px` and the panes
+at a real `translateZ(7px)`; two panes of **equal width** (532.7px at 1280,
+171.9px at 390); rows 50px at `lg` and 66px below it; the bay 57px against its
+56px floor. At 390 the strip is `flex` and the plate `none`, the lens keys are
+`none` and two selects are visible — one control each, one copy of the standing.
+Selecting the fifth team moved the pressed state, re-solved the roster pane and
+dropped the picks to none; the lens moved every figure to KTC; the sort re-ordered
+the standings and reformatted the totals; the bench disclosed six rows. The
+all-zero league drew **no coloured total and no coloured seat figure**, dashes
+throughout, and four em-dashed rank windows. The never-synced league drew
+neither plate nor strip. `/comps`' rails still measure 24px with no
+`.lab-rail-bay`, and `/tools` renders unchanged.
+
+At every width and in both schemes: `document.documentElement.scrollWidth` equal
+to the viewport, **zero unclipped elements past it**, exactly one `<h1>`, and no
+page errors. 1,630 unit tests pass (21 more — the two ramp inputs, the win
+share, the median and `slotMedians`); `lint`, `typecheck` and `build` are clean.
+
+**Not verified against real data**, which is the gap to close first: every
+number above is a fixture. Four things a render cannot check — how a real
+league's names set in a 532px pane against the fixtures' invented ones; whether
+`sharePercentile`'s ±10% is the right saturation against a corpus of real
+scoring rather than one hand-made spread; whether `slotPercentile`'s ±20% is,
+against real per-slot spreads; and how the headshots read at all, since
+`sleepercdn.com` is unreachable from where this was built and every face
+rendered as its letter mount.
 ## The console card
 
 One card carries a league across three tools — `/trades`, `/manager` and
