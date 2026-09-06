@@ -228,6 +228,56 @@ export const CONSOLE_BILLET =
 export const CONSOLE_MILLED_WELL =
   "bg-[image:var(--billet-well-bg)] shadow-[var(--billet-well-shadow)]";
 
+/**
+ * A row **cut into glass**: the channel a standings row or a seat row sits in.
+ *
+ * The expanded card's panes are parts, and inside each part's glass the rows
+ * are grooves milled across it — a dark channel with a lit lip along its
+ * bottom edge, which is the one detail that says "cut" rather than "painted".
+ * It is the same idea as {@link CONSOLE_MILLED_WELL} one material over, and
+ * that difference is the whole reason there are two: **a well on glass is a
+ * dark channel, never `--billet-well-bg`**, which is *metal* — a recess in a
+ * billet's face, with a face's own gradient inverted. Glass has no face to
+ * invert, so a metal well drawn here reads as a chip that has fallen onto the
+ * screen.
+ *
+ * Carries no radius, no height and no padding, for {@link CONSOLE_CARD_SHELL}'s
+ * reason: the desktop row and the two-line phone row are the same channel at
+ * two sizes, and a constant naming a `rounded-*` is a second base utility for
+ * the caller's own to lose an emit-order coin flip against.
+ */
+export const CONSOLE_ROW_WELL =
+  "bg-[color:var(--row-well-bg)] shadow-[var(--row-well-shadow)]";
+
+/**
+ * The smaller channel cut into a row, which one figure sits in.
+ *
+ * One pattern used twice at two depths — a row in the glass, a figure in the
+ * row — and the nesting is what gives the pane its depth without a single
+ * gradient or border. Deeper and darker than the row around it, because a cut
+ * into a cut has to read as further in.
+ *
+ * `overflow-hidden` is part of it: a figure wider than its cell is clipped by
+ * the channel's own edge rather than spilling across the row, which is what
+ * keeps a six-figure KeepTradeCut total from running under the team name.
+ */
+export const CONSOLE_FIGURE_WELL =
+  "overflow-hidden rounded-md bg-[color:var(--figure-well-bg)] " +
+  "shadow-[var(--figure-well-shadow)]";
+
+/**
+ * The control track on a pane's own ledge.
+ *
+ * {@link CONSOLE_TRACK} is cut into a *panel* and takes the panel's key stock;
+ * this is cut into a **ledge**, which is machined metal, so it is a hole in
+ * that metal rather than a channel of key stock. Its colour is `--recess-bg`
+ * rather than the `bg-black/N` this file usually spells a recess with — see
+ * that token: the label stamped on this one is ink on metal, and 34% black
+ * under a near-white ledge takes it to 3.4:1.
+ */
+export const CONSOLE_PANE_TRACK =
+  "rounded-full bg-[color:var(--recess-bg)] shadow-[var(--track-shadow)]";
+
 /** A chip of the same billet stock: one raised part carrying a pair of bays. */
 export const CONSOLE_CHIP =
   "bg-[image:var(--chip-bg)] shadow-[var(--chip-shadow)]";
@@ -284,11 +334,23 @@ export const CONSOLE_GLASS =
  * `relative overflow-hidden` on {@link CONSOLE_WINDOW}'s contract, and its
  * `overflow: hidden` is safe here for the reason it is not on the card — this
  * sits *outside* the summary's `preserve-3d` subtree, where a clip has no
- * depth to collapse.
+ * depth to collapse. (A `perspective` on it is safe for a narrower reason and
+ * the two are worth telling apart: perspective survives a clip, where
+ * `preserve-3d` does not. The manager card's expanded half projects its parts
+ * from this element and is clipped by it.)
+ *
+ * {@link CONSOLE_HOUSING_INSET_SHELL} is the same surface carrying **no
+ * radius**, for {@link CONSOLE_CARD_SHELL}'s reason: the manager card's
+ * expanded half is a 14px part where the week view is a 12px one, and two base
+ * `rounded-*` utilities of the same specificity are decided by Tailwind's emit
+ * order rather than by the class attribute.
  */
-export const CONSOLE_HOUSING_INSET =
-  "relative overflow-hidden rounded-xl border border-foreground/10 " +
+export const CONSOLE_HOUSING_INSET_SHELL =
+  "relative overflow-hidden border border-foreground/10 " +
   "bg-[image:var(--housing-bg)] shadow-[var(--housing-inset-shadow)]";
+
+/** The same, at the inner 12px radius. */
+export const CONSOLE_HOUSING_INSET = `${CONSOLE_HOUSING_INSET_SHELL} rounded-xl`;
 
 /**
  * The metal finish, as a set of token overrides on a card's own container.

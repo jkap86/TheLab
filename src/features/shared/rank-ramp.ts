@@ -114,3 +114,106 @@ export function placeAmong(
   if (all.length <= 1 || all.every((figure) => figure === 0)) return null;
   return { rank: all.filter((figure) => figure > value).length + 1, of: all.length };
 }
+
+/**
+ * How much of the league's points one team holds, as a percentile the ramp can
+ * read.
+ *
+ * **A rank is the wrong input for a table of totals**, which is the whole of
+ * why this exists beside {@link rankPercentile}. A rank ramp spends its full
+ * red and its full green in *every* league, because somebody is always first
+ * and somebody is always last — so twelve teams sitting within a point of each
+ * other read as a blowout, and the colour says nothing the ordinal beside it
+ * had not already said. Anchored on the league's own mean instead, a tight
+ * table lands every row on the neutral and only a real spread reaches the ends.
+ *
+ * The saturation is ±10% of the mean, which is a claim about fantasy scoring
+ * rather than a round number: a team 10% clear of its league's average points
+ * is comfortably the best in it, and one 10% adrift is out of the race. Beyond
+ * that the ramp has nothing further to say and clamps.
+ *
+ * Null in for a mean of zero — a league whose totals are all zero has no share
+ * to take, which is {@link rankPercentile}'s own "nothing to colour" rule at
+ * this grain and the reason a caller must still gate on the all-zero case.
+ */
+const SHARE_SATURATE = 0.1;
+
+export function sharePercentile(
+  total: number,
+  all: readonly number[],
+): number {
+  if (all.length === 0) return 50;
+  const mean = all.reduce((sum, v) => sum + v, 0) / all.length;
+  if (mean === 0) return 50;
+  return clampPercent(50 + ((total - mean) / mean / SHARE_SATURATE) * 50);
+}
+
+/**
+ * One seat's figure against the league's median at that same slot.
+ *
+ * **The comparison is positional, which is what makes the colour worth
+ * printing.** A seat drawn on its own magnitude would paint every quarterback
+ * green and every kicker red, since the two are not on one scale; read against
+ * the twelve rosters' middle player at that seat, a green QB1 is one that
+ * actually beats the league's, and a red one is a hole to fix.
+ *
+ * ±20% rather than the standings' ±10%, and the widening is measured rather
+ * than chosen: one slot spreads much further across a league than a whole
+ * roster does — the best QB in a twelve-team league routinely doubles the
+ * worst, where the best *roster* rarely clears the worst by half.
+ *
+ * A median of zero is a slot no roster in the league has a figure for — the
+ * lens is silent on it, or the board could not be read — so it comes back
+ * neutral rather than painting an absent answer.
+ */
+const SLOT_SATURATE = 0.2;
+
+export function slotPercentile(value: number, median: number): number {
+  if (!median) return 50;
+  return clampPercent(50 + ((value - median) / median / SLOT_SATURATE) * 50);
+}
+
+/** Both scales saturate rather than run off the ramp's ends. */
+function clampPercent(value: number): number {
+  return Math.max(0, Math.min(100, value));
+}
+
+/**
+ * A record, as a percentile — its win share stretched across .250–.750.
+ *
+ * **The raw share is the wrong number to hand the ramp**, and the reason is
+ * where records actually land: almost every one in a played season sits between
+ * a quarter and three quarters, so 8–5 (.615) and 7–6 (.538) would both come
+ * back a hair off the neutral and the colour would say nothing. Stretched over
+ * the band records occupy, the same two are 73 and 58 — visibly different, which
+ * is the whole job.
+ *
+ * Ties are not counted on either side. A tie is neither result, and a league
+ * that has them is a league where the two ends of this scale mean what they
+ * always did.
+ *
+ * Neutral for a record of no games: a manager who has not played is not a
+ * manager who has lost.
+ */
+export function winSharePercentile(wins: number, losses: number): number {
+  const played = wins + losses;
+  if (played === 0) return 50;
+  return clampPercent(((wins / played - 0.25) / 0.5) * 100);
+}
+
+/**
+ * The median of a set of figures, or 0 where there is nothing to take one of.
+ *
+ * The plain even-length average of the two middle values, which is what
+ * {@link slotPercentile} wants: a *typical* figure at this seat, not a rank in
+ * it. Zero is the "nothing to compare against" answer the percentile above
+ * reads as neutral — the same absence, spelled once.
+ */
+export function median(all: readonly number[]): number {
+  if (all.length === 0) return 0;
+  const sorted = [...all].sort((a, b) => a - b);
+  const mid = sorted.length >> 1;
+  return sorted.length % 2 === 0
+    ? ((sorted[mid - 1] ?? 0) + (sorted[mid] ?? 0)) / 2
+    : (sorted[mid] ?? 0);
+}

@@ -4,7 +4,7 @@ import { useMemo, useState, type ReactNode } from "react";
 
 import type { LeagueLineupEntry } from "@/shared/contract";
 
-import { CONSOLE_KEY_PILL } from "../../console-chrome";
+import { CONSOLE_KEY_PILL, CONSOLE_WELL } from "../../console-chrome";
 import { formatInstantDate } from "../../format";
 import {
   stopSummary,
@@ -115,10 +115,16 @@ export function TimelineView({
           has — a control that vanishes on press is worse than one that says it
           found nothing.
 
-          The 50px floor is measured rather than chosen: the `History` key's own
-          row is 36px and the rail's is 35, so without it pressing the key would
-          shift the whole table below by a pixel. */}
-      <div className="mb-3.5 flex min-h-[3.125rem] items-center gap-3 border-b border-foreground/10 pb-3.5">
+          **It is a shallow well now, not a bottom-bordered row.** The expanded
+          half became a housing holding parts, and a rule drawn across a housing
+          is a line on metal where a bay is a tray cut into it — which is what
+          says the rail belongs to this card rather than dividing it. The floor
+          rises with it: 56px, which is the taller keys and the deeper channel
+          the bay holds, and it is still a floor for the same reason it always
+          was, so pressing `History` moves nothing under it. */}
+      <div
+        className={`${CONSOLE_WELL} mb-3 flex min-h-[3.5rem] flex-wrap items-center gap-2.5 px-2.5 py-[9px] sm:mb-4 sm:gap-3.5 sm:px-3 pointer-fine:[transform:translateZ(4px)]`}
+      >
         {!opened && (
           <>
             <button

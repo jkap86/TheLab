@@ -40,6 +40,97 @@ export function CardPlateRow({ children }: { children: ReactNode }) {
 }
 
 /**
+ * The card's standing as a **milled strip** bolted to the housing's face —
+ * three equal bays under the rule, where the plate row cannot hold them.
+ *
+ * **It exists because of a width, and the width is the card's own subject.**
+ * `LeaguePlate` and `ReadingPlate` share one row inside the plate row's insets,
+ * and on a 362px card that leaves the league name ~95px — truncated to
+ * "Dynasty Wa…" *after* `standingFields` had already dropped its third field to
+ * buy that much. Every fix inside the row is the same trade at a different
+ * price. So below `sm` the row carries the league plate alone, at full width,
+ * and the standing comes down here as the card's first in-flow child: all three
+ * fields are back, the name stops truncating, and nothing is competing for a
+ * line.
+ *
+ * **Metal, not glass, and that is the decision rather than the finish.** Drawn
+ * on `--readout-bg` the strip read as one more thing the league reports about
+ * itself, sitting next to the settings window that reports the rest — where a
+ * standing is the *reader's* result, not the league's own configuration. A
+ * plate bolted to the housing is a different class of object from a window cut
+ * into it, and the class is what carries the distinction.
+ *
+ * Its shadow is one atomic list ({@link CONSOLE_BILLET} on why a shadow list
+ * cannot be composed) and lives in `--standing-strip-shadow` for the reason
+ * every bevel in `globals.css` does — it is chamfered bright-top and
+ * dark-underside, which inverts wholesale on a pale ground rather than dimming.
+ *
+ * Rejected alternatives, in the design file: a step milled off the plate's own
+ * bottom edge, and the standing stamped into the housing face with no part at
+ * all. Also superseded is the two-line {@link CardLedge} that carried both —
+ * it works, and costs 76px of card before the rule.
+ */
+export function StandingStrip({ children }: { children: ReactNode }) {
+  return (
+    <div
+      className={`relative mt-[1.125rem] flex items-stretch justify-between gap-2.5 overflow-hidden rounded-xl bg-[image:var(--billet-bg)] px-[11px] py-[9px] shadow-[var(--standing-strip-shadow)] sm:hidden`}
+    >
+      <BilletFinish />
+      {children}
+    </div>
+  );
+}
+
+/**
+ * One bay of the strip: a stamped label over a figure in a milled well.
+ *
+ * **The figure is coloured by what it says**, which is the strip's second job
+ * and the reason it is not simply the plate moved down the card. A place is its
+ * own percentile in the field and a record is its win share, both on the ramp
+ * the rank windows below already run — so the standing agrees with the four
+ * figures under it instead of being the one reading on the card drawn in a
+ * single ink. The caller computes the percentile, because only it knows which
+ * of the two rules this field takes.
+ *
+ * The engraving is `--standing-engrave` plus the caller's own glow: the static
+ * layers are a token because they invert for light mode, and the glow is a
+ * continuous ramp colour with no utility to generate. A `text-shadow` is a
+ * comma list, so the two compose.
+ */
+export function StandingBay({
+  label,
+  tone,
+  glow,
+  children,
+}: {
+  label: string;
+  /** The ramp colour for this field's own percentile. */
+  tone: string;
+  /** The same colour at low alpha, for the figure's halo. */
+  glow: string;
+  children: ReactNode;
+}) {
+  return (
+    <span className="relative flex min-w-0 flex-1 flex-col items-center gap-1">
+      <span className="whitespace-nowrap font-mono text-[length:var(--fs-9)] uppercase tracking-[0.14em] text-[color:var(--billet-label)] [text-shadow:var(--standing-label-shadow)]">
+        {label}
+      </span>
+      <span className="flex w-full justify-center rounded-[0.4375rem] bg-[image:var(--billet-well-bg)] px-2 pb-[5px] pt-1 shadow-[var(--standing-well-shadow)]">
+        <span
+          className="whitespace-nowrap font-display text-[length:var(--fs-18)] font-semibold leading-[1.1] tracking-[-0.015em] tabular-nums"
+          style={{
+            color: tone,
+            textShadow: `var(--standing-engrave), 0 0 18px ${glow}`,
+          }}
+        >
+          {children}
+        </span>
+      </span>
+    </span>
+  );
+}
+
+/**
  * The league, as a plate: a lit mark and the league's name.
  *
  * **This is the card's subject.** On the manager and lineup checker cards it
