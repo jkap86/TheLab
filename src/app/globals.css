@@ -125,14 +125,22 @@
    * `top-6`, and that 24px was part of every arm; the rack sits at `top-0` now
    * — still a rack unit in its own gutter, just not one hovering clear of the
    * edge — so the clearance is the rack's height plus the gap under it and
-   * nothing above it. The gap under it is unchanged, which is the thing to
-   * check after any edit here: the identity plate clears the rack by the same
-   * 28px at `md` that it always did.
+   * nothing above it. The gap under it is the thing to check after any edit
+   * here, and it is **two numbers rather than one**, because the rack's height
+   * is: a page with no Browse track is 62px at `md` and the identity plate
+   * clears it by the 28px it always did, while a page carrying one is 65.1px
+   * and clears by 24.9. The track is the taller object in that row — a 37.1px
+   * key in 5px of channel, against the brand link's 44px bezel — and that 5px
+   * is the deep channel a *filled* cap needs; see `--track-shadow-deep`. Both
+   * are measured and both are clear, and neither earns a fourth arm on this
+   * token: raising it for the two pages that carry controls would push the
+   * other four down by the same 3px for nothing.
    *
    * The rack is one row at every width, which is a constraint rather than an
-   * observation: the two control tracks fold behind a single key below `lg`
+   * observation: the Browse pair folds behind a single key below `md`
    * precisely so this number stays three values rather than five. See
-   * `rack-controls-keys.tsx`.
+   * `rack-controls-keys.tsx`, which carries the measurement for why the fold
+   * is `md` and not the `lg` two tracks needed.
    */
   --rack-clear: 4.75rem;
 
@@ -170,6 +178,13 @@
    * that number predates the rule above and counts the rack and the breath
    * alone, which parks the plate's top edge at 61px against a 62px rack — the
    * name a pixel behind the thing the freeze exists to keep it clear of.
+   *
+   * The 62px in that sum is the rack with no Browse track in it, and both
+   * pages whose cards freeze *do* carry one, which makes their rack 65.1 — so
+   * the plate parks at 74 against 65.1 and clears by 8.9px rather than 13.
+   * Less breath than the rule asks for and still clear, which is what the
+   * freeze is for. Measured rather than assumed, so the next 3px of rack is
+   * known to be the one that would cost it.
    */
   --card-freeze-top: 5.4375rem;
 
@@ -322,6 +337,50 @@
    */
   --track-shadow: inset 0 3px 8px rgba(0, 0, 0, 0.9);
   --well-shadow: inset 0 3px 8px rgba(0, 0, 0, 0.55), inset 0 -1px 0 rgba(255, 255, 255, 0.06);
+
+  /*
+   * **The accent cap: the one filled object in the app rack.**
+   *
+   * Everything in the rack is machined — a key pressed into a housing, a
+   * readout engraved on one — except the page's own controls, which are the
+   * only thing up there that acts on the page underneath it. So the Browse
+   * keys are a domed cap with the glyph cut into it and everything else stays
+   * unlit. Two filled objects in one pill would put the emphasis nowhere,
+   * which is why the tool-menu key beside them is deliberately not this.
+   *
+   * **The light cap inverts rather than dimming**, which is the rule this file
+   * states for every bevel and is load-bearing here: `--accent` in light mode
+   * is a dark teal (`#0b6d63`), so a pale cap with dark ink — the dark
+   * scheme's arrangement — fails contrast outright. Light is a teal cap with
+   * white ink instead. Measured: 11.4:1 in dark, 6.8:1 in light.
+   *
+   * `--cap-ink-emboss` and `--cap-glyph-emboss` are the same highlight for the
+   * two kinds of thing a cap carries, and they are tokens rather than literals
+   * in a class string for the reason every shadow here is one: the dark cap
+   * lights its ink from above and the light cap from below, and an `rgba()`
+   * typed into a Tailwind arbitrary value cannot invert. The glyph's is a
+   * `drop-shadow` filter and not a `text-shadow`, because it has to follow the
+   * stroke's alpha rather than the box around it.
+   */
+  --cap-accent-bg: radial-gradient(120% 160% at 30% 12%, #bdfff5 0%, #4bf0df 26%, #00dfca 58%,
+    #00ada0 100%);
+  --cap-accent-border: rgba(0, 58, 52, 0.55);
+  --cap-accent-ink: #04322c;
+  --cap-accent-shadow: inset 0 1.5px 0 rgba(255, 255, 255, 0.85),
+    inset 0 -2.5px 3px rgba(0, 52, 47, 0.5), 0 2px 0 #046b61, 0 5px 10px -3px rgba(0, 0, 0, 0.7),
+    0 0 24px -6px var(--accent-glow);
+  --cap-ink-emboss: 0 1px 0 rgba(255, 255, 255, 0.55);
+  --cap-glyph-emboss: drop-shadow(0 1px 0 rgba(255, 255, 255, 0.75))
+    drop-shadow(0 -1px 0 rgba(0, 52, 47, 0.35));
+
+  /*
+   * The channel a *filled* cap travels in, deeper than `--track-shadow` and
+   * with a lit bottom lip. A cap in the shallow one reads as sitting **on**
+   * the rack rather than in it — the same reason the two recesses above are
+   * two rather than one alpha apart.
+   */
+  --track-shadow-deep: inset 0 3px 9px rgba(0, 0, 0, 0.95),
+    inset 0 -1px 0 rgba(255, 255, 255, 0.06);
 
   --readout-bg: linear-gradient(180deg, #04100f, #061816);
   --readout-shadow: inset 0 3px 8px rgba(0, 0, 0, 0.95), inset 0 0 20px rgba(0, 255, 229, 0.11);
@@ -732,6 +791,25 @@
      shadow, not the near-black the dark scheme can afford. */
   --track-shadow: inset 0 3px 8px rgba(15, 23, 42, 0.18);
   --well-shadow: inset 0 3px 8px rgba(15, 23, 42, 0.12), inset 0 -1px 0 rgba(255, 255, 255, 0.9);
+
+  /* The accent cap, inverted rather than dimmed — see the note on the dark
+     values. A teal cap with white ink, because light mode's accent is a dark
+     teal and dark ink on it fails contrast. The two embosses swap sides with
+     the cap: the pale dark-mode cap lights its ink from above, this one from
+     below. */
+  --cap-accent-bg: radial-gradient(120% 160% at 30% 12%, #4ec8ba 0%, #1a9d8e 30%, #0b7f73 62%,
+    #075f56 100%);
+  --cap-accent-border: rgba(4, 50, 45, 0.5);
+  --cap-accent-ink: #f4fffd;
+  --cap-accent-shadow: inset 0 1.5px 0 rgba(255, 255, 255, 0.5),
+    inset 0 -2.5px 3px rgba(0, 40, 36, 0.45), 0 2px 0 #05463f,
+    0 5px 10px -3px rgba(15, 23, 42, 0.45), 0 0 22px -8px var(--accent-glow);
+  --cap-ink-emboss: 0 -1px 0 rgba(0, 40, 36, 0.45);
+  --cap-glyph-emboss: drop-shadow(0 1px 0 rgba(255, 255, 255, 0.35))
+    drop-shadow(0 -1px 0 rgba(0, 40, 36, 0.4));
+
+  --track-shadow-deep: inset 0 3px 9px rgba(15, 23, 42, 0.22),
+    inset 0 -1px 0 rgba(255, 255, 255, 0.9);
 
   /* The account readout: a lit window, not a card. */
   --readout-bg: linear-gradient(180deg, #eaf6f4, #dcefeb);

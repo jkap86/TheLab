@@ -110,6 +110,15 @@ export const SHARES_COLUMNS_BY_KIND: Record<
 > = {
   player: ["value", "age", "class", "record", "share"],
   leaguemate: ["record", "share"],
+  // **The one kind with no panel of its own.** A `leaguemate-player` is picked
+  // from a chip inside the leaguemate panel's expanded row, so nothing renders
+  // a list of them and nothing reads this entry today. It is here because the
+  // `Record` is the seam: a kind that compiles without having been given
+  // columns is a kind somebody can put in the rack tomorrow and find blank.
+  // `share` is what a row of them would carry — how many of the leagues shared
+  // with that person hold that player, which is exactly what the chip's own pip
+  // already says.
+  "leaguemate-player": ["share"],
   starter: ["start", "bench"],
   opponent: ["start", "bench"],
 };

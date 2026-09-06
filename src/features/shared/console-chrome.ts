@@ -33,7 +33,7 @@ const KEY_PRESS =
   "focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-active/60";
 
 /**
- * Pill geometry and travel, carrying **no colour of its own**.
+ * Pill geometry and travel, carrying **no colour and no padding of its own**.
  *
  * The split from {@link CONSOLE_KEY} is not tidiness. A key with two states
  * has to be composed as `shape + state`, and appending `border-active/40` to a
@@ -42,9 +42,28 @@ const KEY_PRESS =
  * Tailwind happened to emit them in, not by the order they appear in the class
  * attribute. A shape that names no colour cannot lose that flip.
  */
-export const CONSOLE_KEY_PILL =
-  "shrink-0 rounded-full border px-4 py-2 " +
+export const CONSOLE_KEY_PILL_SHELL =
+  "shrink-0 rounded-full border " +
   `font-mono text-[length:var(--fs-11)] uppercase tracking-[0.16em] ${KEY_PRESS}`;
+
+/**
+ * The pill above, at the standard gutter.
+ *
+ * The padding is split out of {@link CONSOLE_KEY_PILL_SHELL} for the reason
+ * {@link CONSOLE_CARD_SHELL} is split out of {@link CONSOLE_CARD}, one axis
+ * over: a key that wants a tighter gutter — an icon-only cap, say — cannot get
+ * one by appending `px-2.5` to a string that already says `px-4`. Both are base
+ * utilities of the same specificity, and Tailwind emits the scale in ascending
+ * order, so **the larger value wins whatever the class attribute says**. It is
+ * the same coin flip this file splits colour out for, and it is worse here,
+ * because a key silently laid out at the wrong width still looks like a key.
+ *
+ * Measured against this project's own Tailwind build: `px-2.5` is emitted
+ * before `px-4`, and an arbitrary value (`px-[0.6875rem]`) after both. So a
+ * caller with a bare scale step needs the shell; one with an arbitrary value
+ * happens to win either way, which is not a difference worth remembering.
+ */
+export const CONSOLE_KEY_PILL = `${CONSOLE_KEY_PILL_SHELL} px-4 py-2`;
 
 /** The everyday key: the pill above, unlit. */
 export const CONSOLE_KEY =

@@ -22,6 +22,7 @@ export {
   CONSOLE_KEY,
   CONSOLE_KEY_BLOCK,
   CONSOLE_KEY_PILL,
+  CONSOLE_KEY_PILL_SHELL,
   CONSOLE_METAL,
   CONSOLE_MILLED_WELL,
   CONSOLE_PLATE,
@@ -98,10 +99,15 @@ export type { SharesColumnId } from "./shares-columns";
 // drawers of its own — the line `CONSOLE_KEY` and `ManagerPlate` moved on.
 export {
   NO_SUBJECTS,
+  leaguematePlayerId,
   matchesSubjects,
+  parseLeaguematePlayerId,
+  pickedSubject,
   removeSubject,
+  setSubjectMode,
   subjectCount,
   subjectKey,
+  subjectSlot,
   toggleSubject,
 } from "./league-subjects";
 export type {
@@ -109,10 +115,15 @@ export type {
   Subject,
   SubjectKind,
   SubjectMatch,
+  SubjectMode,
   SubjectRolls,
 } from "./league-subjects";
+export { CollapseTray } from "./ui/collapse-tray";
 export { SharesDrawer } from "./ui/shares-drawer";
-export type { SharesDrawerRow } from "./ui/shares-drawer";
+export type {
+  SharesDrawerDisclosure,
+  SharesDrawerRow,
+} from "./ui/shares-drawer";
 export { SubjectTokens } from "./ui/subject-tokens";
 export {
   RackControlsProvider,

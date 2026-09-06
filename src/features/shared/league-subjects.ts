@@ -30,11 +30,46 @@
  * `player` and `leaguemate` are a season's — who the manager rosters, and who
  * they play against — where `starter` and `opponent` are one *week's*: the
  * players on their own lineups, and the players on the lineups facing them.
+ *
+ * `leaguemate-player` is the one that is **not a panel**: it is picked from a
+ * chip inside the leaguemate panel's own expanded row, so there is no drawer of
+ * that kind and the rack never publishes a key for one. It has an entry in
+ * `SHARES_COLUMNS_BY_KIND` all the same, because the seam is the point — the
+ * `Record` is what makes a new kind a compile error until somebody has said
+ * what a row of it would carry.
  */
-export type SubjectKind = "player" | "leaguemate" | "starter" | "opponent";
+export type SubjectKind =
+  | "player"
+  | "leaguemate"
+  | "leaguemate-player"
+  | "starter"
+  | "opponent";
 
-/** One thing the reader picked. `kind` is what says which map answers for it. */
-export type Subject = { kind: SubjectKind; id: string };
+/**
+ * Which leagues a *player* pick narrows to, of the three a stored roster set
+ * can distinguish.
+ *
+ * **It lives on the subject rather than beside it**, which is what lets two
+ * picks sit on two modes — and what lets the token tray name a narrowing
+ * rather than a player. A copy held in the drawer would be a second spelling of
+ * one fact, and the drawer is not what the grid reads.
+ *
+ * `owned` is the resting mode and the one an unmoded subject means: it is the
+ * question the panel answered before there were three, so a subject carrying no
+ * mode narrows exactly as it always did.
+ */
+export type SubjectMode = "owned" | "taken" | "available";
+
+/**
+ * One thing the reader picked. `kind` is what says which map answers for it,
+ * and `mode` — on a `player` alone — which of three readings of that map.
+ */
+export type Subject = {
+  kind: SubjectKind;
+  id: string;
+  /** Absent is {@link SubjectMode}'s `owned`, and is what every other kind is. */
+  mode?: SubjectMode;
+};
 
 /**
  * The maps a narrowing reads, one per kind — league id to the ids that league
@@ -45,9 +80,16 @@ export type Subject = { kind: SubjectKind; id: string };
  * made necessary and what keeps this module honest: a page answers for the
  * kinds its own drawers pick and returns null for the rest, so adding a panel
  * costs a case here and nothing at every call site.
+ *
+ * **The mode is an argument because the three modes are three maps, not three
+ * readings of one.** `owned` is the manager's own rosters, `taken` is every
+ * *other* roster in the league, and `available` is every roster in it — which
+ * {@link matchesSubjects} then reads inverted, since a player nobody names is
+ * the one who is free.
  */
 export type SubjectRolls = (
   kind: SubjectKind,
+  mode: SubjectMode | undefined,
 ) => Record<string, readonly string[]> | null;
 
 /**
@@ -66,22 +108,69 @@ export type LeagueSubjects = {
 /** Nothing picked. `all` is the resting mode: with one subject the two agree. */
 export const NO_SUBJECTS: LeagueSubjects = { subjects: [], match: "all" };
 
-/** A subject's identity across the two kinds — a player and a user could share an id. */
-export function subjectKey(subject: Subject): string {
+/**
+ * **Which row a subject came from** — its kind and its id, and nothing else.
+ *
+ * The counterpart of {@link subjectKey}, and the split is the thing to get
+ * right: a row holds at most one narrowing, so *picking* and *clearing* are
+ * about the slot, while the token that names the narrowing, and the map that
+ * answers it, are about the key. Toggling on the key instead would mean a row
+ * switched to `Taken` could not be cleared by pressing it — the press would
+ * carry no mode, miss the moded subject, and add a second one.
+ */
+export function subjectSlot(subject: Pick<Subject, "kind" | "id">): string {
   return `${subject.kind}:${subject.id}`;
+}
+
+/**
+ * A subject's full identity — the slot plus the mode.
+ *
+ * The mode is in it because a player on `taken` is a **different narrowing**
+ * from the same player on `owned`, not a different view of one: the two read
+ * different maps and the token above the grid says different words. A player
+ * and a user could share an id, which is what the kind is for.
+ */
+export function subjectKey(subject: Subject): string {
+  const slot = subjectSlot(subject);
+  // Absent and `owned` are one narrowing, so they must be one key — otherwise
+  // a mode press that lands back on the resting mode would look like a change.
+  return subject.mode && subject.mode !== "owned"
+    ? `${slot}:${subject.mode}`
+    : slot;
 }
 
 export function subjectCount(state: LeagueSubjects): number {
   return state.subjects.length;
 }
 
-/** Add the subject, or remove it if it is already picked. */
+/**
+ * The subject picked in that row, whatever mode it is on — or undefined.
+ *
+ * What a drawer reads to draw a row as pressed and to know which mode key is
+ * lit. It is the only way to ask, because the mode lives on the subject and a
+ * drawer holding its own copy would be a second spelling of it.
+ */
+export function pickedSubject(
+  state: LeagueSubjects,
+  kind: SubjectKind,
+  id: string,
+): Subject | undefined {
+  const slot = subjectSlot({ kind, id });
+  return state.subjects.find((s) => subjectSlot(s) === slot);
+}
+
+/**
+ * Add the subject, or remove it if that row is already picked.
+ *
+ * **Matched on the slot, not the key** — see {@link subjectSlot}. A row is one
+ * narrowing, so a press clears it whatever mode it is on.
+ */
 export function toggleSubject(
   state: LeagueSubjects,
   subject: Subject,
 ): LeagueSubjects {
-  const key = subjectKey(subject);
-  const without = state.subjects.filter((s) => subjectKey(s) !== key);
+  const slot = subjectSlot(subject);
+  const without = state.subjects.filter((s) => subjectSlot(s) !== slot);
   return {
     ...state,
     subjects:
@@ -91,12 +180,69 @@ export function toggleSubject(
   };
 }
 
+/** Drop that row's pick, on {@link toggleSubject}'s slot rule. */
 export function removeSubject(
   state: LeagueSubjects,
   subject: Subject,
 ): LeagueSubjects {
-  const key = subjectKey(subject);
-  return { ...state, subjects: state.subjects.filter((s) => subjectKey(s) !== key) };
+  const slot = subjectSlot(subject);
+  return {
+    ...state,
+    subjects: state.subjects.filter((s) => subjectSlot(s) !== slot),
+  };
+}
+
+/**
+ * Move one picked row onto another mode, **in place**.
+ *
+ * In place because the order of the tokens is the order they were picked in,
+ * and a mode press is not a re-pick: remove-then-add would send the row to the
+ * end of the tray every time the reader compared two readings of it.
+ *
+ * A row that is not picked is left alone. The modes are mutually exclusive and
+ * one is always on, so there is no press here that clears a selection — that is
+ * the row's own press, which is where a reader already reaches for it.
+ */
+export function setSubjectMode(
+  state: LeagueSubjects,
+  kind: SubjectKind,
+  id: string,
+  mode: SubjectMode,
+): LeagueSubjects {
+  const slot = subjectSlot({ kind, id });
+  return {
+    ...state,
+    subjects: state.subjects.map((s) =>
+      subjectSlot(s) === slot ? { ...s, mode } : s,
+    ),
+  };
+}
+
+/**
+ * The composite id a `leaguemate-player` subject carries: this person, holding
+ * this player.
+ *
+ * **One spelling, here, beside the kind that uses it.** The id is written by
+ * the chip that picks it and read back by the token that names it, and those
+ * are two files — a second spelling is a token naming somebody else.
+ */
+export function leaguematePlayerId(userId: string, playerId: string): string {
+  return `${userId}:${playerId}`;
+}
+
+/**
+ * The pair back out, or null where the id is not one.
+ *
+ * Split on the **first** separator: a Sleeper player id is a bare number or a
+ * team code, so it never carries one, and splitting on the last would be the
+ * same answer by luck rather than by rule.
+ */
+export function parseLeaguematePlayerId(
+  id: string,
+): { userId: string; playerId: string } | null {
+  const at = id.indexOf(":");
+  if (at <= 0 || at === id.length - 1) return null;
+  return { userId: id.slice(0, at), playerId: id.slice(at + 1) };
 }
 
 /**
@@ -111,16 +257,27 @@ function holds(
   subject: Subject,
   rolls: SubjectRolls,
 ): boolean | null {
-  const map = rolls(subject.kind);
+  const map = rolls(subject.kind, subject.mode);
   if (!map) return null;
+  // `""` and `"0"` are Sleeper's roster padding, and a blank subject id would
+  // match them — which under `available` would then match every league on
+  // earth. One never gets built from a blank; this is the belt.
+  if (!subject.id) return false;
   const roll = map[leagueId];
   // A stored map with no row for this league *can* answer: it does not hold
   // them. Only a missing map is unanswerable.
+  //
+  // **`available` reads this the same way, which is the arm to get right.** The
+  // map it is handed is every roster in the league, so a league with no row is
+  // one whose rosters were never stored — and "nobody rosters him there" is a
+  // claim nothing has seen the data to make. Read as a match it would sweep
+  // every unsynced league into the answer, which is the mistake
+  // `PlayerShares.league_count` is written to avoid one grain up.
   if (!roll) return false;
-  // `""` and `"0"` are Sleeper's roster padding and can never equal a real
-  // subject id, so no extra guard is needed here — but a subject id of `""`
-  // would match them, which is why one is never built from a blank.
-  return Boolean(subject.id) && roll.includes(subject.id);
+  const named = roll.includes(subject.id);
+  // The one inversion: under `available` the league that does **not** name him
+  // is the match, because the map is who holds him rather than who wants him.
+  return subject.mode === "available" ? !named : named;
 }
 
 /**

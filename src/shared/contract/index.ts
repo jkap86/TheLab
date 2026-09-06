@@ -49,8 +49,10 @@ export {
   type LeaguematePayload,
 } from "./names";
 export {
+  type LeagueRosterEntry,
   type ManagerPlayersPayload,
   type ManagerLeaguematesPayload,
+  type ManagerLeaguemateRostersPayload,
 } from "./shares";
 export {
   type TradePickAsset,
