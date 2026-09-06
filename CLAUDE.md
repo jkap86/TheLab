@@ -5352,9 +5352,187 @@ because it comes straight back with any dialog mounted in that subtree: a modal
 `<dialog>` is in the top layer only while it still generates a box, so hiding
 the panel it lives in leaves a backdrop over an inert page. The two remaining
 keys open the *page's* drawers, mounted nowhere near that box, so they dismiss
-on the press. The collapse breakpoint stays `lg`: one track is ~220px less than
-two and `md` may well hold it now, but what is on the other side of a wrong
-guess is `--rack-clear` computed against a rack that is quietly two rows tall.
+on the press. The collapse breakpoint stayed `lg` at the time — one track is
+~220px less than two and `md` may well have held it, but what is on the other
+side of a wrong guess is `--rack-clear` computed against a rack that is quietly
+two rows tall. **It is `md` since**, and the measurement is in the pass below.
+
+### The rack's phone row, and the four objects in it
+
+The rack carried the wordmark, a menu key naming the tool you were in, the
+page's Browse keys and a theme key — and at 390 on a page publishing controls
+that came to 370px against the 348 the pill gives, so the wordmark was dropped
+below `sm` there and the brand was a bare flask. This buys it back by making the
+two things beside it smaller, and settles what each object in the rack is for.
+Applied from a design handoff. Nothing on the wire moved: no route, no query, no
+contract type, no payload field, and no migration — the diff is four components,
+two chrome constants and six tokens per scheme.
+
+**Four objects, and each says one thing.** The brand link goes to the tool grid,
+a readout names the tool you are in, the Browse keys act on the page *under* the
+rack, and one key opens the tool tray. That split is the whole pass: the menu
+key was doing two jobs, naming the page and offering the list, and a key wide
+enough for `Lineup Checker` is a key the wordmark cannot sit beside.
+
+**The tool name became a readout, and that is why it could stop being a key.**
+It is engraved type on the rack's face — no border, no `--key-bg`, no travel —
+because it reports and does not act, where everything else up there that looks
+pressable is. `app-rack.tsx` draws it, not the menu, which is also what lets it
+render **nothing** on a route no tool owns: the old key fell back to the string
+"Tools", a key naming a page rather than the page you were on. It keeps the
+short-form rule (`Tool.short`, two spans switched by the cascade at `sm`), so
+390 reads `LINEUPS` and 640 up reads `LINEUP CHECKER`.
+
+**The measured row at 390, which is the whole justification for change 1.**
+Brand link 129.1 + readout 64.9 + Browse cap 39 + tool key in its track 40, with
+three 12px gaps — **309 in a 347px content box**, one row 54px tall, against the
+370 that forced the old conditional. The rack is *shorter* than it was at a
+phone's width (54 against 54.8), the tool key having given up its legend.
+
+**The tray drops its own `Tools` entry, and `showMenu` stopped being able to
+match one.** That entry did two jobs — light the key on `/tools`, and be a row —
+and the first went with the key's legend. So `links` is `tools.map(...)` alone
+and `showMenu` tests the path directly, because `/tools` is no longer *in* the
+list to be matched. Tray order is the registry's own.
+
+**The theme control moved into the tray**, under a milled hairline, as the one
+row that is not navigation — which is what the hairline says, and why it is also
+the one row that does **not** dismiss: the others navigate, where a toggle is
+something a reader may want to watch land. The standalone key survives on routes
+that render no tray, which today is `/tools` alone, at exactly its old geometry.
+
+**`ThemeToggle` gained two optional props rather than the tray rendering its own
+button.** The handoff prefers leaving the component alone and putting the word
+`Theme` outside it, and a render is what refused that: every other row in the
+tray is a full-width target, so a row whose right third is the only pressable
+part is an inconsistency in a list of five. `leadingLabel` puts a node before
+both faces — the left of a `justify-between` row, which two faces cannot express
+between them — and `faceClassName` makes the reading a step brighter than the
+label naming it, the console's own grammar for a value beside its caption. Both
+default to today's behaviour, so the `/tools` call site is unchanged, and the
+`sr-only` sentence per face is still the button's accessible name.
+
+**One auto margin in the phone row, and it is on the brand link.** The handoff
+puts `ml-auto` on the readout; that is right in every case it draws and wrong in
+the ones it does not — a route no tool owns has no readout, `/tools` has neither
+readout nor controls, so the leading trailing item is three different elements
+depending on the route. Two auto margins in one row split the slack rather than
+pinning either end, so it cannot simply be spelled on all of them. `mr-auto` on
+the brand (dropped at `md`, where the groove and readout sit hard against it and
+the tool key takes the slack instead) is one unconditional spelling that renders
+identically to the handoff wherever the handoff has an opinion.
+
+### The Browse pair unfolds at `md`, and takes an accent cap
+
+**The fold moved `lg` -> `md` on a measurement the old note asked for.** At 768
+on `/manager`: brand 208 + 33 (gap, groove, gap) + readout 68 + 16 + the pair
+with legends 257 + 16 + tool key 40 = **638 against 718**. Below `md` it stays
+folded, and that is the same kind of number rather than caution — as text the
+pair needs 589 against 342, and a rack that wrapped would break the one thing
+`--rack-clear` encodes.
+
+**They are the rack's one filled object, and that is an argument rather than a
+finish.** Everything else up there is machined, and these two are the only
+things in the rack that act on the page underneath it. So they are a domed
+accent cap with the glyph cut into it, in a channel cut deeper than
+`--track-shadow` — a filled cap in the shallow one reads as sitting on the rack
+rather than in it. The tool key stays machined deliberately: two filled objects
+in one pill would put the emphasis nowhere.
+
+**The light cap inverts rather than dimming**, which is `globals.css`'s rule for
+every bevel and load-bearing here: light mode's accent is a dark teal, so the
+dark scheme's pale-cap-and-dark-ink fails contrast outright, and light is a teal
+cap with white ink. Measured 11.4:1 and 6.8:1. `--cap-ink-emboss` and
+`--cap-glyph-emboss` invert with it — a legend lit from above in dark and from
+below in light — and the glyph's is a `drop-shadow` filter rather than a
+`text-shadow` because it has to follow the stroke's alpha rather than the box.
+Both are tokens for the reason the handoff offers as optional and this file
+states as a rule: an `rgba()` in a class string cannot invert.
+
+**`CONSOLE_KEY_PILL` had to give up its padding, and that is the finding worth
+keeping.** The folded trigger has said `px-2.5` since it was written, appended
+to a constant that says `px-4` — and it has been a 16px gutter the whole time,
+because two base utilities of the same specificity are settled by Tailwind's
+emit order and the scale is emitted **ascending**, so the larger value wins
+whatever the class attribute says. Verified against this project's own build:
+`px-2.5`, then `px-3.5`, then `px-4`, then arbitrary values like
+`px-[0.6875rem]` last. It is the colour coin flip this file has documented for
+three passes, one axis over, and it is worse, because a key silently laid out at
+the wrong width still looks like a key. `CONSOLE_KEY_PILL_SHELL` is the pill
+with no padding, `CONSOLE_KEY_PILL` is that plus `px-4 py-2`, every existing
+caller is byte-identical, and the cap takes the shell. The same rule says the
+lit state is composed **whole** in one `shadow-[…]` rather than layered beside
+the resting one.
+
+**Lit is a halo rather than a rim**, which falls out of the finish: the key is
+already accent, so `border-active/45` — what a machined key lights with — has
+nothing to say against a border that is part of the cap.
+
+**The rack is 3px taller on the two pages that carry the track**, which is the
+one number this pass moved and it is recorded in `--rack-clear`'s own note
+rather than answered there. 62px at `md` with no track and 65.1 with one (a
+37.1px key in 5px of channel, against the brand's 44px bezel), so the identity
+plate clears the rack by 28px on four pages and 24.9 on two. Both are clear, and
+raising the token for two pages would push the other four down for nothing. The
+same 3px takes `--card-freeze-top`'s parked plate from 10.9px of clearance to
+8.9 — still clear, and now written down as the margin the next 3px would spend.
+
+#### Verified
+
+Driven over CDP against a production-shaped `next dev` and a throwaway Postgres
+16 cluster, at 390, 640, 768, 1024 and 1280 in both schemes, on
+`/lineupchecker`, `/manager`, `/trades` and `/tools`. The mechanics are the ones
+this file already records — `--no-proxy-server`, `localhost` rather than
+`127.0.0.1`, a phone viewport from `Emulation.setDeviceMetricsOverride`, and the
+`--blink-settings=availablePointerTypes=4,…` flags, without which headless
+Chrome reports `pointer: none` and every `pointer-fine:` rule is inert. One
+mechanic is new and cost an hour: **`next start` did not load `.env.local` here
+and the production boot refuses to start without `DATABASE_URL`**, where
+`next dev` loads it and treats the variable as non-fatal — which is
+`db/config.ts`'s documented split doing exactly what it says.
+
+Every arm landed. The wordmark draws at **every** width on every route,
+including 390 with controls. The readout reads `LINEUPS` / `MGR` at 390 and
+`LINEUP CHECKER` / `MANAGER` from 640, and renders **nothing** on `/tools`. The
+rack is **one row at every width** on all four routes, 54px at 390 and 65.1 (or
+62 without a track) at `md`, with `documentElement.scrollWidth` equal to the
+viewport and **zero** elements past it everywhere. The pair is folded at 390 and
+640 and unfolded at 768, 1024 and 1280 — change 5 end to end.
+
+The tray: right-aligned and inside the viewport at both widths (right 367 of 390
+and 1191 of 1280), **five rows with no `Tools`**, the current row lit with its
+lamp, a 1px milled hairline, and `THEME · LIGHT` in dark against `THEME · DARK`
+in light with only the shown face's `sr-only` sentence in the tree. Pressing the
+theme row flipped `data-theme` and **left the tray open**; Escape closed it and
+returned focus to the key; an outside `pointerdown` closed it. On `/tools`,
+**zero** `<nav>`, the standalone theme key pinned right at 333–363 of 390, and a
+press flipping the theme.
+
+The cap resolves to the tokens in both schemes — dark `rgb(189,255,245)` face
+over `rgb(4,50,44)` ink with a `0 1px 0` white emboss, light `rgb(78,200,186)`
+over `rgb(244,255,253)` with a `0 -1px 0` dark one, the border and the glyph
+filter inverting with them — in a 5px channel with a 7px gap, and the folded
+key's gutter measures **10px**, which is the shell split working: on the old
+constant it was 16.
+
+Exactly one `<h1>` per page, one `<nav>` (none on `/tools`, the deliberate
+exception), one `aria-current="page"`, and no console output but the dev
+server's own React-DevTools and HMR lines plus the 502s of a sandbox with no
+route to Sleeper. 1,575 unit tests pass; `lint`, `typecheck` and `build` are
+clean.
+
+**Not verified against real data**, which is the gap to close first: the pages
+behind the rack could not load a league here, so what a render cannot check is
+the rack against a real 113-league page — whether the frozen card plate still
+reads at 8.9px of clearance, and whether the accent cap holds its emphasis over
+a hundred cards rather than over an error card.
+
+**One finding outside this pass, reported rather than fixed.**
+`timeline-view.tsx` composes `px-3.5 py-1.5` onto `CONSOLE_KEY_PILL`, which is
+the same emit-order trap: both lose to the constant's `px-4 py-2`, so that key
+has been rendering at the standard gutter. It is one line — the shell, or
+arbitrary values — and it is a different component from the four this handoff
+names.
 
 ### The rank is the reading, and the denominator is the config window's
 

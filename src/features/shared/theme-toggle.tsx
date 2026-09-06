@@ -1,6 +1,6 @@
 "use client";
 
-import { useLayoutEffect } from "react";
+import { useLayoutEffect, type ReactNode } from "react";
 
 import { readLocal, writeLocal } from "./local-store";
 import { THEME_STORAGE_KEY, type Theme } from "./theme";
@@ -15,14 +15,25 @@ import { THEME_STORAGE_KEY, type Theme } from "./theme";
  * frame late, and on the first paint it would be wrong.
  *
  * `className` is the chrome, because the call sites do not share one: the app
- * rack draws it as a key with a legend and the tools console as a bare key.
- * What is shared is everything below the paint.
+ * rack draws it as a bare key on `/tools` and the tool menu's tray as a
+ * full-width row with a word on either side. What is shared is everything below
+ * the paint — which is why every chrome prop here is optional and one per
+ * element this draws, rather than a variant enum naming its two call sites.
  */
 export function ThemeToggle({
   className = DEFAULT_CHROME,
+  faceClassName = "",
   labelClassName,
+  leadingLabel,
 }: {
   className?: string;
+  /**
+   * Extra classes for the face — the cluster of glyph and legend that is the
+   * theme a press switches *to*. Both faces take it; only one is ever
+   * displayed, and its `display` still comes from `globals.css` rather than
+   * from here, which is what lets the cascade pick the face rather than state.
+   */
+  faceClassName?: string;
   /**
    * Set to render the name of the theme a press switches *to* beside the
    * glyph — the rack's "Light" / "Dark" legend, which it hides again below
@@ -33,6 +44,16 @@ export function ThemeToggle({
    * a redundant token to it.
    */
   labelClassName?: string;
+  /**
+   * Rendered once, before both faces — the word on the left of a
+   * `justify-between` row, which the tray's theme row wants and the two faces
+   * cannot express between them.
+   *
+   * It is decoration, so make it `aria-hidden` at the call site: each face
+   * already carries the full sentence naming the button, and a visible "Theme"
+   * beside it would only prepend a token to that name.
+   */
+  leadingLabel?: ReactNode;
 }) {
   // React's dev-only Strict Mode remount resets `<html>` to the attributes it
   // manages from JSX, which clears the one the boot script set — the stored
@@ -55,10 +76,11 @@ export function ThemeToggle({
 
   return (
     <button type="button" onClick={toggle} className={className}>
+      {leadingLabel}
       {/* Each face carries its own label, so the accessible name follows the
           cascade too: a `display: none` face is out of the tree entirely,
           where a single `aria-label` would have to be set from state. */}
-      <span className="theme-when-dark items-center gap-2">
+      <span className={`theme-when-dark items-center gap-2 ${faceClassName}`}>
         <SunMark />
         {labelClassName !== undefined && (
           <span aria-hidden className={labelClassName}>
@@ -67,7 +89,7 @@ export function ThemeToggle({
         )}
         <span className="sr-only">Switch to the light theme</span>
       </span>
-      <span className="theme-when-light items-center gap-2">
+      <span className={`theme-when-light items-center gap-2 ${faceClassName}`}>
         <MoonMark />
         {labelClassName !== undefined && (
           <span aria-hidden className={labelClassName}>
