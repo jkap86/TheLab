@@ -6671,6 +6671,9 @@ old neighbour — the reader pressing a key and watching a different column answ
 Every write goes through `write`, which asks `normalizeLineupColumns` where the
 column landed rather than predicting it. `clear` is the one that does not, and
 deliberately: what the reader is looking at is the socket they emptied.
+**Superseded — see The rack holds its sockets, below.** The renumbering is what
+had to go rather than the index chasing it: following the column kept the right
+bay lit and still moved every tile on screen.
 
 **An empty bay composes rather than refusing.** Its tracks are live with nothing
 lit, and a press picks the first cell that is *free* — pressing `Proj` with bay
@@ -6888,7 +6891,9 @@ Every rule landed. The panel is **560 × 562** at desktop and **352 × 661** at
 elements past its box. Pressing `KTC` on bay 01 carried the `Starters` scope
 over, re-sorted the column to bay 04 and **the panel followed it there** — the
 head's readout and the housing's chip both moving to `Bay 01 / 04` → `Bay 04 /
-04`, which is the renumber-and-follow rule end to end. `QB` then `TE` gave the
+04`, which is the renumber-and-follow rule end to end. (That rule is gone since:
+the rack holds its sockets and a press moves nothing on it — see The rack holds
+its sockets, below.) `QB` then `TE` gave the
 bay line `Auto · Auto · QB/TE` and the sentence `KeepTradeCut — the starters
 only. On each league's own board. QB and TE only.`; forcing `Dyn`/`SF` composed
 with it rather than replacing it. `Scope → Picks` cleared the set to `All` and
@@ -7074,6 +7079,90 @@ the league's own board identical, correctly and uninterestingly. What a second
 board costs on the 113-league page, which is three re-totals per league per
 narrowing and no extra read. And whether `ros_total` reads as a *third*
 projection beside the two it joins, or as the one a reader wanted all along.
+
+### The rack holds its sockets
+
+Changing the selected bay's Value moved the highlight off it — pressing `KTC` on
+bay 01 sent that column to bay 04, slid the other three left, and lit a socket at
+the far end of the rack. Reported as the highlight shifting to another column,
+which is what it looks like: the lit bay *was* the column the reader had just
+edited, and everything on screen had still moved under their finger.
+
+**The follow was right and was not the fix.** `write` asked
+`normalizeLineupColumns` where the column landed and re-pointed `active` there —
+driven over CDP, that works, and it is what the section above records. What it
+cannot do is stop the rack re-sorting, because the rack was drawn straight off
+the store and the store is a set in canonical order. So the panel was correct and
+unusable in the same press.
+
+**The store's order is untouched; the rack is an arrangement of it.**
+`arrangeLineupColumns` in `lineup-columns.ts` is the one place the two are
+reconciled: the dialog holds a socket order — one `lineupColumnKey` per bay — and
+that function seats the canonical selection into it. `storeLineupColumns` still
+normalizes, so the card's tile strip re-sorts behind the dialog exactly as
+before; what a press changes on the rack is *only* what the selected socket
+reads. Nothing else moves and `active` never has to chase anything.
+
+**The order is matched rather than trusted**, which is the arm that makes it
+safe: a socket claims the column it names only if that column is still in the
+selection, each column is claimed at most once, and whatever is left fills the
+empty sockets in canonical order. So a write from another tab — a whole different
+selection arriving mid-edit — re-seats the rack without dropping a bay or drawing
+one twice, which is the failure this being a pure function under Node's own
+runner is for: a rack that lost a column renders perfectly and is a column the
+reader can no longer reach.
+
+**It is re-seeded on open, not held for the page's life.** The rack is the tile
+strip it configures, so a fresh open should read in the card's own order, and an
+arrangement earned by one sitting's presses should not outlive it. That open is
+the one moment the rack is allowed to re-order — so it is the one moment an index
+has to chase what it points at, and the `findIndex` the write used to do on every
+press moved there. The deliberate cost is the only one this trades: after a press
+the rack's order can differ from the card's until the panel is next opened. That
+is the cheaper of the two, and the reverse of the reading the module header
+carried before somebody used it.
+
+#### Verified
+
+Driven over CDP against `next dev` through a temporary `/preview` route rendering
+the real `LineupColumnsDialog` on the real `useLineupColumns` store, then
+deleted — the method the console-card, shares, rack and timeline passes
+established. The mechanics are unchanged: `--no-proxy-server`, `localhost` rather
+than `127.0.0.1`, `localStorage.clear()` between drives since the browser profile
+persists, and a phone viewport from `Emulation.setDeviceMetricsOverride`.
+
+The old behaviour reproduces exactly and the fix closes it. Before: pressing `KTC`
+on bay 01 left the rack `[ROS bench, Capital, Bench capital, >KTC starters]` with
+the readout on `Bay 04 / 04` — the follow working and every tile moved. After:
+four presses on four different axes from bay 01 (`Value=KTC`, `Scope=Bench`,
+`Market=Dyn`, `Position=QB`) left the rack `[>KTC bench Dyn·Auto·QB, ROS bench,
+Capital, Bench capital]` throughout, `Bay 01 / 04` on every one, while the stored
+value and the page's own column order both read
+`ros_bench, capital_total, capital_bench, ktc_bench:dynasty:QB` — canonical, so
+the card is unmoved by any of this. Closing and reopening re-seeded the rack to
+that canonical order with the selection following its column to bay 04.
+
+The stale-order arm was driven for real: with the rack arranged, an other-tab
+write replacing the whole selection kept `ros_bench` in the socket that named it
+and filled the other three in canonical order, no column lost and none repeated.
+The collision rule is unchanged — `Scope=Bench` on bay 01 stays `disabled` with
+`Another bay is on this column` while bay 02 holds it. At 390 the dialog is
+352px at x=19 with `documentElement.scrollWidth === 390`, **zero** elements past
+the panel, `:modal` true and no console output of any kind.
+
+`lineup-columns.test.ts` is where the arrangement is pinned rather than rendered:
+that a null order is the canonical order, that a socket keeps what it was given
+while the store stays canonical, that a stale key leaves its socket to the
+spares, that an order naming one column four times seats it once, and — the
+invariant every caller leans on — that the result is always a permutation of the
+selection it was handed. 1,728 unit tests pass (12 more); `lint`, `typecheck` and
+`build` are clean.
+
+**Not verified against real data**: the drive is the defaults over a page with no
+database behind it. What a fixture cannot check is whether the rack diverging
+from the card's tile order between opens reads as wrong on a real account — the
+one cost this takes, and the thing to watch if the re-seed wants to be more
+frequent than once per open.
 
 ## The league card's machined billet, and what survived it
 
