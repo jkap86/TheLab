@@ -88,6 +88,7 @@ export {
   type CompStatField,
   type CompSeasonLine,
   type CompPlayerFacts,
+  type DraftCapital,
   type CompNextSeason,
   type CompSubject,
   type CompPair,

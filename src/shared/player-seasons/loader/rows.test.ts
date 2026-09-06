@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { describe, test } from "node:test";
 
+import type { KnownDraftCapital } from "./draft-source.ts";
 import type { PlayerRecord } from "./facts.ts";
 import { buildSeasonRows, mergeSkips } from "./rows.ts";
 import type { SeasonAggregate } from "./season-line.ts";
@@ -29,7 +30,6 @@ const record = (over: Partial<PlayerRecord> = {}): PlayerRecord => ({
   birth_date: "1999-05-20",
   rookie_year: 2021,
   years_exp: 5,
-  draft_pick: null,
   ...over,
 });
 
@@ -37,12 +37,14 @@ const build = (
   aggregates: SeasonAggregate[],
   players: PlayerRecord[],
   over: Partial<Parameters<typeof buildSeasonRows>[0]> = {},
+  draft: Record<string, KnownDraftCapital> = {},
 ) =>
   buildSeasonRows({
     season: 2023,
     currentSeason: 2025,
     aggregates,
     players: new Map(players.map((p) => [p.player_id, p])),
+    draft: new Map(Object.entries(draft)),
     positions: ["QB", "RB", "WR", "TE"],
     minGames: 1,
     ...over,
@@ -56,7 +58,7 @@ const build = (
  */
 describe("buildSeasonRows", () => {
   test("composes a row from the aggregate and the players map", () => {
-    const built = build([aggregate()], [record({ draft_pick: 177 })]);
+    const built = build([aggregate()], [record()], {}, { p1: 177 });
     assert.equal(built.rows.length, 1);
     assert.deepEqual(built.rows[0], {
       player_id: "p1",
@@ -66,6 +68,7 @@ describe("buildSeasonRows", () => {
       age: 24.3,
       experience: 2,
       draft_pick: 177,
+      undrafted: false,
       games: 16,
       fantasy_pts: 240,
       fantasy_ppg: 15,
@@ -78,7 +81,28 @@ describe("buildSeasonRows", () => {
       snap_share: 88.2,
     });
     assert.deepEqual(built.experience, { rookie_year: 1, years_exp: 0 });
-    assert.equal(built.draftFilled, 1);
+    assert.deepEqual(built.draft, { drafted: 1, undrafted: 0, unknown: 0 });
+  });
+
+  test("draft capital is three states across two columns, and unknown is not undrafted", () => {
+    // A pick beside `undrafted: true` is the state the schema's CHECK refuses,
+    // and a null pick means undrafted only where the row vouches for it.
+    const built = build(
+      [aggregate(), aggregate({ player_id: "p2" }), aggregate({ player_id: "p3" })],
+      [record(), record({ player_id: "p2" }), record({ player_id: "p3" })],
+      {},
+      { p1: 5, p2: "udfa" },
+    );
+    const byId = new Map(built.rows.map((r) => [r.player_id, r]));
+    assert.deepEqual(
+      [byId.get("p1")!, byId.get("p2")!, byId.get("p3")!].map((r) => [r.draft_pick, r.undrafted]),
+      [
+        [5, false],
+        [null, true],
+        [null, false],
+      ],
+    );
+    assert.deepEqual(built.draft, { drafted: 1, undrafted: 1, unknown: 1 });
   });
 
   test("the position and the name come from the players map, not the feed", () => {

@@ -173,6 +173,8 @@ function report(
 
   console.log(
     `[comps] Corpus loaded: ${result.inserted} new and ${result.updated} updated rows ` +
-      `over ${result.seasons.join(", ")}; ${result.meta?.players ?? 0} players on file.`,
+      `over ${result.seasons.join(", ")}; ${result.meta?.players ?? 0} players on file; ` +
+      `draft ${result.draft.drafted} drafted, ${result.draft.undrafted} undrafted, ` +
+      `${result.draft.unknown} unknown.`,
   );
 }

@@ -4333,10 +4333,14 @@ file up to the row. A career figure that read the following season would score
 the comp on the very answer the payoff column reveals. **A player with one
 season on file has one season, not a zero** — every window over such a row
 answers that season, and the card says so (`rookie · 1 yr on file`, chip tag
-`1 yr`). Draft capital reads an undrafted player as `UDFA_PICK` (260): "after
-everyone" is an ordinal position on the board rather than an absence, which is
-why it enters the distance where a null target share does not, and the page
-prints it as the word from the same constant.
+`1 yr`). Draft capital reads a player *known* to have gone undrafted as
+`UDFA_PICK`: "after everyone" is an ordinal position on the board rather than an
+absence, which is why it enters the distance where a null target share does not,
+and the page prints it as the word from the same constant. A slot no source could
+supply is **null and reads as a null stat does** — the pair is absent from that
+row and the page prints an em dash. It was one state for both until the corpus
+was loaded from a source with no draft column and every player in it read as a
+UDFA; see Draft capital, and the lines a position draws, below.
 
 `sim% = round(100 × exp(−λ × d))` is a presentation transform, not a statistic.
 **λ was `0.62`, hand-tuned so a good comp in the sample corpus landed in the
@@ -4369,11 +4373,13 @@ Nothing in the schema held season stats, so `1788000000006_create_player_seasons
 is the choice the handoff hands over. **The column list is the criteria table
 and nothing else** — thirteen columns for eleven criteria plus identity and the
 finish's inputs. Three things about it are claims the table refuses to make:
-`draft_pick` is **null for an undrafted player** rather than a stored 260;
-`target_share`, `yprr` and `snap_share` are nullable on the null-is-not-zero
-rule above; and `fantasy_pts`/`fantasy_ppg` are columns on **one stated scoring
-basis** rather than derived from components that are not the whole of a
-scoring system. `player_name` is stored rather than joined: `players` is
+`draft_pick` is **null wherever there is no pick to state** rather than a stored
+260 — and since `1788000000009` a second column, `undrafted`, says whether that
+null is a known outcome or an absence, which the first migration's own comment
+collapsed into one word; `target_share`, `yprr` and `snap_share` are nullable on
+the null-is-not-zero rule above; and `fantasy_pts`/`fantasy_ppg` are columns on
+**one stated scoring basis** rather than derived from components that are not
+the whole of a scoring system. `player_name` is stored rather than joined: `players` is
 Sleeper's *current* map and a 2018 comp names players it never held. `player_id`
 is the Sleeper id where the loader can crosswalk one, not a foreign key, for
 the same reason.
@@ -4617,11 +4623,11 @@ dims; nothing is cleared, nothing shifts, and the controls stay live.
 decision.** Sleeper publishes no routes run, so `yprr` is null across a
 Sleeper-loaded corpus and the criterion narrows the comparison rather than
 answering it — the coverage machinery is what makes that honest. It publishes
-no NFL draft position either, so `draft_pick` is null and the Draft criterion
-becomes a constant that orders nothing; the loader reports the fill rate rather
-than leaving it to be discovered, and the read is written so a source that does
-publish it (nflverse's ids file carries `draft_ovr` beside a `sleeper_id`) fills
-the column with no other change. And `experience` falls back from
+no NFL draft position either, and this paragraph used to say the column was
+therefore null and the Draft criterion a constant; **the column is filled from
+a second source since**, and what that paragraph did not say is that the page
+was printing every one of those nulls as `UDFA` — see Draft capital, and the
+lines a position draws, below. And `experience` falls back from
 `metadata.rookie_year` to a `years_exp` derivation with a known failure mode — a
 player who missed a whole season — which the repo would normally decline; it is
 taken because the alternative here is dropping the row rather than blanking a
@@ -4806,6 +4812,78 @@ the first real boot is still what confirms Sleeper's stat-row shape. What is
 new and unproven is only the *timing* of it — how long a cold first boot's
 eight-season fan-out actually takes behind the limiter, and therefore how long a
 fresh deployment shows `NO COMPS CORPUS LOADED` before the page fills in.
+
+### Draft capital, and the lines a position draws
+
+Two things the first real corpus showed that no fixture had. Every player on
+the page — first-round picks included — read `UDFA`, and a quarterback's
+readouts and comp cards carried a receiver's lines: `Rec yd 0`, `Tgt sh 0%`,
+`YPRR —`. Both were the page saying something the data did not.
+
+**The draft column had two states for three facts.** Sleeper's players map
+carries no NFL draft position, so the loader wrote `draft_pick` null on every
+row; the contract said null *meant* undrafted; the distance read every null as
+`UDFA_PICK` and the page printed the word. Nothing was wrong in any one place —
+the fold happened between them. So the contract's `draft` is
+**`number | "udfa" | null`** now (`DraftCapital`), and the three are read apart
+everywhere: a pick is a pick, a known UDFA reads as `UDFA_PICK` and prints as
+the word, and **null is unknown** — absent from the row's distance the way a
+null target share is, an em dash on the page. The table gained the column that
+tells the last two apart (`1788000000009`: `undrafted`, with a CHECK that a pick
+and `undrafted` cannot both be set), and `LOADER_VERSION` moved to `2`, which is
+what makes the boot loop reload a corpus whose every row means "unknown" rather
+than extend it.
+
+**The source is DynastyProcess's player-id crosswalk**, the ffverse join table,
+which carries a `sleeper_id` beside `draft_year` and `draft_ovr` — the file the
+paragraph above had been naming as the one that would fill the column "with no
+other change". Two changes, in the event: `loader/draft-source.ts` reads it (a
+by-name column read over a small RFC 4180 parser, since the file quotes a
+handful of names and a split on commas would shear those rows a column right),
+and `loader/draft-fetch.ts` is the one line that reaches GitHub, kept apart so
+the reading resolves under Node's runner. **The three-state reading is the
+whole module**: `draft_ovr` is the pick; a `draft_year` with no pick is a
+player the file *knows* went undrafted (Austin Ekeler is `2017, NA, NA, NA`);
+neither is nothing to say. A Sleeper id the file lists twice with two answers
+resolves to nobody, on the KTC matcher's rule. Run against the live file: 6,339
+Sleeper ids, 3,722 drafted, 2,617 known UDFA, four conflicts. **A source that
+cannot be read fails the load before any season is fetched**, because writing
+the seasons anyway would stamp a year of unknowns covered and the refresh gate
+would never come back for them — this bug again, with a different cause.
+
+**`UDFA_PICK` moved from 260 to 265, and 260 was a real pick.** Compensatory
+picks run a board past 256; 2022's ran to 262, and pick 262 of it was Brock
+Purdy, who read as undrafted in the distance and printed so. A chip prints the
+number the distance ran on, so the label rule is `>= UDFA_PICK` and the constant
+has to clear every board there has been.
+
+**The lines a readout draws are the criteria panel's own rule, spelled once.**
+`helpers/season-lines.ts` is the table: a line is drawn where its criterion
+applies to the position (`POSITION_CRITERIA`, the list the panel already
+narrows by), with one narrowing for the two criteria that are offered everywhere
+and a signal only somewhere — rushing and total points are drawn where the
+position's *preset* weights them, because a receiver's twenty rushing yards is a
+row spent on nothing where a back's are the season. So a quarterback's windows
+are age, experience, draft, PPG, points, rushing, snaps and games; a receiver's
+are the receiving lines and no rushing; a back's are both yardage lines. The
+subject housing, a comp card's season pane and its payoff pane all read it, and
+`season-lines.test.ts` pins the four positions. The presets themselves were
+already switching with the subject — what was drawn beside them was not.
+
+#### Verified
+
+Under Node's runner and against the live crosswalk file, since no database is
+reachable from where this was built. The parser over the real 12,492-row file
+answered the figures above in 79ms and priced Ja'Marr Chase at 5, Puka Nacua at
+177, Jayden Daniels at 2, Ekeler as `udfa` and Purdy at 262. Unit tests cover
+the three-state read, the conflict rule, a refused header, the CSV's quoting,
+the row builder's two columns, the null-is-not-UDFA read in the distance, the
+three labels, and the lines each position draws.
+
+**Not verified against real data**: the first boot on `LOADER_VERSION` 2 is
+what reloads the corpus, and its report's `unknown` count is the figure to
+read — a Sleeper id the crosswalk has no row for is expected for a marginal
+player and a warning sign for a season.
 
 ## Tracking placeholder picks
 

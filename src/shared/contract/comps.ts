@@ -85,6 +85,22 @@ export type CompSeasonLine = {
 };
 
 /**
+ * A player's NFL draft capital, in three states — and the third is the one
+ * that used to be missing.
+ *
+ * A number is the overall pick. `"udfa"` is a player the source *knows* went
+ * undrafted, which the distance reads as `UDFA_PICK` (see
+ * `shared/comps/criteria`) because "came off the board after everyone" is an
+ * ordinal statement about capital rather than an absence. **`null` is
+ * unknown**: no source could say, and it is read the way a null target share
+ * is — the pair is absent from that row's distance and the page prints an em
+ * dash. It was a two-state field once, null standing for undrafted, and under
+ * a source that publishes no draft position at all that spelled every player
+ * in the corpus as an undrafted free agent.
+ */
+export type DraftCapital = number | "udfa" | null;
+
+/**
  * The facts about a player at a season that are not production — the three
  * windowless criteria.
  */
@@ -92,12 +108,8 @@ export type CompPlayerFacts = {
   age: number;
   /** Seasons of experience entering that season. */
   exp: number;
-  /**
-   * Overall draft pick, or null for an undrafted player. The distance reads
-   * a null as `UDFA_PICK` — see `shared/comps/criteria` — because "came off
-   * the board after everyone" is an ordinal statement rather than an absence.
-   */
-  draft: number | null;
+  /** See {@link DraftCapital}. */
+  draft: DraftCapital;
 };
 
 /**

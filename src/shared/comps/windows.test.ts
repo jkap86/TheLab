@@ -69,12 +69,21 @@ describe("windowValue", () => {
     assert.equal(windowValue(blank, "yprr", "cavg"), null);
   });
 
-  test("a fact ignores the window and an undrafted player reads as the UDFA pick", () => {
+  test("a fact ignores the window and a known UDFA reads as the UDFA pick", () => {
     assert.equal(windowValue(row, "age", "chigh"), 24);
     assert.equal(windowValue(row, "exp", "avg2"), 3);
     assert.equal(windowValue(row, "draft", "last"), 40);
-    const undrafted: CompRow = { facts: { ...facts, draft: null }, history: row.history };
+    const undrafted: CompRow = { facts: { ...facts, draft: "udfa" }, history: row.history };
     assert.equal(windowValue(undrafted, "draft", "last"), UDFA_PICK);
+  });
+
+  test("an unknown draft slot is null, never the UDFA pick", () => {
+    // A slot no source could supply is an absence, and folding it into
+    // "undrafted" is how every player in a corpus once read as a UDFA. Null
+    // costs the pair, the way a null target share does.
+    const unknown: CompRow = { facts: { ...facts, draft: null }, history: row.history };
+    assert.equal(windowValue(unknown, "draft", "last"), null);
+    assert.deepEqual(windowReading(unknown, "draft", "last"), { value: null, used: 0, of: 1 });
   });
 });
 

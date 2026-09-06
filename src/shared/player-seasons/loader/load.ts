@@ -15,10 +15,13 @@ import { foldSeasonStats, DEFAULT_SCORING } from "./season-line.ts";
 import type { CompsScoring } from "./season-line.ts";
 import { latestCompleteSeason, planLoad, playersMapSeason } from "./plan.ts";
 import type { CompsLoadPlan, CompsLoadRequest, NflSeasonState } from "./plan.ts";
+import { fetchDraftCapital } from "./draft-fetch";
+import { DRAFT_SOURCE_NAME } from "./draft-source.ts";
+import type { DraftCapitalSource, KnownDraftCapital } from "./draft-source.ts";
 import { readPlayerRecords } from "./players";
 import type { PlayerRecord } from "./facts.ts";
 import { buildSeasonRows, mergeSkips } from "./rows.ts";
-import type { PlayerSeasonWrite, SkipCounts } from "./rows.ts";
+import type { DraftCounts, PlayerSeasonWrite, SkipCounts } from "./rows.ts";
 import { sleeperSeasonStats, SLEEPER_SOURCE_NAME } from "./sleeper-source.ts";
 import type { SeasonStatSource } from "./sleeper-source.ts";
 
@@ -62,7 +65,16 @@ import type { SeasonStatSource } from "./sleeper-source.ts";
  * **It counts what it did and what it refused.** Inserted, updated, skipped
  * with a reason each, the seasons written, and the two figures a reader of the
  * resulting corpus needs to judge it: how many rows leaned on the weaker
- * experience derivation, and how many carry real draft capital.
+ * experience derivation, and how the rows' draft capital resolved — drafted,
+ * known undrafted, or unknown.
+ *
+ * **A draft source that cannot be read fails the load, before any season is
+ * fetched.** Writing the seasons anyway would write every row as "unknown"
+ * and stamp them covered, and the refresh gate would never come back for
+ * them — which is the corpus of undrafted free agents this column just
+ * stopped producing, with a different cause. `sleeper-source` makes the same
+ * call for a week that will not fetch: a loud failure and a rerun beat a
+ * quietly wrong table nothing revisits.
  *
  * **The advisory lock is the blocking-free kind**, so a second loader started
  * by accident reports that one is already running rather than queueing behind
@@ -77,7 +89,7 @@ import type { SeasonStatSource } from "./sleeper-source.ts";
  * older loader can be told apart without diffing rows. The corpus cache keys
  * on it too, so bumping it invalidates every held build.
  */
-export const LOADER_VERSION = "1";
+export const LOADER_VERSION = "2";
 
 /** The fewest games a season needs to be a season. See `./rows`. */
 export const DEFAULT_MIN_GAMES = 1;
@@ -97,6 +109,8 @@ export type CompsLoadOptions = CompsLoadRequest & {
   state?: NflSeasonState;
   /** The players map. Read from Postgres otherwise. */
   players?: ReadonlyMap<string, PlayerRecord>;
+  /** Draft capital by Sleeper id. Fetched from `./draft-source` otherwise. */
+  draftSource?: DraftCapitalSource;
   /** Report progress a season at a time — the CLI prints these. */
   onProgress?: (line: string) => void;
 };
@@ -112,8 +126,8 @@ export type CompsLoadReport = {
   errors: { season: number; message: string }[];
   /** How many rows leaned on each experience derivation. */
   experience: { rookie_year: number; years_exp: number };
-  /** How many written rows carry a real draft pick. */
-  draftFilled: number;
+  /** How the written rows' draft capital resolved. */
+  draft: DraftCounts;
   meta: CompCorpusMeta | null;
 };
 
@@ -157,7 +171,7 @@ async function loadLocked(options: CompsLoadOptions): Promise<CompsLoadReport> {
     skipped: {},
     errors: [],
     experience: { rookie_year: 0, years_exp: 0 },
-    draftFilled: 0,
+    draft: { drafted: 0, undrafted: 0, unknown: 0 },
     meta: null,
   };
   if (plan.seasons.length === 0) return empty;
@@ -167,6 +181,12 @@ async function loadLocked(options: CompsLoadOptions): Promise<CompsLoadReport> {
   // arithmetic rather than through the query.
   const players = options.players ?? (await readPlayerRecords());
   log(`players map: ${players.size} rows`);
+  // Likewise once, and before any season is fetched — see the header on why
+  // this one is allowed to fail the whole load.
+  const draft: ReadonlyMap<string, KnownDraftCapital> = await (
+    options.draftSource ?? fetchDraftCapital
+  )();
+  log(`draft capital: ${draft.size} players from ${DRAFT_SOURCE_NAME}`);
 
   // Everything fetched, folded and built before a connection is taken.
   const built: PlayerSeasonWrite[] = [];
@@ -174,7 +194,7 @@ async function loadLocked(options: CompsLoadOptions): Promise<CompsLoadReport> {
   const experience = { rookie_year: 0, years_exp: 0 };
   const errors: { season: number; message: string }[] = [];
   const written: number[] = [];
-  let draftFilled = 0;
+  const draftCounts: DraftCounts = { drafted: 0, undrafted: 0, unknown: 0 };
 
   for (const season of plan.seasons) {
     try {
@@ -185,6 +205,7 @@ async function loadLocked(options: CompsLoadOptions): Promise<CompsLoadReport> {
         currentSeason: mapSeason,
         aggregates,
         players,
+        draft,
         positions,
         minGames,
       });
@@ -199,7 +220,9 @@ async function loadLocked(options: CompsLoadOptions): Promise<CompsLoadReport> {
       mergeSkips(skipped, seasonRows.skipped);
       experience.rookie_year += seasonRows.experience.rookie_year;
       experience.years_exp += seasonRows.experience.years_exp;
-      draftFilled += seasonRows.draftFilled;
+      draftCounts.drafted += seasonRows.draft.drafted;
+      draftCounts.undrafted += seasonRows.draft.undrafted;
+      draftCounts.unknown += seasonRows.draft.unknown;
       written.push(season);
       log(`${season}: ${seasonRows.rows.length} rows`);
     } catch (error) {
@@ -247,6 +270,7 @@ async function loadLocked(options: CompsLoadOptions): Promise<CompsLoadReport> {
         "age",
         "experience",
         "draft_pick",
+        "undrafted",
         "games",
         "fantasy_pts",
         "fantasy_ppg",
@@ -267,6 +291,7 @@ async function loadLocked(options: CompsLoadOptions): Promise<CompsLoadReport> {
         row.age,
         row.experience,
         row.draft_pick,
+        row.undrafted,
         row.games,
         row.fantasy_pts,
         row.fantasy_ppg,
@@ -281,7 +306,8 @@ async function loadLocked(options: CompsLoadOptions): Promise<CompsLoadReport> {
       onConflict: `(player_id, season) DO UPDATE SET
           player_name = EXCLUDED.player_name, position = EXCLUDED.position,
           age = EXCLUDED.age, experience = EXCLUDED.experience,
-          draft_pick = EXCLUDED.draft_pick, games = EXCLUDED.games,
+          draft_pick = EXCLUDED.draft_pick, undrafted = EXCLUDED.undrafted,
+          games = EXCLUDED.games,
           fantasy_pts = EXCLUDED.fantasy_pts, fantasy_ppg = EXCLUDED.fantasy_ppg,
           rec = EXCLUDED.rec, rec_yards = EXCLUDED.rec_yards,
           target_share = EXCLUDED.target_share, rush_yards = EXCLUDED.rush_yards,
@@ -345,7 +371,7 @@ async function loadLocked(options: CompsLoadOptions): Promise<CompsLoadReport> {
     skipped,
     errors,
     experience,
-    draftFilled,
+    draft: draftCounts,
     meta,
   };
 }
@@ -377,6 +403,6 @@ const LOCKED_REPORT: CompsLoadReport = {
   skipped: {},
   errors: [],
   experience: { rookie_year: 0, years_exp: 0 },
-  draftFilled: 0,
+  draft: { drafted: 0, undrafted: 0, unknown: 0 },
   meta: null,
 };

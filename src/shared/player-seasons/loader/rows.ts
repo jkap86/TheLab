@@ -1,3 +1,4 @@
+import type { KnownDraftCapital } from "./draft-source.ts";
 import { playerFactsAt } from "./facts.ts";
 import type { ExperienceBasis, PlayerRecord } from "./facts.ts";
 import { pointsPerGame } from "./season-line.ts";
@@ -25,7 +26,10 @@ export type PlayerSeasonWrite = {
   position: string;
   age: number;
   experience: number;
+  /** The overall pick, or null. Null is undrafted only where `undrafted` says so. */
   draft_pick: number | null;
+  /** True where the draft source knows he went undrafted. Never true beside a pick. */
+  undrafted: boolean;
   games: number;
   fantasy_pts: number;
   fantasy_ppg: number;
@@ -47,9 +51,16 @@ export type BuiltSeason = {
   skipped: SkipCounts;
   /** How many rows leaned on each experience derivation — see `./facts`. */
   experience: Record<ExperienceBasis, number>;
-  /** How many rows carry a real draft pick, which under Sleeper alone is none. */
-  draftFilled: number;
+  /**
+   * How the rows' draft capital resolved. `unknown` is the figure to watch:
+   * it is a player the draft source has no row for, and a season where it
+   * dominates is a crosswalk that has stopped matching rather than a class
+   * of undrafted players.
+   */
+  draft: DraftCounts;
 };
+
+export type DraftCounts = { drafted: number; undrafted: number; unknown: number };
 
 export type BuildSeasonInput = {
   season: number;
@@ -58,6 +69,8 @@ export type BuildSeasonInput = {
   aggregates: readonly SeasonAggregate[];
   /** The players map, keyed by Sleeper id. */
   players: ReadonlyMap<string, PlayerRecord>;
+  /** Draft capital keyed by Sleeper id — see `./draft-source`. An id absent here is unknown. */
+  draft: ReadonlyMap<string, KnownDraftCapital>;
   /** The positions this corpus holds. */
   positions: readonly string[];
   /** The fewest games a season must have to be a season. */
@@ -84,12 +97,12 @@ export type BuildSeasonInput = {
  * what makes an absence mean an absence.
  */
 export function buildSeasonRows(input: BuildSeasonInput): BuiltSeason {
-  const { season, currentSeason, aggregates, players, positions, minGames } = input;
+  const { season, currentSeason, aggregates, players, draft, positions, minGames } = input;
   const allowed = new Set(positions);
   const rows: PlayerSeasonWrite[] = [];
   const skipped: SkipCounts = {};
   const experience: Record<ExperienceBasis, number> = { rookie_year: 0, years_exp: 0 };
-  let draftFilled = 0;
+  const draftCounts: DraftCounts = { drafted: 0, undrafted: 0, unknown: 0 };
 
   const skip = (reason: string) => {
     skipped[reason] = (skipped[reason] ?? 0) + 1;
@@ -123,14 +136,15 @@ export function buildSeasonRows(input: BuildSeasonInput): BuiltSeason {
       continue;
     }
 
-    const facts = playerFactsAt(record, season, currentSeason);
+    const capital = draft.get(aggregate.player_id) ?? null;
+    const facts = playerFactsAt(record, season, currentSeason, capital);
     if (!facts.ok) {
       skip(facts.reason);
       continue;
     }
 
     experience[facts.basis]++;
-    if (facts.facts.draft !== null) draftFilled++;
+    draftCounts[capital === null ? "unknown" : capital === "udfa" ? "undrafted" : "drafted"]++;
 
     rows.push({
       player_id: aggregate.player_id,
@@ -141,7 +155,11 @@ export function buildSeasonRows(input: BuildSeasonInput): BuiltSeason {
       position,
       age: facts.facts.age,
       experience: facts.facts.exp,
-      draft_pick: facts.facts.draft,
+      // Two columns for three states — the migration that added the second
+      // says why. A pick is a pick; "udfa" is a null pick the row vouches for;
+      // an unknown is a null pick it does not.
+      draft_pick: typeof capital === "number" ? capital : null,
+      undrafted: capital === "udfa",
       games: aggregate.games,
       fantasy_pts: aggregate.fantasy_pts,
       fantasy_ppg: pointsPerGame(aggregate.fantasy_pts, aggregate.games),
@@ -159,7 +177,7 @@ export function buildSeasonRows(input: BuildSeasonInput): BuiltSeason {
   }
 
   rows.sort((a, b) => a.player_id.localeCompare(b.player_id));
-  return { season, rows, skipped, experience, draftFilled };
+  return { season, rows, skipped, experience, draft: draftCounts };
 }
 
 /** Two skip tallies added, for a report over several seasons. */

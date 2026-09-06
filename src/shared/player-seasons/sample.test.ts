@@ -58,7 +58,8 @@ function refValue(row: CompRow, field: CompField, window: CompWindowId): number 
   if (!isStatField(field)) {
     if (field === "age") return row.facts.age;
     if (field === "exp") return row.facts.exp;
-    return row.facts.draft ?? UDFA_PICK;
+    if (row.facts.draft === null) return null;
+    return row.facts.draft === "udfa" ? UDFA_PICK : row.facts.draft;
   }
   const span =
     window === "last"
