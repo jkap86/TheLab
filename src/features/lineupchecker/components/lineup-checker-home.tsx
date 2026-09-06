@@ -35,7 +35,7 @@ import {
 } from "../helpers/lineup-check-metrics";
 import type { WeekLineupEntry } from "../helpers/starter-shares";
 import { weekSummary } from "../helpers/week-summary";
-import { LineupCheckCard } from "./lineup-check-card";
+import { LineupCheckCard, LineupMarkDefs } from "./lineup-check-card";
 import { OpponentSharesDrawer } from "./opponent-shares-drawer";
 import { StarterSharesDrawer } from "./starter-shares-drawer";
 import { WeekSummary } from "./week-summary";
@@ -455,16 +455,24 @@ function Checker({
               </p>
             </Plate>
           ) : (
-            <ul className="relative m-0 grid list-none grid-cols-1 gap-[1.125rem] p-0">
-              {visible.map((league) => (
-                <LineupCheckCard
-                  key={league.league_id}
-                  league={league}
-                  entry={checked[league.league_id] ?? null}
-                  onSynced={reread}
-                />
-              ))}
-            </ul>
+            <>
+              {/* The cleared-check mark's face gradient, once for the whole
+                  page rather than once per tile — see `LineupMarkDefs`. It is
+                  mounted here because this is the one place that knows there
+                  is a list of cards at all, and *beside* the list rather than
+                  inside it: a `<ul>` takes `<li>` children and nothing else. */}
+              <LineupMarkDefs />
+              <ul className="relative m-0 grid list-none grid-cols-1 gap-[1.125rem] p-0">
+                {visible.map((league) => (
+                  <LineupCheckCard
+                    key={league.league_id}
+                    league={league}
+                    entry={checked[league.league_id] ?? null}
+                    onSynced={reread}
+                  />
+                ))}
+              </ul>
+            </>
           )}
         </>
       )}

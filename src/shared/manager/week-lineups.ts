@@ -65,6 +65,35 @@ export type WeekLineupLeague = {
    * the other half of the same `matchups` pairing.
    */
   opponent: WeekLineupOpponent | null;
+  /**
+   * Every roster in the league for this week, for the median — or **null where
+   * this league has no median matchup**, which is most of them.
+   *
+   * Null rather than an empty array, and the distinction is the usual one: an
+   * empty pool is a median league whose other rosters are not stored, where
+   * null is a league that never asked for one. Both draw no median bay, and
+   * only one of them is a gap in the data.
+   *
+   * It is the *whole* league including the manager's own roster, because a
+   * median is over every team. The manager's own figure is not re-solved from
+   * it — see {@link medianProjection}.
+   */
+  median_rosters: WeekLineupRoster[] | null;
+};
+
+/**
+ * One roster of the median pool: whose it is, and what it is starting.
+ *
+ * The same two arrays {@link WeekLineupOpponent} carries and deliberately not
+ * that type: an opponent has a name, because a pane is headed with it, and a
+ * roster in a median pool is a number in a sort. Naming it would be a field
+ * nothing reads on every roster of every median league.
+ */
+export type WeekLineupRoster = {
+  roster_id: number;
+  /** The week's own lineup where one is stored, else the roster's live one. */
+  starters: string[] | null;
+  players: string[] | null;
 };
 
 /**
@@ -172,6 +201,17 @@ export function solveWeekLineup(
     ? solveOpponentLineup(league, league.opponent, board, locked, kickoffs)
     : null;
 
+  // The league's median, over the same board and the same comparison. The
+  // manager's own figure is handed in rather than re-derived from the pool:
+  // one measurement, so a plate reading `128.4` against a median that counted
+  // `128.5` for the same lineup cannot happen.
+  const median = medianProjection(
+    league,
+    comparison.current_points,
+    board,
+    locked,
+  );
+
   return {
     roster_id: league.roster_id,
     best_ball: league.best_ball,
@@ -186,6 +226,7 @@ export function solveWeekLineup(
     // and a missing opponent into the same thing — which they are, for a pane
     // that draws neither.
     opponent_team_name: league.opponent?.team_name ?? null,
+    median_points: median,
     optimal_points: comparison.optimal_points,
     points_left: comparison.points_left,
     start: comparison.start,
@@ -196,6 +237,68 @@ export function solveWeekLineup(
     ...rosterCensus(league, positions),
     unknown_slots: comparison.unknown_slots,
   };
+}
+
+/**
+ * The league's median projected score for the week, or null where there is
+ * none to give.
+ *
+ * **Every roster, solved the same way the manager's was.** A median is a
+ * statement about the whole league, so it cannot be read off the two rosters
+ * a card already has — which is the one reason this needs the pool at all,
+ * and why the query fetches it for median leagues and no others.
+ *
+ * Three decisions carry it:
+ *
+ * - **The manager's own figure is substituted, never re-solved.** It is in the
+ *   pool by construction — a median is over every team including yours — and
+ *   solving it a second time here would be a second spelling of the number
+ *   printed beside it on the same plate. `compareLineup` is deterministic, so
+ *   the two would agree today and be two chances to disagree after any edit.
+ * - **The median is the middle of what could be projected**, not of the
+ *   league's declared size. A partly-synced league answers over the rosters it
+ *   has, which is honest; padding it to `total_rosters` would average a full
+ *   board against a handful of teams.
+ * - **Fewer than two rosters is no answer at all.** A "median" over one roster
+ *   is that roster, which for the manager is a tie against themselves — a
+ *   number that renders perfectly and means nothing. Null, and the plate draws
+ *   one bay.
+ *
+ * Even pools take the mean of the two middle scores, which is Sleeper's own
+ * rule for a median matchup and the only reading that does not favour one half
+ * of an even league.
+ *
+ * The pool is priced with `compareLineup` and **not** with the kickoff order:
+ * a median is what the league is projected to score, and where anybody's
+ * flexes lock has no bearing on it. That is also what keeps this off the
+ * schedule read, so a failed one costs the median nothing.
+ */
+function medianProjection(
+  league: WeekLineupLeague,
+  ownPoints: number,
+  board: WeekProjections,
+  locked: ReadonlySet<string>,
+): number | null {
+  const pool = league.median_rosters;
+  if (!pool || pool.length < 2) return null;
+
+  const scores = pool.map((roster) => {
+    if (roster.roster_id === league.roster_id) return ownPoints;
+    const starters = roster.starters ?? [];
+    const priced = priceRoster(roster.players, starters, league, board, locked, null);
+    return compareLineup({
+      rosterPositions: league.roster_positions ?? [],
+      starters,
+      players: solverPool(priced),
+      bestBall: league.best_ball,
+    }).current_points;
+  });
+
+  scores.sort((a, b) => a - b);
+  const mid = scores.length >> 1;
+  return scores.length % 2 === 1
+    ? scores[mid]
+    : (scores[mid - 1] + scores[mid]) / 2;
 }
 
 /**

@@ -423,6 +423,70 @@
   --groove: linear-gradient(to bottom, transparent, rgba(0, 0, 0, 0.9), transparent);
   --groove-highlight: 1px 0 0 rgba(255, 255, 255, 0.07);
 
+  /*
+   * The lineup checker's cleared-check mark, and the figure that stands where
+   * it does when a tile has something to say.
+   *
+   * Two objects, one family: a tile either shows the mark or shows a number,
+   * and both are struck out of the glass rather than printed on it — the same
+   * extruded treatment in the two colours the page reads as "nothing to do"
+   * and "act on this". They are tokens rather than literals in the component
+   * for the reason every other stack here is one: a bevel is a stack, and the
+   * light counterpart is a *different* stack rather than the same one at a
+   * different alpha.
+   *
+   * **The face is five tokens rather than one gradient**, because the mark's
+   * face is an SVG stroke and an SVG stroke cannot take a CSS gradient. It is
+   * a `<linearGradient>` whose stops read these, so the offsets live in one
+   * list in the component (`MARK_FACE_STOPS`) and the colours live here —
+   * which is what lets both themes read one list.
+   *
+   * The green is a new colour on this page: the console spends teal and
+   * nothing else. That is deliberate — it is the one "nothing to do here"
+   * signal on the card and it must not read as another lit readout — and it
+   * does mean the rank ramp's own green (`rankColor`, oklch hue 150) and this
+   * one appear on the same card, on the projection pip and the tiles. If that
+   * ever reads as two greens, the fix is to pull the mark's face onto the
+   * ramp's hue rather than to re-tint the pip.
+   */
+  --mark-face-0: #f4ffdd;
+  --mark-face-1: #c2ff62;
+  --mark-face-2: #4bff7c;
+  --mark-face-3: #12dd63;
+  --mark-face-4: #0a9c49;
+  /* The extrusion, nearest first: three copies of the stroke offset downward
+     behind the face, receding into shade. */
+  --mark-shoulder-1: #07692f;
+  --mark-shoulder-2: #064d27;
+  --mark-shoulder-3: #05341c;
+  --mark-specular: rgba(255, 255, 255, 0.8);
+  --mark-glow: drop-shadow(0 0 10px rgba(74, 255, 124, 0.75))
+    drop-shadow(0 0 26px rgba(74, 255, 124, 0.4)) drop-shadow(0 4px 6px rgba(0, 0, 0, 0.6));
+
+  /*
+   * The figure opposite the mark, struck in red.
+   *
+   * **The extrusion must be `drop-shadow()` and never `text-shadow`**, and the
+   * reason is the clip: the figure is a gradient clipped to its glyphs with a
+   * transparent fill, so the element's background paints first and a
+   * `text-shadow` paints *above* it — the dark offset copies cover the
+   * gradient inside the glyph bodies and the word renders as flat maroon with
+   * a 1px lit rim. Chained `drop-shadow`s composite behind the clipped
+   * gradient, which is the same reason the mark's shoulders are separate SVG
+   * paths rather than a shadow on one.
+   *
+   * **No stop goes darker than `#ef4444`.** A first pass ran to `#9c0d0d`,
+   * which is 2.4:1 on this glass — the bottom 40% of every glyph under even
+   * the 3:1 large-text floor. The ramp below clears 4.5:1 throughout, which is
+   * the same reason `--error` is `#fca5a5` and not a red anybody would pick
+   * for ink on white.
+   */
+  --alert-face: linear-gradient(180deg, #fff0f0 0%, #fecaca 22%, #fca5a5 52%, #f87171 78%,
+    #ef4444 100%);
+  --alert-depth: drop-shadow(0 1px 0 #5a0808) drop-shadow(0 1px 0 #460606)
+    drop-shadow(0 1px 0 #320404) drop-shadow(0 0 10px rgba(255, 90, 90, 0.55))
+    drop-shadow(0 0 24px rgba(255, 90, 90, 0.3)) drop-shadow(0 4px 6px rgba(0, 0, 0, 0.6));
+
   --card-bg: linear-gradient(158deg, rgba(255, 255, 255, 0.085), rgba(255, 255, 255, 0.018) 46%,
     rgba(255, 255, 255, 0.05));
   --card-bevel: inset 0 1px 0 rgba(255, 255, 255, 0.17), inset 0 -1px 0 rgba(0, 0, 0, 0.55);
@@ -764,6 +828,53 @@
   --groove: linear-gradient(to bottom, transparent, rgba(15, 23, 42, 0.28), transparent);
   --groove-highlight: 1px 0 0 rgba(255, 255, 255, 0.9);
 
+  /*
+   * The mark and the figure, turned over rather than dimmed.
+   *
+   * Both were designed on the dark readout (`#04100f → #061816`) and neither
+   * survives being carried across: on the light glass (`#eaf6f4 → #dcefeb`)
+   * the mark's top stops are near-white and its outer glow reads as haze,
+   * while the red ramp's own top stops are a pale pink on pale mint. So the
+   * stacks invert on this file's own rule.
+   *
+   * - **The faces run dark on light**, and every stop is measured against the
+   *   *darker* end of `--readout-bg` (`#dcefeb`, the worse of the two): the
+   *   green's lightest stop is 4.77:1 and the red's 4.81:1, both running to
+   *   10:1 at the bottom. Anything lighter fails the floor, which is what
+   *   ruled out the mid-greens (`#1fae5a` is 2.4:1 here) the first pass took
+   *   from the dark ramp's midpoint.
+   * - **The extrusion becomes a lit lip rather than a shadow.** Dark ink on a
+   *   pale ground is embossed by light catching the edge beneath it, not by a
+   *   dark wall — which is exactly what `--card-title-depth` and
+   *   `--billet-name-shadow` already do on this side of the theme.
+   * - **The specular ridge becomes a dark under-edge**, for the same reason
+   *   reversed: a white ridge along dark ink on a light ground has nothing to
+   *   be brighter than.
+   * - **The outer glow drops to a small accent halo.** A 26px green bloom on
+   *   white is haze; the light scheme's own `--accent-glow` is what a lit
+   *   thing is allowed here.
+   *
+   * Derived, not designed — as everywhere else on this console — and checked
+   * for contrast rather than reviewed.
+   */
+  --mark-face-0: #0f7640;
+  --mark-face-1: #0c6837;
+  --mark-face-2: #0a5c30;
+  --mark-face-3: #084c27;
+  --mark-face-4: #063a1e;
+  --mark-shoulder-1: rgba(255, 255, 255, 0.85);
+  --mark-shoulder-2: rgba(255, 255, 255, 0.6);
+  --mark-shoulder-3: rgba(255, 255, 255, 0.35);
+  --mark-specular: rgba(4, 40, 20, 0.45);
+  --mark-glow: drop-shadow(0 0 10px rgba(13, 148, 136, 0.3))
+    drop-shadow(0 2px 4px rgba(15, 23, 42, 0.28));
+
+  --alert-face: linear-gradient(180deg, #c22a2a 0%, #b01f1f 22%, #9a1414 52%, #851010 78%,
+    #6d0b0b 100%);
+  --alert-depth: drop-shadow(0 1px 0 rgba(255, 255, 255, 0.95))
+    drop-shadow(0 0 10px rgba(185, 28, 28, 0.22))
+    drop-shadow(0 2px 4px rgba(15, 23, 42, 0.22));
+
   /* The tool cards. */
   --card-bg: linear-gradient(158deg, rgba(15, 23, 42, 0.05), rgba(15, 23, 42, 0.012) 46%, rgba(15, 23, 42, 0.035));
   --card-bevel: inset 0 1px 0 rgba(255, 255, 255, 0.9), inset 0 -1px 0 rgba(15, 23, 42, 0.1);
@@ -925,6 +1036,34 @@ body {
 @keyframes drawer-in-right {
   from {
     transform: translateX(100%);
+  }
+}
+
+/*
+ * One glint across the cleared-check mark, once, on mount.
+ *
+ * A dashed white copy of the mark's specular path swept along it by
+ * `stroke-dashoffset`, so the flash follows the stroke rather than crossing
+ * the box. `both` fill is what makes it fire exactly once and leave nothing
+ * behind: invisible before the delay, invisible after the run, and no state on
+ * the element either side of it. It carries `.lab-anim`, which is the app's
+ * one reduced-motion hook — a second media query here would be a second
+ * spelling of a rule that already exists.
+ */
+@keyframes mark-glint {
+  0% {
+    stroke-dashoffset: 14;
+    opacity: 0;
+  }
+  12% {
+    opacity: 1;
+  }
+  85% {
+    opacity: 1;
+  }
+  100% {
+    stroke-dashoffset: -46;
+    opacity: 0;
   }
 }
 
