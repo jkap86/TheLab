@@ -22,6 +22,11 @@ import {
   superflexCell,
   type MetricCell,
 } from "../helpers/lineup-check-metrics";
+import {
+  formatRecord,
+  leagueWeekRecord,
+  type LeagueWeekRecord,
+} from "../helpers/week-summary";
 import { LeagueSyncKey } from "./league-sync-key";
 import { WeekPanes } from "./week-panes";
 
@@ -237,9 +242,10 @@ export function LineupCheckCard({
 
 /**
  * The week's projected outcome: this lineup against the one it plays, and —
- * where the league runs one — against the league's median beside it.
+ * where the league runs one — against the league's median beside it, then
+ * the record the week adds up to.
  *
- * **One bay or two, or nothing at all.** There is no opponent for a future week
+ * **Two bays or three, or nothing at all.** There is no opponent for a future week
  * (the sync fetches matchups only up to the week being played), for a week
  * Sleeper filed without a pairing, or where the opponent's roster is not
  * stored — and the honest answer to all three is no plate, not `128.4–0` and a
@@ -247,6 +253,10 @@ export function LineupCheckCard({
  * what makes the distinction drawable at all. A league that runs no median
  * matchup draws **one** bay rather than an empty second one, on the same rule
  * one grain down: `median_points` is null there and null is not a score.
+ * The `Rec` bay is drawn wherever the plate is, and it is the one reading
+ * that says what the league's week *is* in Sleeper's own terms — a median
+ * league plays two games a week and is `2–0`, `1–1` or `0–2`, which is the
+ * figure the page's `Proj rec` sums. See `leagueWeekRecord`.
  *
  * The head-to-head bay is what gates the plate even where a median exists.
  * That is deliberate: this plate is the week's *game*, and a median standing
@@ -271,7 +281,8 @@ export function LineupCheckCard({
  * opponent", which is the one thing this plate is careful about.
  */
 function ProjectionPlate({ entry }: { entry?: LineupCheckLeague | null }) {
-  if (!entry || entry.opponent_points === null) return null;
+  const record = leagueWeekRecord(entry);
+  if (!entry || entry.opponent_points === null || !record) return null;
 
   const mine = entry.current_points;
   const theirs = entry.opponent_points;
@@ -281,7 +292,23 @@ function ProjectionPlate({ entry }: { entry?: LineupCheckLeague | null }) {
     <ReadingPlate tight>
       <PlateBay label="Proj">
         {mine.toFixed(1)}–{theirs.toFixed(1)}
-        <OutcomePip mine={mine} against={theirs} />
+        {/* **Below `sm` the pip is the week's record**, and that is the one
+            place the median reaches a phone. The median bay is dropped there
+            (measured below), and a lamp reading `W` over a league that is
+            `2–0` for the week says half of what the card knows. `2–0` in the
+            lamp's own place costs a lozenge's width over a disc's — estimated,
+            not rendered — against the ~88px a second bay would,
+            and for a league with no median it reads `1–0`, which is the same
+            letter one grain more exact. From `sm` up the two bays carry a pip
+            each and the record has a bay of its own, so the lamp goes back
+            to being the head-to-head's alone. `display: none` on the copy
+            not shown keeps exactly one in the accessibility tree. */}
+        <span className="hidden sm:contents">
+          <OutcomePip mine={mine} against={theirs} />
+        </span>
+        <span className="contents sm:hidden">
+          <RecordPip record={record} />
+        </span>
       </PlateBay>
       {median !== null && (
         // **The median bay drops below `sm`, and that is measured.** The plate
@@ -316,6 +343,26 @@ function ProjectionPlate({ entry }: { entry?: LineupCheckLeague | null }) {
           </span>
         </>
       )}
+      {/* **The week's record for this league, as its own bay.** One game for
+          most leagues and two where the league runs a median — which is what
+          Sleeper's own standings write down for the week, and the figure the
+          plate above the list sums. It is `leagueWeekRecord`'s answer, the
+          same fold the page's `Proj rec` reads, so a card reading `2–0`
+          cannot sit under a plate that counted it once. It is drawn beside the
+          pips rather than instead of them: a pip says which game went which
+          way, and the record says what the week adds up to. `sm` up only —
+          below it the record has taken the pip's place in the first bay. */}
+      <span className="hidden sm:contents">
+        <PlateDivider stretch />
+        <PlateBay label="Rec">
+          <span className="sr-only">
+            {record.median
+              ? `Projected ${formatRecord(record)} for the week, median game included`
+              : `Projected ${formatRecord(record)} for the week`}
+          </span>
+          <span aria-hidden>{formatRecord(record)}</span>
+        </PlateBay>
+      </span>
     </ReadingPlate>
   );
 }
@@ -342,18 +389,84 @@ function OutcomePip({
   // 1 for a win, 0 for a loss, 0.5 for a tie — the ramp's own ends and middle.
   const outcome = mine > against ? 1 : mine < against ? 0 : 0.5;
   const letter = outcome === 1 ? "W" : outcome === 0 ? "L" : "T";
-  const tone = rankColor(outcome * 100);
   const result = outcome === 1 ? "win" : outcome === 0 ? "loss" : "tie";
 
   return (
-    <span
-      className="inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full border border-active/45 bg-[image:var(--readout-bg)] font-mono text-[length:var(--fs-11)] font-medium shadow-[inset_0_0_12px_var(--accent-glow)]"
-      style={{ color: tone, textShadow: `0 0 10px ${rankColor(outcome * 100, 0.6)}` }}
+    <Lamp
+      percentile={outcome * 100}
+      name={median ? `Projected ${result} against the median` : `Projected ${result}`}
     >
-      <span className="sr-only">
-        {median ? `Projected ${result} against the median` : `Projected ${result}`}
-      </span>
-      <span aria-hidden>{letter}</span>
+      {letter}
+    </Lamp>
+  );
+}
+
+/**
+ * The week's record as a lamp, where the phone plate has room for one lamp and
+ * not for a second bay.
+ *
+ * Its tone is the pip's own scale one game wider — wins as a share of the
+ * games with a result, so `2–0` is the green a `W` is, `1–1` the neutral a
+ * `T` is, and `0–2` the red an `L` is. Not `winSharePercentile`, which
+ * stretches a *season's* .250–.750 band across the ramp: over one or two
+ * games there is no band to stretch, and a `1–0` read through it would land
+ * at the same full green as a `W` anyway, with a `1–1` off the neutral for no
+ * reason a reader could see. A tie is left out of the share, on that
+ * function's own rule — it is neither result.
+ */
+function RecordPip({ record }: { record: LeagueWeekRecord }) {
+  const played = record.wins + record.losses;
+  const share = played === 0 ? 0.5 : record.wins / played;
+  const text = formatRecord(record);
+
+  return (
+    <Lamp
+      percentile={share * 100}
+      name={
+        record.median
+          ? `Projected ${text} for the week, median game included`
+          : `Projected ${text} for the week`
+      }
+      wide
+    >
+      {text}
+    </Lamp>
+  );
+}
+
+/**
+ * The lit lamp both pips are drawn on: a bordered disc of readout glass with
+ * its letter — or its record — coloured off the rank ramp.
+ *
+ * `rankColor` rather than a second green and a second red, so a good outcome
+ * is the same green everywhere on the console and both ends invert for light
+ * mode together. `wide` lets the disc stretch into a lozenge for a record,
+ * which is three characters where a letter is one; the height is the same so
+ * the two sit on the figure line identically.
+ */
+function Lamp({
+  percentile,
+  name,
+  wide = false,
+  children,
+}: {
+  percentile: number;
+  /** The screen reader's sentence — the visible text is the letter alone. */
+  name: string;
+  wide?: boolean;
+  children: string;
+}) {
+  const tone = rankColor(percentile);
+
+  return (
+    <span
+      className={`inline-flex h-5 shrink-0 items-center justify-center rounded-full border border-active/45 bg-[image:var(--readout-bg)] font-mono text-[length:var(--fs-11)] font-medium tabular-nums shadow-[inset_0_0_12px_var(--accent-glow)] ${
+        wide ? "min-w-5 px-1.5" : "w-5"
+      }`}
+      style={{ color: tone, textShadow: `0 0 10px ${rankColor(percentile, 0.6)}` }}
+    >
+      <span className="sr-only">{name}</span>
+      <span aria-hidden>{children}</span>
     </span>
   );
 }
