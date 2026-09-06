@@ -6611,16 +6611,17 @@ long form is the card tile's own `unit`, which is what makes the bay read as the
 tile; the short form is the *value* axis the track below sets, the same word one
 grain coarser, and it cannot clip.
 
-**A `Position` axis is deliberately not built.** The design offers a third track
-— `All / QB / RB / WR / TE / IDP` — and it is the one thing in the panel that is
-a *feature* rather than a re-presentation: there is no position axis on
-`LineupColumn`, no per-position total on `LeagueTeam`, nothing in
-`lineupMetricTotals` that groups by position, and no rank for one in the route.
-Building the track without those four seams would be a control that reads a
-column nobody can compute. The handoff flags it as new server scope and asks that
-it be confirmed first; it is flagged back rather than guessed at. The words
-themselves are not new when it arrives — `SLOT_GROUPS` is derived from the
-solver's own tables.
+**A `Position` axis was deliberately not built, and has since arrived.** The
+argument for leaving it out was that it is the one thing in the panel that is a
+*feature* rather than a re-presentation: there was no position axis on
+`LineupColumn`, no per-position total, nothing in `lineupMetricTotals` that
+groups by position, and no rank for one in the route, so building the track
+without those seams would have been a control that reads a column nobody can
+compute. It was flagged back rather than guessed at, the seams landed, and the
+track is a control over something. See The position axis, and a panel with no
+budget, below — the paragraphs above about the *bay* still hold and are what
+that pass is built on; what it supersedes is the budget, `Clear` and the empty
+socket.
 
 #### Verified
 
@@ -6670,6 +6671,189 @@ whether a real account's league names still set acceptably in the manager card's
 tighter 14px gutter; and whether the four-bay rack holds a reader's own stored
 selection as legibly as the fixtures', since the bay's short unit is the *value*
 axis and two KTC bays on one board read alike there.
+
+### The position axis, and a panel with no budget
+
+A third axis on a rank column — which positions it counts — and the panel loses
+its bay budget and gains the league card's own machined finish at 560px. Applied
+from a design handoff, its `2a`. This is the pass the paragraph above was
+flagging back: **the Position track is a feature rather than a re-presentation**,
+so it is four seams deep, and the panel could not have it until they existed.
+
+**It needed no migration**, and that is the schema's doing rather than luck: a
+narrowing decides what a *rank* counts, and every number it counts is already on
+a solved lineup.
+
+**The vocabulary is derived from the solver's own `SLOT_POSITIONS`**, not written
+again. `FANTASY_POSITIONS` is that table's values with first appearances kept,
+which yields `QB RB WR TE K DEF DL LB DB` — offence by depth, then the kicker and
+the team unit, then the two individual-defender families, which is exactly how
+the keys are laid out on screen. The order looks like a coincidence and is the
+table's own declaration order; a flex contributes nothing new by construction.
+`LineupPosition` is the contract's type-only union on `LineupMetricId`'s terms
+and `positions.test.ts` is what pins the two together, so a position the solver
+learns breaks a test rather than being silently unofferable, and one named in the
+union that no slot admits breaks it the other way. **`DL`/`LB`/`DB` rather than
+one `IDP`**, because those are the groups a league actually starts: a single key
+would name a bucket rather than a board.
+
+**An un-narrowed column keys exactly as it always did**, and that is the whole
+reason the position clause is a *suffix* rather than a segment. The nine base
+ranks the route always ships are filed under bare metric ids; append an `all`
+token to every key and every card on the page looks up a rank the server filed
+under another name, and the page fills with em dashes. It is the argument
+`lineupColumnKey` already makes for folding `auto:auto` away, one axis over.
+There is **one spelling**, not two kept in step by a test: the client names a
+column with `lineupColumnKey` whole and the route composes a rank key from a base
+metric plus `positionKeySuffix`, two entry points to one function.
+
+**The request carries the distinct position *sets*, not the columns** —
+`?positions=qb+te,rb` — exactly as it already carries KeepTradeCut variants and
+for the identical reason: a set is a second way to *total* the same solved
+lineups, so every narrowing falls out of the solves the route already ran and
+**there is no second solve**. Sending the columns would make every press blank
+the page. An unreadable token drops on `?ktc_boards=`' terms, costing the column
+that named it its narrowing and nothing else — the opposite call from `?season=`,
+and right for the opposite reason.
+
+**A narrowed `ktc_picks` is zero, and the quartet turns on it.** A pick has no
+position — KTC names it by a third of its round, and it is not a quarterback
+until somebody spends it. Two alternatives were rejected: apportioning the
+portfolio across positions, which nothing stored supports, and leaving the whole
+portfolio inside a narrowed `ktc_total`, which is the arm that looks right and is
+worst — on a dynasty roster the picks would dominate a QB-only figure and the
+total would exceed its own starters plus bench by an amount with nothing to do
+with quarterbacks, breaking exactly the reading the four are arranged to make
+possible. So the four still reconcile under a narrowing with the third part at
+zero, and the metric ranks **null** rather than being absent: it was asked and
+has no answer. The all-zero rule then covers a league where nobody rosters a
+`DL` for free.
+
+**`starters` and `bench` are narrowed separately**, never re-split from a merged
+roster, so the two halves stay the partition `solveLeagueLineup` built them as.
+A narrowed `ros_starters` is summed from the counted seats and **rounded the way
+`ros_bench` already is**, or the narrowed and un-narrowed figures would part
+company at the last decimal. A player Sleeper files at two positions is in either
+narrowing and counted **once** in a set naming both; a player the feed knows
+nothing about is in none, because guessing is how a roster's total quietly gains
+somebody nobody asked for.
+
+**`LeagueTeam` deliberately carries no per-position total.** The handoff asks for
+one; nothing reads it. The expanded browser sorts, dashes and prints through
+`team.totals[metric]` with a bare `LineupMetricId` off the card's `<select>`, and
+the timeline re-solves through `rankLeagueLineups` for the same nine — there is
+no surface that can name a narrowed total. A field nobody reads is dead weight
+the next reader has to prove is dead, so it arrives with a browser that can ask
+the question, and the reason is written into `solveLeagueEntry` rather than left
+to be rediscovered.
+
+**All four bays are always set**, which is what the budget became: no `Add`, no
+`Clear`, no empty socket, no `n of 4`. Both arguments the panel used to carry are
+answered rather than abandoned. The empty socket was how a reader saw that a
+column was free to take — with every bay occupied a press *replaces* what a bay
+reads, nothing is gained or lost, and there is no budget left to describe; what
+the shape still says is *one of four*, which is why the selected bay is the only
+one lifted out of the tray. And `Clear` is gone with the socket it emptied into:
+the bound it carried now lives in `normalizeLineupColumns`, which tops a short
+selection back up to four rather than handing the panel a bay it cannot draw.
+That rule's failure is unchanged and still silent — `normalize` falls back to
+`DEFAULT_LINEUP_COLUMNS` when handed an *empty* array, which is right for a stale
+stored value and would be four columns nobody chose if a press could reach it.
+`MAX_LINEUP_COLUMNS` therefore means **exactly** four now, on read as well as on
+write.
+
+**The collision rule is the one bound that survives, and it does more work.**
+Every slot being occupied means every press is checked against three siblings
+rather than against however many happened to be set, and it runs against the
+**whole column** a press would write — metric, market, QB board and position set
+— never the metric alone, or two bays could never hold one metric on two boards,
+which is the comparison a dynasty reader opens the panel to make.
+
+**`SwitchTrack` gained multi-select rather than a second track beside it**, which
+is that file's own standing rule: four tracks in one panel where one has stopped
+travelling is a panel nobody can see is broken. The mode is
+`Array.isArray(value)` rather than a flag, so the array *is* the switch's
+position and there is nothing beside it to keep in step. `All` is an ordinary
+option the caller maps its empty set onto — not a tenth position — so pressing it
+empties the set and turning the last position off returns there. One asymmetry
+worth knowing: `unavailable` is skipped for a lit key in single-select, where
+pressing it rewrites the same column, and **asked** in multi-select, where
+pressing a lit key *removes* a position and therefore names a different column a
+sibling bay may hold.
+
+**A stored value with no `positions` field reads as the empty set**, which is
+what keeps every existing reader's selection through the change: the axis did not
+exist when the value was written, and "every position" is what the page was doing
+anyway. It is the same rule one grain older that already reads a legacy bare
+string as a triple on `auto`.
+
+#### Verified
+
+Driven over CDP at 1280 and 390 in both schemes through a temporary `/preview`
+route rendering the real dialog and the real card against fixtures, then deleted
+— the method the console-card, shares, rack and timeline passes established.
+The mechanics are unchanged: `--no-proxy-server`, `localhost` rather than
+`127.0.0.1`, a phone viewport from `Emulation.setDeviceMetricsOverride`, and
+`data-theme` rather than `prefers-color-scheme`, which this app ignores. One
+mechanic is new and cost a run: **the browser profile persists between launches**,
+so a second drive started from the first drive's stored columns and every
+assertion after the first press was about a selection nobody had chosen.
+`localStorage.clear()` before the drive is the fix.
+
+Every rule landed. The panel is **560 × 562** at desktop and **352 × 661** at
+390, inside the dialog's own max-height at both with *Done* reachable and zero
+elements past its box. Pressing `KTC` on bay 01 carried the `Starters` scope
+over, re-sorted the column to bay 04 and **the panel followed it there** — the
+head's readout and the housing's chip both moving to `Bay 01 / 04` → `Bay 04 /
+04`, which is the renumber-and-follow rule end to end. `QB` then `TE` gave the
+bay line `Auto · Auto · QB/TE` and the sentence `KeepTradeCut — the starters
+only. On each league's own board. QB and TE only.`; forcing `Dyn`/`SF` composed
+with it rather than replacing it. `Scope → Picks` cleared the set to `All` and
+disabled all nine position keys with `A draft pick has no position`; the three
+other reasons appeared on their own keys with their own strings. Both milled
+hairlines sit where the design puts them, after `All` and after `DEF`. **No
+console output of any kind** beyond the dev server's own React-DevTools and HMR
+lines.
+
+**One render changed the code, and it is the failure the axis exists to avoid.**
+At 390 the ten position keys were laid out `flex-1` — `flex: 1 1 0%`, so every
+key claimed a basis of zero and the track handed all ten an identical 25.2px
+share, of which the border and `px-0.5` leave **19.2px of content against the
+21px `All` and `DEF` need**. Both were clipped to a letter and an ellipsis, on
+the one axis whose whole point is naming a position, with
+`document.documentElement.scrollWidth` still reading 390 and nothing on screen
+saying so. `flex-auto` sizes each key to its own label and grows it into what is
+left — 227px of content in 276px of track — and it is the same finding the league
+card's chip rail already records, one component over. From `sm` up the track has
+room for the equal share the design draws, so a desktop keeps `flex-1`; measured
+after, every key is 36.1px there and nothing is clipped at either width in either
+scheme.
+
+1,648 unit tests pass (25 more than before); `lint`, `typecheck` and `build` are
+clean.
+
+**Not verified against real data**, which is the gap to close first: every number
+above is a fixture, and three things a render cannot check. Whether a real
+account's narrowed ranks are *interesting* — a `DL` narrowing over a league with
+no IDP slots ranks null for everybody, correctly, and how often that is the
+common case rather than the guard is a question about this corpus. What the
+cross product actually costs on the 113-league page, where four bays can name
+four distinct narrowings and each is nine more re-totals per league. And whether
+the card's second line reads acceptably at 390 with a narrowing on it — see the
+open item below, which is a designer's call rather than a measurement.
+
+#### Worth a designer's call, not drawn here
+
+**The card's tile second line does not fit a narrowing at 390.** The label box is
+65px and the line runs at `--fs-9`, about ten and a half characters, where
+`Starters · QB/TE` is sixteen and `Dyn·SF · QB/TE` fourteen. What ships is the
+positions **alone** below `sm` and the whole `setting · positions` line from `sm`
+up, on the argument that the narrowing is both the newer fact and the one that
+most changes the figure, where the scope is at least implied by the unit above
+it. An un-narrowed column is byte-identical at every width, which is every column
+any existing reader holds. The alternative — drop the positions on a phone and
+keep the scope — is the one that was rejected, and it is the one to reach for if
+this reads wrong.
 
 ## The league card's machined billet, and what survived it
 

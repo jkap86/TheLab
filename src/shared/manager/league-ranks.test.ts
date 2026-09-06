@@ -1,8 +1,9 @@
 import assert from "node:assert/strict";
 import { describe, test } from "node:test";
 
-import type { LeagueLineup } from "@/shared/contract";
+import type { LeagueLineup, LineupMetricId, LineupPosition } from "@/shared/contract";
 
+import { lineupColumnKey } from "../ktc/columns.ts";
 import { lineupMetricTotals, rankLeagueLineups } from "./league-ranks.ts";
 import type { LeagueRosterRow, RankLeague } from "./league-ranks.ts";
 import type { RosProjections } from "../projections/ros.ts";
@@ -89,6 +90,137 @@ function lineupFixture(): LeagueLineup {
     unknown_slots: [],
   };
 }
+
+/**
+ * A lineup with a quarterback and two flex-eligible starters, one of whom
+ * Sleeper files at two positions, plus a bench of one more quarterback, a
+ * running back and a player the feed knows nothing about.
+ *
+ * Every figure is distinct across the three lenses so a narrowed total can only
+ * be right for one reason.
+ */
+function narrowableFixture(): LeagueLineup {
+  const player = (
+    id: string,
+    positions: string[],
+    points: number | null,
+    adp: number | null,
+    ktc: number | null,
+  ) => ({ player_id: id, name: null, positions, points, adp_value: adp, ktc_value: ktc });
+
+  return {
+    league_id: "L1",
+    starters: [
+      { slot: "QB", player: player("qb1", ["QB"], 18, 200, 5000) },
+      { slot: "FLEX", player: player("wr1", ["WR"], 12, 150, 3000) },
+      // Sleeper files this one at two positions, which is the case the
+      // intersection rule exists for.
+      { slot: "TE", player: player("te1", ["TE", "WR"], 9, 90, 2000) },
+      { slot: "K", player: null },
+    ],
+    bench: [
+      player("qb2", ["QB"], 6, 50, 1200),
+      player("rb1", ["RB"], 4, 40, 800),
+      // Positions unknown: he belongs to no narrowing at all.
+      player("nobody", [], 3, 10, 100),
+    ],
+    projected_points: 39,
+    unknown_slots: [],
+  };
+}
+
+/** The three positions the fixture actually seats, for the "everyone" case. */
+const EVERY_SEATED: LineupPosition[] = ["QB", "RB", "WR", "TE"];
+
+describe("lineupMetricTotals — a position narrowing", () => {
+  // The whole claim in one assertion: a narrowed total is the same solve summed
+  // over fewer players, on every lens at once. `qb1` is seated and `qb2` is
+  // not, so the starters/bench partition survives the narrowing rather than
+  // being re-decided by it.
+  test("counts only the players in the set, on every lens", () => {
+    const totals = lineupMetricTotals(narrowableFixture(), 9000, ["QB"]);
+    assert.deepEqual(totals, {
+      ros_starters: 18,
+      ros_bench: 6,
+      capital_total: 250,
+      capital_bench: 50,
+      capital_starters: 200,
+      ktc_total: 6200,
+      ktc_starters: 5000,
+      ktc_bench: 1200,
+      ktc_picks: 0,
+    });
+  });
+
+  // Sleeper lists more than one position for the players this matters most for,
+  // so `te1` is in a TE column and a WR column alike — and **once** in a set
+  // that names both. Double-counted he would read 7,000 here.
+  test("a two-position player counts in either set, and once in a set naming both", () => {
+    const lineup = narrowableFixture();
+    assert.equal(lineupMetricTotals(lineup, 0, ["TE"]).ktc_starters, 2000);
+    assert.equal(lineupMetricTotals(lineup, 0, ["WR"]).ktc_starters, 5000);
+    assert.equal(lineupMetricTotals(lineup, 0, ["TE", "WR"]).ktc_starters, 5000);
+    assert.equal(lineupMetricTotals(lineup, 0, ["TE", "WR"]).ros_starters, 21);
+  });
+
+  // A player the feed cannot place belongs nowhere, which is the honest reading:
+  // guessing is how a roster's total quietly gains somebody nobody asked for.
+  test("a player with no positions is in no narrowing", () => {
+    const lineup = narrowableFixture();
+    const rb = lineupMetricTotals(lineup, 0, ["RB"]);
+    assert.equal(rb.ros_bench, 4);
+    assert.equal(rb.ktc_bench, 800);
+    // The unplaced bench player's 3 points and 100 of value are in the
+    // un-narrowed bench and in none of the narrowed ones.
+    assert.equal(lineupMetricTotals(lineup).ros_bench, 13);
+  });
+
+  // The regression that matters most: the axis must be free for everyone who
+  // never touches it.
+  test("an empty set is byte-identical to no narrowing at all", () => {
+    assert.deepEqual(
+      lineupMetricTotals(narrowableFixture(), 9000, []),
+      lineupMetricTotals(narrowableFixture(), 9000),
+    );
+  });
+
+  // The un-narrowed figure is read off `projected_points`; a narrowed one is
+  // re-summed and must round on the same convention, or the two disagree at the
+  // last decimal with nothing on screen saying which is wrong.
+  test("a narrowed ros_starters rounds the way the solver already did", () => {
+    const lineup = narrowableFixture();
+    lineup.starters[1]!.player!.points = 0.1;
+    lineup.starters[2]!.player!.points = 0.2;
+    // 0.1 + 0.2 is 0.30000000000000004 unrounded.
+    assert.equal(lineupMetricTotals(lineup, 0, ["WR"]).ros_starters, 0.3);
+  });
+
+  test("a set naming every seated position re-sums to the lineup's own figure", () => {
+    const lineup = narrowableFixture();
+    assert.equal(
+      lineupMetricTotals(lineup, 0, EVERY_SEATED).ros_starters,
+      lineup.projected_points,
+    );
+  });
+
+  // A pick has no position, so a narrowed column cannot own one — and the four
+  // metrics still have to add up, or the tiles stop being readable together.
+  test("a narrowing drops the picks and the four KTC metrics still reconcile", () => {
+    const whole = lineupMetricTotals(narrowableFixture(), 9000);
+    const narrowed = lineupMetricTotals(narrowableFixture(), 9000, ["QB"]);
+
+    assert.equal(whole.ktc_picks, 9000);
+    assert.equal(narrowed.ktc_picks, 0);
+    for (const totals of [whole, narrowed]) {
+      assert.equal(
+        totals.ktc_total,
+        totals.ktc_starters + totals.ktc_bench + totals.ktc_picks,
+      );
+    }
+    // Left in, the portfolio would be the whole of a QB column's figure.
+    assert.equal(narrowed.ktc_total, 6200);
+  });
+});
 
 describe("lineupMetricTotals", () => {
   test("sums each lens off one lineup, counting nulls as zero", () => {
@@ -369,5 +501,218 @@ describe("rankLeagueLineups", () => {
       ktc_bench: null,
       ktc_picks: null,
     });
+  });
+});
+
+
+/** The nine metric ids, so a stray key in the un-narrowed answer is visible. */
+const NINE: LineupMetricId[] = [
+  "ros_starters",
+  "ros_bench",
+  "capital_total",
+  "capital_bench",
+  "capital_starters",
+  "ktc_total",
+  "ktc_starters",
+  "ktc_bench",
+  "ktc_picks",
+];
+
+/**
+ * The key a column of this shape is looked up by — asked of `lineupColumnKey`
+ * itself rather than spelled here, because that is the claim these tests exist
+ * to make: the server files a rank under the string the card reads it back by,
+ * and a second spelling anywhere is an em dash where a number should be.
+ */
+function key(
+  metric: LineupMetricId,
+  positions: readonly LineupPosition[] = [],
+  forced: { format: "dynasty" | "redraft"; lineup: "sf" | "oneqb" } | null = null,
+): string {
+  return lineupColumnKey({
+    metric,
+    format: forced?.format ?? "auto",
+    lineup: forced?.lineup ?? "auto",
+    positions,
+  });
+}
+
+describe("rankLeagueLineups — a position narrowing", () => {
+  /** One QB seat and one flex, so a narrowing can disagree with the whole. */
+  function narrowableLeague(): RankLeague {
+    return league(
+      [roster(1, "me", ["q1", "w1"]), roster(2, "t2", ["q2", "w2"])],
+      { roster_positions: ["QB", "FLEX", "BN"] },
+    );
+  }
+
+  const BOARD: RosProjections = {
+    q1: projected("q1", ["QB"], { rec: 5 }),
+    w1: projected("w1", ["WR"], { rec: 20 }),
+    q2: projected("q2", ["QB"], { rec: 10 }),
+    w2: projected("w2", ["WR"], { rec: 3 }),
+  };
+
+  // The manager's receiver carries their whole lineup, so on the roster as a
+  // whole they lead and at quarterback alone they trail. A narrowing that could
+  // not disagree with the base rank would not be worth a column.
+  test("narrows the population and files the answer under the column's own key", () => {
+    const { ranks } = rankLeagueLineups(
+      narrowableLeague(),
+      "me",
+      BOARD,
+      NO_ADP,
+      new Map(),
+      new Map(),
+      [],
+      [["QB"], ["WR"]],
+    );
+
+    assert.deepEqual(ranks.ros_starters, { rank: 1, of: 2 });
+    assert.deepEqual(ranks[key("ros_starters", ["QB"])], { rank: 2, of: 2 });
+    assert.deepEqual(ranks[key("ros_starters", ["WR"])], { rank: 1, of: 2 });
+  });
+
+  // The regression that matters most. Every column on the page that has not
+  // narrowed reads a bare metric id, so a set on the request must add keys and
+  // never rename one — an `all` token on the nine would blank every card.
+  test("the nine keep their bare names and their answers when sets are asked for", () => {
+    const plain = rankLeagueLineups(narrowableLeague(), "me", BOARD, NO_ADP);
+    const narrowed = rankLeagueLineups(
+      narrowableLeague(),
+      "me",
+      BOARD,
+      NO_ADP,
+      new Map(),
+      new Map(),
+      [],
+      [["QB"], ["TE", "WR"]],
+    );
+
+    assert.deepEqual(Object.keys(plain.ranks).sort(), [...NINE].sort());
+    for (const metric of NINE) {
+      assert.deepEqual(narrowed.ranks[metric], plain.ranks[metric]);
+    }
+    // …and the sets that were asked for are all nine each, beside them.
+    assert.deepEqual(
+      Object.keys(narrowed.ranks).sort(),
+      [
+        ...NINE,
+        ...NINE.map((metric) => key(metric, ["QB"])),
+        ...NINE.map((metric) => key(metric, ["TE", "WR"])),
+      ].sort(),
+    );
+  });
+
+  // Nobody in this league rosters a defensive lineman, so every roster totals
+  // zero on every lens — which is the all-zero rule's own case, and answering
+  // "1st of 12" there would be a claim about a field nobody stood in.
+  test("a position nobody plays ranks null rather than first", () => {
+    const { ranks } = rankLeagueLineups(
+      narrowableLeague(),
+      "me",
+      BOARD,
+      NO_ADP,
+      new Map([["q1", 100]]),
+      new Map([[1, 5000]]),
+      [],
+      [["DL"]],
+    );
+
+    for (const metric of NINE) {
+      assert.equal(ranks[key(metric, ["DL"])], null);
+    }
+    // The un-narrowed answers are untouched by the empty narrowing beside them.
+    assert.deepEqual(ranks.ktc_starters, { rank: 1, of: 2 });
+    assert.deepEqual(ranks.ktc_picks, { rank: 1, of: 2 });
+  });
+
+  // A pick has no position, so a narrowed `ktc_picks` has nothing to rank —
+  // while the un-narrowed one, over the same rosters, does.
+  test("picks rank whole and never under a narrowing", () => {
+    const { ranks } = rankLeagueLineups(
+      narrowableLeague(),
+      "me",
+      BOARD,
+      NO_ADP,
+      new Map([
+        ["q1", 100],
+        ["w1", 900],
+        ["q2", 800],
+        ["w2", 100],
+      ]),
+      new Map([[1, 5000]]),
+      [],
+      [["QB"]],
+    );
+
+    // 6,000 against 900 with the picks in, and 100 against 800 without them.
+    assert.deepEqual(ranks.ktc_total, { rank: 1, of: 2 });
+    assert.deepEqual(ranks[key("ktc_total", ["QB"])], { rank: 2, of: 2 });
+    assert.deepEqual(ranks.ktc_picks, { rank: 1, of: 2 });
+    assert.equal(ranks[key("ktc_picks", ["QB"])], null);
+  });
+
+  // Both axes at once: a forced board *and* a narrowing is still one re-total
+  // of one solve, and the key is the triple plus the set.
+  test("a forced board crosses with a set, and its own key is unmoved", () => {
+    const { ranks } = rankLeagueLineups(
+      narrowableLeague(),
+      "me",
+      BOARD,
+      NO_ADP,
+      new Map([
+        ["q1", 100],
+        ["w1", 900],
+        ["q2", 800],
+        ["w2", 100],
+      ]),
+      new Map(),
+      [
+        {
+          key: "dynasty:sf",
+          values: new Map([
+            ["q1", 900],
+            ["w1", 100],
+            ["q2", 100],
+            ["w2", 100],
+          ]),
+          pickValues: new Map([[1, 3000]]),
+        },
+      ],
+      [["QB"]],
+    );
+
+    const sf = { format: "dynasty", lineup: "sf" } as const;
+    // The variant's own four are exactly what they were before the axis landed.
+    assert.deepEqual(ranks[key("ktc_total", [], sf)], { rank: 1, of: 2 });
+    assert.deepEqual(ranks[key("ktc_starters", [], sf)], { rank: 1, of: 2 });
+    // On the league's own board the manager's quarterback trails; on the forced
+    // one he leads. Both are four ranks off the same two solves.
+    assert.deepEqual(ranks[key("ktc_starters", ["QB"])], { rank: 2, of: 2 });
+    assert.deepEqual(ranks[key("ktc_starters", ["QB"], sf)], { rank: 1, of: 2 });
+    assert.equal(ranks[key("ktc_picks", ["QB"], sf)], null);
+  });
+
+  // The lineups the teams pane renders are the ones the manager fields —
+  // narrowing decides what a rank counts, never who is seated.
+  test("a narrowing changes no lineup and no team total", () => {
+    const plain = rankLeagueLineups(narrowableLeague(), "me", BOARD, NO_ADP);
+    const narrowed = rankLeagueLineups(
+      narrowableLeague(),
+      "me",
+      BOARD,
+      NO_ADP,
+      new Map(),
+      new Map(),
+      [],
+      [["QB"]],
+    );
+
+    assert.deepEqual(narrowed.lineup, plain.lineup);
+    assert.deepEqual(
+      narrowed.rosters.map((one) => one.totals),
+      plain.rosters.map((one) => one.totals),
+    );
   });
 });

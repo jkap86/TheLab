@@ -124,6 +124,34 @@ describe("solveLeagueEntry", () => {
       null,
     );
   });
+
+  // The narrowings ride through to the ranks and stop there. Keys are spelled
+  // out rather than asked of `lineupColumnKey` here on purpose — that agreement
+  // is pinned in `league-ranks.test.ts`, and what this checks is the wire.
+  test("a position narrowing reaches the ranks and leaves the teams alone", () => {
+    const entry = solveLeagueEntry(
+      row(),
+      "me",
+      "2026",
+      PROJECTIONS,
+      NO_ADP,
+      undefined,
+      [],
+      [["WR"], ["QB"]],
+    );
+    assert.ok(entry);
+
+    // Both rostered players are receivers, so the WR column is the whole
+    // roster's answer and the QB column has nobody to rank.
+    assert.deepEqual(entry.ranks.ros_starters, { rank: 1, of: 2 });
+    assert.deepEqual(entry.ranks["ros_starters:wr"], { rank: 1, of: 2 });
+    assert.equal(entry.ranks["ros_starters:qb"], null);
+
+    // A team still carries the nine whole-roster totals and its own solve —
+    // nothing per-position ships, because nothing reads one.
+    assert.equal(entry.teams[0]?.totals.ros_starters, 20);
+    assert.equal(entry.teams[0]?.lineup.starters[0]?.player?.player_id, "w1");
+  });
 });
 
 describe("solveLeagueEntry — KeepTradeCut", () => {

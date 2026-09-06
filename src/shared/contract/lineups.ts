@@ -104,6 +104,32 @@ export type MetricRank = { rank: number; of: number };
 export type LineupRanks = Record<LineupMetricId, MetricRank | null>;
 
 /**
+ * A fantasy position a column can be narrowed to.
+ *
+ * A type-only union on the same terms as {@link LineupMetricId}: the runtime
+ * list is derived from the solver's own `SLOT_POSITIONS` in
+ * `shared/projections/positions`, and `positions.test.ts` pins that the two
+ * name the same nine — so a position the solver learns breaks a test rather
+ * than being silently unofferable, and one named here that no slot admits
+ * breaks it the other way.
+ *
+ * The nine are the four skill positions, the kicker and the team defence, and
+ * the three individual-defender families. **`DL`/`LB`/`DB` rather than one
+ * `IDP`**, because those are the groups a league actually starts: a single key
+ * would name a bucket rather than a board.
+ */
+export type LineupPosition =
+  | "QB"
+  | "RB"
+  | "WR"
+  | "TE"
+  | "K"
+  | "DEF"
+  | "DL"
+  | "LB"
+  | "DB";
+
+/**
  * One column a card carries: a metric, and — for the four KeepTradeCut
  * metrics — which market and which QB board it is priced on.
  *
@@ -117,11 +143,30 @@ export type LineupRanks = Record<LineupMetricId, MetricRank | null>;
  *
  * Both axes default to `auto`, which is a rule rather than a value: the league
  * decides. See {@link KtcBoardChoice} and {@link KtcLineupChoice}.
+ *
+ * **The third axis narrows what is counted rather than how it is priced.** A
+ * column carrying `["QB", "TE"]` totals only the quarterbacks and tight ends of
+ * whatever its scope names, and ranks the manager among the league's rosters on
+ * that narrower sum. It composes with the other two rather than replacing
+ * either: `KTC starters, dynasty, SF, QB only` is a real question a dynasty
+ * reader asks.
  */
 export type LineupColumn = {
   metric: LineupMetricId;
   format: KtcBoardChoice;
   lineup: KtcLineupChoice;
+  /**
+   * Which positions the total counts, or **empty for every position**.
+   *
+   * Empty is the absence of a narrowing and not a tenth value — which is what
+   * lets a stored selection written before this axis existed read correctly
+   * (positions did not exist, and "all of them" is what the page was doing),
+   * and what keeps {@link LineupColumn}'s key unchanged for every column that
+   * has not narrowed. Always in the axis's own canonical order, never in press
+   * order: the bay's second line and the card's tile both print it, and press
+   * order would make one column read two ways.
+   */
+  positions: readonly LineupPosition[];
 };
 
 /**

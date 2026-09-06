@@ -3,7 +3,12 @@
 import { useEffect, useRef, useState } from "react";
 
 import type { LineupColumn, ManagerLineupsPayload } from "@/shared/contract";
-import { ktcVariantsOf, serializeKtcVariants } from "@/shared/ktc/columns";
+import {
+  ktcVariantsOf,
+  positionSetsOf,
+  serializeKtcVariants,
+  serializePositionSets,
+} from "@/shared/ktc/columns";
 import { isAbortError } from "@/features/shared";
 
 /**
@@ -21,21 +26,24 @@ import { isAbortError } from "@/features/shared";
  * false→true when it finishes, which is exactly when the rosters and drafts
  * this route reads came into existence.
  *
- * **`columns` reaches the request as the *variants* they need, not as
+ * **`columns` reaches the request as the *narrowings* they need, not as
  * themselves.** A rank has to exist before it can be rendered and only the
  * server can compute one across a league's twelve rosters, so a column that has
- * forced a KeepTradeCut market or QB board is a board the server has to price;
- * but the nine ranks on each league's own boards always ship, so a column left
- * on `auto` — and every column with no market at all — is already answered.
- * `ktcVariantsOf` is that reduction, and it is what keeps adding a ROS tile, or
- * reordering the rack, free of a round trip.
+ * forced a KeepTradeCut market or QB board is a board the server has to price,
+ * and one narrowed to a set of positions is a second way to total the same
+ * solved lineups; but the nine ranks on each league's own boards, un-narrowed,
+ * always ship — so a column left on `auto` with no position set, which is every
+ * column any reader held before those axes existed, is already answered.
+ * `ktcVariantsOf` and `positionSetsOf` are those two reductions, and they are
+ * what keep adding a ROS tile, or reordering the rack, free of a round trip.
  *
- * **The variants therefore join the subject key**, so forcing a board blanks
- * the ranks for the one round trip instead of painting the old market's numbers
- * under the new label. That is the same cost a season change already pays, and
- * one request for the whole page. (The trades board resolves its own board
- * choice on the client, because there the number is only printed — see that
- * route for the argument.)
+ * **Both therefore join the subject key**, so forcing a board or narrowing to a
+ * position blanks the ranks for the one round trip instead of painting the old
+ * narrowing's numbers under the new label — which is the failure that has no
+ * symptom, since a rank is a plausible number whichever question produced it.
+ * That is the same cost a season change already pays, and one request for the
+ * whole page. (The trades board resolves its own board choice on the client,
+ * because there the number is only printed — see that route for the argument.)
  *
  * A failure resolves to null and the cards simply omit the section — the
  * lineup is an enhancement beside the list, not the list, so it degrades the
@@ -53,7 +61,8 @@ export function useManagerLineups(
   // Reset during render, the way `useManagerLeagues` does: a subject change
   // must not paint one frame of the previous manager's lineups.
   const boards = serializeKtcVariants(ktcVariantsOf(columns));
-  const subject = `${username} ${season ?? ""} ${boards}`;
+  const positions = serializePositionSets(positionSetsOf(columns));
+  const subject = `${username} ${season ?? ""} ${boards} ${positions}`;
   const [renderedSubject, setRenderedSubject] = useState(subject);
   if (renderedSubject !== subject) {
     setRenderedSubject(subject);
@@ -70,7 +79,8 @@ export function useManagerLineups(
     const url =
       `/api/user/${encodeURIComponent(username)}/lineups` +
       `?season=${encodeURIComponent(season)}` +
-      (boards ? `&ktc_boards=${encodeURIComponent(boards)}` : "");
+      (boards ? `&ktc_boards=${encodeURIComponent(boards)}` : "") +
+      (positions ? `&positions=${encodeURIComponent(positions)}` : "");
 
     void (async () => {
       try {
@@ -85,10 +95,11 @@ export function useManagerLineups(
     })();
 
     return () => controller.abort();
-    // `boards` and not `columns`: the array is a new identity on every render
-    // of the page above, where the string moves only when a bay's market or
-    // lineup does — which is the one edit that costs a request.
-  }, [username, season, ready, boards]);
+    // The two strings and not `columns`: the array is a new identity on every
+    // render of the page above, where a string moves only when a bay's market,
+    // QB board or position set does — which are the only edits that cost a
+    // request.
+  }, [username, season, ready, boards, positions]);
 
   return payload;
 }

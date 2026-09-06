@@ -13,7 +13,12 @@ import {
 } from "@/shared/ktc";
 import type { KtcBoards } from "@/shared/ktc";
 import { resolveKtcFormat } from "@/shared/ktc/board-choice";
-import { AUTO_VARIANT, ktcVariantKey, parseKtcVariants } from "@/shared/ktc/columns";
+import {
+  AUTO_VARIANT,
+  ktcVariantKey,
+  parseKtcVariants,
+  parsePositionSets,
+} from "@/shared/ktc/columns";
 import type { KtcVariant } from "@/shared/ktc/columns";
 import {
   getManagerDraftAdp,
@@ -74,6 +79,22 @@ export const dynamic = "force-dynamic";
  * projections span does: no stamp for that market, every price on it null, and
  * its four metrics ranked null league-wide by the all-zero rule that already
  * exists.
+ *
+ * **`?positions=` is the third axis and travels on its own parameter** —
+ * `qb+te,rb`, the distinct narrowings the reader's bays carry. Sets and not
+ * columns, for `?ktc_boards=`' reason: a narrowing is a second way to *total*
+ * lineups this route has already solved, so every metric of every set falls out
+ * of the solves it was going to run anyway, and naming the columns instead
+ * would make adding a tile cost a round trip. The two axes cross — a column can
+ * force a board and narrow a position at once — and the key each rank is filed
+ * under is exactly what `lineupColumnKey` writes on the card's side.
+ *
+ * A token that cannot be read folds to the empty set and is dropped, on
+ * `parsePositionSets`' terms: the column that named it loses its narrowing and
+ * reads an em dash, and nothing else on the page moves. That is the same
+ * degradation an unreadable `?ktc_boards=` has always had, and it is deliberate
+ * that neither is a 400 — a narrowing nobody can read costs one window, where a
+ * season nobody can read would put one year's page under another's heading.
  */
 export async function GET(
   request: Request,
@@ -129,6 +150,7 @@ export async function GET(
     }
 
     const forced = parseKtcVariants(url.searchParams.get("ktc_boards"));
+    const narrowings = parsePositionSets(url.searchParams.get("positions"));
     const ktc = await readKtcMarkets(leagues, forced);
 
     const solved: ManagerLineupsPayload["leagues"] = {};
@@ -154,6 +176,11 @@ export async function GET(
             ...ktc.pricing(league, variant),
           }),
         ),
+        // Unresolved, and there is nothing to resolve: a position is a fact
+        // about a player rather than a rule about a league, so the same set
+        // means the same thing in every league on the page — which is what
+        // makes one parameter answer for all hundred of them.
+        narrowings,
       );
       // A null entry means the store moved between the query and here — the
       // league drops out of the payload, as it always has for roster-less ones.

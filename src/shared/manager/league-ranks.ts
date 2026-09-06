@@ -25,6 +25,17 @@
  * what it always got — the timeline among them, which asks the league's own
  * board and nothing else.
  *
+ * **A position narrowing is a third way to total the same solves, and it must
+ * never be a second seating.** A column narrowed to `QB` asks what the
+ * quarterbacks on a roster are worth, not what the roster would look like if
+ * only quarterbacks could be started — so `lineupMetricTotals` takes the set
+ * and sums over fewer players, while the lineup underneath is the one the
+ * manager actually fields. Re-solving would rank them on a lineup nobody has,
+ * and the seats on the card beside the rank would be a different roster's. The
+ * narrowed ranks are filed under the key {@link lineupColumnKey} writes, and
+ * `positionSetKey` is imported rather than re-spelled for that reason: a key
+ * spelled twice is a rank the card looks up and does not find.
+ *
  * **A metric ranks null when every roster in the league totals zero on it.**
  * That one rule covers every degenerate case — no projections read (both ROS
  * metrics zero everywhere), no synced drafts (all three capital metrics), an
@@ -40,11 +51,14 @@ import type {
   LeagueLineup,
   LineupMetricId,
   LineupPlayer,
+  LineupPosition,
   LineupRanks,
   MetricRank,
 } from "@/shared/contract";
 
+import { positionKeySuffix } from "../ktc/columns.ts";
 import { round } from "../projections/optimal.ts";
+import { playsPosition } from "../projections/positions.ts";
 import type { RosProjections } from "../projections/ros.ts";
 import type { AdpEntry } from "./adp-value.ts";
 import { solveLeagueLineup } from "./ros-lineups.ts";
@@ -79,40 +93,58 @@ export type RankLeague = {
  * two sums cannot double-count anyone or exceed the whole. That is why this
  * takes a lineup rather than walking the roster the way TheLabX's
  * `rosterKtcValue` has to (see `ktc/roster` for the version of this that does).
+ * A narrowing preserves that partition rather than replacing it — see
+ * {@link countedRoster}.
  *
  * **`ktc_total` is the only metric that includes the picks, and it includes all
  * three parts**: `ktc_starters + ktc_bench + ktc_picks`, so the four
- * reconcile exactly and a reader can see where a roster's worth sits. Capital
- * is deliberately not arranged that way — `capital_total` is the players alone,
- * because ADP prices a *player* and there is no pick ladder here to add.
+ * reconcile exactly and a reader can see where a roster's worth sits — under a
+ * narrowing too, where the third part is zero for the reason
+ * {@link countedPicks} gives. Capital is deliberately not arranged that way —
+ * `capital_total` is the players alone, because ADP prices a *player* and there
+ * is no pick ladder here to add.
  *
  * `pickValue` is what KTC prices this roster's future picks at, already summed
  * by the caller (`./league-teams`, which resolves each pick's tier against the
  * league's own draft order). Zero where the roster owns no priced pick —
  * including every roster in a league read on the redraft market — which the
  * all-zero rule above then reads correctly as "nothing to rank".
+ *
+ * `positions` narrows **what is counted and nothing else**. An empty set is the
+ * absence of a narrowing, and the answer it gives is byte-identical to the one
+ * this returned before the axis existed — which is what keeps every column that
+ * has not narrowed on exactly the ranks it always had, under exactly the keys
+ * it always had.
  */
 export function lineupMetricTotals(
   lineup: LeagueLineup,
   pickValue = 0,
+  positions: readonly LineupPosition[] = [],
 ): Record<LineupMetricId, number> {
-  const starterCapital = lineup.starters.reduce(
-    (sum, seat) => sum + (seat.player?.adp_value ?? 0),
-    0,
-  );
-  const benchCapital = lineup.bench.reduce(
-    (sum, player) => sum + (player.adp_value ?? 0),
-    0,
-  );
+  const roster = countedRoster(lineup, positions);
+  const starterCapital = sumOf(roster.starters, (player) => player.adp_value);
+  const benchCapital = sumOf(roster.bench, (player) => player.adp_value);
   return {
-    ros_starters: lineup.projected_points,
-    ros_bench: round(
-      lineup.bench.reduce((sum, player) => sum + (player.points ?? 0), 0),
-    ),
+    // **The un-narrowed figure is read off the lineup, never re-summed here.**
+    // `projected_points` is the number the card prints beside this rank and the
+    // solver has already `round`ed it over these very seats, so a second
+    // summation could only ever disagree with it — at the last decimal, with
+    // nothing on screen saying which of the two was wrong. A narrowed figure has
+    // no such field to read and takes the same `round`, which is the convention
+    // `ros_bench` is on below and the one the solver used.
+    ros_starters:
+      positions.length === 0
+        ? lineup.projected_points
+        : round(sumOf(roster.starters, (player) => player.points)),
+    ros_bench: round(sumOf(roster.bench, (player) => player.points)),
     capital_total: starterCapital + benchCapital,
     capital_bench: benchCapital,
     capital_starters: starterCapital,
-    ...ktcMetricTotals(lineup, (player) => player.ktc_value, pickValue),
+    ...ktcTotalsOf(
+      roster,
+      (player) => player.ktc_value,
+      countedPicks(pickValue, positions),
+    ),
   };
 }
 
@@ -132,26 +164,131 @@ export type KtcMetricId = Extract<LineupMetricId, `ktc_${string}`>;
  * the roster is worth and not who is in it. One summation, two `price`
  * arguments, and the reconciliation `ktc_total = starters + bench + picks`
  * holds on both by construction rather than by two spellings agreeing.
+ *
+ * `positions` narrows it on {@link lineupMetricTotals}' exact terms, so a
+ * column forcing a board *and* a position set is still one re-total of one
+ * solve rather than anything new.
  */
 export function ktcMetricTotals(
   lineup: LeagueLineup,
   price: (player: LineupPlayer) => number | null,
   pickValue = 0,
+  positions: readonly LineupPosition[] = [],
 ): Record<KtcMetricId, number> {
-  const starters = lineup.starters.reduce(
-    (sum, seat) => sum + (seat.player ? (price(seat.player) ?? 0) : 0),
-    0,
+  return ktcTotalsOf(
+    countedRoster(lineup, positions),
+    price,
+    countedPicks(pickValue, positions),
   );
-  const bench = lineup.bench.reduce(
-    (sum, player) => sum + (price(player) ?? 0),
-    0,
-  );
+}
+
+/**
+ * The quartet itself, over players already counted and a pick figure already
+ * decided. One summation behind both public entry points, so the reconciliation
+ * cannot hold on one and not the other.
+ */
+function ktcTotalsOf(
+  roster: CountedRoster,
+  price: (player: LineupPlayer) => number | null,
+  pickValue: number,
+): Record<KtcMetricId, number> {
+  const starters = sumOf(roster.starters, price);
+  const bench = sumOf(roster.bench, price);
   return {
     ktc_total: starters + bench + pickValue,
     ktc_starters: starters,
     ktc_bench: bench,
     ktc_picks: pickValue,
   };
+}
+
+/** The two halves of a roster a total counts, once a narrowing has been applied. */
+type CountedRoster = {
+  readonly starters: readonly LineupPlayer[];
+  readonly bench: readonly LineupPlayer[];
+};
+
+/**
+ * Which players a total counts: the seated starters and the bench, either whole
+ * or narrowed to a set of positions.
+ *
+ * **The narrowing is applied to each half, never to a merged roster.** That is
+ * what keeps `starters` and `bench` a partition under a narrowing exactly as
+ * they are without one — a quarterback is counted by the starters metrics if
+ * the solver seated him and by the bench metrics if it did not, and by neither
+ * twice. Filtering the whole roster and re-splitting it would be a second
+ * seating rule with nothing to keep it honest against the solver's.
+ *
+ * {@link playsPosition} is the test, and it is an intersection rather than an
+ * equality: Sleeper lists more than one position for the players this matters
+ * most for, so a tight end it also files at receiver belongs to a `TE` column
+ * and to a `WR` one alike. He is still counted **once** in either, because a
+ * set is asked as a whole — `["TE", "WR"]` is one question, not two.
+ *
+ * An empty set is the absence of a narrowing and takes both halves whole. The
+ * check lives here rather than at each call site so there is exactly one answer
+ * to what no narrowing means.
+ */
+function countedRoster(
+  lineup: LeagueLineup,
+  positions: readonly LineupPosition[],
+): CountedRoster {
+  const seated = lineup.starters
+    .map((seat) => seat.player)
+    .filter((player): player is LineupPlayer => player !== null);
+  if (positions.length === 0) return { starters: seated, bench: lineup.bench };
+  const keep = (player: LineupPlayer) =>
+    playsPosition(player.positions, positions);
+  return { starters: seated.filter(keep), bench: lineup.bench.filter(keep) };
+}
+
+/**
+ * What a narrowing counts of a roster's pick portfolio: all of it, or none.
+ *
+ * **A draft pick has no position, so a narrowed column cannot own one.** KTC
+ * names a pick by a third of its round and nothing in that names a
+ * quarterback — a pick is not a position until somebody spends it — so there is
+ * no share of a portfolio a `QB` column could honestly claim.
+ *
+ * Both alternatives are worse and the second is the one that looks right.
+ * Apportioning a portfolio across positions has no basis in anything stored:
+ * nothing in the graph says what a 2027 first will be used on. And leaving the
+ * **whole** portfolio in a narrowed `ktc_total` would credit a quarterback-only
+ * column with thousands of points of value no quarterback carries — on a
+ * dynasty roster the picks would dominate the figure — and it would break the
+ * one reading the quartet is arranged to make possible: `ktc_total:qb` would
+ * exceed `ktc_starters:qb + ktc_bench:qb` by an amount with nothing to do with
+ * quarterbacks, and a reader adding the tiles up would find the sum wrong.
+ *
+ * So a narrowed `ktc_picks` is zero on every roster in the league, which the
+ * all-zero rule then reads as *unanswerable* rather than as "1st of 12": the
+ * card draws an em dash, which is the honest state for a question a pick cannot
+ * answer. `column()` on the client already refuses to narrow that metric at
+ * all, so this is a belt to its braces; what it genuinely guards is
+ * `ktc_total`, which a reader *can* narrow.
+ */
+function countedPicks(
+  pickValue: number,
+  positions: readonly LineupPosition[],
+): number {
+  return positions.length === 0 ? pickValue : 0;
+}
+
+/**
+ * Sum one field across the players a total counts, an absent value counting
+ * zero.
+ *
+ * Null is not zero anywhere else on this wire — an unprojected stash and an
+ * unpriced bench player are both real absences — but a *sum* has to put
+ * something there, and zero is the only value that leaves the other rosters'
+ * totals comparable. The all-zero rule is what catches the case where that
+ * makes the whole metric meaningless.
+ */
+function sumOf(
+  players: readonly LineupPlayer[],
+  value: (player: LineupPlayer) => number | null,
+): number {
+  return players.reduce((sum, player) => sum + (value(player) ?? 0), 0);
 }
 
 /** One roster's solve with its metric totals — what the teams pane renders from. */
@@ -171,6 +308,18 @@ export type RankedRoster = {
  * store moved between reads, and the route omits the league the way it always
  * has. `rosters` comes back in the caller's roster order either way — the
  * ranks and the teams pane must be read off the same set of solves.
+ *
+ * **Everything past the nine base ranks is a re-total, never a second solve.**
+ * The cross product a request can ask for is: each position set on the league's
+ * own board (nine metrics), plus each forced KeepTradeCut pricing (four
+ * metrics) *at* each position set including the un-narrowed one. A rack holds
+ * four bays, so that is bounded by four sets against four variants however a
+ * reader arranges them, and every one of those totals is summed off the solves
+ * already in `solved`. The variants and the sets are crossed rather than paired
+ * per column deliberately: what crosses the wire is the two *axes* rather than
+ * the columns themselves (see `ktcVariantsOf` and `positionSetsOf`), which is
+ * what keeps adding a tile free of a round trip, and the cost of ranking a cell
+ * nobody happens to be reading is one more sum over a dozen lineups.
  */
 export function rankLeagueLineups(
   league: RankLeague,
@@ -192,6 +341,15 @@ export function rankLeagueLineups(
    * else. See {@link RankVariant}.
    */
   variants: readonly RankVariant[] = [],
+  /**
+   * Position sets to re-total under, one per distinct narrowing the reader's
+   * columns carry. Empty for every caller that has not narrowed anything — the
+   * timeline among them, which draws the un-narrowed card over rewound rosters.
+   * The empty set is never in here: it *is* the base ranks, and ranking it
+   * again would file the nine under a second name (`ros_starters:` with nothing
+   * after the colon) that nothing looks up.
+   */
+  positionSets: readonly (readonly LineupPosition[])[] = [],
 ): {
   lineup: LeagueLineup | null;
   ranks: ColumnRanks;
@@ -221,10 +379,86 @@ export function rankLeagueLineups(
   }
   const manager = solved[managerIndex];
 
-  const rankOn = (metric: LineupMetricId) =>
-    rankAmong(solved.map(({ totals }) => totals[metric]), managerIndex);
+  // The nine, on the league's own board over the whole roster — the totals
+  // already hung on every solve, so this path is untouched by either axis.
+  const base = baseRanks((metric) =>
+    rankAmong(solved.map(({ totals }) => totals[metric]), managerIndex),
+  );
 
-  const base: LineupRanks = {
+  const keyed: Record<string, MetricRank | null> = {};
+
+  // A narrowing is the same nine rosters re-totalled over fewer players. The
+  // key is the metric plus the set, which is exactly what `lineupColumnKey`
+  // writes on the other side of the seam.
+  for (const positions of positionSets) {
+    const totals = solved.map(({ roster, lineup }) =>
+      lineupMetricTotals(
+        lineup,
+        pickValues.get(roster.roster_id) ?? 0,
+        positions,
+      ),
+    );
+    const suffix = positionKeySuffix(positions);
+    const narrowed = baseRanks((metric) =>
+      rankAmong(totals.map((one) => one[metric]), managerIndex),
+    );
+    // Off the literal rather than a list of the nine, so the exhaustive
+    // `LineupRanks` stays the one seam a new metric id has to pass through.
+    for (const [metric, rank] of Object.entries(narrowed)) {
+      keyed[`${metric}${suffix}`] = rank;
+    }
+  }
+
+  // A forced board is the same nine rosters re-totalled on a second price
+  // table, so it is four more ranks rather than a second solve: `ktcMetricTotals`
+  // reads the lineups already in hand. Crossed with the sets, since a column may
+  // force a board *and* narrow — `EVERY_POSITION` first, so a variant that has
+  // narrowed nothing keeps the bare `ktc_total:dynasty:sf` key it always had.
+  for (const variant of variants) {
+    for (const positions of [EVERY_POSITION, ...positionSets]) {
+      const totals = solved.map(({ roster, lineup }) =>
+        ktcMetricTotals(
+          lineup,
+          (player) => variant.values.get(player.player_id) ?? null,
+          variant.pickValues.get(roster.roster_id) ?? 0,
+          positions,
+        ),
+      );
+      const suffix = positionKeySuffix(positions);
+      for (const metric of KTC_METRIC_IDS) {
+        keyed[`${metric}:${variant.key}${suffix}`] = rankAmong(
+          totals.map((one) => one[metric]),
+          managerIndex,
+        );
+      }
+    }
+  }
+
+  return {
+    lineup: manager.lineup,
+    ranks: { ...keyed, ...base },
+    rosters: solved,
+  };
+}
+
+/** No narrowing at all — the scope the base ranks answer, named so the variant
+ * loop can walk it beside the reader's sets rather than special-casing it. */
+const EVERY_POSITION: readonly LineupPosition[] = [];
+
+/**
+ * The nine ranks as one literal, given something that ranks a metric.
+ *
+ * A function rather than a list of the ids because **the literal is the
+ * compiler seam**: `LineupRanks` is exhaustive, so a metric added to the
+ * contract breaks this until somebody places it — the same seam the client's
+ * `METRIC_ORDER` and `LINEUP_METRIC_LABELS` are. A `readonly LineupMetricId[]`
+ * to iterate would compile happily with one missing, and the symptom would be a
+ * column whose rank is quietly absent from every league.
+ */
+function baseRanks(
+  rankOn: (metric: LineupMetricId) => MetricRank | null,
+): LineupRanks {
+  return {
     ros_starters: rankOn("ros_starters"),
     ros_bench: rankOn("ros_bench"),
     capital_total: rankOn("capital_total"),
@@ -235,34 +469,28 @@ export function rankLeagueLineups(
     ktc_bench: rankOn("ktc_bench"),
     ktc_picks: rankOn("ktc_picks"),
   };
-
-  // A forced board is the same nine rosters re-totalled on a second price
-  // table, so it is four more ranks rather than a second solve: `ktcMetricTotals`
-  // reads the lineups already in hand. The keys are suffixed with the variant,
-  // which is exactly what `lineupColumnKey` spells on the other side.
-  const forced: Record<string, MetricRank | null> = {};
-  for (const variant of variants) {
-    const totals = solved.map(({ roster, lineup }) =>
-      ktcMetricTotals(
-        lineup,
-        (player) => variant.values.get(player.player_id) ?? null,
-        variant.pickValues.get(roster.roster_id) ?? 0,
-      ),
-    );
-    for (const metric of KTC_METRIC_IDS) {
-      forced[`${metric}:${variant.key}`] = rankAmong(
-        totals.map((one) => one[metric]),
-        managerIndex,
-      );
-    }
-  }
-
-  return {
-    lineup: manager.lineup,
-    ranks: { ...forced, ...base },
-    rosters: solved,
-  };
 }
+
+/**
+ * What a position set adds to a rank's key — nothing at all for the un-narrowed
+ * one.
+ *
+ * **An un-narrowed key is byte-identical to the one this route has always
+ * shipped**, which is the whole reason the axis is a suffix rather than a
+ * segment: append an `all` token to every key and every card on the page looks
+ * up a rank the server filed under another name, and the page fills with em
+ * dashes. It is the same argument `lineupColumnKey` already makes for folding
+ * `auto:auto` away, one axis over.
+ *
+ * The whole suffix comes from `shared/ktc/columns` rather than being spelled
+ * here — the separator, the ordering, the lower-casing and the `+` are all that
+ * module's, and the client names the column it looks a rank up by through the
+ * same one. Not even the separator is repeated: a rank is a base metric key
+ * plus this, where a column is `lineupColumnKey` whole, and the two are two
+ * entry points to one spelling rather than two spellings a test keeps in step.
+ * `league-ranks.test.ts` still asserts the agreement by calling the client's
+ * own function, which is what makes that a check rather than a restatement.
+ */
 
 /**
  * One extra KeepTradeCut pricing to rank on: the prices, the roster pick

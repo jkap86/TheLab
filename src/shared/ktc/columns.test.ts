@@ -5,8 +5,12 @@ import {
   isKtcMetric,
   ktcVariantsOf,
   lineupColumnKey,
+  normalizeLineupPositions,
   parseKtcVariants,
+  parsePositionSets,
+  positionSetsOf,
   serializeKtcVariants,
+  serializePositionSets,
 } from "./columns.ts";
 
 /**
@@ -20,11 +24,14 @@ import {
  * screen saying so.
  */
 
+type Col = Parameters<typeof lineupColumnKey>[0];
+
 const col = (
-  metric: Parameters<typeof lineupColumnKey>[0]["metric"],
+  metric: Col["metric"],
   format: "auto" | "dynasty" | "redraft" = "auto",
   lineup: "auto" | "oneqb" | "sf" = "auto",
-) => ({ metric, format, lineup }) as const;
+  positions: Col["positions"] = [],
+): Col => ({ metric, format, lineup, positions });
 
 describe("isKtcMetric", () => {
   test("the four priced metrics, and only those", () => {
@@ -113,5 +120,95 @@ describe("parseKtcVariants", () => {
     assert.deepEqual(parseKtcVariants("garbage"), []);
     assert.deepEqual(parseKtcVariants(""), []);
     assert.deepEqual(parseKtcVariants(null), []);
+  });
+});
+
+describe("the position axis in the key", () => {
+  test("an un-narrowed column keys exactly as it always did", () => {
+    // The load-bearing one: the nine base ranks the route always ships are
+    // filed under bare metric ids, so an `all` token appended to every key
+    // would rename every one of them and leave a card looking up a rank the
+    // server computed under another name.
+    assert.equal(lineupColumnKey(col("ros_starters")), "ros_starters");
+    assert.equal(lineupColumnKey(col("ktc_total")), "ktc_total");
+    assert.equal(
+      lineupColumnKey(col("ktc_total", "dynasty", "sf")),
+      "ktc_total:dynasty:sf",
+    );
+  });
+
+  test("a narrowed column takes a suffix, after any forced pricing", () => {
+    assert.equal(
+      lineupColumnKey(col("ros_starters", "auto", "auto", ["QB", "TE"])),
+      "ros_starters:qb+te",
+    );
+    assert.equal(
+      lineupColumnKey(col("ktc_total", "dynasty", "sf", ["QB"])),
+      "ktc_total:dynasty:sf:qb",
+    );
+  });
+
+  test("two narrowings of one metric are two columns", () => {
+    // Without the axis in the key they would dedupe into one, and the rank
+    // shown under one narrowing would be the other's.
+    assert.notEqual(
+      lineupColumnKey(col("capital_total", "auto", "auto", ["QB"])),
+      lineupColumnKey(col("capital_total", "auto", "auto", ["RB"])),
+    );
+  });
+});
+
+describe("normalizeLineupPositions", () => {
+  test("unknown entries drop and duplicates collapse", () => {
+    assert.deepEqual(
+      normalizeLineupPositions(["QB", "qb", "PUNTER", 3, null]),
+      ["QB"],
+    );
+    assert.deepEqual(normalizeLineupPositions("QB"), []);
+  });
+
+  test("the set sorts into the solver's own order, never press order", () => {
+    // A reader who pressed TE then QB and one who pressed them the other way
+    // are asking one question — two keys for it would be two columns of the
+    // same numbers, which a four-bay rack could hold at once.
+    assert.deepEqual(normalizeLineupPositions(["TE", "QB"]), ["QB", "TE"]);
+    assert.deepEqual(
+      normalizeLineupPositions(["DB", "WR", "DL"]),
+      ["WR", "DL", "DB"],
+    );
+  });
+});
+
+describe("positionSetsOf", () => {
+  test("the distinct narrowings, with the un-narrowed ones dropped", () => {
+    // The empty set is dropped because the base ranks are its answer, which is
+    // what keeps a reader who never touches this axis on the request they had.
+    assert.deepEqual(
+      positionSetsOf([
+        col("ros_starters"),
+        col("ros_bench", "auto", "auto", ["QB"]),
+        col("capital_total", "auto", "auto", ["QB"]),
+        col("capital_bench", "auto", "auto", ["RB", "WR"]),
+      ]),
+      [["QB"], ["RB", "WR"]],
+    );
+  });
+});
+
+describe("parsePositionSets", () => {
+  test("round-trips what the columns needed", () => {
+    const sets = positionSetsOf([
+      col("ros_bench", "auto", "auto", ["QB"]),
+      col("capital_bench", "auto", "auto", ["RB", "WR"]),
+    ]);
+    assert.deepEqual(parsePositionSets(serializePositionSets(sets)), sets);
+  });
+
+  test("a set that folds to empty is dropped rather than ranked", () => {
+    // A garbled parameter costs the columns that named it their narrowing and
+    // nothing else — the base ranks still answer them.
+    assert.deepEqual(parsePositionSets("nonsense,qb"), [["QB"]]);
+    assert.deepEqual(parsePositionSets("nonsense"), []);
+    assert.deepEqual(parsePositionSets(null), []);
   });
 });
