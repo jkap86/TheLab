@@ -3568,14 +3568,44 @@ reads as a *second* green beside `rankColor`'s own on the same card — the
 projection pip and the tiles are the two, and the fix if it does is to pull the
 mark's face onto the ramp's hue rather than to re-tint the pip.
 
-#### Worth doing next, not drawn here
+#### The record counts the median game
 
-`weekSummary` still counts one game per league, so a median league contributes
-`1-0` to the plate's projected record while its own card reads two results. Both
-are defensible on their own — the summary counts *leagues* and the card counts
-*games* — but they are visibly the same week, and the handoff scopes only the
-card. Counting medians there is a change to every account's projected record and
-wants its own decision.
+`weekSummary` used to count one game per league, so a median league contributed
+`1-0` to the plate's projected record while its own card read two results —
+visibly the same week, counted two ways. **A median league is two games now,
+on the card and on the plate**, which is what Sleeper's own standings write
+down for it. `leagueWeekRecord` in `helpers/week-summary.ts` is the one fold:
+the head-to-head is a game, the median is a second where `median_points` is
+not null, and `weekSummary` sums those records rather than re-deriving the
+outcomes, so the card and the plate cannot count a league differently.
+`WeekSummary` gained a `games` field beside `leagues`, and the rate and the
+em-dash rule read `games`.
+
+**The head-to-head still gates the record, median or not.** The median is
+solved off *live* rosters, so it answers for a week nobody has been scheduled
+for; counted alone it would put a projected `0–13` on the plate in August, one
+median league at a time. A median with no opponent is no record at all —
+`week-summary.test.ts` pins it.
+
+**The card's plate gained a `Rec` bay**, drawn beside the pips rather than
+instead of them: a pip says which game went which way, and the record says
+what the week adds up to. **Below `sm` the record takes the pip's place** in
+the head-to-head bay, and that is the one place the median reaches a phone —
+the median bay is dropped there on the measurement above, and a lamp reading
+`W` over a league that is `2–0` for the week says half of what the card knows.
+`2–0` in the lamp costs a lozenge's width over a disc's against the ~88px a
+second bay would, and a league with no median reads `1–0`, the same letter one
+grain more exact. Its tone is
+the pip's own scale one game wider — wins over the games with a result — and
+deliberately not `winSharePercentile`, which stretches a *season's* band across
+the ramp and has nothing to stretch over two games. Exactly one of the two
+lamps exists at any width, on `StandingPlate`'s `display: none` rule.
+
+**Not rendered**, which is the gap to close first: `week-summary.test.ts` pins
+the arithmetic, `typecheck`, `lint` and 1,701 unit tests are clean, but no
+preview was driven over CDP, so the phone lamp's width against the league name
+at 390 and the three-bay plate's width at 1280 are estimates rather than
+measurements.
 
 ### Starters and Opponents
 

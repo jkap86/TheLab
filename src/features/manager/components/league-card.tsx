@@ -408,66 +408,87 @@ export function LeagueCard({
   );
 }
 
+/** No answer for a field, in the app's own grammar: never a zero. */
+const NO_FIGURE = "—";
+
 /**
  * Record, standings rank and points rank — the card's standing, in the two
  * places one card puts it.
  *
- * **Three fields or as few as none**, and the absences are the point. A league
- * whose rosters have not been read has no record and no rank — nothing to
- * state — and neither the plate nor the strip is drawn at all, where drawing an
- * empty one would read as a rendering fault and drawing `0–0 · 1st` would be a
- * claim. Each field appears exactly when its own answer exists, so a league
- * mid-way through its first week can carry a record with no ranks behind it.
+ * **Three fields or none at all, and the two absences are different
+ * absences.** A league whose rosters have not been read has nothing to state —
+ * no record, no rank — and neither the plate nor the strip is drawn, where
+ * drawing an empty one would read as a rendering fault. A league that *is*
+ * read but has not played yet has a real answer for one field and no answer
+ * for the other two, and it draws all three with `—` where the ranks would go.
  *
- * **All three survive at every width now, which is the phone header's whole
- * point.** The rule that dropped `Pts` below `sm` existed to buy the league
- * name width back from the plate opposite it — and below `sm` there is no
- * plate opposite it any more: the standing is a strip of its own under the
- * rule, and the name has the row. Deleting the rule rather than keeping it is
- * what makes the strip worth the 60px it costs.
+ * **A rank that vanishes and a rank that is unknown look identical, which is
+ * why the fields stopped being conditional.** Before a season starts every
+ * league on the page carried `Rec 0–0` alone, and a reader had no way to tell
+ * that from a league whose ranks the card had simply not been given: the plate
+ * was a different shape per league for a reason nothing on it explained. The
+ * dash is the same three-way grammar the rank windows below already read by —
+ * a figure, or a dash, and never a `1st` nobody has earned.
  *
- * **Each field carries its own percentile**, because the two readings colour by
- * different rules and only this function knows which is which: a rank is its
- * place in the field on the ramp the windows below already run, and a record is
- * its win share stretched across the band records land in. The colour is spent
- * only on the strip — the plate stays one ink, since three ramp colours on a
- * pill the width of a thumb is a bar chart rather than a reading.
+ * **And all three survive at every width**, which is the phone header's own
+ * point and is unchanged by any of it. The rule that dropped `Pts` below `sm`
+ * existed to buy the league name width back from the plate opposite it, and
+ * below `sm` there is no plate opposite it any more — the standing is a strip
+ * of its own under the rule, and the name has the row.
+ *
+ * **Each field carries its own percentile, or null**, because the two readings
+ * colour by different rules and only this function knows which is which: a
+ * rank is its place in the field on the ramp the windows below already run,
+ * and a record is its win share stretched across the band records land in. A
+ * dash carries null and lands on the neutral, which is `rankPercentile`'s own
+ * rule one grain over — painting an absent answer red claims a last place
+ * nobody finished in. The colour is spent only on the strip: the plate stays
+ * one ink, since three ramp colours on a pill the width of a thumb is a bar
+ * chart rather than a reading.
  *
  * The card's rank *windows* are untouched by any of it: this is the standing's
  * three figures, not the four the strip below ranks.
  */
 function standingFields(
   league: ManagerLeague,
-): { label: string; value: string; percentile: number }[] {
-  const fields: { label: string; value: string; percentile: number }[] = [];
+): { label: string; value: string; percentile: number | null }[] {
+  // Nothing read for this league at all. `toRecord` answers null only where no
+  // roster of theirs is stored, which is the same join the ranks come off — so
+  // in practice the record is the gate and the two ranks are belt and braces.
+  if (
+    league.record === null &&
+    league.standings_rank === null &&
+    league.points_rank === null
+  ) {
+    return [];
+  }
   // The field size every rank here is out of. `rankFill` answers 0 for a
   // one-roster league, which is the same "no spread to show" the meters take.
   const of = league.total_rosters;
   // **Rank leads, and the record follows it.** The standing is what the plate
   // is read for — the record is how it was arrived at — so it takes the
   // position a reader's eye lands on first, nearest the card's own edge.
-  if (league.standings_rank !== null) {
-    fields.push({
-      label: "Rank",
-      value: ordinal(league.standings_rank),
-      percentile: rankFill({ rank: league.standings_rank, of }),
-    });
-  }
-  if (league.record) {
-    fields.push({
+  return [
+    rankField("Rank", league.standings_rank, of),
+    {
       label: "Rec",
-      value: formatRecord(league.record),
-      percentile: winSharePercentile(league.record.wins, league.record.losses),
-    });
-  }
-  if (league.points_rank !== null) {
-    fields.push({
-      label: "Pts",
-      value: ordinal(league.points_rank),
-      percentile: rankFill({ rank: league.points_rank, of }),
-    });
-  }
-  return fields;
+      value: league.record ? formatRecord(league.record) : NO_FIGURE,
+      percentile: league.record
+        ? winSharePercentile(league.record.wins, league.record.losses)
+        : null,
+    },
+    rankField("Pts", league.points_rank, of),
+  ];
+}
+
+/** One of the two ranks, as a figure and a percentile or as a dash and null. */
+function rankField(
+  label: string,
+  rank: number | null,
+  of: number,
+): { label: string; value: string; percentile: number | null } {
+  if (rank === null) return { label, value: NO_FIGURE, percentile: null };
+  return { label, value: ordinal(rank), percentile: rankFill({ rank, of }) };
 }
 
 /**
@@ -505,10 +526,12 @@ function StandingPlate({ league }: { league: ManagerLeague }) {
 /**
  * The same standing as a part bolted to the housing, below `sm`.
  *
- * Three equal bays whatever the count, so a league carrying a record and no
- * ranks fills the strip rather than leaving two thirds of a machined part
- * empty — `flex-1` on the bay is what does it, and it is the reason the strip
- * is drawn at all only when there is something to put in it.
+ * Three equal bays, and `flex-1` on the bay is what keeps them equal. It read
+ * as an arrangement that tolerated one or two until the ranks stopped being
+ * conditional; a strip two thirds empty is what it was tolerating, and a
+ * machined part with a bay missing out of it reads as a fault. The strip is
+ * still drawn only where there is something to put in it — see
+ * {@link standingFields} for the one case that answers nothing at all.
  *
  * The figures take the ramp: see `standingFields` for which rule each field's
  * percentile comes from, and {@link StandingBay} for why the colour lands here
