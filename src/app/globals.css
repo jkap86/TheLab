@@ -144,29 +144,34 @@
 
   /*
    * Where an **open** league card's housing parks while its expanded half
-   * scrolls under it — see `league-card.tsx`, which is the only reader.
+   * scrolls under it — read by `league-card.tsx` and `lineup-check-card.tsx`,
+   * which is the whole of why it is one token: the two cards are one object
+   * seen from two tools, and two spellings of where it parks is the drift the
+   * shared header exists to prevent.
    *
-   * 74px is the rack's 62px `md` height plus 12px of breath, so a frozen
-   * housing stands just clear of the rack rather than butting against it. It
-   * is a second spelling of that height and is written as one deliberately:
+   * **It is the plate that has to clear the rack, not the housing**, since the
+   * plate is what the league's name is on: it hangs 13px above the card's own
+   * top edge, so the offset is the rack's height plus that overhang plus a
+   * little breath. 87px is the rack's 62px `md` height plus 13 plus 12.
+   *
+   * The rack's height is spelled here as a number rather than derived:
    * `calc(var(--rack-clear) - 2.5rem)` reproduces it at `md` and not at the
    * other two arms, where the shell's own padding is doing something else, and
    * a derivation that is only right at one breakpoint is worse than a number.
    *
-   * One value at every width. The card is one per row and its housing is the
-   * same height on a phone as on a desktop, so a per-arm offset would be three
-   * spellings of one gap.
+   * One value at every width. The card is one per row and its plate hangs the
+   * same 13px on a phone as on a desktop, so a per-arm offset would be three
+   * spellings of one gap — and the two narrower arms have a shorter rack, so
+   * the `md` figure clears there with room to spare.
    *
-   * **It is the ledge that has to clear the rack, not the housing**, which is
-   * why this grew from 4.625rem when the manager card's two plates became one
-   * billet. A plate hung 13px above the card's top edge; the ledge hangs 20px,
-   * and it carries the league's name — so parked at the old offset the name
-   * slid 8px *behind* the rack, which is precisely the reading the freeze
-   * exists to keep on screen. 94px is the rack's 62px plus the ledge's 20 plus
-   * the same 12 of breath, and it still clears at the two narrower arms, where
-   * the rack is shorter and the ledge hangs 18.
+   * **It was 5.875rem while the manager card wore a milled billet ledge**,
+   * whose overhang is 20px rather than 13, and it comes back down with the
+   * ledge. It must not go back to the 4.625rem it carried before that pass:
+   * that number predates the rule above and counts the rack and the breath
+   * alone, which parks the plate's top edge at 61px against a 62px rack — the
+   * name a pixel behind the thing the freeze exists to keep it clear of.
    */
-  --card-freeze-top: 5.875rem;
+  --card-freeze-top: 5.4375rem;
 
   /* ---- Instrument chrome (dark) ------------------------------------ */
 
