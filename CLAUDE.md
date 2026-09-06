@@ -3841,6 +3841,232 @@ projections read costs on a page spanning a hundred leagues (the board is shared
 and cached, but it is scored per league), and whether the pick grid a league
 enumerates matches the one its own card draws.
 
+## Comping a player
+
+`/comps` was the one tool the rack named and the app did not have. It is a
+player-comparison tool: the reader picks a player as he stands entering the
+coming season, weights the criteria the comparison should run on, and the page
+returns the historical player-seasons nearest to him by weighted
+k-nearest-neighbours — each shown beside **what that player did the following
+season**, which is the reason anyone looks at a comp. Applied from a design
+handoff whose prototype's arithmetic is the spec.
+
+**The arithmetic is `shared/comps`, pure throughout, and that is the one
+`shared/` barrel a client module may import.** Nothing in it reaches Postgres
+or the network — the vocabulary (`criteria.ts`), the windowing (`windows.ts`),
+the distance (`knn.ts`) and the request's one spelling (`params.ts`) — so the
+criteria panel reads the same tables the route validates against, and the two
+cannot drift. The corpus reads are the other half, `shared/player-seasons`,
+which is server-only on every other barrel's terms; `GET /api/comps` composes
+the two. The relative imports inside `shared/comps` carry `.ts`, which is what
+lets Node's runner resolve them — the arrangement `shared/trades/params.ts`
+already makes.
+
+**The port is verified against the prototype's own output, not against a
+reading of it.** `player-seasons/sample.test.ts` carries the rankings the
+prototype's `CORPUS`, `PREV`, `windowValue` and distance loop produce when
+extracted from `Comps.dc.html` and run under Node — three subjects under the
+default criteria and one under every criterion on every window — to six
+decimal places, with the per-pair gaps on the nearest comp. Nothing in that
+file was typed by hand, and the port agrees on every row.
+
+### The distance, and the four rules that are silent when wrong
+
+Weighted KNN over z-scored features. For every `(field, window)` pair any
+requested criterion needs, the field is read over that window for every pool
+row plus the subject, and its mean and population SD over that set are what a
+z-score divides by; a field read over two windows is two scales and is cached
+twice. Per row, one term per **(criterion, window) pair** —
+`pairGap = mean over the criterion's fields of |z(row) − z(subject)|`,
+`acc += weight × pairGap²`, `d = sqrt(acc / Σ weights)`. `knn.test.ts` pins
+each of the following, because every one renders perfectly when it is wrong:
+
+- **The weight lives on the pair, not the criterion.** PPG-last-year at 1.6
+  and PPG-career-best at 0.8 are two dimensions with two influences, which is
+  the whole reason the weight moved off the criterion.
+- **A multi-field criterion averages its fields**, so "Rec yd / rec" does not
+  outweigh a single-column criterion by reading two columns.
+- **Dividing by the weight sum** keeps `d` comparable as pairs are switched on
+  and off, so the similarity readout does not lurch on a toggle.
+- **A null is not a zero, and it costs the pair rather than the row.** Target
+  share, YPRR and snap share are nullable in the schema because the source
+  does not carry them for every season and position; where either side is
+  null for the window asked, that pair is absent from the row's distance *and
+  its weight sum*, ships as `{gap: null, read: null}` so the chip draws no
+  bars and an em dash, and a row on which nothing could be read is not a comp.
+  Verified on the stored path: a seeded row with a null target share ranked on
+  its other pairs with that one chip dark.
+
+**The windows read only what is at or before the row**, and this is the
+easiest thing on the page to get quietly wrong. `last` is the row's own
+season; `avg2` that and the one before; the two career windows every season on
+file up to the row. A career figure that read the following season would score
+the comp on the very answer the payoff column reveals. **A player with one
+season on file has one season, not a zero** — every window over such a row
+answers that season, and the card says so (`rookie · 1 yr on file`, chip tag
+`1 yr`). Draft capital reads an undrafted player as `UDFA_PICK` (260): "after
+everyone" is an ordinal position on the board rather than an absence, which is
+why it enters the distance where a null target share does not, and the page
+prints it as the word from the same constant.
+
+`sim% = round(100 × exp(−0.62 × d))` is a presentation transform, not a
+statistic, tuned so a good comp in the sample corpus lands in the 60s–80s
+rather than pinning at 99. **If a real corpus moves the distance distribution,
+retune `SIMILARITY_DECAY` and say so in its comment** — a readout drifting into
+always-90s is what a comp tool looks like right before nobody trusts it.
+
+### KTC is not a criterion — settled by the design
+
+`ktc_values` is a current-value table; a 2019 season has no recoverable market
+price. The three ways out were to drop it, to snapshot forward and accept
+comps only on seasons since the sync began, or to synthesise a historical value
+and match on the number we invented. The design takes the first: KTC is
+promoted to the subject plate as what the market charges for him *today*, read
+beside the comps rather than matched against them. On a stored corpus it is the
+dynasty board's 1QB column — `resolveKtcCrossLeagueFormat`'s rule, since there
+is no league on this page for `auto` to resolve against — and a board that
+cannot be read costs the plate its figure and nothing else. The panel's second
+explanatory line states this decision and comes out with it if it is ever
+reversed; the honest route back in is snapshotting forward from now.
+
+### The corpus, and a schema that is a decision
+
+Nothing in the schema held season stats, so `1788000000006_create_player_seasons`
+is the choice the handoff hands over. **The column list is the criteria table
+and nothing else** — thirteen columns for eleven criteria plus identity and the
+finish's inputs. Three things about it are claims the table refuses to make:
+`draft_pick` is **null for an undrafted player** rather than a stored 260;
+`target_share`, `yprr` and `snap_share` are nullable on the null-is-not-zero
+rule above; and `fantasy_pts`/`fantasy_ppg` are columns on **one stated scoring
+basis** rather than derived from components that are not the whole of a
+scoring system. `player_name` is stored rather than joined: `players` is
+Sleeper's *current* map and a 2018 comp names players it never held. `player_id`
+is the Sleeper id where the loader can crosswalk one, not a foreign key, for
+the same reason.
+
+**Nothing in the app writes the table.** The source is nfl_data_py's seasonal
+data plus Sleeper's stats per the handoff, and the loader that joins them is a
+script rather than a sync loop — the corpus changes once a year. Until it runs
+the table is empty, and **the page answers from the sample corpus and says so**:
+`CompCorpusSource` rides both payloads and the result rule prints `Sample
+corpus` or `Stored corpus`. That fallback is on one condition only, an empty
+table; a database that cannot be read is a 500, because answering the sample in
+its place would put twenty-six invented comps under a page that looks healthy.
+
+**`buildCorpus` derives everything a table cannot state**, and `corpus.test.ts`
+pins it: a comp is a season with the following season on file (a gap in a
+career is not bridged); a subject is a row of the latest season on file,
+entering the one after it, read off the data rather than a constant; and a
+row's series is its seasons at or before it, newest first. The positional
+finish (`WR12`) is a `rank()` over `(season, position)` in the read, because it
+is a statement about the whole position's population and the table is the only
+thing that knows what that is — so a season loaded for its top forty receivers
+ranks those forty among themselves, which a loader has to know.
+
+### The request, and the opposite of the trades board's rule
+
+The question is the whole URL — `?subject=&from=&to=&k=&pos=&own=&c=age:last:1.4,ppg:last:1.6,…`
+— serialised by `compsQueryParams`, which is also `useComps`' subject key.
+**Every unreadable parameter is a 400.** That is the reverse of `/api/trades`,
+whose parameters are narrowings with "not narrowing" as their neutral form;
+here the neutral form of a weight is *whatever the reader set*, and a parser
+that quietly read a malformed one as its default would run a distance the
+reader did not ask for and print it under their rails. Absent is different
+from unreadable: an absent edge is the corpus's own, an absent `k` the default,
+and absent pairs rank nothing while the pool count still answers — which is how
+the strip has a figure before a player is picked. An unknown subject is a 404.
+Weights are written to one decimal, the rail's own step, so `0.2 + 0.2` cannot
+change the key on a value the reader cannot see.
+
+**The distance runs on the server.** Twenty-six rows are trivial anywhere; eight
+thousand real player-seasons over eleven criteria and four windows are not a
+thing to ship to a phone on every rail move. The route returns the ranked `k`
+with their pair gaps and the figure each window read, so the chips are drawn
+without recomputing anything. `useComps` debounces the question 150ms and
+**keeps the previous answer on screen while the next is in flight** — the one
+place it diverges from `useTrades`, since a rail fires on every step of a drag
+— except on a subject change, where it resets during render: another player's
+comps under the new name is a wrong claim rather than a stale one.
+
+### The page
+
+Four regions inside `PageShell width="console"` on `ConsoleGround`: the header,
+the subject housing, the criteria panel and the comp cards. All the state is
+in `CompsHome` and none of it is persisted — a comp is a question asked once,
+not a device preference. The housing and the cards are `CONSOLE_CARD` with the
+console card's own plates: `LeaguePlate` with no avatar draws exactly the lit
+initial the design asks for, and `ReadingPlate` carries the three facts with
+the KTC figure alone lit. **The subject readouts and the left pane show the
+row's own line, never a windowed figure** — windows are per criterion, so no
+single window could label either, and what each criterion actually read is on
+its own chip, tagged with its window. The deltas in the payoff pane are
+measured against the season opposite and nothing else.
+
+`helpers/criteria-state.ts` is the panel's four edits, pure and tested: the
+last window on a criterion cannot be removed (its key is disabled, and the
+reducer refuses as belt and braces), and an arriving window takes weight 1.0
+and is **inserted in canonical `WINDOWS` order**, so the rails under a
+criterion always read top-down in the order of the keys above them. A
+switched-off criterion shows no rails and its window keys are `disabled` at a
+tone that is only legitimate *because* they are disabled. The similarity, the
+deltas and the chips' closeness take `rankColor` rather than a colour of their
+own, and closeness is a **bar count** as well as a hue so it does not rest on
+colour alone.
+
+**One change against the handoff, because a render showed it.** The reading
+plate keeps **KTC alone** below `md`: at 390 the three-field plate left the
+name plate opposite its lamp and nothing else, at two fields the name was
+five characters, and at 640 — where `PlateField` steps its type up — the
+full plate still clipped it to eight. The two seasons it drops are already
+stated in the page header; the price is the one figure stated nowhere else.
+It is the manager plate's own precedent of losing a field at a phone's width,
+one breakpoint later because the plate carries a size-17 figure at `sm`.
+
+### Verified
+
+Against a throwaway Postgres 16 cluster and a production build, since no live
+database is reachable from where this was built. `migrate:up` applied
+`1788000000006`, `migrate:down -- 1 --dry-run` printed the mirror, and the
+round trip left the table and its index as declared.
+
+**On the empty table** both routes answered from the sample and said so:
+`/api/comps/players` with `source: "sample"`, twelve subjects entering 2026
+over a 2018–2024 corpus of 26; `/api/comps` for Puka Nacua under the default
+criteria ranked Tyreek Hill 2018, Nico Collins 2024 and Amon-Ra St. Brown 2022
+at 0.734 / 0.738 / 0.769 — the prototype's own top three to the thousandth —
+over a pool of 19 of 26. `k=2`, `from=abc` and `c=ktc:last:1` are 400s, an
+unknown subject a 404, and no subject at all answers the pool count with no
+comps.
+
+**On a seeded table** of four players over 2021–2025 the routes answered
+`source: "stored"` with the bounds read off the data (2021–2024, ten comp
+seasons), an undrafted player's `draft: null`, `years_on_file` per subject, and
+KTC null throughout with no board rows. The comp with a null target share
+carried `{gap: null, read: null}` on that pair and still ranked; the career
+average on a 2024 row read the four seasons at or before it and none after;
+the finish ranked off the stored population; and dropping the position lock
+let the back into a receiver's pool.
+
+Over CDP at 1280 and 390 in both schemes, driven through the real search and
+list: picking a subject drew ten cards with `10 comps · Puka Nacua · 2026` in
+the status line, eight chips per card in pair order, the rookie row marked
+`rookie · 1 yr on file`, signed deltas with a real minus; switching Fantasy PPG
+off took the rails from 9 to 7 and disabled its four window keys, adding `1Y`
+to YPRR enabled its previously-locked `2Y` and put the new rail *above* it;
+raising `from` past `to` pushed `to` with it and the eligible count moved to
+`4 of 26`. The criteria panel is two columns at 1280 and one at 390. At every
+width and in both schemes: `documentElement.scrollWidth` equal to the viewport,
+zero elements past it, one `<h1>`, one `<nav>`, every rail labelled, and no
+console output of any kind. 1,286 unit tests pass; `lint` and `build` are
+clean.
+
+**Not verified against real data**, which is the gap to close first: the
+stored corpus above is four seeded players. What a seed cannot check is the
+loader itself — the crosswalk from nfl_data_py names to Sleeper ids, which
+scoring basis the table is loaded on, and whether `SIMILARITY_DECAY` still
+lands a good comp in the 60s–80s over eight thousand rows rather than the
+sample's twenty-six.
+
 ## Tracking placeholder picks
 
 `/picktracker` was the one tool this app *declared* and did not have: an entry in

@@ -80,3 +80,18 @@ export {
   type PicktrackerPayload,
   type PicktrackerStreamMessage,
 } from "./picktracker";
+export {
+  type CompWindowId,
+  type CompCriterionId,
+  type CompStatField,
+  type CompSeasonLine,
+  type CompPlayerFacts,
+  type CompNextSeason,
+  type CompSubject,
+  type CompPair,
+  type CompPairReading,
+  type CompMatch,
+  type CompCorpusSource,
+  type CompPlayersPayload,
+  type CompsPayload,
+} from "./comps";
