@@ -53,9 +53,14 @@ import { useLocalValue, writeLocal } from "./local-store.ts";
 // The selection is still a *set*, not an arrangement: columns render in
 // canonical order, so `normalize` sorts on write and read alike and a
 // hand-edited or stale stored value cannot invent an ordering the UI never
-// offered. Bays are numbered by that order, so an edit renumbers them — which
-// is the cheaper of the two readings the design considered, and the one it
-// draws no dragging affordance for.
+// offered. What this file used to add — that bays are numbered by that order,
+// so an edit renumbers them, "the cheaper of the two readings the design
+// considered" — was the cheaper reading right up until somebody used it: a
+// press that moves a column's place in the sort teleports the tile being
+// edited across the rack and shifts the other three under it, which is a
+// picker rearranging itself under the reader's finger. The store's order is
+// unchanged; the *rack* holds its sockets for a sitting, and
+// {@link arrangeLineupColumns} is the one place the two are reconciled.
 //
 // It lives in `features/shared` because the metric-id list is the client half
 // of the contract's compiler seam (see `LineupMetricId`) and the
@@ -597,6 +602,51 @@ function toppedUp(
       METRIC_ORDER[a.metric] - METRIC_ORDER[b.metric] ||
       lineupColumnKey(a).localeCompare(lineupColumnKey(b)),
   );
+}
+
+/**
+ * Seat a canonical selection into a rack whose sockets are already occupied.
+ *
+ * **The store is a set in canonical order and the picker's rack is an
+ * arrangement of it, and this is the one function that reconciles the two.**
+ * The module header's rule is unchanged — `normalize` sorts on write and read
+ * alike, and the card's tile strip is that order — but a *socket* is a hole a
+ * reader is pressing into, and re-sorting the rack under their finger is what
+ * this exists to stop: changing bay 01 from a projection to a KeepTradeCut
+ * column moves that column to the end of the canonical order, and a rack that
+ * followed it would teleport the tile being edited across the panel and shift
+ * the other three under it. Held, the socket keeps what it was just given and
+ * nothing else moves.
+ *
+ * `order` is a list of {@link lineupColumnKey}s, one per socket, and it is
+ * **matched rather than trusted** — it can be stale the moment another tab
+ * writes a different selection, or one press behind its own store. So each
+ * socket claims the column it names *if that column is still in the selection*,
+ * each column is claimed at most once, and whatever is left fills the empty
+ * sockets in canonical order. A null `order` is the absence of an arrangement
+ * and answers the canonical order itself, which is what a first open draws.
+ *
+ * Total by construction: the result is always `canonical` re-ordered, never a
+ * column dropped or drawn twice, which is the failure this being a pure
+ * function under Node's own runner is for — a rack that lost a bay or repeated
+ * one renders perfectly and is a column the reader can no longer reach.
+ */
+export function arrangeLineupColumns(
+  canonical: readonly LineupColumn[],
+  order: readonly string[] | null,
+): readonly LineupColumn[] {
+  if (!order) return canonical;
+
+  const unseated = new Map(canonical.map((c) => [lineupColumnKey(c), c]));
+  const sockets = canonical.map((_, i) => {
+    const key = order[i];
+    const held = key === undefined ? undefined : unseated.get(key);
+    if (held) unseated.delete(key);
+    return held ?? null;
+  });
+
+  const spare = [...unseated.values()];
+  return sockets.map((held) => held ?? spare.shift()!);
 }
 
 /**

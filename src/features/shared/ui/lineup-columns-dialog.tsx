@@ -27,6 +27,7 @@ import {
 } from "../console-chrome";
 import {
   adpBoardLabel,
+  arrangeLineupColumns,
   cellGapReason,
   column,
   COLUMN_SCOPE_LABELS,
@@ -111,6 +112,20 @@ import { Scanlines } from "./card-plate";
  * is kept from that direction is the `Reads` line: the composed column stated in
  * words, on lit glass, under the tracks.
  *
+ * **And the rack holds its sockets, which is what makes the bay a preview at
+ * all.** The stored selection is a set in canonical order — that is the card's
+ * tile order and it has not moved — but the panel used to draw the rack straight
+ * off it, so a press that changed a column's place in the sort re-ordered the
+ * rack under the reader's finger: pressing `KTC` on bay 01 sent that column to
+ * bay 04 and slid the other three left. The panel *followed* it, correctly, and
+ * that was not the fix — the lit bay was right and everything on screen had
+ * still moved, which reads as the highlight jumping to a column the reader did
+ * not choose. `sockets` below is the rack's own order, `arrangeLineupColumns`
+ * seats the canonical set into it, and the only thing a press changes is what
+ * the selected socket reads. The order is re-seeded on {@link open}, so a fresh
+ * open is the card's order again and no arrangement outlives the sitting that
+ * made it.
+ *
  * A press writes immediately rather than staging an "apply": the cards update
  * live behind the dialog, and there is no draft state to reconcile with a change
  * from another tab.
@@ -159,15 +174,11 @@ export function LineupColumnsDialog({
   /**
    * Which bay is being edited.
    *
-   * A bay *index*, because a bay is a socket on a rack rather than a column.
-   *
-   * **But the selection is a set rendered in canonical order, so an edit
-   * renumbers the sockets**, and an index held across that re-sort points at
-   * whatever landed there. Switching bay 01 to KeepTradeCut moves it to bay 04,
-   * and an index left at 0 would leave the panel editing the column that slid
-   * up into its place — the reader pressing a key and watching a different
-   * column answer. So every write goes through {@link write}, which asks the
-   * store where the column it just wrote ended up.
+   * A bay *index*, because a bay is a socket on a rack rather than a column —
+   * and now that the rack holds its sockets ({@link sockets} below) the index
+   * is all it needs to be: a press rewrites what the selected socket reads and
+   * leaves it selected, so nothing here has to chase a column through a
+   * re-sort.
    *
    * Local and unpersisted, like the tab it replaced: which bay you were last
    * inside is a fact about this sitting.
@@ -175,14 +186,37 @@ export function LineupColumnsDialog({
   const [active, setActive] = useState(0);
 
   /**
-   * The rack's four bays.
+   * The rack's own socket order, as one {@link lineupColumnKey} per bay — or
+   * null before anything has been edited, which is the canonical order.
+   *
+   * **The store is a set in canonical order and the rack is an arrangement of
+   * it.** Those were one thing until a reader pressed a key: changing bay 01
+   * from a projection to a KeepTradeCut column sorts that column to the end, so
+   * a canonical rack teleported the tile being edited from the first socket to
+   * the last and slid the other three left under the reader's finger. Following
+   * it with the selection — which is what this panel did, correctly — kept the
+   * *right* bay lit and still moved everything on screen. Held, the socket keeps
+   * what it was just given and nothing else moves at all.
+   *
+   * It is re-seeded on every open rather than kept for the page's life, because
+   * the rack is the tile strip it configures and a fresh open should read in the
+   * card's own order; an arrangement is a fact about one sitting, like the
+   * selected bay beside it.
+   */
+  const [sockets, setSockets] = useState<readonly string[] | null>(null);
+
+  /**
+   * The rack's four bays, in socket order.
    *
    * Folded again here rather than trusted, and it is one idempotent call: every
    * line below indexes a bay without a guard, and the state that would break
    * them — a selection of three — is one `normalizeLineupColumns` cannot
    * produce. `MAX_LINEUP_COLUMNS` means *exactly* four for this reason.
+   * `arrangeLineupColumns` only ever re-orders what that returns, so the count
+   * and the membership are still its answer.
    */
-  const bays = normalizeLineupColumns(columns);
+  const canonical = normalizeLineupColumns(columns);
+  const bays = arrangeLineupColumns(canonical, sockets);
   const bay = Math.min(Math.max(active, 0), bays.length - 1);
   const col = bays[bay];
   const axes = metricAxes(col.metric);
@@ -194,21 +228,43 @@ export function LineupColumnsDialog({
   );
 
   /**
-   * Persist a selection and keep the panel on the column it just wrote.
+   * Persist a selection and leave the rack exactly as the reader is looking at
+   * it.
    *
-   * `normalizeLineupColumns` is the same fold the store applies, so the index
-   * found here is the one the next render will number the bay by — asking the
-   * store what it did rather than predicting it is what keeps the two from
-   * disagreeing the day the sort changes.
+   * Two writes, and they are two different orders on purpose:
+   * `storeLineupColumns` normalizes, so what is *stored* is the canonical set
+   * the card's tile strip renders — while the socket order recorded beside it is
+   * this rack's, which is the order on screen with one socket's contents
+   * replaced. So the card re-sorts behind the dialog, as it must, and nothing in
+   * the panel moves.
+   *
+   * The keys are taken from `all` rather than from the store's answer because
+   * `all` *is* the arrangement: reading them back would be reading the canonical
+   * order, which is the re-sort this exists to keep off the rack.
    */
   const write = (next: LineupColumn) => {
     const all = bays.map((c, i) => (i === bay ? next : c));
     storeLineupColumns(all);
-    const key = lineupColumnKey(next);
-    const landed = normalizeLineupColumns(all).findIndex(
-      (c) => lineupColumnKey(c) === key,
-    );
+    setSockets(all.map(lineupColumnKey));
+  };
+
+  /**
+   * Open the panel on the card's own order, still inside the column last edited.
+   *
+   * The re-seed is what keeps the rack the tile strip it configures: an
+   * arrangement earned by a sitting's presses should not outlive it, or a reader
+   * coming back to the panel would find their bays in an order nothing on the
+   * page explains. The selection follows its *column* across that one re-sort —
+   * the same `findIndex` the write used to do on every press, which is right
+   * here and was wrong there: this is the one moment the rack is allowed to
+   * re-order, so it is the one moment an index has to chase what it points at.
+   */
+  const open = () => {
+    const key = lineupColumnKey(col);
+    const landed = canonical.findIndex((c) => lineupColumnKey(c) === key);
+    setSockets(null);
     if (landed >= 0) setActive(landed);
+    ref.current?.showModal();
   };
 
   /**
@@ -303,7 +359,7 @@ export function LineupColumnsDialog({
     <>
       <button
         type="button"
-        onClick={() => ref.current?.showModal()}
+        onClick={open}
         aria-haspopup="dialog"
         className={triggerClassName}
       >

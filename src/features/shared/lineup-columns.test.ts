@@ -1,8 +1,10 @@
 import assert from "node:assert/strict";
 import { describe, test } from "node:test";
 
+import type { LineupColumn } from "../../shared/contract/lineups.ts";
 import {
   adpBoardLabel,
+  arrangeLineupColumns,
   cellGapReason,
   column,
   COLUMN_SCOPES,
@@ -168,6 +170,99 @@ describe("normalizeLineupColumns", () => {
       ordered.slice(2).map((c) => c.format),
       ["dynasty", "redraft"],
     );
+  });
+});
+
+/**
+ * The picker's rack against the store's canonical order.
+ *
+ * Every one of these renders a perfectly ordinary rack of four when it is
+ * wrong — a bay drawn twice, a column with no socket to reach it by, a tile
+ * that moved when nothing about it changed — which is why the arrangement is a
+ * pure function here rather than a `useState` shuffle inside the dialog.
+ */
+describe("arrangeLineupColumns", () => {
+  const canonical = normalizeLineupColumns([
+    column("ros_starters"),
+    column("ros_bench"),
+    column("capital_total"),
+    column("capital_bench"),
+  ]);
+  const keys = (cols: readonly LineupColumn[]) => cols.map(lineupColumnKey);
+
+  test("no arrangement is the canonical order", () => {
+    // Which is what a first open draws: the rack is the card's tile strip until
+    // somebody presses something.
+    assert.deepEqual(arrangeLineupColumns(canonical, null), canonical);
+  });
+
+  test("a socket keeps what it was given, and nothing else moves", () => {
+    // The whole point. `ktc_starters` sorts to the end of the canonical order,
+    // so a rack drawn off the store would send the tile being edited from the
+    // first socket to the last and slide the other three left under the
+    // reader's finger.
+    const edited = [
+      column("ktc_starters"),
+      column("ros_bench"),
+      column("capital_total"),
+      column("capital_bench"),
+    ];
+    const sockets = keys(edited);
+    const seated = arrangeLineupColumns(normalizeLineupColumns(edited), sockets);
+    assert.deepEqual(keys(seated), sockets);
+    // And the store is still canonical underneath it — the card re-sorts, the
+    // rack does not.
+    assert.deepEqual(keys(normalizeLineupColumns(edited)), [
+      "ros_bench",
+      "capital_total",
+      "capital_bench",
+      "ktc_starters",
+    ]);
+  });
+
+  test("a key the selection no longer holds leaves its socket to the spares", () => {
+    // A stale order — another tab wrote a different selection while the panel
+    // was open. The sockets it can still name keep their columns and the rest
+    // fill in canonical order, so the rack is never short and never repeats.
+    const stale = ["capital_bench", "not_a_column", "ros_starters", "gone"];
+    const seated = arrangeLineupColumns(canonical, stale);
+    assert.deepEqual(keys(seated), [
+      "capital_bench",
+      // The two unnamed sockets take the unseated columns in canonical order.
+      "ros_bench",
+      "ros_starters",
+      "capital_total",
+    ]);
+  });
+
+  test("an order naming one column twice seats it once", () => {
+    // Belt and braces: a duplicate cannot be produced by a press, and a rack
+    // that drew one would have a bay the reader can no longer reach.
+    const seated = arrangeLineupColumns(canonical, [
+      "ros_bench",
+      "ros_bench",
+      "ros_bench",
+      "ros_bench",
+    ]);
+    assert.deepEqual(new Set(keys(seated)).size, canonical.length);
+    assert.deepEqual(keys(seated).slice(0, 1), ["ros_bench"]);
+  });
+
+  test("always a permutation of the selection it was handed", () => {
+    // The one invariant every caller leans on: `arrangeLineupColumns` re-orders
+    // what `normalizeLineupColumns` answered and never edits it, so the count
+    // and the membership are still that function's.
+    for (const order of [
+      null,
+      [],
+      ["capital_total"],
+      ["ktc_total", "ros_bench", "capital_bench", "ros_starters"],
+      ["ros_starters", "ros_starters", "capital_bench", "capital_total"],
+    ]) {
+      const seated = arrangeLineupColumns(canonical, order);
+      assert.equal(seated.length, canonical.length);
+      assert.deepEqual(new Set(keys(seated)), new Set(keys(canonical)));
+    }
   });
 });
 
