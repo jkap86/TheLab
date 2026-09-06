@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { describe, test } from "node:test";
 
 import {
+  adpBoardLabel,
   cellGapReason,
   column,
   COLUMN_SCOPES,
@@ -22,7 +23,11 @@ import {
   positionsClause,
   positionsLabel,
 } from "./lineup-columns.ts";
-import { isKtcMetric, lineupColumnKey } from "../../shared/ktc/columns.ts";
+import {
+  isKtcMetric,
+  lineupColumnKey,
+  readsQbBoard,
+} from "../../shared/ktc/columns.ts";
 
 /**
  * The rules a stored column selection is read by, all of which are silent when
@@ -74,14 +79,39 @@ describe("normalizeLineupColumns", () => {
     assert.equal(held.filter((k) => k === "ktc_total:dynasty:sf").length, 1);
   });
 
-  test("a metric with no market cannot occupy two bays", () => {
-    // `column` forces both axes to auto on those five, so a hand-edited value
+  test("a projection cannot occupy two bays", () => {
+    // `column` forces both axes to auto on the three, so a hand-edited value
     // carrying a board on one folds back onto the column already there.
     const chosen = normalizeLineupColumns([
       column("ros_starters"),
       { metric: "ros_starters", format: "dynasty", lineup: "sf" },
     ]);
     assert.equal(chosen.filter((c) => c.metric === "ros_starters").length, 1);
+  });
+
+  test("two capital columns on two ADP boards both survive", () => {
+    // The same shape one valuation over: the ADP fold splits superflex drafts
+    // from standard ones, so pricing a roster's capital on both is the
+    // comparison the KTC bays already make on two markets.
+    const held = keysOf([
+      column("capital_total", "auto", "sf"),
+      column("capital_total", "auto", "oneqb"),
+    ]);
+    assert.ok(held.includes("capital_total:sf"));
+    assert.ok(held.includes("capital_total:oneqb"));
+  });
+
+  test("a capital column carrying a market folds onto the one already there", () => {
+    // Draft capital has no market to read, so a stray one must not become a
+    // second, un-removable copy of a column the reader cannot tell apart. Asked
+    // of the *keys*, because the two survivors of a short selection are its own
+    // column and whatever `toppedUp` put beside it.
+    const held = keysOf([
+      column("capital_total", "auto", "sf"),
+      { metric: "capital_total", format: "dynasty", lineup: "sf" },
+    ]);
+    assert.equal(held.filter((k) => k === "capital_total:sf").length, 1);
+    assert.ok(!held.some((k) => k.startsWith("capital_total:dynasty")));
   });
 
   test("caps at the budget", () => {
@@ -162,7 +192,7 @@ describe("the position axis, stored", () => {
   });
 
   test("an un-narrowed column keys exactly as it did before the axis", () => {
-    // The nine base ranks the route always ships are filed under bare metric
+    // The ten base ranks the route always ships are filed under bare metric
     // ids, so appending an `all` token to every key would rename every one of
     // them — a card looking up a rank the server computed under another name,
     // and an em dash where a number was.
@@ -246,17 +276,57 @@ describe("the position axis, spoken", () => {
   });
 });
 
+describe("which axes a column carries", () => {
+  test("a projection takes neither, capital takes the board, KTC takes both", () => {
+    // `column` is the one constructor, so an axis a metric cannot read is
+    // forced to `auto` here rather than guarded at each call site — which is
+    // what lets `lineupColumnKey` fold it out of the key.
+    const proj = column("ros_total", "dynasty", "sf");
+    assert.equal(proj.format, "auto");
+    assert.equal(proj.lineup, "auto");
+
+    const capital = column("capital_bench", "dynasty", "sf");
+    assert.equal(capital.format, "auto");
+    assert.equal(capital.lineup, "sf");
+
+    const ktc = column("ktc_bench", "dynasty", "sf");
+    assert.equal(ktc.format, "dynasty");
+    assert.equal(ktc.lineup, "sf");
+  });
+
+  test("and the picker draws a QB track for exactly the ones that keep it", () => {
+    for (const id of LINEUP_METRIC_IDS) {
+      assert.equal(
+        column(id, "auto", "sf").lineup === "sf",
+        readsQbBoard(id),
+        id,
+      );
+    }
+  });
+});
+
 describe("the labels", () => {
-  test("every metric is placed, and only the priced four spend line two", () => {
+  test("every metric is placed, and only the KTC four spend line two", () => {
     // The tile's second line carries the scope, except on the four metrics
     // where the market pair takes it — and `isKtcMetric` is what says which,
-    // rather than the emptiness being read as a signal.
+    // rather than the emptiness being read as a signal. A capital column reads
+    // a board too, but it keeps its scope word: see `tileScope`, where the
+    // board joins it only once a reader has forced one.
     for (const id of LINEUP_METRIC_IDS) {
       const words = LINEUP_METRIC_LABELS[id];
       assert.ok(words.unit.length > 0, id);
       assert.ok(words.column.length > 0, id);
       assert.equal(words.scope === "", isKtcMetric(id), id);
     }
+  });
+
+  test("a capital bay names its board only once one is forced", () => {
+    // `Auto` there would spend a third of a 72px line saying "nothing was
+    // forced" in a rack where nothing is forced by default — where a KTC bay
+    // has nothing else to put on the line and spells the rule out.
+    assert.equal(adpBoardLabel("auto"), "");
+    assert.equal(adpBoardLabel("sf"), "SF");
+    assert.equal(adpBoardLabel("oneqb"), "1QB");
   });
 
   test("a setting reads as a rule and a reading names a board", () => {
@@ -289,6 +359,16 @@ describe("the value × scope grid", () => {
     }
   });
 
+  test("the whole-roster projection has a cell", () => {
+    // It was the grid's other hole and is a metric now: the picker made the
+    // absence legible, which is what a two-axis composer is for.
+    assert.equal(metricAt("projection", "all"), "ros_total");
+    assert.deepEqual(metricAxes("ros_total"), {
+      value: "projection",
+      scope: "all",
+    });
+  });
+
   test("no two metrics share a cell", () => {
     const seen = new Set(
       LINEUP_METRIC_IDS.map((id) => {
@@ -306,14 +386,11 @@ describe("the value × scope grid", () => {
         if (!metricAt(value, scope)) holes.push(`${value}:${scope}`);
       }
     }
-    // Projection has no whole-roster reading, and only KeepTradeCut prices a
-    // pick — so picks are absent under the other two bases. Anything else
-    // appearing here is a metric that quietly stopped being reachable.
-    assert.deepEqual(holes.sort(), [
-      "capital:picks",
-      "projection:all",
-      "projection:picks",
-    ]);
+    // Only KeepTradeCut prices a pick, so picks are absent under the other two
+    // bases — and that is the grid's one remaining gap since `ros_total` filled
+    // `projection:all`. Anything else appearing here is a metric that quietly
+    // stopped being reachable.
+    assert.deepEqual(holes.sort(), ["capital:picks", "projection:picks"]);
   });
 
   test("a hole always carries a reason and a cell never does", () => {
@@ -328,9 +405,10 @@ describe("the value × scope grid", () => {
         if (reason !== null) assert.ok(reason.length > 0);
       }
     }
-    // The two are different claims: one is a reading this app has not built,
-    // the other is a reading that cannot exist on that basis at all.
-    assert.match(cellGapReason("projection", "all")!, /whole-roster/);
+    // The gap that is left is a reading that cannot exist on that basis at all,
+    // rather than one this app has not built — which is why it names the basis
+    // that *can* answer it.
+    assert.equal(cellGapReason("projection", "all"), null);
     assert.match(cellGapReason("capital", "picks")!, /KeepTradeCut/);
   });
 });

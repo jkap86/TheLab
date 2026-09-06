@@ -72,6 +72,7 @@ export type LeagueLineup = {
  * this folder would break the folder's own contract instead.
  */
 export type LineupMetricId =
+  | "ros_total"
   | "ros_starters"
   | "ros_bench"
   | "capital_total"
@@ -92,8 +93,8 @@ export type MetricRank = { rank: number; of: number };
 
 /**
  * Null where the metric is degenerate league-wide — every roster totals zero,
- * which is what no projections (both ROS metrics), no synced drafts (all three
- * capital metrics) and an unreadable or empty KTC board (all four KTC metrics)
+ * which is what no projections (all three ROS metrics), no synced drafts (all
+ * three capital metrics) and an unreadable or empty KTC board (all four KTC metrics)
  * look like. "1st of 12" among all-zero totals would be a claim; the card
  * renders an em dash instead.
  *
@@ -130,16 +131,28 @@ export type LineupPosition =
   | "DB";
 
 /**
- * One column a card carries: a metric, and — for the four KeepTradeCut
- * metrics — which market and which QB board it is priced on.
+ * One column a card carries: a metric, and — for the metrics that read one —
+ * which market and which QB board it is priced on.
  *
  * **A column is a triple rather than a metric id**, which is what lets the same
  * metric sit in two bays: "KTC total on the dynasty board at superflex prices"
  * and "KTC total on the dynasty board at 1QB prices" are two readings of one
  * roster, and a reader comparing them is doing the thing the second axis exists
- * for. The two axes are ignored on the five non-KTC metrics — a projection and
- * an ADP curve have no market to read — and {@link lineupColumnKey} is what
- * folds that back into one identity, so those five can never duplicate.
+ * for. {@link lineupColumnKey} is what folds an axis a metric does not read
+ * back into one identity, so a column that cannot answer an axis can never
+ * duplicate itself on it.
+ *
+ * **The two axes are read by different metrics, and that is the point rather
+ * than an inconsistency.** A *market* is KeepTradeCut's own — dynasty and
+ * redraft are two boards that repo publishes — so only the four KTC metrics
+ * carry `format`. A *QB board* is a fact about how a league starts
+ * quarterbacks, and both valuations split on it: KTC prices every player twice
+ * and the ADP fold aggregates superflex drafts apart from standard ones. So the
+ * three capital metrics carry `lineup` too, and a reader can price a roster's
+ * draft capital on the superflex board while sitting in a 1QB league — the same
+ * comparison the KTC bays already make one market over. Only the three
+ * projection metrics read neither: points are scored under the league's own
+ * scoring settings and no board enters them.
  *
  * Both axes default to `auto`, which is a rule rather than a value: the league
  * decides. See {@link KtcBoardChoice} and {@link KtcLineupChoice}.
@@ -173,12 +186,13 @@ export type LineupColumn = {
  * The ranks one league's entry carries, keyed by **column identity** rather
  * than by metric id.
  *
- * The nine metric ids are always present, ranked on the pricing a league reads
+ * The ten metric ids are always present, ranked on the pricing a league reads
  * for itself — `auto` on both axes — which is what the timeline, and any reader
  * that has not asked for a forced board, gets for free. A column that *has*
- * forced one carries an extra key beside them (`ktc_total:dynasty:sf`), and
- * only the variants the request named are computed: the four KTC metrics of a
- * market nobody asked for are rows nothing would read.
+ * forced one carries an extra key beside them (`ktc_total:dynasty:sf`, or
+ * `capital_total:sf` where the metric reads a QB board and no market), and only
+ * the pricings the request named are computed: the four KTC metrics of a market
+ * nobody asked for are rows nothing would read.
  *
  * The exhaustive half is the compiler seam it always was — a new
  * {@link LineupMetricId} breaks the ranks literal until it is placed — and the

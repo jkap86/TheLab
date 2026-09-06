@@ -2,13 +2,19 @@ import assert from "node:assert/strict";
 import { describe, test } from "node:test";
 
 import {
+  adpBoardsOf,
+  isAdpMetric,
   isKtcMetric,
   ktcVariantsOf,
   lineupColumnKey,
   normalizeLineupPositions,
+  parseAdpBoards,
   parseKtcVariants,
   parsePositionSets,
   positionSetsOf,
+  qbBoardKeySuffix,
+  readsQbBoard,
+  serializeAdpBoards,
   serializeKtcVariants,
   serializePositionSets,
 } from "./columns.ts";
@@ -33,18 +39,37 @@ const col = (
   positions: Col["positions"] = [],
 ): Col => ({ metric, format, lineup, positions });
 
-describe("isKtcMetric", () => {
-  test("the four priced metrics, and only those", () => {
+describe("what prices a metric", () => {
+  test("a market is KeepTradeCut's alone", () => {
     assert.equal(isKtcMetric("ktc_total"), true);
     assert.equal(isKtcMetric("ktc_picks"), true);
     assert.equal(isKtcMetric("ros_starters"), false);
     assert.equal(isKtcMetric("capital_total"), false);
   });
+
+  test("an ADP board is the three capital metrics'", () => {
+    assert.equal(isAdpMetric("capital_total"), true);
+    assert.equal(isAdpMetric("capital_starters"), true);
+    assert.equal(isAdpMetric("ktc_total"), false);
+    assert.equal(isAdpMetric("ros_total"), false);
+  });
+
+  test("and a QB board is read by both valuations, by no projection", () => {
+    // The question the picker asks to decide whether to draw the QB track: both
+    // priced valuations split on how a league starts quarterbacks — KTC prices
+    // every entry twice and the ADP fold aggregates superflex drafts apart —
+    // where points are scored under the league's own scoring and no board
+    // enters them.
+    assert.equal(readsQbBoard("ktc_bench"), true);
+    assert.equal(readsQbBoard("capital_bench"), true);
+    assert.equal(readsQbBoard("ros_total"), false);
+    assert.equal(readsQbBoard("ros_starters"), false);
+  });
 });
 
 describe("lineupColumnKey", () => {
   test("a column on both autos is keyed by its bare metric id", () => {
-    // Which is what lets the nine base ranks answer it without the client
+    // Which is what lets the ten base ranks answer it without the client
     // knowing what the server resolved.
     assert.equal(lineupColumnKey(col("ktc_total")), "ktc_total");
   });
@@ -67,13 +92,90 @@ describe("lineupColumnKey", () => {
     );
   });
 
-  test("a metric with no market ignores both axes", () => {
-    // A projection is not priced on a board, so a stray axis on one must not
-    // become a second, indistinguishable copy of the same column.
+  test("a projection ignores both axes", () => {
+    // A projection is not priced on a board at all, so a stray axis on one must
+    // not become a second, indistinguishable copy of the same column.
     assert.equal(
       lineupColumnKey(col("ros_starters", "dynasty", "sf")),
       "ros_starters",
     );
+    assert.equal(lineupColumnKey(col("ros_total", "auto", "sf")), "ros_total");
+  });
+
+  test("a capital column takes the QB board alone, and ignores the market", () => {
+    // There is no ADP market — nobody publishes a second one — but the fold
+    // does split superflex drafts from standard ones, so the QB board names a
+    // second reading and the market half must fold away or `capital_total` on
+    // `dynasty:sf` and on `redraft:sf` would be two keys for one pricing.
+    assert.equal(lineupColumnKey(col("capital_total")), "capital_total");
+    assert.equal(
+      lineupColumnKey(col("capital_total", "auto", "sf")),
+      "capital_total:sf",
+    );
+    assert.equal(
+      lineupColumnKey(col("capital_total", "dynasty", "sf")),
+      lineupColumnKey(col("capital_total", "redraft", "sf")),
+    );
+  });
+
+  test("two ADP boards on one capital metric are two keys", () => {
+    assert.notEqual(
+      lineupColumnKey(col("capital_bench", "auto", "sf")),
+      lineupColumnKey(col("capital_bench", "auto", "oneqb")),
+    );
+  });
+
+  test("the suffix the server composes is the one the key carries", () => {
+    // Two entry points to one spelling, and not even the separator repeated:
+    // the route files a rank under a base metric key plus this.
+    assert.equal(qbBoardKeySuffix("auto"), "");
+    assert.equal(
+      `capital_total${qbBoardKeySuffix("sf")}`,
+      lineupColumnKey(col("capital_total", "auto", "sf")),
+    );
+  });
+});
+
+describe("adpBoardsOf", () => {
+  test("the distinct forced boards, with `auto` dropped", () => {
+    // `auto` is dropped because the base ranks answer it, which is what keeps a
+    // reader who never touches this axis on the request they had.
+    assert.deepEqual(
+      adpBoardsOf([
+        col("capital_total"),
+        col("capital_bench", "auto", "sf"),
+        col("capital_starters", "auto", "sf"),
+        col("capital_total", "auto", "oneqb"),
+      ]),
+      ["sf", "oneqb"],
+    );
+  });
+
+  test("a KeepTradeCut or projection column names none", () => {
+    // A KTC column's board rides `ktcVariantsOf`, where it travels with its
+    // market; sending it here as well would price an ADP aggregate nobody reads.
+    assert.deepEqual(
+      adpBoardsOf([col("ktc_total", "dynasty", "sf"), col("ros_total")]),
+      [],
+    );
+  });
+});
+
+describe("parseAdpBoards", () => {
+  test("round-trips what the columns needed", () => {
+    const boards = adpBoardsOf([
+      col("capital_total", "auto", "sf"),
+      col("capital_bench", "auto", "oneqb"),
+    ]);
+    assert.deepEqual(parseAdpBoards(serializeAdpBoards(boards)), boards);
+  });
+
+  test("an unreadable token costs its column a board and nothing else", () => {
+    // The degradation `?ktc_boards=` already has, and the opposite call from
+    // `?season=` for the opposite reason.
+    assert.deepEqual(parseAdpBoards("sf,garbage,auto"), ["sf"]);
+    assert.deepEqual(parseAdpBoards("garbage"), []);
+    assert.deepEqual(parseAdpBoards(null), []);
   });
 });
 
@@ -125,7 +227,7 @@ describe("parseKtcVariants", () => {
 
 describe("the position axis in the key", () => {
   test("an un-narrowed column keys exactly as it always did", () => {
-    // The load-bearing one: the nine base ranks the route always ships are
+    // The load-bearing one: the ten base ranks the route always ships are
     // filed under bare metric ids, so an `all` token appended to every key
     // would rename every one of them and leave a card looking up a rank the
     // server computed under another name.
@@ -145,6 +247,20 @@ describe("the position axis in the key", () => {
     assert.equal(
       lineupColumnKey(col("ktc_total", "dynasty", "sf", ["QB"])),
       "ktc_total:dynasty:sf:qb",
+    );
+  });
+
+  test("a forced ADP board and a narrowing compose without colliding", () => {
+    // The two vocabularies share a `:` and are disjoint — no position is
+    // spelled `sf` or `oneqb` — so a key is read as an opaque lookup rather
+    // than parsed back.
+    assert.equal(
+      lineupColumnKey(col("capital_total", "auto", "sf", ["QB"])),
+      "capital_total:sf:qb",
+    );
+    assert.notEqual(
+      lineupColumnKey(col("capital_total", "auto", "sf")),
+      lineupColumnKey(col("capital_total", "auto", "auto", ["QB"])),
     );
   });
 

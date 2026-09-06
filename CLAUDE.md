@@ -6885,6 +6885,143 @@ any existing reader holds. The alternative — drop the positions on a phone and
 keep the scope — is the one that was rejected, and it is the one to reach for if
 this reads wrong.
 
+### The whole-roster projection, and capital's own board
+
+Two things the grid made legible and then had to answer. `Projection × All` was a
+greyed key reading "there is no whole-roster projection", which is the composer
+doing its job — the nine-key list it replaced simply did not offer one and
+nobody could see what was missing. It is **`ros_total`** now. And the QB-board
+track was drawn on KeepTradeCut bays alone, which was never a fact about
+KeepTradeCut: the ADP fold already aggregates superflex drafts apart from
+standard ones, so **the three capital metrics read a QB board too**. Nothing on
+the schema moved and there is no migration; the diff is the contract, the two
+`shared/` seams, the route, the picker and the card.
+
+**`ros_total` is summed from the two halves, never re-summed off the roster.**
+`ros_total = ros_starters + ros_bench` exactly, which is the reconciliation the
+KeepTradeCut quartet already holds to and for the same reason: a reader adding
+the tiles up must not find the sum wrong. Re-summing the players would round once
+where the halves round twice, and disagree by a cent on a card showing all three.
+It also inherits the rule the starters figure already lives by — an un-narrowed
+`ros_starters` is `lineup.projected_points` read off the solve rather than
+re-summed, because that is the number the card prints beside the rank.
+
+**One record says what prices a metric, and three questions read it.**
+`PRICED_BY` in `shared/ktc/columns` answers `"none"`, `"adp"` or `"ktc"`, and
+`isKtcMetric`, `isAdpMetric` and `readsQbBoard` are three readings of that one
+answer rather than three exhaustive `Record`s that could come to disagree. It is
+still the compiler seam it was — a new metric id breaks it until somebody says
+what values it — and the question it now forces is sharper: not "is this KTC" but
+"what board, if any, does this read". A *market* is KeepTradeCut's own, because
+that repo publishes two and nobody publishes a second ADP. A *QB board* is a fact
+about how a league starts quarterbacks, which both priced valuations split on.
+Points read neither.
+
+**A capital column keys on the board alone — `capital_total:sf` — and `auto`
+still folds away.** The market half would be a meaningless `auto` in a
+KeepTradeCut triple, and worse than meaningless: `capital_total:dynasty:sf` and
+`capital_total:redraft:sf` would be two keys for one pricing. `column()` forces
+each axis to `auto` on a metric that cannot read it, which is what lets
+`lineupColumnKey` fold it out — so a stored value carrying a stray market on a
+capital column cannot become a second, un-removable copy of it. The `auto` fold
+is the load-bearing half, unchanged: the ten base ranks the route always ships
+are filed under bare metric ids, and renaming them is a card full of em dashes.
+`qbBoardKeySuffix` is exported for the same reason `positionKeySuffix` is — the
+route composes the rank key from the other end, and not even the separator is
+repeated.
+
+**`?adp_boards=sf,oneqb` carries the boards, not the columns**, on
+`?ktc_boards=`' exact terms: a board is a second way to *price* the same solved
+lineups, so every capital metric of every board falls out of the solves the route
+was going to run anyway, and naming the columns would make adding a tile cost a
+round trip. It costs no read at all — `getManagerDraftAdp` already returns both
+aggregates, so a forced board points at the other half of one answer that was
+fetched before any of this. It joins `useManagerLineups`' subject key beside the
+other two, which blanks the ranks for one round trip rather than painting the old
+board's numbers under the new label. An unreadable token folds to `auto` and
+drops, costing its column a board and nothing else.
+
+**The seating does not move, and this is the one axis where that rule had to be
+*held to* rather than merely observed.** KeepTradeCut never enters the solve, so
+a forced market changing what a roster is worth and not who is in it is free.
+`adp_value` does — it is the tiebreak that seats the unprojected, scaled below
+the 0.01 that points are rounded to. So handing a forced board to
+`solveLeagueLineup` would rank the manager on a lineup nobody fields, with the
+seats on the card beside the rank belonging to a different roster. The solve
+reads `isSuperflexLineup` directly, as it always has; the forced boards travel
+separately and `capitalMetricTotals` re-prices the lineups already in hand —
+three more ranks, crossed with the position sets exactly as the KTC variants are.
+`league-ranks.test.ts` pins that the seated player and every base total are
+byte-identical with a board forced.
+
+**The variant carries the ADP *entries*, where a KeepTradeCut one carries
+values.** A KTC price is a number that means the same thing everywhere, so the
+route builds one map for the page; an ADP value is a position on a board run
+through a curve anchored to **this league's** startable pool, so the pricing has
+to happen where the pool is known. Handing values in would mean either a map per
+league per board or a second anchoring, and the second is the one that renders
+perfectly while being wrong. The pool is the league's own on every board:
+`leagueAdpPool` is teams times starting slots and a QB board changes neither.
+
+**A capital surface names its board only where one is forced**, which is where it
+parts company with a KeepTradeCut one — and the reason is the line rather than
+the principle. A KTC tile's scope is already in its unit (`KTC start`), so its
+second line is empty and the board pair has it to itself; a capital tile's line
+*is* the scope, and `Starters·1QB` is twelve characters against a phone's ten and
+a half. An `auto` capital column reads the league's own board, which is what
+every capital column read before the axis existed, so its tile is byte-identical
+to the one it always drew. Where a board is forced, **the scope and the board
+join tight and the positions join spaced** — `Roster·SF · QB/TE` — because the
+first two are one reading and the narrowing is a second clause about it. That is
+the card tile's own spelling, and a render is what required it in the bay too: at
+` · ` the 55px bay line cut to `ROSTER ·…`, putting the ellipsis exactly where the
+board a reader had just forced should be. The `Reads` window is the opposite
+call and states the board even on `auto` — it is the one surface with room to say
+what a rule means.
+
+#### Verified
+
+Rendered through a temporary `/preview` route against the real
+`LineupColumnsDialog` and `LeagueCard`, the real tokens and the real Tailwind
+build — the method the console-card, shares, rack and timeline passes established
+— then driven over CDP at 1280 and 390 in both schemes and deleted. The mechanics
+are unchanged: `--no-proxy-server`, `localhost` rather than `127.0.0.1`, a phone
+viewport from `Emulation.setDeviceMetricsOverride`, `data-theme` rather than
+`prefers-color-scheme`, and `localStorage.clear()` between drives, since the
+browser profile persists and a second run otherwise starts from the first run's
+stored columns.
+
+Every arm landed. On the default four, **bay 03 (`Capital · Roster`) offers
+`Proj`** — the press that started this, and it was greyed for the honest reason
+that the cell had no metric. Pressing it stored `ros_total`, re-sorted the column
+to bay 01 and the panel followed it there, with `Reads` on `Projected points —
+the whole roster, rest of season.` and **no QB track drawn**, a projection
+reading neither axis. A capital bay drew `Value / Scope / QB board / Position`
+and **no Market track**; pressing `SF` stored `{"metric":"capital_total",
+"format":"auto","lineup":"sf"}`, put `ROSTER·SF` in the bay unclipped at 55px,
+and read `Draft capital off ADP — the whole roster. Off the superflex draft
+board.` The card's four windows read `Proj pts / Roster`, `Draft cap / Roster·SF`,
+`Draft cap / Bench·1QB` and `KTC / Dyn·SF` with **nothing clipped on either line
+at either width**, and the expanded card's `Rank by` select carries `ROS total`
+at its head.
+
+The panel is **560 × 609** at desktop and **352 × 724** at 390 on a capital bay —
+one track taller than before, `Done` inside the viewport at both — with `:modal`
+true and **zero** elements past its own box. At every width and in both schemes:
+`document.documentElement.scrollWidth` equal to the viewport, exactly one `<h1>`,
+and **no console output of any kind** beyond the dev server's own React-DevTools
+and HMR lines. 1,716 unit tests pass (22 more); `lint`, `typecheck` and `build`
+are clean.
+
+**Not verified against real data**, which is the gap to close first: every number
+above is a fixture, and three things a render cannot check. Whether the two ADP
+boards actually differ enough on a real account for a forced capital column to be
+worth a bay — a manager whose synced drafts are all superflex will find `sf` and
+the league's own board identical, correctly and uninterestingly. What a second
+board costs on the 113-league page, which is three re-totals per league per
+narrowing and no extra read. And whether `ros_total` reads as a *third*
+projection beside the two it joins, or as the one a reader wanted all along.
+
 ## The league card's machined billet, and what survived it
 
 **Superseded on the manager card — see The two league cards converged,

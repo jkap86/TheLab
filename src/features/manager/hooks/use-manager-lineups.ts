@@ -4,8 +4,10 @@ import { useEffect, useRef, useState } from "react";
 
 import type { LineupColumn, ManagerLineupsPayload } from "@/shared/contract";
 import {
+  adpBoardsOf,
   ktcVariantsOf,
   positionSetsOf,
+  serializeAdpBoards,
   serializeKtcVariants,
   serializePositionSets,
 } from "@/shared/ktc/columns";
@@ -31,13 +33,17 @@ import { isAbortError } from "@/features/shared";
  * server can compute one across a league's twelve rosters, so a column that has
  * forced a KeepTradeCut market or QB board is a board the server has to price,
  * and one narrowed to a set of positions is a second way to total the same
- * solved lineups; but the nine ranks on each league's own boards, un-narrowed,
+ * solved lineups; but the ten ranks on each league's own boards, un-narrowed,
  * always ship — so a column left on `auto` with no position set, which is every
  * column any reader held before those axes existed, is already answered.
- * `ktcVariantsOf` and `positionSetsOf` are those two reductions, and they are
- * what keep adding a ROS tile, or reordering the rack, free of a round trip.
+ * `ktcVariantsOf`, `adpBoardsOf` and `positionSetsOf` are those three
+ * reductions, and they are what keep adding a ROS tile, or reordering the rack,
+ * free of a round trip. The middle one is the capital columns' half of the QB
+ * board axis: draft capital has no market, but the ADP fold does split superflex
+ * drafts from standard ones, so a capital bay can force a board exactly as a
+ * KeepTradeCut one can and it costs the same single round trip.
  *
- * **Both therefore join the subject key**, so forcing a board or narrowing to a
+ * **All three therefore join the subject key**, so forcing a board or narrowing to a
  * position blanks the ranks for the one round trip instead of painting the old
  * narrowing's numbers under the new label — which is the failure that has no
  * symptom, since a rank is a plausible number whichever question produced it.
@@ -61,8 +67,9 @@ export function useManagerLineups(
   // Reset during render, the way `useManagerLeagues` does: a subject change
   // must not paint one frame of the previous manager's lineups.
   const boards = serializeKtcVariants(ktcVariantsOf(columns));
+  const adpBoards = serializeAdpBoards(adpBoardsOf(columns));
   const positions = serializePositionSets(positionSetsOf(columns));
-  const subject = `${username} ${season ?? ""} ${boards} ${positions}`;
+  const subject = `${username} ${season ?? ""} ${boards} ${adpBoards} ${positions}`;
   const [renderedSubject, setRenderedSubject] = useState(subject);
   if (renderedSubject !== subject) {
     setRenderedSubject(subject);
@@ -80,6 +87,7 @@ export function useManagerLineups(
       `/api/user/${encodeURIComponent(username)}/lineups` +
       `?season=${encodeURIComponent(season)}` +
       (boards ? `&ktc_boards=${encodeURIComponent(boards)}` : "") +
+      (adpBoards ? `&adp_boards=${encodeURIComponent(adpBoards)}` : "") +
       (positions ? `&positions=${encodeURIComponent(positions)}` : "");
 
     void (async () => {
@@ -95,11 +103,11 @@ export function useManagerLineups(
     })();
 
     return () => controller.abort();
-    // The two strings and not `columns`: the array is a new identity on every
+    // The three strings and not `columns`: the array is a new identity on every
     // render of the page above, where a string moves only when a bay's market,
     // QB board or position set does — which are the only edits that cost a
     // request.
-  }, [username, season, ready, boards, positions]);
+  }, [username, season, ready, boards, adpBoards, positions]);
 
   return payload;
 }

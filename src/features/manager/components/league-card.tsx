@@ -27,6 +27,7 @@ import {
   PlateDivider,
   PlateField,
   positionsLabel,
+  qbBoardWord,
   ReadingPlate,
   Scanlines,
   StandingBay,
@@ -715,6 +716,7 @@ function tileScope(
   column: LineupColumn,
   league: ManagerLeague,
 ): { wide: string; phone: string } {
+  const scope = LINEUP_METRIC_LABELS[column.metric].scope;
   const setting = isKtcMetric(column.metric)
     ? ktcBoardLabel(
         // `leagueType` rather than a read of `settings.type`, on that helper's
@@ -724,7 +726,19 @@ function tileScope(
         resolveKtcFormat(column.format, leagueType(league)),
         resolveKtcLineup(column.lineup, league.roster_positions),
       )
-    : LINEUP_METRIC_LABELS[column.metric].scope;
+    : // **A capital tile names its board only where the reader forced one**,
+      // which is where it parts company with the KeepTradeCut arm above and the
+      // reason is the line rather than the principle. A KTC tile's scope is
+      // already in its unit (`KTC start`), so this line is empty and the board
+      // pair has it to itself; a capital tile's line is the scope, and
+      // `Starters·1QB` is twelve characters against a phone's ten and a half.
+      // An `auto` capital column reads the league's own board, which is what
+      // every capital column read before the axis existed — so its tile is
+      // byte-identical to the one it always drew, and the board appears exactly
+      // when it is the thing telling two capital tiles apart.
+      column.lineup === "auto"
+      ? scope
+      : `${scope}·${qbBoardWord(column.lineup === "sf")}`;
   const narrowed = positionsLabel(column.positions);
   if (!narrowed) return { wide: setting, phone: setting };
   return {

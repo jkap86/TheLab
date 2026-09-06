@@ -11,7 +11,7 @@
  * what keeps this testable without `pg`.
  *
  * **The picks are resolved before the ranks, and the order is load-bearing.**
- * `ktc_picks` is one of the nine ranked metrics and a pick's price is not on
+ * `ktc_picks` is one of the ranked metrics and a pick's price is not on
  * any player, so the portfolios have to exist before `rankLeagueLineups` can
  * total anything. Resolving them afterwards — which is what this did until the
  * KTC columns landed — would mean either a second reconstruction of the same
@@ -33,7 +33,7 @@ import type { AdpEntry } from "./adp-value.ts";
 import { leaguePickBoard, pickCellKey } from "./draft-picks.ts";
 import type { LeaguePickBoard, PickLeague } from "./draft-picks.ts";
 import { rankLeagueLineups } from "./league-ranks.ts";
-import type { RankLeague, RankVariant } from "./league-ranks.ts";
+import type { AdpVariant, RankLeague, RankVariant } from "./league-ranks.ts";
 
 /**
  * What one league's entry is built from: the solve's half and the picks' half
@@ -90,16 +90,25 @@ export function solveLeagueEntry(
    * **They ride through to the ranks and stop there**, and that is a decision
    * rather than an omission. A narrowing decides what a *rank* counts; it
    * touches neither the picks resolved above nor the lineups the teams pane
-   * renders, and a {@link LeagueTeam} still carries the nine whole-roster
+   * renders, and a {@link LeagueTeam} still carries the ten whole-roster
    * totals it always did. Shipping a per-position total beside them was the
    * alternative and nothing would read it: the expanded browser sorts and
    * prints by a bare {@link LineupMetricId} (`team.totals[metric]`) and the
-   * timeline re-solves through {@link rankLeagueLineups} for the same nine, so
+   * timeline re-solves through {@link rankLeagueLineups} for the same ten, so
    * a narrowed total would be a field on every team of every league that no
    * reader could name — the dead weight the next reader has to prove is dead.
    * It arrives with a browser that can ask the question.
    */
   positionSets: readonly (readonly LineupPosition[])[] = [],
+  /**
+   * The extra ADP boards this page's capital columns have forced. Page-wide
+   * rather than per league, which is where they differ from the KeepTradeCut
+   * variants above: a QB board choice is `sf` or `oneqb` outright — `auto` is
+   * dropped before it gets here, being what the base ranks answer — so there is
+   * nothing left to resolve against a league. What *is* league-specific is the
+   * pool the curve is anchored to, and that is `rankLeagueLineups`' to compute.
+   */
+  adpVariants: readonly AdpVariant[] = [],
 ): LeagueLineupEntry | null {
   const board = leaguePickBoard(league, season, (pick) =>
     pickValue(ktc, league.total_rosters, pick),
@@ -127,6 +136,7 @@ export function solveLeagueEntry(
       pickValues: variantPickValues(board, league.total_rosters, variant),
     })),
     positionSets,
+    adpVariants,
   );
   if (!lineup) return null;
   const teams: LeagueTeam[] = rosters.map(({ roster, lineup, totals }) => ({
