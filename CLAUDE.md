@@ -5675,7 +5675,17 @@ tighter 14px gutter; and whether the four-bay rack holds a reader's own stored
 selection as legibly as the fixtures', since the bay's short unit is the *value*
 axis and two KTC bays on one board read alike there.
 
-## The league card's machined billet
+## The league card's machined billet, and what survived it
+
+**Superseded on the manager card — see The two league cards converged,
+below.** The billet, the chip tray and the milled window headers were this
+card's alone, and a reader walking from `/lineupchecker` to `/manager` saw
+one league drawn as two different objects. What is kept here is the
+*measurement*, because it did not go away when the ledge did: two plates in
+one row leave a phone-width league name four characters, and the rule that
+buys it nine back is the thing the convergence had to carry with it. The
+chip rail, the ledge parts and their tokens all stay declared; nothing
+mounts them today.
 
 A polish pass on `/manager`'s league card alone — the same league, the same
 standing, the same settings and the same four ranks, recomposed into three
@@ -5897,6 +5907,143 @@ ledge is one per card over a real twelve-team browser; and whether any league in
 the corpus actually starts two bare `QB` slots, which is what decides if the
 fifth chip ever renders.
 
+
+## The two league cards converged
+
+`/manager` and `/lineupchecker` list the same leagues and had drifted into two
+objects: this card on a **milled billet ledge** over a **chip tray** with its
+rank words on **machined window headers**, that one on a **two-plate header**
+over a **lit config window** in a **metal** housing. A reader walking between
+the two tools sees one after the other, which is the one place a single-page
+render can never show a drift. The manager card moves onto the checker's
+vocabulary; **nothing about the lineup checker card changes**. Applied from a
+design handoff. Nothing on the wire moved: no route, no query, no contract type,
+no payload field, no migration — this is chrome, and the diff is three files.
+
+**It is a convergence rather than a redesign, so the target is quoted rather
+than re-derived.** Every structural value in `league-card.tsx` is now
+`lineup-check-card.tsx`'s to the digit: `CONSOLE_METAL` on the `<details>`, the
+`px-3.5 sm:px-[1.125rem]` gutter over `pb-[1.125rem] pt-[1.875rem]`, the four
+decorative layers, `rotateX(3deg)` at rest under a `2400px` perspective, the
+window at `mt-3.5` and `translateZ(18px)`, and the strip at `mt-2.5 gap-1.5
+sm:gap-2` and `translateZ(22px)`. What differs is what the plate says and what
+the windows hold, which is the whole of what should differ.
+
+**The one thing that deliberately does not converge is the meter.** The
+checker's tiles carry none and are right not to — a check is a count or a
+clearance and has no field to sit in — where a rank *is* a position in a field,
+and the hairline is what states the field. That is load-bearing rather than
+decorative: the denominator came out of the figure (`2nd`, not `2nd of 12`)
+precisely because the meter was already saying it, so a strip with the meters
+dropped would be four ordinals out of nothing.
+
+**Two arrangements of one read, and neither is deleted.** `LeagueChipRail` and
+`LeagueConfigWindow` both go through `readLeagueConfig`, which is why a card can
+change which one it draws without any rule being derived a second time and
+without the Filters dialog coming to disagree with a card. The window is what
+the other two cards draw, so the manager card takes the window. **The rail, the
+six ledge parts and their `--billet-*` / `--chip-*` / `--window-ledge-*` tokens
+all stay declared with nothing mounting them**, which the handoff asks for by
+name — they are one design handoff away from being wanted again, and this file's
+own `peekActiveSeason` rule covers the case. It is worth knowing they are unread
+rather than discovering it.
+
+### The phone arm, which is the question this pass had to answer
+
+The billet existed because of a real measurement, and going back to plates
+brings it back: two plates compete for one line, the reading plate keeps its
+width, and the league's name — the card's whole subject — truncates into what is
+left. The handoff flags this as its own open question and says not to ship the
+desktop arm and find out.
+
+**The answer is the rule the design already had: `Pts` comes off the plate below
+`sm`.** `standingFields` carries a `phone` flag per field again and the third is
+`hidden sm:inline-flex`, which is the pre-billet spelling restored rather than a
+new idea. Measured at 390: the name goes from 71px to **98px — nine characters**,
+which is exactly the figure `card-plate.tsx` and the old `StandingPlate` both
+record. `ReadingPlate` and `PlateField` already step their own type down there,
+which buys the other two fields their room and is free.
+
+**The worst case is a wider plate, not a narrower name rule.** A league with a
+long record and a two-digit rank (`13th` / `3–9–1`) makes a 182px plate against
+a 155px one, and its name gets **71px** at 390 rather than 98. That is the plate
+header's own cost and is what the ledge was built to remove; it is the accepted
+trade of this pass, not a defect in the rule.
+
+**`--card-freeze-top` came down with the ledge, and not as far as the handoff
+says.** The token's rule is the rack's height plus *the overhang of whatever
+carries the name* plus a little breath, and the handoff states that rule (62 +
+13 + 12) while quoting the pre-billet **4.625rem**, which is 74px — the rack and
+the breath alone, from before the rule was written down. Driven at 1280 with a
+card open and the page scrolled: at 4.625rem the plate's top edge lands at
+**62px against a rack bottom of 62** — flush against the thing the freeze exists
+to keep the name clear of — and at **5.4375rem** (87px) it lands at 75 for the
+**13px** of clearance the rule asks for. 5.4375rem is what shipped. The token
+also stopped claiming `league-card.tsx` is its only reader, which it has not
+been since the checker card took the same freeze.
+
+**The grid gap is 18px, not the 22 the handoff names.** It justifies 22 as "the
+spacing `lineupchecker-home.tsx` uses for the same card", and that file uses
+`gap-[1.125rem]` — 18px, which is also what this grid carried before the billet.
+The justification is checkable and the number contradicts it; the two pages list
+the same leagues, so a gap that differed between them would be a fresh drift
+introduced by a pass whose whole purpose is to remove one.
+
+### Verified
+
+Rendered through a temporary `/preview` route against the real components,
+tokens and Tailwind build — the method the console-card, shares, rack and
+timeline passes established, since no database is reachable from where this was
+built — then driven over CDP at **375, 390, 640 and 1280** in both schemes, the
+set the handoff names, and deleted. The mechanics are unchanged:
+`--no-proxy-server`, `localhost` rather than `127.0.0.1`, a phone viewport from
+`Emulation.setDeviceMetricsOverride`, and the
+`--blink-settings=availablePointerTypes=4,…` flags the billet pass recorded —
+headless Chrome reports `pointer: none`, so every `pointer-fine:` rule on this
+card is inert without them. The fixtures are three leagues: a dynasty superflex
+ranked on four columns including two forced boards, a 14-team best-ball redraft
+whose record and rank are the plate's widest reading, and one whose
+`roster_positions`, `settings` and rosters were never synced — rendered beside
+two real `LineupCheckCard`s over the same leagues, which is the comparison no
+single-card render can make and the one this pass is about.
+
+Every arm landed. The two cards are the same object at every width: the same
+metal housing, the same plate row, the same config window and the same strip,
+differing only in the plate's reading and the manager strip's meters. The
+summary computes `padding: 30px` top with a `14px` gutter at 375/390 and `18px`
+from 640, one padding at every width and on the league with no standing —
+`standing` and its two-arm branch are gone. `rotateX(3deg)` at rest,
+`translateZ(20px)` with the border at `active/0.45` open. The unsynced league
+draws **no reading plate**, `—` for both counts, both ladders and the premium,
+and four em dashes with empty meters. The phone rule: `Rank · Rec` at 375 and
+390, `Rank · Rec · Pts` at 640 and 1280.
+
+At every width and in both schemes: `document.documentElement.scrollWidth` equal
+to the viewport, **zero** unclipped elements past it, one `<h1>`, and no console
+output but the dev server's own React-DevTools and HMR lines. 1,235 unit tests
+pass; `lint`, `typecheck` and `build` are clean.
+
+**One finding at 375, reported rather than patched.** Three window labels
+(`Draft cap`, `KTC start`, `KTC picks`) overflow their 59px box by 3px and
+truncate; at 390 they measure 63 in 63 and are exactly clean, which is the
+finalization pass's own measurement holding. It is not introduced by the
+convergence so much as widened by it — the billet's window was 1px over the same
+labels at 375 — and **the checker card, the target, clips `Vs optimal` by the
+same 3px there**. The two fixes available both cost more than they buy: taking
+the phone gutter back to `px-1.5` diverges from the checker by the exact kind of
+pixel this pass exists to remove, and dropping the unit line to `--fs-9` flattens
+it onto the scope line and undoes the hierarchy the finalization pass measured
+into it. 375 is below the repo's 390 bar and both cards behave the same there,
+which is the state to leave it in until a design answers for both at once.
+
+**Not verified against real data**, which is the gap to close first: every number
+above is a fixture. Three things a render cannot check — whether a real
+account's league names are acceptable at nine characters, which is the cost the
+ledge was built to remove and this pass knowingly takes back; whether the freeze
+reads on a 113-league page, where the sticky plate is one per card over a real
+twelve-team browser; and whether the two cards still read as one object on a
+corpus where the manager plate is often three fields wide and the checker's is
+often absent.
 ## The console card
 
 One card carries a league across three tools — `/trades`, `/manager` and
