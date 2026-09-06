@@ -13,9 +13,9 @@ import { SLOT_POSITIONS } from "../../../shared/projections/slots.ts";
  * not know the `@/*` aliases.
  *
  * **The grammar is four-way, and it is the whole readability of the page.**
- * Every tile says one of four things, and no two of them may render alike:
+ * Every tile says one of four things:
  *
- * - an **alert** — a number the reader can act on, in the error tone;
+ * - an **alert** — a number the reader can act on;
  * - a **clear** — a real and good answer (`Set`, `In order`, `QB seated`,
  *   `Full`). The tile draws a **checkmark** and keeps the word as its
  *   accessible name;
@@ -28,6 +28,18 @@ import { SLOT_POSITIONS } from "../../../shared/projections/slots.ts";
  * contract is written to — `points_left: 0` beside `kickoff_moves: null` is a
  * lineup that is optimal in a league whose seat order cannot be known — and a
  * tile that printed `0` for both would quietly claim the second was checked.
+ *
+ * **The tile draws three of the four and not four**, which reverses what this
+ * note used to require of it. `alert` and `count` are both *figures* — a number
+ * the reader is being handed — and the card strikes them alike, in red, so that
+ * a row of four tiles reads as "the mark, or something it is telling you"
+ * rather than as four differently-toned readings. That is a decision about
+ * ink, and this file keeps all four states regardless, because the two that
+ * share an ink do **not** share a meaning anywhere it counts:
+ * {@link needsAttention} and {@link attentionByReason} read `alert` alone, so
+ * an open roster spot still sends nobody to a league that is in perfectly good
+ * order. Folding `count` into `alert` *here* is what would break that, and it
+ * is why the union is a union rather than a boolean.
  *
  * **It was a boolean `alert`, and the checkmark is what ended that.** A mark
  * saying "nothing to do here" is not the same answer as a figure that merely
@@ -321,8 +333,10 @@ export function superflexCell(
  *
  * **Under is a `count` and not an alert**, which is the whole reason that state
  * exists: an open roster spot is an opportunity — a waiver claim to make — and
- * drawing it in the error tone would send a reader to fix a league that is
- * fine. Over is an alert, because Sleeper refuses adds until somebody is
+ * counting it as a fault would send a reader to a league that is fine. (The
+ * *tile* draws the two figures alike now; what the state still decides is
+ * whether the league is counted off, which is the half that matters. See the
+ * module note.) Over is an alert, because Sleeper refuses adds until somebody is
  * dropped. IR and taxi over their own limits are alerts too — an ineligible
  * player parked on IR is the common real case — and the roster figure is
  * preferred when both are wrong, with the title carrying the rest.

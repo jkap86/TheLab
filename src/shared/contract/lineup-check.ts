@@ -131,6 +131,30 @@ export type LineupCheckLeague = {
    */
   opponent_team_name: string | null;
   /**
+   * The league's median projected score for the week, or **null where there is
+   * no median to answer with**.
+   *
+   * Sleeper's median matchup (`settings.league_average_match`) pairs every team
+   * against the league's median as well as against an opponent, so a league
+   * that runs it is 2-0, 1-1 or 0-2 for the week rather than 1-0 or 0-1. This
+   * is the number the second half of that is read against: the median of every
+   * roster's projected points, solved on the same board and through the same
+   * `compareLineup` the two figures beside it come from, so the plate's bays
+   * are one measurement rather than three.
+   *
+   * Null is the `opponent_points` discipline again and it covers three states,
+   * none of which is a zero: a league that does not run a median matchup at
+   * all, a league too small for a median to mean anything, and a league whose
+   * other rosters are not stored. `116.2` against a median nobody computed is
+   * the claim the null refuses — the plate draws one bay rather than two.
+   *
+   * **It is not derived from `total_rosters`.** The median is over the rosters
+   * that could actually be projected, which is what makes it honest on a
+   * partly-synced league; a denominator taken from the league's declared size
+   * would quietly average a full board against a handful of teams.
+   */
+  median_points: number | null;
+  /**
    * What the best lineup **still reachable** projects — seats held by a player
    * whose game has kicked off stay as they are, the rest are solved. Part-way
    * through a week that is a different number from the best lineup outright,

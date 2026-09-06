@@ -3382,6 +3382,201 @@ intended beside the *flat* housings of `/manager` and `/trades`, which a reader
 walking between the two tools sees one after the other and which no single-page
 render can put side by side.
 
+### The mark, the figure, and the league median
+
+The four tiles said `Set` / `In order` / `QB seated` / `Full` as a 24px teal pip
+in a ring, and the figures opposite them were flat ink with a glow. The mark is
+now an extruded neon check with no housing at all, the figures are struck out of
+the glass in red beside it, and a league that runs Sleeper's **median matchup**
+carries that result on the card's reading plate next to the head-to-head.
+Applied from a design handoff. **Only the median needed the wire**: one field on
+the contract and one extra read behind it; the rest is chrome.
+
+**The mark has no housing, and that is the design's conclusion rather than an
+omission.** Three housed treatments came first — a ring, a glass lens, a milled
+billet — and all three lose the same argument: a mark inside a bezel, on a card
+made of bezels, is one more instrument to read. Struck straight onto the glass
+it is the only thing on the tile that is *not* an instrument, which is what
+"there is nothing to do here" should look like.
+
+**It is four stacked strokes and a ridge, not a glyph with a shadow.** Three
+copies of the check offset downward behind the face make the extrusion
+*geometry*; a filter or a text-shadow on one stroke would paint above or below
+the whole mark rather than behind the face and in front of the shoulder under
+it. The red figure opposite makes the identical argument in the other medium and
+it is the thing most likely to be got wrong on a later edit: with
+`background-clip: text` and a transparent fill the element's background paints
+first, so a `text-shadow` paints **above** it — the dark offset copies cover the
+gradient inside the glyph bodies and the word renders as flat maroon with a 1px
+lit rim. Chained `drop-shadow`s composite behind the clipped gradient.
+`--alert-depth` is that stack, and the reason it is a token rather than a class
+string is the next paragraph.
+
+**Every colour in both objects is a token, and light mode is a different stack
+rather than a dimmer one.** The green was drawn on the dark readout and does not
+survive being carried across: the face's top stops are near-white on
+`#eaf6f4 → #dcefeb` and the outer bloom reads as haze. So the light scheme runs
+the face dark-on-light, turns the extrusion into a *lit lip* — which is what
+`--card-title-depth` and `--billet-name-shadow` already do on that side — makes
+the specular ridge a dark under-edge, and drops the 26px bloom to the light
+scheme's own small accent halo. Every stop of both light ramps is measured
+against the **darker** end of `--readout-bg`: the green's lightest is 4.77:1 and
+the red's 4.81:1, both running past 10:1 at the bottom. That is what ruled out
+the mid-greens taken from the dark ramp's own midpoint — `#1fae5a` is 2.4:1
+there. Derived and measured, not designed, as everywhere else on this console.
+
+**The face gradient is declared once for the page, not once per mark.** An SVG
+stroke cannot take a CSS gradient, and an SVG fragment reference resolves
+against the *document* rather than the `<svg>` it is written in — so
+`LineupMarkDefs` is one hidden `<defs>` mounted beside the card list and every
+mark points at it. Four tiles a card times a hundred cards is the alternative,
+and the other alternative — a `useId` per instance — would put a hook in a leaf
+of a card whose own note says it owns no state, to buy four hundred gradients
+where one will do. The coupling is worth knowing: a page that mounts the card
+without the defs draws marks whose face resolves to nothing, which looks *dim*
+rather than broken. The five gradient stops are `MARK_FACE_STOPS` in the
+component and five tokens in `globals.css` — the offsets are the ramp's shape
+and the colours are what it is made of, which is what lets one list serve both
+themes.
+
+**The tile draws three tones where the state union has four, and the union
+stays four.** `alert` and `count` are both *figures* — a number the reader is
+being handed — so the card strikes them alike, and a row of four reads as "the
+mark, or something it is telling you" rather than as four differently-toned
+readings. What must not follow it is the *counting*: `needsAttention` and
+`attentionByReason` still read `alert` alone, so two open roster spots still
+send nobody to a league in perfectly good order. That is why `MetricState` is a
+union rather than the boolean it once was, and why collapsing it here would be
+the edit that breaks the header window with nothing on screen saying so. The
+handoff flagged this as a designer confirm; the reference draws the two-way
+reading and cites the instruction it came from, so it is what shipped — the
+third treatment is one line in `MetricTile` if it is ever wanted back.
+
+#### The league median
+
+Sleeper's median matchup (`settings.league_average_match`) pairs every team
+against the league's median as well as against an opponent, so a league that
+runs one is 2-0, 1-1 or 0-2 for the week. Nothing here read that setting before;
+`LineupCheckLeague.median_points` is the number, and **it needed no migration** —
+`rosters` and `matchups` have carried every roster of every league since the
+league-graph migration, and nothing here writes.
+
+**A median is a statement about the whole league, so it cannot be read off the
+two rosters a card already has.** `getWeekRosterPool` is a second statement
+rather than a widening of `getManagerWeekLineups`: that query answers one roster
+per league and this answers *every* roster of a league, so folding them together
+would multiply every column of the manager's own row by the league's size on a
+hundred leagues to serve the handful that run a median. Asked separately it is
+one read over the league ids that need it, and an account with none — which is
+most of them — never issues it at all.
+
+**The manager's own figure is substituted into the pool, never re-solved.** It
+is in the pool by construction, and solving it a second time would be a second
+spelling of the number printed beside it on the same plate: `compareLineup` is
+deterministic, so the two would agree today and be two chances to disagree after
+any edit. `week-lineups.test.ts` pins it with a pool row that names a
+*different* lineup for the manager's roster, so a re-solve would move the
+median and the test would say so.
+
+**Null is not zero, three times over.** No median matchup, a league too small
+for a middle to mean anything, and a league whose other rosters are not stored
+all answer null — the `opponent_points` discipline, and the plate draws one bay
+rather than two. The median is over the rosters that could actually be
+projected rather than over `total_rosters`, which is what keeps it honest on a
+partly-synced league; and an even pool takes the mean of the two middle scores,
+which is Sleeper's own rule and the only reading that does not favour one half
+of an even league. The pool is priced through `compareLineup` and **not** the
+kickoff ordering, so a failed schedule read costs the median nothing.
+
+**The plate stacks its bays, and the reason is width.** Two readings side by
+side are 377px of a 620px card against 281px stacked, and the 96px is exactly
+what the league name opposite was losing — the arrangement the handoff rejected
+clipped `DYNASTY WAREHOUSE` to `DYNAS…`. `PlateBay` is that shape and is
+deliberately not `LedgeBay`, which is the same idea milled into the manager
+card's billet: two parts, two inks, two components. `ReadingPlate`'s `tight`
+arm — this card's and nothing else's — carries the whole box rather than one
+override, on `CONSOLE_KEY_PILL`'s rule, and gains `items-stretch` so
+`PlateDivider stretch` runs the bays' full height instead of sitting as a 17px
+dash centred in a 34px stack.
+
+**The head-to-head is what gates the plate, even where a median exists.** This
+plate is the week's *game*; a median standing alone on it — over a lineup the
+card is already captioning "as set now" — would be a reading of a week nobody
+has been scheduled for.
+
+**And the median bay drops below `sm`, which is this pass's own measurement
+rather than the handoff's.** Only the desktop arm is drawn in the reference, and
+at 390 the two-bay plate is 233px of a 322px row: the league name gets **20px —
+one character**. Dropped, a median league's plate is 145px and its name 108px,
+which is exactly what every other league on the page already gets. The
+alternative measured against it — keeping both bays and setting the
+head-to-head as `128.4` alone — buys the name back only to 74px *and* loses the
+opponent's total. It is `hidden`/`sm:contents` rather than a second render, on
+`StandingPlate`'s own rule one card over: `display: none` takes the bay out of
+the accessibility tree as well as off the screen, so a phone reader is not read
+a figure nobody can see.
+
+#### Verified
+
+Rendered through a temporary `/preview` route against the real components,
+tokens and Tailwind build — the method the console-card, shares, rack and
+timeline passes established, since no database is reachable from where this was
+built — then driven over CDP at 1280 and 390 in both schemes and deleted. The
+mechanics are unchanged: `--no-proxy-server`, `localhost` rather than
+`127.0.0.1`, and the `--blink-settings=availablePointerTypes=4,…` flags the
+billet pass recorded, without which every `pointer-fine:` rule on the card is
+inert. The fixtures are four leagues — a dynasty superflex whose four checks are
+all clear, with an opponent *and* a median; a league alert on all four
+(`−6.6` / `2 to move` / `1 non-QB` / `2 over`) with an opponent and no median; a
+redraft league with an open roster spot, no superflex slot and no opponent; and
+a league nothing could be read for.
+
+Every arm landed. The mark measured **46×40 at 1280 and 36×31 at 390**, one
+`linearGradient#lineup-mark-face` on the page against six marks referencing it,
+the face stroke resolving to that url and the glint animating `mark-glint`. Its
+filter read the green bloom in dark and the teal halo in light, and its nearest
+shoulder `#07692f` against `rgba(255,255,255,0.85)` — the turn-over end to end.
+The figures computed `-webkit-text-fill-color: transparent` with
+`filter: drop-shadow(rgb(90,8,8) …)` in dark and
+`drop-shadow(rgba(255,255,255,0.95) …)` in light, at **27.84px** (`--fs-24` at
+`--type-scale` 1.16) and 20.52px on the phone, with **nothing clipped** at
+either width. `2 open` drew red beside a muted flat em dash and four checkmarks
+on the cleared card, and the unanswered league drew four dashes and no plate.
+
+The plate: **276×44 at 1280** carrying `PROJ 128.4–121.7 W │ MED 116.2 W` over
+two stretched bays and one cut, **145×43 at 390** carrying the head-to-head
+alone. Its overhang is **12px at both widths and on both arms** — unchanged by
+the taller plate, which is what the handoff asked be checked against
+`--card-freeze-top`: parked, the summary sits at 87px and the plate's top at
+**75px against a rack bottom of 62**, the same 13px of clearance the token
+reserves. The token does not move.
+
+At every width and in both schemes: `document.documentElement.scrollWidth` equal
+to the viewport, **zero unclipped elements past it**, one `<h1>`, and no console
+output but the dev server's own React-DevTools and HMR lines. Under
+`prefers-reduced-motion: reduce` the glint's `animation-name` computes to
+`none`, which is `.lab-anim` doing its job. 1,581 unit tests pass (six more, all
+of them the median's); `lint`, `typecheck` and `build` are clean.
+
+**Not verified against real data**, which is the gap to close first: every
+number above is a fixture, and three things a render cannot check. Whether
+`league_average_match` is actually set on any league in this corpus — the whole
+median half is unexercised until one is, and the first real page is what says
+so. What the pool read costs on an account that holds several median leagues,
+since it is every roster of each rather than one. And whether the new green
+reads as a *second* green beside `rankColor`'s own on the same card — the
+projection pip and the tiles are the two, and the fix if it does is to pull the
+mark's face onto the ramp's hue rather than to re-tint the pip.
+
+#### Worth doing next, not drawn here
+
+`weekSummary` still counts one game per league, so a median league contributes
+`1-0` to the plate's projected record while its own card reads two results. Both
+are defensible on their own — the summary counts *leagues* and the card counts
+*games* — but they are visibly the same week, and the handoff scopes only the
+card. Counting medians there is a change to every account's projected record and
+wants its own decision.
+
 ### Starters and Opponents
 
 Two more Browse keys in the rack, each opening a side panel of *week* shares:
@@ -5570,9 +5765,187 @@ because it comes straight back with any dialog mounted in that subtree: a modal
 `<dialog>` is in the top layer only while it still generates a box, so hiding
 the panel it lives in leaves a backdrop over an inert page. The two remaining
 keys open the *page's* drawers, mounted nowhere near that box, so they dismiss
-on the press. The collapse breakpoint stays `lg`: one track is ~220px less than
-two and `md` may well hold it now, but what is on the other side of a wrong
-guess is `--rack-clear` computed against a rack that is quietly two rows tall.
+on the press. The collapse breakpoint stayed `lg` at the time — one track is
+~220px less than two and `md` may well have held it, but what is on the other
+side of a wrong guess is `--rack-clear` computed against a rack that is quietly
+two rows tall. **It is `md` since**, and the measurement is in the pass below.
+
+### The rack's phone row, and the four objects in it
+
+The rack carried the wordmark, a menu key naming the tool you were in, the
+page's Browse keys and a theme key — and at 390 on a page publishing controls
+that came to 370px against the 348 the pill gives, so the wordmark was dropped
+below `sm` there and the brand was a bare flask. This buys it back by making the
+two things beside it smaller, and settles what each object in the rack is for.
+Applied from a design handoff. Nothing on the wire moved: no route, no query, no
+contract type, no payload field, and no migration — the diff is four components,
+two chrome constants and six tokens per scheme.
+
+**Four objects, and each says one thing.** The brand link goes to the tool grid,
+a readout names the tool you are in, the Browse keys act on the page *under* the
+rack, and one key opens the tool tray. That split is the whole pass: the menu
+key was doing two jobs, naming the page and offering the list, and a key wide
+enough for `Lineup Checker` is a key the wordmark cannot sit beside.
+
+**The tool name became a readout, and that is why it could stop being a key.**
+It is engraved type on the rack's face — no border, no `--key-bg`, no travel —
+because it reports and does not act, where everything else up there that looks
+pressable is. `app-rack.tsx` draws it, not the menu, which is also what lets it
+render **nothing** on a route no tool owns: the old key fell back to the string
+"Tools", a key naming a page rather than the page you were on. It keeps the
+short-form rule (`Tool.short`, two spans switched by the cascade at `sm`), so
+390 reads `LINEUPS` and 640 up reads `LINEUP CHECKER`.
+
+**The measured row at 390, which is the whole justification for change 1.**
+Brand link 129.1 + readout 64.9 + Browse cap 39 + tool key in its track 40, with
+three 12px gaps — **309 in a 347px content box**, one row 54px tall, against the
+370 that forced the old conditional. The rack is *shorter* than it was at a
+phone's width (54 against 54.8), the tool key having given up its legend.
+
+**The tray drops its own `Tools` entry, and `showMenu` stopped being able to
+match one.** That entry did two jobs — light the key on `/tools`, and be a row —
+and the first went with the key's legend. So `links` is `tools.map(...)` alone
+and `showMenu` tests the path directly, because `/tools` is no longer *in* the
+list to be matched. Tray order is the registry's own.
+
+**The theme control moved into the tray**, under a milled hairline, as the one
+row that is not navigation — which is what the hairline says, and why it is also
+the one row that does **not** dismiss: the others navigate, where a toggle is
+something a reader may want to watch land. The standalone key survives on routes
+that render no tray, which today is `/tools` alone, at exactly its old geometry.
+
+**`ThemeToggle` gained two optional props rather than the tray rendering its own
+button.** The handoff prefers leaving the component alone and putting the word
+`Theme` outside it, and a render is what refused that: every other row in the
+tray is a full-width target, so a row whose right third is the only pressable
+part is an inconsistency in a list of five. `leadingLabel` puts a node before
+both faces — the left of a `justify-between` row, which two faces cannot express
+between them — and `faceClassName` makes the reading a step brighter than the
+label naming it, the console's own grammar for a value beside its caption. Both
+default to today's behaviour, so the `/tools` call site is unchanged, and the
+`sr-only` sentence per face is still the button's accessible name.
+
+**One auto margin in the phone row, and it is on the brand link.** The handoff
+puts `ml-auto` on the readout; that is right in every case it draws and wrong in
+the ones it does not — a route no tool owns has no readout, `/tools` has neither
+readout nor controls, so the leading trailing item is three different elements
+depending on the route. Two auto margins in one row split the slack rather than
+pinning either end, so it cannot simply be spelled on all of them. `mr-auto` on
+the brand (dropped at `md`, where the groove and readout sit hard against it and
+the tool key takes the slack instead) is one unconditional spelling that renders
+identically to the handoff wherever the handoff has an opinion.
+
+### The Browse pair unfolds at `md`, and takes an accent cap
+
+**The fold moved `lg` -> `md` on a measurement the old note asked for.** At 768
+on `/manager`: brand 208 + 33 (gap, groove, gap) + readout 68 + 16 + the pair
+with legends 257 + 16 + tool key 40 = **638 against 718**. Below `md` it stays
+folded, and that is the same kind of number rather than caution — as text the
+pair needs 589 against 342, and a rack that wrapped would break the one thing
+`--rack-clear` encodes.
+
+**They are the rack's one filled object, and that is an argument rather than a
+finish.** Everything else up there is machined, and these two are the only
+things in the rack that act on the page underneath it. So they are a domed
+accent cap with the glyph cut into it, in a channel cut deeper than
+`--track-shadow` — a filled cap in the shallow one reads as sitting on the rack
+rather than in it. The tool key stays machined deliberately: two filled objects
+in one pill would put the emphasis nowhere.
+
+**The light cap inverts rather than dimming**, which is `globals.css`'s rule for
+every bevel and load-bearing here: light mode's accent is a dark teal, so the
+dark scheme's pale-cap-and-dark-ink fails contrast outright, and light is a teal
+cap with white ink. Measured 11.4:1 and 6.8:1. `--cap-ink-emboss` and
+`--cap-glyph-emboss` invert with it — a legend lit from above in dark and from
+below in light — and the glyph's is a `drop-shadow` filter rather than a
+`text-shadow` because it has to follow the stroke's alpha rather than the box.
+Both are tokens for the reason the handoff offers as optional and this file
+states as a rule: an `rgba()` in a class string cannot invert.
+
+**`CONSOLE_KEY_PILL` had to give up its padding, and that is the finding worth
+keeping.** The folded trigger has said `px-2.5` since it was written, appended
+to a constant that says `px-4` — and it has been a 16px gutter the whole time,
+because two base utilities of the same specificity are settled by Tailwind's
+emit order and the scale is emitted **ascending**, so the larger value wins
+whatever the class attribute says. Verified against this project's own build:
+`px-2.5`, then `px-3.5`, then `px-4`, then arbitrary values like
+`px-[0.6875rem]` last. It is the colour coin flip this file has documented for
+three passes, one axis over, and it is worse, because a key silently laid out at
+the wrong width still looks like a key. `CONSOLE_KEY_PILL_SHELL` is the pill
+with no padding, `CONSOLE_KEY_PILL` is that plus `px-4 py-2`, every existing
+caller is byte-identical, and the cap takes the shell. The same rule says the
+lit state is composed **whole** in one `shadow-[…]` rather than layered beside
+the resting one.
+
+**Lit is a halo rather than a rim**, which falls out of the finish: the key is
+already accent, so `border-active/45` — what a machined key lights with — has
+nothing to say against a border that is part of the cap.
+
+**The rack is 3px taller on the two pages that carry the track**, which is the
+one number this pass moved and it is recorded in `--rack-clear`'s own note
+rather than answered there. 62px at `md` with no track and 65.1 with one (a
+37.1px key in 5px of channel, against the brand's 44px bezel), so the identity
+plate clears the rack by 28px on four pages and 24.9 on two. Both are clear, and
+raising the token for two pages would push the other four down for nothing. The
+same 3px takes `--card-freeze-top`'s parked plate from 10.9px of clearance to
+8.9 — still clear, and now written down as the margin the next 3px would spend.
+
+#### Verified
+
+Driven over CDP against a production-shaped `next dev` and a throwaway Postgres
+16 cluster, at 390, 640, 768, 1024 and 1280 in both schemes, on
+`/lineupchecker`, `/manager`, `/trades` and `/tools`. The mechanics are the ones
+this file already records — `--no-proxy-server`, `localhost` rather than
+`127.0.0.1`, a phone viewport from `Emulation.setDeviceMetricsOverride`, and the
+`--blink-settings=availablePointerTypes=4,…` flags, without which headless
+Chrome reports `pointer: none` and every `pointer-fine:` rule is inert. One
+mechanic is new and cost an hour: **`next start` did not load `.env.local` here
+and the production boot refuses to start without `DATABASE_URL`**, where
+`next dev` loads it and treats the variable as non-fatal — which is
+`db/config.ts`'s documented split doing exactly what it says.
+
+Every arm landed. The wordmark draws at **every** width on every route,
+including 390 with controls. The readout reads `LINEUPS` / `MGR` at 390 and
+`LINEUP CHECKER` / `MANAGER` from 640, and renders **nothing** on `/tools`. The
+rack is **one row at every width** on all four routes, 54px at 390 and 65.1 (or
+62 without a track) at `md`, with `documentElement.scrollWidth` equal to the
+viewport and **zero** elements past it everywhere. The pair is folded at 390 and
+640 and unfolded at 768, 1024 and 1280 — change 5 end to end.
+
+The tray: right-aligned and inside the viewport at both widths (right 367 of 390
+and 1191 of 1280), **five rows with no `Tools`**, the current row lit with its
+lamp, a 1px milled hairline, and `THEME · LIGHT` in dark against `THEME · DARK`
+in light with only the shown face's `sr-only` sentence in the tree. Pressing the
+theme row flipped `data-theme` and **left the tray open**; Escape closed it and
+returned focus to the key; an outside `pointerdown` closed it. On `/tools`,
+**zero** `<nav>`, the standalone theme key pinned right at 333–363 of 390, and a
+press flipping the theme.
+
+The cap resolves to the tokens in both schemes — dark `rgb(189,255,245)` face
+over `rgb(4,50,44)` ink with a `0 1px 0` white emboss, light `rgb(78,200,186)`
+over `rgb(244,255,253)` with a `0 -1px 0` dark one, the border and the glyph
+filter inverting with them — in a 5px channel with a 7px gap, and the folded
+key's gutter measures **10px**, which is the shell split working: on the old
+constant it was 16.
+
+Exactly one `<h1>` per page, one `<nav>` (none on `/tools`, the deliberate
+exception), one `aria-current="page"`, and no console output but the dev
+server's own React-DevTools and HMR lines plus the 502s of a sandbox with no
+route to Sleeper. 1,575 unit tests pass; `lint`, `typecheck` and `build` are
+clean.
+
+**Not verified against real data**, which is the gap to close first: the pages
+behind the rack could not load a league here, so what a render cannot check is
+the rack against a real 113-league page — whether the frozen card plate still
+reads at 8.9px of clearance, and whether the accent cap holds its emphasis over
+a hundred cards rather than over an error card.
+
+**One finding outside this pass, reported rather than fixed.**
+`timeline-view.tsx` composes `px-3.5 py-1.5` onto `CONSOLE_KEY_PILL`, which is
+the same emit-order trap: both lose to the constant's `px-4 py-2`, so that key
+has been rendering at the standard gutter. It is one line — the shell, or
+arbitrary values — and it is a different component from the four this handoff
+names.
 
 ### The rank is the reading, and the denominator is the config window's
 

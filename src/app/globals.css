@@ -125,14 +125,22 @@
    * `top-6`, and that 24px was part of every arm; the rack sits at `top-0` now
    * — still a rack unit in its own gutter, just not one hovering clear of the
    * edge — so the clearance is the rack's height plus the gap under it and
-   * nothing above it. The gap under it is unchanged, which is the thing to
-   * check after any edit here: the identity plate clears the rack by the same
-   * 28px at `md` that it always did.
+   * nothing above it. The gap under it is the thing to check after any edit
+   * here, and it is **two numbers rather than one**, because the rack's height
+   * is: a page with no Browse track is 62px at `md` and the identity plate
+   * clears it by the 28px it always did, while a page carrying one is 65.1px
+   * and clears by 24.9. The track is the taller object in that row — a 37.1px
+   * key in 5px of channel, against the brand link's 44px bezel — and that 5px
+   * is the deep channel a *filled* cap needs; see `--track-shadow-deep`. Both
+   * are measured and both are clear, and neither earns a fourth arm on this
+   * token: raising it for the two pages that carry controls would push the
+   * other four down by the same 3px for nothing.
    *
    * The rack is one row at every width, which is a constraint rather than an
-   * observation: the two control tracks fold behind a single key below `lg`
+   * observation: the Browse pair folds behind a single key below `md`
    * precisely so this number stays three values rather than five. See
-   * `rack-controls-keys.tsx`.
+   * `rack-controls-keys.tsx`, which carries the measurement for why the fold
+   * is `md` and not the `lg` two tracks needed.
    */
   --rack-clear: 4.75rem;
 
@@ -170,6 +178,13 @@
    * that number predates the rule above and counts the rack and the breath
    * alone, which parks the plate's top edge at 61px against a 62px rack — the
    * name a pixel behind the thing the freeze exists to keep it clear of.
+   *
+   * The 62px in that sum is the rack with no Browse track in it, and both
+   * pages whose cards freeze *do* carry one, which makes their rack 65.1 — so
+   * the plate parks at 74 against 65.1 and clears by 8.9px rather than 13.
+   * Less breath than the rule asks for and still clear, which is what the
+   * freeze is for. Measured rather than assumed, so the next 3px of rack is
+   * known to be the one that would cost it.
    */
   --card-freeze-top: 5.4375rem;
 
@@ -323,6 +338,50 @@
   --track-shadow: inset 0 3px 8px rgba(0, 0, 0, 0.9);
   --well-shadow: inset 0 3px 8px rgba(0, 0, 0, 0.55), inset 0 -1px 0 rgba(255, 255, 255, 0.06);
 
+  /*
+   * **The accent cap: the one filled object in the app rack.**
+   *
+   * Everything in the rack is machined — a key pressed into a housing, a
+   * readout engraved on one — except the page's own controls, which are the
+   * only thing up there that acts on the page underneath it. So the Browse
+   * keys are a domed cap with the glyph cut into it and everything else stays
+   * unlit. Two filled objects in one pill would put the emphasis nowhere,
+   * which is why the tool-menu key beside them is deliberately not this.
+   *
+   * **The light cap inverts rather than dimming**, which is the rule this file
+   * states for every bevel and is load-bearing here: `--accent` in light mode
+   * is a dark teal (`#0b6d63`), so a pale cap with dark ink — the dark
+   * scheme's arrangement — fails contrast outright. Light is a teal cap with
+   * white ink instead. Measured: 11.4:1 in dark, 6.8:1 in light.
+   *
+   * `--cap-ink-emboss` and `--cap-glyph-emboss` are the same highlight for the
+   * two kinds of thing a cap carries, and they are tokens rather than literals
+   * in a class string for the reason every shadow here is one: the dark cap
+   * lights its ink from above and the light cap from below, and an `rgba()`
+   * typed into a Tailwind arbitrary value cannot invert. The glyph's is a
+   * `drop-shadow` filter and not a `text-shadow`, because it has to follow the
+   * stroke's alpha rather than the box around it.
+   */
+  --cap-accent-bg: radial-gradient(120% 160% at 30% 12%, #bdfff5 0%, #4bf0df 26%, #00dfca 58%,
+    #00ada0 100%);
+  --cap-accent-border: rgba(0, 58, 52, 0.55);
+  --cap-accent-ink: #04322c;
+  --cap-accent-shadow: inset 0 1.5px 0 rgba(255, 255, 255, 0.85),
+    inset 0 -2.5px 3px rgba(0, 52, 47, 0.5), 0 2px 0 #046b61, 0 5px 10px -3px rgba(0, 0, 0, 0.7),
+    0 0 24px -6px var(--accent-glow);
+  --cap-ink-emboss: 0 1px 0 rgba(255, 255, 255, 0.55);
+  --cap-glyph-emboss: drop-shadow(0 1px 0 rgba(255, 255, 255, 0.75))
+    drop-shadow(0 -1px 0 rgba(0, 52, 47, 0.35));
+
+  /*
+   * The channel a *filled* cap travels in, deeper than `--track-shadow` and
+   * with a lit bottom lip. A cap in the shallow one reads as sitting **on**
+   * the rack rather than in it — the same reason the two recesses above are
+   * two rather than one alpha apart.
+   */
+  --track-shadow-deep: inset 0 3px 9px rgba(0, 0, 0, 0.95),
+    inset 0 -1px 0 rgba(255, 255, 255, 0.06);
+
   --readout-bg: linear-gradient(180deg, #04100f, #061816);
   --readout-shadow: inset 0 3px 8px rgba(0, 0, 0, 0.95), inset 0 0 20px rgba(0, 255, 229, 0.11);
   --readout-scanlines: repeating-linear-gradient(to bottom, rgba(0, 255, 229, 0.07) 0 1px, transparent 1px 3px);
@@ -363,6 +422,70 @@
   --readout-muted: rgba(159, 255, 242, 0.62);
   --groove: linear-gradient(to bottom, transparent, rgba(0, 0, 0, 0.9), transparent);
   --groove-highlight: 1px 0 0 rgba(255, 255, 255, 0.07);
+
+  /*
+   * The lineup checker's cleared-check mark, and the figure that stands where
+   * it does when a tile has something to say.
+   *
+   * Two objects, one family: a tile either shows the mark or shows a number,
+   * and both are struck out of the glass rather than printed on it — the same
+   * extruded treatment in the two colours the page reads as "nothing to do"
+   * and "act on this". They are tokens rather than literals in the component
+   * for the reason every other stack here is one: a bevel is a stack, and the
+   * light counterpart is a *different* stack rather than the same one at a
+   * different alpha.
+   *
+   * **The face is five tokens rather than one gradient**, because the mark's
+   * face is an SVG stroke and an SVG stroke cannot take a CSS gradient. It is
+   * a `<linearGradient>` whose stops read these, so the offsets live in one
+   * list in the component (`MARK_FACE_STOPS`) and the colours live here —
+   * which is what lets both themes read one list.
+   *
+   * The green is a new colour on this page: the console spends teal and
+   * nothing else. That is deliberate — it is the one "nothing to do here"
+   * signal on the card and it must not read as another lit readout — and it
+   * does mean the rank ramp's own green (`rankColor`, oklch hue 150) and this
+   * one appear on the same card, on the projection pip and the tiles. If that
+   * ever reads as two greens, the fix is to pull the mark's face onto the
+   * ramp's hue rather than to re-tint the pip.
+   */
+  --mark-face-0: #f4ffdd;
+  --mark-face-1: #c2ff62;
+  --mark-face-2: #4bff7c;
+  --mark-face-3: #12dd63;
+  --mark-face-4: #0a9c49;
+  /* The extrusion, nearest first: three copies of the stroke offset downward
+     behind the face, receding into shade. */
+  --mark-shoulder-1: #07692f;
+  --mark-shoulder-2: #064d27;
+  --mark-shoulder-3: #05341c;
+  --mark-specular: rgba(255, 255, 255, 0.8);
+  --mark-glow: drop-shadow(0 0 10px rgba(74, 255, 124, 0.75))
+    drop-shadow(0 0 26px rgba(74, 255, 124, 0.4)) drop-shadow(0 4px 6px rgba(0, 0, 0, 0.6));
+
+  /*
+   * The figure opposite the mark, struck in red.
+   *
+   * **The extrusion must be `drop-shadow()` and never `text-shadow`**, and the
+   * reason is the clip: the figure is a gradient clipped to its glyphs with a
+   * transparent fill, so the element's background paints first and a
+   * `text-shadow` paints *above* it — the dark offset copies cover the
+   * gradient inside the glyph bodies and the word renders as flat maroon with
+   * a 1px lit rim. Chained `drop-shadow`s composite behind the clipped
+   * gradient, which is the same reason the mark's shoulders are separate SVG
+   * paths rather than a shadow on one.
+   *
+   * **No stop goes darker than `#ef4444`.** A first pass ran to `#9c0d0d`,
+   * which is 2.4:1 on this glass — the bottom 40% of every glyph under even
+   * the 3:1 large-text floor. The ramp below clears 4.5:1 throughout, which is
+   * the same reason `--error` is `#fca5a5` and not a red anybody would pick
+   * for ink on white.
+   */
+  --alert-face: linear-gradient(180deg, #fff0f0 0%, #fecaca 22%, #fca5a5 52%, #f87171 78%,
+    #ef4444 100%);
+  --alert-depth: drop-shadow(0 1px 0 #5a0808) drop-shadow(0 1px 0 #460606)
+    drop-shadow(0 1px 0 #320404) drop-shadow(0 0 10px rgba(255, 90, 90, 0.55))
+    drop-shadow(0 0 24px rgba(255, 90, 90, 0.3)) drop-shadow(0 4px 6px rgba(0, 0, 0, 0.6));
 
   --card-bg: linear-gradient(158deg, rgba(255, 255, 255, 0.085), rgba(255, 255, 255, 0.018) 46%,
     rgba(255, 255, 255, 0.05));
@@ -775,6 +898,25 @@
   --track-shadow: inset 0 3px 8px rgba(15, 23, 42, 0.18);
   --well-shadow: inset 0 3px 8px rgba(15, 23, 42, 0.12), inset 0 -1px 0 rgba(255, 255, 255, 0.9);
 
+  /* The accent cap, inverted rather than dimmed — see the note on the dark
+     values. A teal cap with white ink, because light mode's accent is a dark
+     teal and dark ink on it fails contrast. The two embosses swap sides with
+     the cap: the pale dark-mode cap lights its ink from above, this one from
+     below. */
+  --cap-accent-bg: radial-gradient(120% 160% at 30% 12%, #4ec8ba 0%, #1a9d8e 30%, #0b7f73 62%,
+    #075f56 100%);
+  --cap-accent-border: rgba(4, 50, 45, 0.5);
+  --cap-accent-ink: #f4fffd;
+  --cap-accent-shadow: inset 0 1.5px 0 rgba(255, 255, 255, 0.5),
+    inset 0 -2.5px 3px rgba(0, 40, 36, 0.45), 0 2px 0 #05463f,
+    0 5px 10px -3px rgba(15, 23, 42, 0.45), 0 0 22px -8px var(--accent-glow);
+  --cap-ink-emboss: 0 -1px 0 rgba(0, 40, 36, 0.45);
+  --cap-glyph-emboss: drop-shadow(0 1px 0 rgba(255, 255, 255, 0.35))
+    drop-shadow(0 -1px 0 rgba(0, 40, 36, 0.4));
+
+  --track-shadow-deep: inset 0 3px 9px rgba(15, 23, 42, 0.22),
+    inset 0 -1px 0 rgba(255, 255, 255, 0.9);
+
   /* The account readout: a lit window, not a card. */
   --readout-bg: linear-gradient(180deg, #eaf6f4, #dcefeb);
   --readout-shadow: inset 0 3px 8px rgba(15, 23, 42, 0.2), inset 0 0 20px rgba(13, 148, 136, 0.12);
@@ -791,6 +933,53 @@
   /* The milled groove between a readout and its key. */
   --groove: linear-gradient(to bottom, transparent, rgba(15, 23, 42, 0.28), transparent);
   --groove-highlight: 1px 0 0 rgba(255, 255, 255, 0.9);
+
+  /*
+   * The mark and the figure, turned over rather than dimmed.
+   *
+   * Both were designed on the dark readout (`#04100f → #061816`) and neither
+   * survives being carried across: on the light glass (`#eaf6f4 → #dcefeb`)
+   * the mark's top stops are near-white and its outer glow reads as haze,
+   * while the red ramp's own top stops are a pale pink on pale mint. So the
+   * stacks invert on this file's own rule.
+   *
+   * - **The faces run dark on light**, and every stop is measured against the
+   *   *darker* end of `--readout-bg` (`#dcefeb`, the worse of the two): the
+   *   green's lightest stop is 4.77:1 and the red's 4.81:1, both running to
+   *   10:1 at the bottom. Anything lighter fails the floor, which is what
+   *   ruled out the mid-greens (`#1fae5a` is 2.4:1 here) the first pass took
+   *   from the dark ramp's midpoint.
+   * - **The extrusion becomes a lit lip rather than a shadow.** Dark ink on a
+   *   pale ground is embossed by light catching the edge beneath it, not by a
+   *   dark wall — which is exactly what `--card-title-depth` and
+   *   `--billet-name-shadow` already do on this side of the theme.
+   * - **The specular ridge becomes a dark under-edge**, for the same reason
+   *   reversed: a white ridge along dark ink on a light ground has nothing to
+   *   be brighter than.
+   * - **The outer glow drops to a small accent halo.** A 26px green bloom on
+   *   white is haze; the light scheme's own `--accent-glow` is what a lit
+   *   thing is allowed here.
+   *
+   * Derived, not designed — as everywhere else on this console — and checked
+   * for contrast rather than reviewed.
+   */
+  --mark-face-0: #0f7640;
+  --mark-face-1: #0c6837;
+  --mark-face-2: #0a5c30;
+  --mark-face-3: #084c27;
+  --mark-face-4: #063a1e;
+  --mark-shoulder-1: rgba(255, 255, 255, 0.85);
+  --mark-shoulder-2: rgba(255, 255, 255, 0.6);
+  --mark-shoulder-3: rgba(255, 255, 255, 0.35);
+  --mark-specular: rgba(4, 40, 20, 0.45);
+  --mark-glow: drop-shadow(0 0 10px rgba(13, 148, 136, 0.3))
+    drop-shadow(0 2px 4px rgba(15, 23, 42, 0.28));
+
+  --alert-face: linear-gradient(180deg, #c22a2a 0%, #b01f1f 22%, #9a1414 52%, #851010 78%,
+    #6d0b0b 100%);
+  --alert-depth: drop-shadow(0 1px 0 rgba(255, 255, 255, 0.95))
+    drop-shadow(0 0 10px rgba(185, 28, 28, 0.22))
+    drop-shadow(0 2px 4px rgba(15, 23, 42, 0.22));
 
   /* The tool cards. */
   --card-bg: linear-gradient(158deg, rgba(15, 23, 42, 0.05), rgba(15, 23, 42, 0.012) 46%, rgba(15, 23, 42, 0.035));
@@ -1007,6 +1196,34 @@ body {
 @keyframes drawer-in-right {
   from {
     transform: translateX(100%);
+  }
+}
+
+/*
+ * One glint across the cleared-check mark, once, on mount.
+ *
+ * A dashed white copy of the mark's specular path swept along it by
+ * `stroke-dashoffset`, so the flash follows the stroke rather than crossing
+ * the box. `both` fill is what makes it fire exactly once and leave nothing
+ * behind: invisible before the delay, invisible after the run, and no state on
+ * the element either side of it. It carries `.lab-anim`, which is the app's
+ * one reduced-motion hook — a second media query here would be a second
+ * spelling of a rule that already exists.
+ */
+@keyframes mark-glint {
+  0% {
+    stroke-dashoffset: 14;
+    opacity: 0;
+  }
+  12% {
+    opacity: 1;
+  }
+  85% {
+    opacity: 1;
+  }
+  100% {
+    stroke-dashoffset: -46;
+    opacity: 0;
   }
 }
 
