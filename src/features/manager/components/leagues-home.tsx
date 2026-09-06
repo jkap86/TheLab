@@ -14,14 +14,17 @@ import {
   matchesFilters,
   matchesSubjects,
   NO_SUBJECTS,
+  parseLeaguematePlayerId,
   PLATE_KEY,
   PLATE_KEY_CHROME,
   removeSubject,
+  setSubjectMode,
   SubjectTokens,
   toggleSubject,
   type LeagueSubjects,
   type Subject,
   type RackDrawerKey,
+  type SubjectMode,
   type SubjectRolls,
   usePublishRackControls,
   useKtcBoard,
@@ -31,9 +34,11 @@ import {
 
 import { useManagerLineups } from "../hooks/use-manager-lineups";
 import {
+  useManagerLeaguemateRosters,
   useManagerLeaguemates,
   useManagerPlayers,
 } from "../hooks/use-manager-shares";
+import { modeRolls, leaguematePlayerRolls } from "../helpers/leaguemate-rosters";
 import { LeagueCard } from "./league-card";
 import { LeaguemateSharesDrawer } from "./leaguemate-shares-drawer";
 import { PlayerSharesDrawer } from "./player-shares-drawer";
@@ -47,6 +52,13 @@ import { SeasonSummary } from "./season-summary";
  * depends on this array, so one rebuilt each render would publish each render,
  * set an ancestor's state and re-render — a loop rather than a stale value.
  */
+/** How a moded player pick reads in the token tray — see `subjectName`. */
+const MODE_WORDS: Record<SubjectMode, string> = {
+  owned: "Owned",
+  taken: "Taken",
+  available: "Available",
+};
+
 const BROWSE_KEYS: readonly RackDrawerKey[] = [
   { kind: "player", label: "Players" },
   { kind: "leaguemate", label: "Leaguemates" },
@@ -166,6 +178,14 @@ export function LeaguesHome({
     state.season,
     opened.has("leaguemate"),
   );
+  // **Latched on either drawer**, which is the one of the three that is: the
+  // leaguemate panel's rail wants it on open, and the players panel's three
+  // mode keys want it one press later. See the hook.
+  const leaguemateRosters = useManagerLeaguemateRosters(
+    username,
+    state.season,
+    opened.has("leaguemate") || opened.has("player"),
+  );
 
   const narrowing =
     activeFilterCount(filters) > 0 || subjects.subjects.length > 0;
@@ -187,13 +207,50 @@ export function LeaguesHome({
   // resolver `matchesSubjects` takes. The two kinds it does *not* answer for —
   // the lineup checker's week panels — come back null, which the predicate
   // reads as "nothing here can say" and ignores rather than failing either way.
+  // **The two union maps, built once per payload and never per press.** Neither
+  // mints a string — an entry is a reference to an id already parsed out of the
+  // response — which is what makes them affordable over a payload this size.
+  const unions = useMemo(
+    () =>
+      leaguemateRosters.data
+        ? modeRolls(leaguemateRosters.data.rosters, user?.user_id ?? null)
+        : null,
+    [leaguemateRosters.data, user?.user_id],
+  );
+
+  // **The combo map is built only while a combo is held**, and that gate is a
+  // boolean rather than the selection itself: it is the one map here that mints
+  // a string per rostered player per league, and a reader who never expands a
+  // leaguemate row should not pay for it. Gating on *whether* any is picked
+  // rather than on *which* keeps the map's contents a fact about the payload
+  // rather than about the query.
+  const holdsCombo = subjects.subjects.some(
+    (s) => s.kind === "leaguemate-player",
+  );
+  const combos = useMemo(
+    () =>
+      holdsCombo && leaguemateRosters.data
+        ? leaguematePlayerRolls(leaguemateRosters.data.rosters)
+        : null,
+    [holdsCombo, leaguemateRosters.data],
+  );
+
   const rolls = useCallback<SubjectRolls>(
-    (kind) => {
-      if (kind === "player") return players.data?.rosters ?? null;
+    (kind, mode) => {
+      if (kind === "player") {
+        // `owned` is the manager's own rosters — the map this page has always
+        // narrowed by, and deliberately not re-derived from the wider payload:
+        // two spellings of one narrowing, and the wrong one would be the one
+        // nobody was looking at.
+        if (mode === "taken") return unions?.taken ?? null;
+        if (mode === "available") return unions?.everyone ?? null;
+        return players.data?.rosters ?? null;
+      }
       if (kind === "leaguemate") return leaguemates.data?.members ?? null;
+      if (kind === "leaguemate-player") return combos;
       return null;
     },
-    [players.data, leaguemates.data],
+    [players.data, leaguemates.data, unions, combos],
   );
   const visible = useMemo(
     () =>
@@ -206,10 +263,33 @@ export function LeaguesHome({
   // A token names what the reader picked. The maps are the only place those
   // names live, so an id that outlives its payload falls back to itself rather
   // than to a blank chip.
-  const subjectName = (s: Subject) =>
-    s.kind === "player"
-      ? (players.data?.players[s.id]?.name ?? s.id)
-      : (leaguemates.data?.users[s.id]?.display_name ?? s.id);
+  // A token names what the reader picked, and for the two new kinds that is a
+  // pair rather than a name: `Slim · Chase` for a combo, `Chase · Taken` for a
+  // moded pick. The maps are the only place those names live, so an id that
+  // outlives its payload falls back to itself rather than to a blank chip.
+  const playerName = (id: string) =>
+    players.data?.players[id]?.name ??
+    leaguemateRosters.data?.players[id]?.name ??
+    id;
+  const mateName = (id: string) =>
+    leaguemates.data?.users[id]?.display_name ?? id;
+
+  const subjectName = (s: Subject) => {
+    if (s.kind === "leaguemate-player") {
+      const pair = parseLeaguematePlayerId(s.id);
+      return pair
+        ? `${mateName(pair.userId)} · ${playerName(pair.playerId)}`
+        : s.id;
+    }
+    if (s.kind === "leaguemate") return mateName(s.id);
+    // The resting mode is what the token said before there were three, so it
+    // still says it: a suffix on every player chip would be a word spent on the
+    // reading a reader did not choose.
+    const name = playerName(s.id);
+    return s.mode && s.mode !== "owned"
+      ? `${name} · ${MODE_WORDS[s.mode]}`
+      : name;
+  };
 
   const columns = useLineupColumns();
 
@@ -529,8 +609,13 @@ export function LeaguesHome({
           leagueTotal={leagues.length}
           filterSummary={leagueNarrowing}
           read={players}
+          rosters={leaguemateRosters}
+          selfId={user?.user_id ?? null}
           subjects={subjects}
           onToggle={(s) => setSubjects((prev) => toggleSubject(prev, s))}
+          onMode={(playerId, mode) =>
+            setSubjects((prev) => setSubjectMode(prev, "player", playerId, mode))
+          }
         />
       )}
       {opened.has("leaguemate") && (
@@ -541,6 +626,7 @@ export function LeaguesHome({
           leagueTotal={leagues.length}
           filterSummary={leagueNarrowing}
           read={leaguemates}
+          rosters={leaguemateRosters}
           selfId={user?.user_id ?? null}
           subjects={subjects}
           onToggle={(s) => setSubjects((prev) => toggleSubject(prev, s))}

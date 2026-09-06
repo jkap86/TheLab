@@ -555,6 +555,59 @@ export async function getManagerRosters(
   return out;
 }
 
+/**
+ * One stored roster as {@link getLeagueRosters} reads it, before the league key
+ * is stripped off.
+ */
+export type LeagueRosterRosterRow = {
+  league_id: string;
+  roster_id: number;
+  owner_id: string | null;
+  players: string[] | null;
+};
+
+/**
+ * **Every** roster in the manager's leagues this season, keyed by league — the
+ * leaguemate rail's input, and the one read that is not about the manager.
+ *
+ * The sibling of {@link getManagerRosters} with the `owner_id` predicate taken
+ * off, which is exactly the difference: that one answers "what do I hold", this
+ * one "what does this league hold, and who holds it". So the league set has to
+ * come from somewhere else, and it comes from the same membership join
+ * {@link getManagerLeaguemates} uses — {@link MANAGER_LEAGUE_SQL} over a
+ * `league_users` row for the manager, which is the app's one spelling of
+ * *which leagues are a manager's*.
+ *
+ * **The owner rides through as it is stored, `null` included.** An orphan team
+ * is a real roster holding real players, and dropping it would make everyone on
+ * it read as *unrostered* — see `ManagerLeaguemateRostersPayload.rosters`,
+ * which is the shape this feeds and where that argument is written down.
+ *
+ * Rows are keyed by `(league_id, roster_id)` in the table, so nothing here has
+ * to concatenate the way {@link getManagerRosters} does: two rosters for one
+ * owner are two entries and stay two.
+ */
+export async function getLeagueRosters(
+  userId: string,
+  season: string,
+): Promise<Record<string, LeagueRosterRosterRow[]>> {
+  const { rows } = await pool.query<LeagueRosterRosterRow>(
+    `SELECT r.league_id, r.roster_id, r.owner_id, r.players
+       FROM rosters r
+       JOIN leagues l ON l.league_id = r.league_id
+       JOIN league_users me
+         ON me.league_id = l.league_id AND me.user_id = $1
+      WHERE l.season = $2
+        AND ${MANAGER_LEAGUE_SQL}
+      ORDER BY r.league_id, r.roster_id`,
+    [userId, season],
+  );
+
+  const out: Record<string, LeagueRosterRosterRow[]> = {};
+  for (const row of rows) (out[row.league_id] ??= []).push(row);
+  return out;
+}
+
 /** One `league_users` row as {@link getManagerLeaguemates} reads it. */
 export type LeaguemateRow = {
   user_id: string;

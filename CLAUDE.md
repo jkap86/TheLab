@@ -1495,6 +1495,12 @@ leagues**, and **who do they keep running into**. `GET /api/user/[username]/play
 and `.../leaguemates` back them. TheLabX's feature ported, minus its metric
 catalogue and its virtualizer.
 
+**A third read has since joined them** — `.../leaguemate-rosters`, every roster
+in those leagues rather than the manager's own — and with it the two questions
+neither of the first pair could answer: what a *leaguemate* rosters, and whether
+anybody at all holds a player. See The expanded leaguemate, and a player's three
+readings, below.
+
 **It needed no migration**, and that is the schema's doing rather than luck:
 `rosters.players` and the `rosters_owner_league_idx` on `(owner_id, league_id)`
 have carried the first question since the league-graph migration, and
@@ -1991,6 +1997,215 @@ filters at all, is unchanged: no key, a two-child search row 36px tall, nothing
 past its panel. Exactly one `<h1>`, `document.documentElement.scrollWidth`
 equal to the viewport at both widths, and **no console output of any kind** —
 no React warning about the controlled select or the layout effect.
+
+### The expanded leaguemate, and a player's three readings
+
+Two additions that answer the same question from opposite ends: **who else has
+him**. A leaguemate row opens onto everything that person rosters across the
+leagues shared with them, and a selected player row grows a three-state track —
+**Owned · Taken · Available** — saying which of those leagues the pick narrows
+to. Applied from a design handoff, its `2b` / `3a` / `4a`; the rejected `2a`
+(one row per player, in a sub-tray) is not built.
+
+**It needed a route and no migration.** `rosters.players` and `rosters.owner_id`
+have carried both answers since the league-graph migration, and the
+`rosters_owner_league_idx` the shares reads already lean on is the same index —
+what was missing was a read of them that is not scoped to the manager.
+`GET /api/user/[username]/leaguemate-rosters` is that read, and it is the third
+shares route on the two beside it's exact terms: membership rather than a count,
+Postgres only, folded on the client because the page narrows its leagues five
+ways and a share has to be counted over the leagues left.
+
+**The payload carries a list of rosters, not a map keyed by user**, which is the
+one place it diverges from the shape the handoff sketched and is forced by the
+data twice over. `rosters.owner_id` is **nullable** — an orphan team is a real
+row holding real players — so a map keyed by user would either drop those
+players, which makes everyone on an orphan roster read as *available*, or invent
+a key for them; and Sleeper can answer with two rosters for one owner in one
+league, which a map silently collapses to one. The two folds then read it
+differently and both are exact: **taken** is a roster whose `user_id` is
+somebody else's, where an orphan team is nobody, and **available** is *no*
+roster naming him at all, orphan teams included. A player held only by an orphan
+team therefore falls out of all three, which is why they are three figures
+rather than a breakdown of one.
+
+**It ships its own player summaries rather than borrowing the players
+payload's.** That map names the ids on the *manager's* rosters, and most of what
+a leaguemate holds is not on one — a chip drawn from it would fall back to a raw
+id for the majority of a roster. `PlayerSummary` and not `PlayerShareSummary`: a
+chip is a name, a position and a team, and an age and a price for two thousand
+players is wire weight nothing here renders.
+
+**It is latched on *either* drawer**, which is the one of the three reads that
+is, and it is a judgement. The leaguemate panel wants it the moment it opens;
+the players panel wants it one press later, when a row is picked and three keys
+want their counts. Gating it on that press would leave the counts on em dashes
+at exactly the moment a reader first looks at them — and the fallback while it
+is in flight, the resting `owned` mode, is the one reading that needs nothing
+from this payload at all. It is the heaviest of the three by an order of
+magnitude, which is why it is behind a latch rather than fetched with the page.
+
+#### The mode lives on the subject, and the slot is what a row is
+
+`SubjectKind` gained **`leaguemate-player`** and `Subject` gained an optional
+**`mode`**, and both broke the compiles the seam exists to break —
+`SHARES_COLUMNS_BY_KIND` needed an entry and the two `SubjectRolls` resolvers
+needed cases. `leaguemate-player` is the first kind that is **not a panel**: it
+is picked from a chip inside another panel's row, so nothing lists it and the
+rack never publishes a key for one. Its columns entry is what the `Record`
+demands rather than something a reader sees.
+
+**The mode had to be on the subject rather than beside it**, and the handoff is
+right about why: two picks cannot sit on two modes otherwise, and the token tray
+cannot name what it narrowed. What follows from that is the one rule in this
+pass that is silent when wrong, and the render caught it.
+
+**`subjectKey` is a narrowing's identity and `subjectSlot` is a row's**, and
+they are two functions because the questions are two. A player on `taken` is a
+*different narrowing* from the same player on `owned` — different map, different
+words on the token — so the key carries the mode. But a row holds at most one
+narrowing, so *picking* and *clearing* are slot questions: `toggleSubject` and
+`removeSubject` match on the slot, or a row switched to `Taken` could not be
+cleared by pressing it, and the press would add a second pick for the same row.
+The drawers' `chosen` sets are slot-keyed for the same reason, and getting that
+wrong is what a render found: keyed by full key, a row dropped out of its own
+selected state the instant its mode moved off `owned` — **which took the mode
+track down with it, so the control deleted itself on first use.** The `selected`
+prop now says which question it is.
+
+`setSubjectMode` moves a pick **in place**, because the tray's order is the
+order things were picked in and a mode press is not a re-pick: remove-then-add
+would send the row to the end every time a reader compared two readings of it.
+There is no local `modes` map in the drawer — the handoff's state sketch offers
+one, and it would be a second spelling of a fact the grid reads from the
+subject. The cost is that deselecting and reselecting returns to `owned`, which
+is right: one mode is always on, and a fresh pick is at rest.
+
+**`available` is the one map read inverted, and a missing league is still a
+no.** The roll it is handed is every roster in the league, so the league that
+does *not* name him is the match. What must not follow is reading a league with
+**no** stored rosters as one where he is free: that map has no row for it, and
+an absence is not evidence. So absent means no in all three modes — one rule
+rather than a special case, and the reason the three counts sum to the leagues
+that answered rather than to the leagues on screen.
+
+#### The rail, and what a collapsed row must not cost
+
+The tray is a **channel** (`--track-shadow` over `bg-black/28`), not a well: a
+well holds a panel of controls and a track holds keys, and this is a board of
+keys. Two per line above `@md` and one below, a position bezel at 1.5rem — the
+players panel's badge one size down — the team and a meter sharing a line, and a
+`CONSOLE_WINDOW` pip carrying the share. The pip and the meter are one figure
+twice, which is why the meter carries no number of its own.
+
+**The denominator is leagues that person fields a roster in**, not leagues
+shared with them: a league they are a member of without holding a team
+contributes nothing to their board and must not be counted as one where they
+hold nobody. It can therefore read lower than the `Share` cell on the row above,
+which counts membership — membership being stored where rosters may not be.
+
+**A collapsed row renders nothing, and that is a bound rather than a tidiness.**
+`CollapseTray` keeps its children mounted while shut, which is right for the one
+tray in the players deck and wrong for one per row: on a 719-leaguemate account
+it is 719 folds of every stored roster and a `ResizeObserver` apiece, to draw
+nothing. The render is what showed it — a scope press changed chips inside rows
+nobody had opened. So `ShareRow` renders the tray's contents only while open;
+the cost is that a *closing* tray is empty as it collapses, which is the
+direction nobody watches, and the opening one still measures because the
+children are in the commit that flips `open`.
+
+**`CollapseTray` moved to `features/shared/ui`** on the line `CONSOLE_KEY` and
+`ManagerPlate` moved on — a second reader. It is `player-filters.tsx`'s
+`FilterTray` with its layout taken out as two class props, and every argument in
+its doc is that file's: the measured height rather than a `0fr`→`1fr` grid row,
+the identical transition list in both states, and `inert` while shut.
+
+**Two sibling `<button>`s in the `<li>`, never a `<details>`.** The row's own
+press and the disclosure are separate controls doing separate things, and a
+`<summary>` maps to a leaf `button` — a control nested in one is unreliably
+reachable. This is the constraint `shares-drawer.tsx` has recorded since the
+first chevron came off; it is the reason the row can be expanded and unpicked,
+or picked and shut. The key is a 44px target below `@md` and a 24×28 key above
+it, and the column-label row grew a matching spacer so a label stays over the
+readout it names.
+
+**The search reaches players**, which is what makes the placeholder honest, and
+it is a `matchRow` override rather than a field on the row: a search text folded
+onto every leaguemate would be thirty-six thousand names concatenated for every
+reader and spent only by one who types. `rosterIndex` is the one pass both it
+and the collapsed row's `subline` read.
+
+#### Three things changed against the handoff, each because a render showed it
+
+- **The mode strip loses its badge inset below `@md`.** The three keys are 286px
+  of a 354px panel and 49px of indentation left them 284 — the track ran past
+  the panel's own box with nothing on screen saying so. The alignment is worth
+  less there anyway: the row's cells have already wrapped under the name, so
+  there is no column for the strip to start under. Shortening the words was the
+  alternative and is worse — "Available" is the whole of what that key says.
+- **The mode's sentence wraps rather than truncating.** The handoff puts it to
+  the right of the track, truncating; measured, it has 137px there and the
+  sentence is 424 — it would read "NARROWING TO THE LEAG…", which is the one
+  part of the strip that explains what the keys mean saying nothing. Wrapped it
+  is a full line at every width. It still sits to the right wherever it fits.
+- **The rail's foot wraps too**, and for the sharper version of the same reason:
+  `truncate` cut it at "…SHARED LEAGUES OF", promising the denominator and then
+  not giving it. Two lines on a phone is the cheaper loss.
+
+#### Verified
+
+Rendered through a temporary `/preview` route against the real components,
+tokens and Tailwind build — the method the console-card, shares, rack and
+timeline passes established, since no database is reachable from where this was
+built — then driven over CDP at 1280 and 390 in both schemes and deleted. The
+mechanics that method needs are unchanged: `--no-proxy-server`, `localhost`
+rather than `127.0.0.1`, and a phone viewport from
+`Emulation.setDeviceMetricsOverride`. The fixtures are four leagues — one with
+an orphan team, one whose rosters were never stored, and two ordinary — over
+three leaguemates, one of whom fields no roster in a league they are a member of.
+
+Every arm landed. Slim's rail read `Jayden Daniels 3 · De'Von Achane 2 · Malik
+Nabers 2 · Bijan Robinson 1 · Marvin Harrison Jr. 1` over a foot of `5 players ·
+pip is shared leagues of 3`, with the orphan team's player on nobody's board;
+`2+ shared` left the first three and `Also mine` left none, both with the
+denominator unmoved. Pressing a chip lit the **row** without pressing it —
+`border-active/50` with the resting `key-shadow`, `aria-pressed=false` on the
+row's own button — put `Jayden Daniels held` under the name, `· 1 combo held` on
+the population readout, and narrowed the grid to the three leagues Slim holds
+him in. Searching `achane` returned Slim, which is the player half of the search
+end to end.
+
+On the players panel, `Brock Bowers` read `Owned 2 · Taken 0 · Available 1` and
+the three narrowings were `Dynasty Warriors, Superflex Society` / `none` /
+`The Gauntlet` — the counts and the grid agreeing, and `available` correctly
+excluding the league whose rosters were never stored. Two picks then sat on two
+modes (`Available` and `Taken`) with tokens reading `Brock Bowers · Available`
+and `Ja'Marr Chase · Taken`, and pressing a row cleared its moded pick, which is
+the slot rule end to end. With the rosters payload withheld the rail said
+`Reading rosters…` and all six mode keys read em dashes rather than zeroes.
+
+At 1280 and 390 in both schemes: the rail one column below `@md` and two above,
+the disclosure key **44×44** at phone width, `documentElement.scrollWidth` equal
+to the viewport, exactly one `<h1>`, `:modal` true, and **no console output of
+any kind** beyond the dev server's own React-DevTools and HMR lines. 1,609 unit
+tests pass (24 more than before — the modes, the composite id, the two
+identities and the folds); `lint`, `typecheck` and `build` are clean.
+
+**One pre-existing defect was found and deliberately not fixed.** At 390 the
+players panel's Sort track runs its last key (`Name`) 4px past the panel's own
+box, where `overflow-hidden` clips it. It is there **at rest, with nothing
+selected**, on four sort keys the reader's stored columns produce; this pass
+touches `SortTrack` only in comments. Fixing it means letting that track wrap or
+shortening its keys, which is a change to a control all four shares panels
+share — worth a designer's call rather than a silent edit made here.
+
+**Not verified against real data**, which is the gap to close first: every number
+above is a fixture. Three things a render cannot check — what the payload
+actually weighs on a 113-league account (the estimate is ~450KB uncompressed
+against the leagues stream's 519KB, but nothing has measured it), how the rail
+reads for a leaguemate whose board runs to fifty players against the twelve-chip
+preview cap, and whether `owner_id` is null often enough in this corpus for the
+orphan-team arm to be a case rather than a guard.
 
 ## KeepTradeCut values
 
@@ -3258,7 +3473,10 @@ are never affected: each is computed inside one lineup.
   `SHARES_COLUMNS_BY_KIND` is a `Record` over, and `matchesSubjects` takes its
   maps through a `SubjectRolls` resolver rather than one argument per kind — so
   a fifth panel does not compile until it has columns and does not narrow until
-  it has a population.
+  it has a population. **A fifth kind has since arrived and is the first that is
+  not a panel** (`leaguemate-player`), which is what proved the seam is about
+  kinds rather than drawers; the resolver took a `mode` beside the kind at the
+  same time. See The expanded leaguemate, and a player's three readings.
 - **The drawer's `seasonSummary` fold came off it.** A record arrives on the row
   already spelled (`rowRecord`), against the same aggregate the identity plate
   reads. It was a manager-only cost every panel paid and a league list every row
