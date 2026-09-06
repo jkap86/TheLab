@@ -390,7 +390,7 @@ function playersPresentSql(
  * every one of its past trades from one manager's filter to another's. The
  * question a bay asks is about the past, so it is answered from the column that
  * records the past; see {@link tradeParticipantsRebuildSql} for how that column
- * is kept immutable, and the `1788000000007` migration for what Sleeper does
+ * is kept immutable, and the `1788000000008` migration for what Sleeper does
  * and does not make knowable.
  *
  * The planner note the old spelling carried survives the switch intact, because
@@ -623,7 +623,7 @@ export function tradeParticipantsSql(where = ""): string {
  * moment the app first observed the trade. For a league that syncs regularly
  * that is the trade-time owner; for one first synced years after the fact it is
  * not, and the value is there so a reader can tell which they are looking at.
- * See the `1788000000007` migration.
+ * See the `1788000000008` migration.
  *
  * The derivation is reused verbatim as a subquery rather than restated, so the
  * rebuild and the backfill in `1788000000003` stay one definition of "who was in
