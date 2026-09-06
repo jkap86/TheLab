@@ -8,13 +8,19 @@ import type {
   KtcLineupChoice,
   LineupColumn,
   LineupMetricId,
+  LineupPosition,
 } from "@/shared/contract";
 // Relative with an explicit extension, the way `shares-columns.ts` beside it
 // reaches the same store: the rules below are read by Node's own test runner,
 // which resolves neither the `@/*` aliases nor an extensionless specifier. The
 // key spelling is `shared/ktc/columns` because the *server* writes the same
 // keys — see the note above — and it is pure for exactly this reason.
-import { isKtcMetric, lineupColumnKey } from "../../shared/ktc/columns.ts";
+import {
+  isKtcMetric,
+  lineupColumnKey,
+  normalizeLineupPositions,
+} from "../../shared/ktc/columns.ts";
+import { FANTASY_POSITIONS } from "../../shared/projections/positions.ts";
 
 import { useLocalValue, writeLocal } from "./local-store.ts";
 
@@ -22,14 +28,23 @@ import { useLocalValue, writeLocal } from "./local-store.ts";
 // storage mechanics live in `local-store.ts`; what is here is only what this
 // key holds and the rules that keep it honest.
 //
-// **A column is a triple now, not a metric id** — the metric, plus which
-// KeepTradeCut market and which QB board it is priced on. That is what lets one
+// **A column is a metric and three axes now, not a metric id** — which
+// KeepTradeCut market and which QB board it is priced on, and which positions
+// it counts. That is what lets one
 // metric occupy two bays: a reader comparing their roster's dynasty superflex
 // worth against its 1QB worth is asking two questions, and until the axes moved
 // into the column there was one global board and no way to ask both. The five
 // non-KTC metrics ignore both axes — a projection has no market — which is why
 // `lineupColumnKey` folds them back to a bare metric id and they can never
 // duplicate.
+//
+// **The third axis narrows what is counted rather than how it is priced**, and
+// it is in the key for the same reason the first two are: two bays narrowed to
+// different positions are two readings of one roster, and without it they would
+// dedupe into one with the rank shown under one narrowing being the other's.
+// The empty set is the absence of a narrowing rather than a tenth value, which
+// is what keeps every un-narrowed column keyed exactly as it always was — and
+// therefore what keeps the nine base ranks the route always ships readable.
 //
 // The selection is still a *set*, not an arrangement: columns render in
 // canonical order, so `normalize` sorts on write and read alike and a
@@ -55,6 +70,11 @@ const STORAGE_KEY = "thelab:lineup-columns";
  * readings exist to choose between. It is also the picker's own shape now: four
  * bays, always four, so the budget is the UI rather than a rule the UI has to
  * state.
+ *
+ * **It means *exactly* four now, not at most four.** The picker has no empty
+ * socket and no `Clear`: every bay is always set, so the store can never answer
+ * fewer — see {@link normalizeLineupColumns}, which tops a short selection back
+ * up rather than handing the panel a bay it has no way to fill.
  */
 export const MAX_LINEUP_COLUMNS = 4;
 
@@ -213,6 +233,101 @@ export const COLUMN_SCOPE_LABELS: Record<ColumnScope, string> = {
   picks: "Picks",
 };
 
+/**
+ * The third axis: which positions a column counts.
+ *
+ * **Multi-select, and `All` is not a tenth key.** It is the absence of a
+ * narrowing — pressing it empties the set, turning the last lit position off
+ * returns there, and it is lit exactly when the set is empty. A tenth value
+ * would be a second spelling of "every position" that the key, the stored
+ * value and the rank would each have to agree about.
+ *
+ * The list is {@link FANTASY_POSITIONS}, which is derived from the solver's own
+ * `SLOT_POSITIONS` rather than written here — so a position the solver learns
+ * is offerable the same day, and one this panel offered that no slot admits
+ * could never seat anybody. The cast is the union the contract declares, tied
+ * to that derivation by `positions.test.ts`.
+ *
+ * **The three individual-defender families are broken out** rather than folded
+ * into one `IDP` key, because `DL`, `LB` and `DB` are the groups a league
+ * actually starts: one key would name a bucket rather than a board.
+ */
+export const LINEUP_POSITIONS = FANTASY_POSITIONS as readonly LineupPosition[];
+
+/**
+ * Where the milled hairlines fall in the position track: after the four skill
+ * positions plus the kicker and the team defence, and before the individual
+ * defenders.
+ *
+ * Read off the vocabulary rather than spelled as indices, so a position the
+ * solver learns lands on the correct side of the cut instead of shifting a
+ * number nobody would think to update.
+ */
+export const IDP_LINEUP_POSITIONS: readonly LineupPosition[] = [
+  "DL",
+  "LB",
+  "DB",
+];
+
+/** Each position as the key spells it — the axis's own words, and the card's. */
+export const LINEUP_POSITION_LABELS: Record<LineupPosition, string> = {
+  QB: "QB",
+  RB: "RB",
+  WR: "WR",
+  TE: "TE",
+  K: "K",
+  DEF: "DEF",
+  DL: "DL",
+  LB: "LB",
+  DB: "DB",
+};
+
+/**
+ * The position clause a bay's second line and the card's tile both print —
+ * `QB/TE` — or nothing at all where the column counts every position.
+ *
+ * Slash-joined and tight, because it shares a 59px line with the scope or the
+ * board pair it follows. One spelling, so the two surfaces cannot come to
+ * describe one column two ways.
+ */
+export function positionsLabel(
+  positions: readonly LineupPosition[],
+): string {
+  return positions.map((one) => LINEUP_POSITION_LABELS[one]).join("/");
+}
+
+/**
+ * The same set as a sentence's tail — ` QB and TE only.` — or nothing.
+ *
+ * A comma list with `and` before the last, which is what the `Reads` window
+ * needs and what a slash-joined label cannot be read as. Leading space and
+ * trailing stop included, so the caller appends rather than punctuating.
+ */
+export function positionsClause(
+  positions: readonly LineupPosition[],
+): string {
+  if (positions.length === 0) return "";
+  const words = positions.map((one) => LINEUP_POSITION_LABELS[one]);
+  const list =
+    words.length === 1
+      ? words[0]
+      : `${words.slice(0, -1).join(", ")} and ${words[words.length - 1]}`;
+  return ` ${list} only.`;
+}
+
+/**
+ * Why the position axis is off for a column, or null where it can be pressed.
+ *
+ * One reason and one column it applies to: `ktc_picks` is the single metric on
+ * the grid that is not about players, and a draft pick has no position yet —
+ * which is the same fact the scope axis already states by having `Picks` live
+ * under KeepTradeCut alone. `All` stays pressable there, because it is the
+ * absence of a narrowing rather than a narrowing to everything.
+ */
+export function positionGapReason(scope: ColumnScope): string | null {
+  return scope === "picks" ? "A draft pick has no position" : null;
+}
+
 const METRIC_AXES: Record<LineupMetricId, [ColumnValue, ColumnScope]> = {
   ros_starters: ["projection", "starters"],
   ros_bench: ["projection", "bench"],
@@ -316,35 +431,52 @@ export const DEFAULT_LINEUP_COLUMNS: readonly LineupColumn[] = [
   column("capital_bench"),
 ];
 
-/** One column on both axes' defaults — the league's own market and QB board. */
+/**
+ * One column on every axis's default — the league's own market and QB board,
+ * and every position.
+ *
+ * The position set is normalized here rather than trusted, on the same terms as
+ * the two axes above: this is the one constructor, so a set that arrived out of
+ * order or carrying a word no slot admits cannot reach a key.
+ */
 export function column(
   metric: LineupMetricId,
   format: KtcBoardChoice = "auto",
   lineup: KtcLineupChoice = "auto",
+  positions: readonly LineupPosition[] = [],
 ): LineupColumn {
-  // The axes are meaningless on a metric with no market, and forcing them to
-  // `auto` here is what makes `lineupColumnKey` able to fold those five to a
-  // bare metric id — so a stored value that carries a stray board on a
+  // A draft pick is not a player and has no position to narrow to — the same
+  // fact the scope axis states by having `Picks` live under KeepTradeCut alone.
+  // Forced empty here rather than guarded at each caller, so a stored value
+  // carrying one cannot become a key nothing ranks.
+  const narrowed =
+    metric === "ktc_picks" ? [] : normalizeLineupPositions(positions);
+  // The two market axes are meaningless on a metric with no market, and forcing
+  // them to `auto` here is what makes `lineupColumnKey` able to fold those five
+  // to a bare metric id — so a stored value that carries a stray board on a
   // projections column cannot become a second, un-removable copy of it.
   return isKtcMetric(metric)
-    ? { metric, format, lineup }
-    : { metric, format: "auto", lineup: "auto" };
+    ? { metric, format, lineup, positions: narrowed }
+    : { metric, format: "auto", lineup: "auto", positions: narrowed };
 }
 
 /**
  * Fold anything — a press, a stored string's parse, a value written by a build
  * that predates the axes — into a valid selection: known metrics only, deduped
- * on the whole triple, canonical order, capped, and never empty. Applied on
- * write *and* read so the two ends cannot disagree about what a valid selection
- * is.
+ * on the whole column, canonical order, and **exactly four**. Applied on write
+ * *and* read so the two ends cannot disagree about what a valid selection is.
  *
  * **A legacy `string[]` reads as triples on `auto`**, which is what keeps a
  * stored selection through the change: the axes did not exist when it was
  * written, and `auto` is what the page was doing anyway.
  *
  * The dedupe is on {@link lineupColumnKey} rather than on the metric, which is
- * the whole point of the new shape — two KTC columns on two boards are two
- * columns — and it is also what stops the same board being chosen twice.
+ * the whole point of the shape — two KTC columns on two boards are two columns,
+ * and so are two narrowed to different positions — and it is also what stops
+ * the same board being chosen twice.
+ *
+ * **Short is topped up rather than left short**, which is new with the position
+ * axis and is really the empty socket's removal: see {@link toppedUp}.
  *
  * Exported for the tests: this is the pure half both ends of the store share,
  * and every rule in it is silent when it goes wrong — a stored selection lost
@@ -364,7 +496,7 @@ export function normalizeLineupColumns(
   }
   if (seen.size === 0) return DEFAULT_LINEUP_COLUMNS;
 
-  return [...seen.values()]
+  const chosen = [...seen.values()]
     .sort(
       (a, b) =>
         METRIC_ORDER[a.metric] - METRIC_ORDER[b.metric] ||
@@ -374,20 +506,74 @@ export function normalizeLineupColumns(
         lineupColumnKey(a).localeCompare(lineupColumnKey(b)),
     )
     .slice(0, MAX_LINEUP_COLUMNS);
+
+  return chosen.length === MAX_LINEUP_COLUMNS ? chosen : toppedUp(chosen, seen);
 }
 
-/** One stored entry, in either shape, or null where it names no known metric. */
+/**
+ * Fill a short selection back out to four, in canonical order.
+ *
+ * **The rack has no empty socket**, so a selection of three is a bay the panel
+ * cannot draw and cannot offer a way to fill — which is what
+ * {@link MAX_LINEUP_COLUMNS} meaning *exactly* four buys, and where it has to be
+ * bought: on read as well as on write, since the short value may be one a build
+ * that predates the change wrote, or one a reader's own hand-edit left.
+ *
+ * The defaults come first and the rest of the grid after, both un-narrowed and
+ * on each league's own board — so a reader who has emptied their storage lands
+ * on the page they had, and one whose stored value held two columns keeps both
+ * and gains the two defaults they were missing rather than a metric nobody
+ * chose. It cannot fail to reach four: nine metrics against a cap of four, and
+ * the five with no market are one column each by construction.
+ */
+function toppedUp(
+  chosen: readonly LineupColumn[],
+  seen: ReadonlyMap<string, LineupColumn>,
+): readonly LineupColumn[] {
+  const filled = [...chosen];
+  const held = new Set(seen.keys());
+  const candidates = [
+    ...DEFAULT_LINEUP_COLUMNS,
+    ...LINEUP_METRIC_IDS.map((metric) => column(metric)),
+  ];
+  for (const candidate of candidates) {
+    if (filled.length >= MAX_LINEUP_COLUMNS) break;
+    const key = lineupColumnKey(candidate);
+    if (held.has(key)) continue;
+    held.add(key);
+    filled.push(candidate);
+  }
+  return filled.sort(
+    (a, b) =>
+      METRIC_ORDER[a.metric] - METRIC_ORDER[b.metric] ||
+      lineupColumnKey(a).localeCompare(lineupColumnKey(b)),
+  );
+}
+
+/**
+ * One stored entry, in any of its three shapes, or null where it names no known
+ * metric.
+ *
+ * **An entry with no `positions` field reads as the empty set**, which is what
+ * keeps every existing reader's selection through this change: the axis did not
+ * exist when the value was written, and "every position" is what the page was
+ * doing anyway. That is the same rule one grain older that already reads a
+ * legacy bare string as a triple on `auto`.
+ */
 function readColumn(entry: unknown): LineupColumn | null {
   if (typeof entry === "string") {
     return entry in METRIC_ORDER ? column(entry as LineupMetricId) : null;
   }
   if (!entry || typeof entry !== "object") return null;
-  const { metric, format, lineup } = entry as Record<string, unknown>;
+  const { metric, format, lineup, positions } = entry as Record<string, unknown>;
   if (typeof metric !== "string" || !(metric in METRIC_ORDER)) return null;
   return column(
     metric as LineupMetricId,
     format === "dynasty" || format === "redraft" ? format : "auto",
     lineup === "oneqb" || lineup === "sf" ? lineup : "auto",
+    // Unknown entries drop, duplicates collapse and the set sorts into the
+    // axis's own order — `normalizeLineupPositions`, reached through `column`.
+    normalizeLineupPositions(positions),
   );
 }
 

@@ -25,8 +25,10 @@ import type {
   KtcLineupChoice,
   LineupColumn,
   LineupMetricId,
+  LineupPosition,
 } from "@/shared/contract";
 
+import { FANTASY_POSITIONS } from "../projections/positions.ts";
 import { parseKtcBoardChoice, parseKtcLineupChoice } from "./board-choice.ts";
 
 /**
@@ -92,11 +94,130 @@ export function ktcVariantKey(variant: KtcVariant): string {
  * name a second key — which is also why they can never occupy two bays.
  */
 export function lineupColumnKey(column: LineupColumn): string {
+  return `${pricedKey(column)}${positionSuffix(column.positions)}`;
+}
+
+/** The key a column had before the position axis: metric, then its variant. */
+function pricedKey(column: LineupColumn): string {
   if (!isKtcMetric(column.metric)) return column.metric;
   const variant = { format: column.format, lineup: column.lineup };
   return isAutoVariant(variant)
     ? column.metric
     : `${column.metric}:${ktcVariantKey(variant)}`;
+}
+
+/**
+ * The position clause a narrowed column's key ends with, or nothing at all.
+ *
+ * **An un-narrowed column keys exactly as it always did**, which is the whole
+ * of why this is a suffix rather than a segment: the nine base ranks the route
+ * always ships are filed under bare metric ids, and appending an `all` token to
+ * every key would rename every one of them — a card looking up a rank the
+ * server had computed under another name, with an em dash where a number was.
+ * It is the same argument {@link lineupColumnKey} already makes for folding
+ * `auto:auto` away, one axis over.
+ *
+ * The token is the set joined by `+`, lower-cased, in the order
+ * {@link normalizeLineupPositions} put it in — so two bays narrowed to the same
+ * two positions in different press orders are one column and dedupe as one,
+ * which is what the sort in that function exists for.
+ *
+ * **The key is written here and read as an opaque lookup, never parsed back**,
+ * so the two vocabularies sharing a `:` costs nothing — and they are disjoint
+ * anyway, no position being spelled `auto`, `dynasty`, `redraft`, `oneqb` or
+ * `sf`. The request carries the axes themselves (see {@link parsePositionSets}),
+ * not these strings.
+ */
+function positionSuffix(positions: readonly LineupPosition[]): string {
+  return positions.length === 0
+    ? ""
+    : `:${positions.map((one) => one.toLowerCase()).join("+")}`;
+}
+
+/**
+ * The distinct non-empty position sets a selection needs ranked, which is the
+ * second thing the request carries.
+ *
+ * **The sets and not the columns**, exactly as {@link ktcVariantsOf} names
+ * variants rather than columns and for the identical reason: a position set is
+ * a second way to *total* the same solved lineups, so what the server needs is
+ * the list of narrowings, and every metric of every one of them falls out of
+ * the solves it already ran. The empty set is dropped because the base ranks
+ * are its answer — which is what keeps a reader who never touches this axis on
+ * exactly the request they had.
+ */
+export function positionSetsOf(
+  columns: readonly LineupColumn[],
+): LineupPosition[][] {
+  const seen = new Map<string, LineupPosition[]>();
+  for (const column of columns) {
+    if (column.positions.length === 0) continue;
+    seen.set(positionSetKey(column.positions), [...column.positions]);
+  }
+  return [...seen.values()];
+}
+
+/** `qb+te` — one position set, as one token. */
+export function positionSetKey(
+  positions: readonly LineupPosition[],
+): string {
+  return positions.map((one) => one.toLowerCase()).join("+");
+}
+
+/**
+ * Fold anything into a valid position set: known positions only, deduped, in
+ * the solver's own canonical order.
+ *
+ * The order is {@link FANTASY_POSITIONS}' — derived from `SLOT_POSITIONS`, so
+ * the axis cannot come to disagree with the table the solver seats from — and
+ * sorting rather than preserving press order is what makes a set an identity: a
+ * reader who pressed `TE` then `QB` and one who pressed them the other way are
+ * asking one question, and two keys for it would be two columns of the same
+ * numbers a rack could hold at once.
+ */
+export function normalizeLineupPositions(
+  value: unknown,
+): LineupPosition[] {
+  if (!Array.isArray(value)) return [];
+  const chosen = new Set<string>();
+  for (const entry of value) {
+    if (typeof entry !== "string") continue;
+    const upper = entry.toUpperCase();
+    if (FANTASY_POSITIONS.includes(upper)) chosen.add(upper);
+  }
+  return FANTASY_POSITIONS.filter((one) => chosen.has(one)) as LineupPosition[];
+}
+
+/**
+ * Read the request's position-set list back — `qb+te,rb`.
+ *
+ * Every token folds to something valid on {@link parseKtcVariants}' terms, and
+ * a set that folds to *empty* is dropped rather than ranked: the base ranks
+ * already answer the un-narrowed column, so a garbled parameter costs the
+ * columns that named it their narrowing and nothing else. That is the same
+ * degradation an unreadable `?ktc_boards=` has always had, and the opposite
+ * call from `?season=` for the opposite reason — a narrowing that cannot be
+ * read leaves an em dash on one window, where a season that cannot be read
+ * would put one year's page under another's heading.
+ */
+export function parsePositionSets(
+  value: string | null,
+): LineupPosition[][] {
+  if (!value) return [];
+  const seen = new Map<string, LineupPosition[]>();
+  for (const token of value.split(",")) {
+    const positions = normalizeLineupPositions(token.split("+"));
+    if (positions.length === 0) continue;
+    seen.set(positionSetKey(positions), positions);
+  }
+  return [...seen.values()];
+}
+
+/** The request's spelling of a position-set list — `qb+te,rb`. */
+export function serializePositionSets(
+  sets: readonly (readonly LineupPosition[])[],
+): string {
+  return sets.map(positionSetKey).join(",");
 }
 
 /**
@@ -146,6 +267,10 @@ export function parseKtcVariants(value: string | null): KtcVariant[] {
           metric: "ktc_total" as LineupMetricId,
           format: parseKtcBoardChoice(format),
           lineup: parseKtcLineupChoice(lineup),
+          // Un-narrowed, because a variant is a *pricing* and the position axis
+          // travels on its own parameter — see `parsePositionSets`. A set here
+          // would make one narrowing's ranks the only ones a forced board got.
+          positions: [],
         };
       }),
   );
