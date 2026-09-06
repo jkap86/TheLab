@@ -68,6 +68,7 @@ export * from "./league-filters";
 // rows are its own parts, on the folder rule the header above states.
 export { LeagueFiltersDialog } from "./league-filters-dialog/league-filters-dialog";
 export {
+  adpBoardLabel,
   column,
   DEFAULT_LINEUP_COLUMNS,
   ktcBoardLabel,
@@ -76,6 +77,7 @@ export {
   LINEUP_METRIC_LABELS,
   MAX_LINEUP_COLUMNS,
   positionsLabel,
+  qbBoardWord,
   storeLineupColumns,
   useLineupColumns,
 } from "./lineup-columns";

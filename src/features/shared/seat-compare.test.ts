@@ -40,6 +40,7 @@ function team(
       unknown_slots: [],
     },
     totals: {
+      ros_total: 0,
       ros_starters: 0,
       ros_bench: 0,
       capital_total: 0,

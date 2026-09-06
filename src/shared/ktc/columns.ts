@@ -14,7 +14,13 @@
  *
  * It lives in `shared/ktc` rather than beside the contract because both axes
  * are this folder's vocabulary and the whole reason a column needs a key at all
- * is that they exist. Pure, and free of runtime imports — the client half of
+ * is that they exist. **The QB-board axis has since grown a second reader** —
+ * the three capital metrics, whose ADP fold splits superflex drafts from
+ * standard ones exactly as KeepTradeCut splits its two columns — so this file
+ * names what prices each metric rather than which are KTC's, and a capital
+ * column that has forced a board takes a key of its own (`capital_total:sf`).
+ * The vocabulary is still `shared/ktc`'s: {@link KtcLineupChoice} and
+ * `resolveKtcLineup` are one question about a league, asked by two valuations. Pure, and free of runtime imports — the client half of
  * the columns store deep-imports it exactly as it already deep-imports
  * `./board-choice` and `./roster`, neither of which may reach this folder's
  * server-only barrel.
@@ -32,27 +38,66 @@ import { FANTASY_POSITIONS } from "../projections/positions.ts";
 import { parseKtcBoardChoice, parseKtcLineupChoice } from "./board-choice.ts";
 
 /**
- * Which metrics read a KeepTradeCut board, as the third exhaustive
- * `Record<LineupMetricId, …>` in the app — the compiler seam `METRIC_ORDER` and
- * `LINEUP_METRIC_LABELS` are the other two. A new metric id breaks this until
- * somebody says whether it has a market, which is the question that decides
- * whether its column carries two axes or ignores them.
+ * What prices a metric, as the third exhaustive `Record<LineupMetricId, …>` in
+ * the app — the compiler seam `METRIC_ORDER` and `LINEUP_METRIC_LABELS` are the
+ * other two. A new metric id breaks this until somebody says what values it,
+ * which is the question that decides which of the two pricing axes its column
+ * carries.
+ *
+ * **One record rather than one per axis**, because the three questions below
+ * are three readings of one fact and asking them separately is how a metric
+ * could come to read a market it is not priced on. The three answers are:
+ *
+ * - `"none"` — points, scored under the league's own scoring settings. No board
+ *   enters them, so a projection column carries neither axis.
+ * - `"adp"` — the draft-capital curve, off the drafts this manager's leagues
+ *   actually ran. There is no ADP *market* — nobody publishes a second one —
+ *   but the fold does split superflex drafts from standard ones, because a
+ *   quarterback goes at a wholly different point on the two boards. So a
+ *   capital column carries the QB board axis and not the market one.
+ * - `"ktc"` — KeepTradeCut, which publishes two markets and prices every entry
+ *   on both QB boards. Both axes.
  */
-const READS_A_MARKET: Record<LineupMetricId, boolean> = {
-  ros_starters: false,
-  ros_bench: false,
-  capital_total: false,
-  capital_bench: false,
-  capital_starters: false,
-  ktc_total: true,
-  ktc_starters: true,
-  ktc_bench: true,
-  ktc_picks: true,
+type PricedBy = "none" | "adp" | "ktc";
+
+const PRICED_BY: Record<LineupMetricId, PricedBy> = {
+  ros_total: "none",
+  ros_starters: "none",
+  ros_bench: "none",
+  capital_total: "adp",
+  capital_bench: "adp",
+  capital_starters: "adp",
+  ktc_total: "ktc",
+  ktc_starters: "ktc",
+  ktc_bench: "ktc",
+  ktc_picks: "ktc",
 };
 
-/** Whether this metric is priced on a market, and therefore carries the axes. */
+/**
+ * Whether this metric is priced on a KeepTradeCut market, and therefore carries
+ * the market axis as well as the QB one.
+ */
 export function isKtcMetric(metric: LineupMetricId): boolean {
-  return READS_A_MARKET[metric];
+  return PRICED_BY[metric] === "ktc";
+}
+
+/** Whether this metric is priced off ADP, and therefore carries the QB axis alone. */
+export function isAdpMetric(metric: LineupMetricId): boolean {
+  return PRICED_BY[metric] === "adp";
+}
+
+/**
+ * Whether this metric splits on how a league starts quarterbacks — which both
+ * priced valuations do, and no projection does.
+ *
+ * The question the picker asks to decide whether to draw the QB-board track,
+ * and the one {@link lineupColumnKey} asks before letting a forced board name a
+ * second column. It is deliberately *not* `isKtcMetric || isAdpMetric` spelled
+ * at each call site: a third valuation arriving would have to answer it here
+ * once rather than in every reader.
+ */
+export function readsQbBoard(metric: LineupMetricId): boolean {
+  return PRICED_BY[metric] !== "none";
 }
 
 /**
@@ -68,7 +113,7 @@ export function isKtcMetric(metric: LineupMetricId): boolean {
 export type KtcVariant = { format: KtcBoardChoice; lineup: KtcLineupChoice };
 
 /**
- * The variant every column opens on and the one the nine base ranks are
+ * The variant every column opens on and the one the ten base ranks are
  * computed for: the league's own market, the league's own QB board.
  */
 export const AUTO_VARIANT: KtcVariant = { format: "auto", lineup: "auto" };
@@ -87,7 +132,7 @@ export function ktcVariantKey(variant: KtcVariant): string {
  * How a column is named wherever a rank is keyed by one.
  *
  * **A column on `auto` is keyed by its bare metric id**, which is what keeps
- * the nine base ranks readable without the client having to know what the
+ * the ten base ranks readable without the client having to know what the
  * server resolved: `auto` is the pricing every league reads for itself, so the
  * base ranks *are* that column's answer. Anything forcing an axis takes the
  * triple. The five non-KTC metrics ignore both axes entirely, so they can never
@@ -97,20 +142,59 @@ export function lineupColumnKey(column: LineupColumn): string {
   return `${pricedKey(column)}${positionKeySuffix(column.positions)}`;
 }
 
-/** The key a column had before the position axis: metric, then its variant. */
+/**
+ * The key a column had before the position axis: metric, then whatever pricing
+ * it has *forced* — and nothing at all where it has forced none.
+ *
+ * Three arms, one per answer in {@link PRICED_BY}, and each folds an axis the
+ * metric does not read back to `auto` rather than trusting the column: a stray
+ * board on a projections column must never become a second, indistinguishable
+ * copy of it. `column()` on the client already forces the same two, so this is
+ * a belt to its braces — and the belt is what a stored value hand-edited or
+ * written by an older build meets first.
+ *
+ * **A metric priced on ADP takes the QB board alone** — `capital_total:sf` —
+ * rather than the KeepTradeCut triple with a meaningless `auto` market in it.
+ * The two spellings are disjoint and neither is ever parsed back (see
+ * {@link positionKeySuffix}); what matters is that the server composes the same
+ * ones, which it does through {@link qbBoardKeySuffix} and
+ * {@link ktcVariantKey} rather than through a second copy of this.
+ */
 function pricedKey(column: LineupColumn): string {
-  if (!isKtcMetric(column.metric)) return column.metric;
-  const variant = { format: column.format, lineup: column.lineup };
-  return isAutoVariant(variant)
-    ? column.metric
-    : `${column.metric}:${ktcVariantKey(variant)}`;
+  if (isKtcMetric(column.metric)) {
+    const variant = { format: column.format, lineup: column.lineup };
+    return isAutoVariant(variant)
+      ? column.metric
+      : `${column.metric}:${ktcVariantKey(variant)}`;
+  }
+  if (!readsQbBoard(column.metric)) return column.metric;
+  return `${column.metric}${qbBoardKeySuffix(column.lineup)}`;
+}
+
+/**
+ * What a forced QB board adds to the key of a metric that reads one and no
+ * market — nothing at all for `auto`.
+ *
+ * **Exported, because the route composes the same suffix from the other end**,
+ * exactly as it does {@link positionKeySuffix}: a rank is a base metric key
+ * plus this plus the position clause, where a column is
+ * {@link lineupColumnKey} whole. Two entry points to one spelling, and not even
+ * the separator repeated.
+ *
+ * `auto` folding away is the same rule the market axis lives by and for the
+ * same reason: `auto` is the pricing every league reads for itself, so the base
+ * ranks *are* that column's answer and renaming them would fill the card with
+ * em dashes.
+ */
+export function qbBoardKeySuffix(lineup: KtcLineupChoice): string {
+  return lineup === "auto" ? "" : `:${lineup}`;
 }
 
 /**
  * The position clause a narrowed column's key ends with, or nothing at all.
  *
  * **An un-narrowed column keys exactly as it always did**, which is the whole
- * of why this is a suffix rather than a segment: the nine base ranks the route
+ * of why this is a suffix rather than a segment: the ten base ranks the route
  * always ships are filed under bare metric ids, and appending an `all` token to
  * every key would rename every one of them — a card looking up a rank the
  * server had computed under another name, with an em dash where a number was.
@@ -286,4 +370,58 @@ export function parseKtcVariants(value: string | null): KtcVariant[] {
 /** The request's spelling of a variant list — `dynasty:sf,redraft:auto`. */
 export function serializeKtcVariants(variants: readonly KtcVariant[]): string {
   return variants.map(ktcVariantKey).join(",");
+}
+
+/**
+ * The distinct QB boards the *capital* columns have forced, which is the third
+ * thing the request carries.
+ *
+ * **The boards and not the columns**, on {@link ktcVariantsOf}' exact terms: a
+ * QB board is a second way to *price* the same solved lineups, so what the
+ * server needs is the list of boards and every capital metric of every one of
+ * them falls out of the solves it was going to run anyway. `auto` is dropped
+ * because the base ranks answer it — which is what keeps a reader who never
+ * touches this axis on exactly the request they had.
+ *
+ * Separate from the KTC variant list rather than folded into it, because the
+ * two name different things: a KTC variant is a market *and* a board, and a
+ * capital column has no market to name. Folding them would send the ADP fold a
+ * `dynasty` half it cannot read and would make `dynasty:sf` and `redraft:sf`
+ * two capital pricings where there is only one.
+ */
+export function adpBoardsOf(
+  columns: readonly LineupColumn[],
+): KtcLineupChoice[] {
+  const seen = new Set<KtcLineupChoice>();
+  for (const column of columns) {
+    if (!isAdpMetric(column.metric)) continue;
+    if (column.lineup === "auto") continue;
+    seen.add(column.lineup);
+  }
+  return [...seen];
+}
+
+/**
+ * Read the request's ADP board list back — `sf,oneqb`.
+ *
+ * Every token folds through `parseKtcLineupChoice` and an unreadable one
+ * becomes `auto`, which is then dropped: a garbled parameter costs the columns
+ * that named it their forced board and nothing else, the degradation
+ * {@link parseKtcVariants} already has and for the same reason.
+ */
+export function parseAdpBoards(value: string | null): KtcLineupChoice[] {
+  if (!value) return [];
+  const seen = new Set<KtcLineupChoice>();
+  for (const token of value.split(",")) {
+    const choice = parseKtcLineupChoice(token);
+    if (choice !== "auto") seen.add(choice);
+  }
+  return [...seen];
+}
+
+/** The request's spelling of an ADP board list — `sf,oneqb`. */
+export function serializeAdpBoards(
+  boards: readonly KtcLineupChoice[],
+): string {
+  return boards.join(",");
 }

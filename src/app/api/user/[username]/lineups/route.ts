@@ -16,8 +16,10 @@ import { resolveKtcFormat } from "@/shared/ktc/board-choice";
 import {
   AUTO_VARIANT,
   ktcVariantKey,
+  parseAdpBoards,
   parseKtcVariants,
   parsePositionSets,
+  qbBoardKeySuffix,
 } from "@/shared/ktc/columns";
 import type { KtcVariant } from "@/shared/ktc/columns";
 import {
@@ -26,6 +28,7 @@ import {
   solveLeagueEntry,
 } from "@/shared/manager";
 import type {
+  AdpVariant,
   KtcPricing,
   KtcVariantPricing,
   ManagerLeagueRow,
@@ -79,6 +82,18 @@ export const dynamic = "force-dynamic";
  * projections span does: no stamp for that market, every price on it null, and
  * its four metrics ranked null league-wide by the all-zero rule that already
  * exists.
+ *
+ * **`?adp_boards=` is the same question one valuation over.** Draft capital has
+ * no market — nobody publishes a second ADP — but the fold does split superflex
+ * drafts from standard ones, so a capital column can force a QB board exactly
+ * as a KeepTradeCut one can, and `sf,oneqb` names the boards the reader's bays
+ * have forced. Boards and not columns, for `?ktc_boards=`' reason, and three
+ * more ranks per board rather than a second solve: **the seating does not move
+ * when a capital bay is switched**, which is the rule the KTC columns have
+ * always had and the one this axis had to be held to rather than merely
+ * observe — `adp_value` is a tiebreak inside the solve, so a forced board could
+ * have re-seated the unprojected. The lineup on the card is the one the
+ * league's own board seated, and every column ranks the manager on it.
  *
  * **`?positions=` is the third axis and travels on its own parameter** —
  * `qb+te,rb`, the distinct narrowings the reader's bays carry. Sets and not
@@ -151,15 +166,26 @@ export async function GET(
 
     const forced = parseKtcVariants(url.searchParams.get("ktc_boards"));
     const narrowings = parsePositionSets(url.searchParams.get("positions"));
+    // The ADP aggregate is already split superflex/standard by
+    // `getManagerDraftAdp`, so a forced board costs no read at all — it points
+    // at the other half of one answer that was fetched before any of this.
+    const adpBoards: AdpVariant[] = parseAdpBoards(
+      url.searchParams.get("adp_boards"),
+    ).map((lineup) => ({
+      key: qbBoardKeySuffix(lineup),
+      adp: lineup === "sf" ? adp.superflex : adp.standard,
+    }));
     const ktc = await readKtcMarkets(leagues, forced);
 
     const solved: ManagerLineupsPayload["leagues"] = {};
     for (const league of leagues) {
-      // The ADP board still splits on the league's *own* lineup, and reads the
-      // predicate directly rather than a column's choice: a forced QB board is
-      // a KeepTradeCut reading, where draft capital is priced off the drafts
-      // this league actually ran. Nothing about the seating moves when a bay is
-      // switched — see the KTC columns' own note in `contract/lineups`.
+      // **The solve reads the league's own board, whatever any bay has
+      // forced**, and it reads the predicate directly rather than a column's
+      // choice. That is what keeps a forced capital board a re-pricing rather
+      // than a re-seating: `adp_value` is a tiebreak among the unprojected
+      // inside `solveLeagueLineup`, so handing a forced board in here would
+      // change which players a card *seats* to answer a question about what
+      // they are worth. The forced boards travel separately, below.
       const board = isSuperflexLineup(league.roster_positions)
         ? adp.superflex
         : adp.standard;
@@ -181,6 +207,11 @@ export async function GET(
         // means the same thing in every league on the page — which is what
         // makes one parameter answer for all hundred of them.
         narrowings,
+        // Likewise page-wide, for a different reason: a forced ADP board names
+        // one of the two aggregates outright, and the only league-specific part
+        // of pricing off it — the pool the curve is anchored to — is computed
+        // where the league is.
+        adpBoards,
       );
       // A null entry means the store moved between the query and here — the
       // league drops out of the payload, as it always has for roster-less ones.

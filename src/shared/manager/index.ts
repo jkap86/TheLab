@@ -72,11 +72,14 @@ export type {
 export { solveLeagueLineup } from "./ros-lineups";
 export type { RosLineupLeague } from "./ros-lineups";
 export {
+  capitalMetricTotals,
   ktcMetricTotals,
   lineupMetricTotals,
   rankLeagueLineups,
 } from "./league-ranks";
 export type {
+  AdpVariant,
+  CapitalMetricId,
   KtcMetricId,
   LeagueRosterRow,
   RankLeague,

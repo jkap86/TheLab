@@ -19,6 +19,7 @@ import {
   isKtcMetric,
   lineupColumnKey,
   normalizeLineupPositions,
+  readsQbBoard,
 } from "../../shared/ktc/columns.ts";
 import { FANTASY_POSITIONS } from "../../shared/projections/positions.ts";
 
@@ -28,15 +29,18 @@ import { useLocalValue, writeLocal } from "./local-store.ts";
 // storage mechanics live in `local-store.ts`; what is here is only what this
 // key holds and the rules that keep it honest.
 //
-// **A column is a metric and three axes now, not a metric id** — which
-// KeepTradeCut market and which QB board it is priced on, and which positions
-// it counts. That is what lets one
-// metric occupy two bays: a reader comparing their roster's dynasty superflex
-// worth against its 1QB worth is asking two questions, and until the axes moved
-// into the column there was one global board and no way to ask both. The five
-// non-KTC metrics ignore both axes — a projection has no market — which is why
-// `lineupColumnKey` folds them back to a bare metric id and they can never
-// duplicate.
+// **A column is a metric and three axes now, not a metric id** — which market
+// and which QB board it is priced on, and which positions it counts. That is
+// what lets one metric occupy two bays: a reader comparing their roster's
+// dynasty superflex worth against its 1QB worth is asking two questions, and
+// until the axes moved into the column there was one global board and no way to
+// ask both. A metric that does not read an axis has it folded back to `auto` by
+// `column()` and out of its key by `lineupColumnKey`, so it can never duplicate
+// itself on one — which is the three projection metrics on both axes, and the
+// three capital ones on the market alone. Capital reads the *QB board*, because
+// the ADP fold aggregates superflex drafts apart from standard ones: pricing a
+// roster's draft capital on the superflex board while sitting in a 1QB league is
+// the same comparison the KeepTradeCut bays make one market over.
 //
 // **The third axis narrows what is counted rather than how it is priced**, and
 // it is in the key for the same reason the first two are: two bays narrowed to
@@ -44,7 +48,7 @@ import { useLocalValue, writeLocal } from "./local-store.ts";
 // dedupe into one with the rank shown under one narrowing being the other's.
 // The empty set is the absence of a narrowing rather than a tenth value, which
 // is what keeps every un-narrowed column keyed exactly as it always was — and
-// therefore what keeps the nine base ranks the route always ships readable.
+// therefore what keeps the ten base ranks the route always ships readable.
 //
 // The selection is still a *set*, not an arrangement: columns render in
 // canonical order, so `normalize` sorts on write and read alike and a
@@ -81,15 +85,20 @@ export const MAX_LINEUP_COLUMNS = 4;
 // Exhaustive by construction — the client half of the contract's compiler
 // seam: a new `LineupMetricId` breaks this Record until it is placed.
 const METRIC_ORDER: Record<LineupMetricId, number> = {
-  ros_starters: 0,
-  ros_bench: 1,
-  capital_total: 2,
-  capital_bench: 3,
-  capital_starters: 4,
-  ktc_total: 5,
-  ktc_starters: 6,
-  ktc_bench: 7,
-  ktc_picks: 8,
+  // Each family leads with its own total, which is the one ordering all three
+  // can share — and inserting `ros_total` at the head moves nothing for an
+  // existing reader, since the sort is by these numbers and nobody's stored
+  // selection holds a metric that did not exist.
+  ros_total: 0,
+  ros_starters: 1,
+  ros_bench: 2,
+  capital_total: 3,
+  capital_bench: 4,
+  capital_starters: 5,
+  ktc_total: 6,
+  ktc_starters: 7,
+  ktc_bench: 8,
+  ktc_picks: 9,
 };
 
 /** Every metric the columns dialog offers, in canonical column order. */
@@ -123,6 +132,12 @@ export const LINEUP_METRIC_LABELS: Record<
   LineupMetricId,
   { column: string; unit: string; scope: string; option: string }
 > = {
+  ros_total: {
+    column: "ROS total",
+    unit: "Proj pts",
+    scope: "Roster",
+    option: "Projected points — the whole roster, rest of season.",
+  },
   ros_starters: {
     column: "ROS starters",
     unit: "Proj pts",
@@ -182,23 +197,24 @@ export const LINEUP_METRIC_LABELS: Record<
 /**
  * The two axes a metric is composed from, and the grid they index.
  *
- * The nine ids are not nine unrelated readings: they are a *value* (what a
- * number is priced in) crossed with a *scope* (how much of a roster it was
- * counted over), and the picker asks those two questions rather than listing
- * the products. The list was hiding two gaps that the grid makes visible, and
- * both are real rather than oversights:
+ * The ten ids are not ten unrelated readings: they are a *value* (what a number
+ * is priced in) crossed with a *scope* (how much of a roster it was counted
+ * over), and the picker asks those two questions rather than listing the
+ * products. The grid makes its own gaps visible, which is what it is for:
  *
- * - **Projection × All has no metric.** A whole-roster rest-of-season
- *   projection does not exist here, and adding one is server work — an id in
- *   the contract, a total in the solver, a rank in the route, a place in each
- *   of the four exhaustive `Record<LineupMetricId, …>`s. Until it does, the key
- *   is greyed with the reason in its title, which is this app's rule for a
- *   control that cannot act.
+ * - **Projection × All used to be a hole and is `ros_total` now.** The grid is
+ *   what made the absence legible — a greyed key reading "there is no
+ *   whole-roster projection", where the nine-key list it replaced simply did
+ *   not offer one and nobody could see what was missing. Filling it was the
+ *   server work that note predicted: an id in the contract, a total in
+ *   `lineupMetricTotals`, a rank in the literal, and a place in each of the
+ *   exhaustive `Record<LineupMetricId, …>`s.
  * - **Picks are not a roster scope.** They are the one thing on a card that is
  *   not a player, and only KeepTradeCut prices them — there is no ADP pick
  *   ladder in this repo and a pick has no projection because it is not a player
  *   yet. So `Picks` is a fourth scope key, live under KTC and greyed under the
- *   other two.
+ *   other two. That is the grid's one remaining gap, and it is a reading that
+ *   cannot exist rather than one this app has not built.
  *
  * {@link METRIC_AXES} is the **fifth** exhaustive `Record<LineupMetricId, …>`
  * in the compiler seam, and the grid is derived from it rather than written
@@ -329,6 +345,7 @@ export function positionGapReason(scope: ColumnScope): string | null {
 }
 
 const METRIC_AXES: Record<LineupMetricId, [ColumnValue, ColumnScope]> = {
+  ros_total: ["projection", "all"],
   ros_starters: ["projection", "starters"],
   ros_bench: ["projection", "bench"],
   capital_total: ["capital", "all"],
@@ -364,9 +381,11 @@ export function metricAt(
 /**
  * Why a cell has no metric — the key's title, and never a silent grey.
  *
- * Null where the cell exists. The two reasons are the two above, and they are
- * different claims: one is a reading this app has not built, the other is a
- * reading that cannot exist on that basis at all.
+ * Null where the cell exists. Only one gap is left on the grid — a pick priced
+ * on anything but KeepTradeCut, which is a reading that cannot exist rather
+ * than one this app has not built. The fallback under it is not dead code but
+ * the thing that keeps this total: a value or scope added without a metric
+ * behind it greys with a word rather than with nothing.
  */
 export function cellGapReason(
   value: ColumnValue,
@@ -374,9 +393,6 @@ export function cellGapReason(
 ): string | null {
   if (metricAt(value, scope)) return null;
   if (scope === "picks") return "Only KeepTradeCut prices a draft pick";
-  if (value === "projection" && scope === "all") {
-    return "There is no whole-roster projection";
-  }
   return "No column reads that";
 }
 
@@ -415,7 +431,35 @@ export function ktcChoiceLabel(col: LineupColumn): string {
  * characters of a 59px line.
  */
 export function ktcBoardLabel(format: KtcFormat, superflex: boolean): string {
-  return `${MARKET_WORDS[format]}·${superflex ? "SF" : "1QB"}`;
+  return `${MARKET_WORDS[format]}·${qbBoardWord(superflex)}`;
+}
+
+/**
+ * Which of the two QB boards, in the tightest words there are — `SF` / `1QB`.
+ *
+ * One spelling, because three surfaces print it: a KeepTradeCut tile's board
+ * pair, a capital tile's forced board, and the switch keys in the picker (which
+ * take it from `LINEUP_WORDS`, the same two words with `Auto` beside them).
+ */
+export function qbBoardWord(superflex: boolean): string {
+  return superflex ? "SF" : "1QB";
+}
+
+/**
+ * What a *capital* column is set to, or nothing at all where it is set to the
+ * league's own board.
+ *
+ * **Nothing on `auto`, which is where a capital bay parts company with a
+ * KeepTradeCut one.** A KTC bay's second line has nothing else to carry — its
+ * scope is already in its unit — so it spells the rule out as `Auto · Auto`. A
+ * capital bay's line is the scope (`Roster`, `Bench`, `Starters`), and
+ * appending `· Auto` to it would spend a third of a 72px line on a word meaning
+ * "nothing was forced" in a rack where nothing is forced by default. So the
+ * board appears exactly when a reader has set one, which is also when it is the
+ * only thing telling two capital bays apart.
+ */
+export function adpBoardLabel(lineup: KtcLineupChoice): string {
+  return lineup === "auto" ? "" : LINEUP_WORDS[lineup];
 }
 
 /**
@@ -436,7 +480,7 @@ export const DEFAULT_LINEUP_COLUMNS: readonly LineupColumn[] = [
  * and every position.
  *
  * The position set is normalized here rather than trusted, on the same terms as
- * the two axes above: this is the one constructor, so a set that arrived out of
+ * the two axes below: this is the one constructor, so a set that arrived out of
  * order or carrying a word no slot admits cannot reach a key.
  */
 export function column(
@@ -451,13 +495,18 @@ export function column(
   // carrying one cannot become a key nothing ranks.
   const narrowed =
     metric === "ktc_picks" ? [] : normalizeLineupPositions(positions);
-  // The two market axes are meaningless on a metric with no market, and forcing
-  // them to `auto` here is what makes `lineupColumnKey` able to fold those five
-  // to a bare metric id — so a stored value that carries a stray board on a
-  // projections column cannot become a second, un-removable copy of it.
-  return isKtcMetric(metric)
-    ? { metric, format, lineup, positions: narrowed }
-    : { metric, format: "auto", lineup: "auto", positions: narrowed };
+  // **Each axis is forced to `auto` on a metric that cannot read it**, which is
+  // what makes `lineupColumnKey` able to fold it out of the key — so a stored
+  // value carrying a stray board on a projections column cannot become a
+  // second, un-removable copy of it. The two axes are forced separately because
+  // they are read by different metrics: a market is KeepTradeCut's alone, where
+  // a QB board is a fact about the league that both priced valuations split on.
+  return {
+    metric,
+    format: isKtcMetric(metric) ? format : "auto",
+    lineup: readsQbBoard(metric) ? lineup : "auto",
+    positions: narrowed,
+  };
 }
 
 /**

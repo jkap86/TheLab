@@ -9,7 +9,11 @@ import type {
   LineupPosition,
   ManagerLineupsPayload,
 } from "@/shared/contract";
-import { isKtcMetric, lineupColumnKey } from "@/shared/ktc/columns";
+import {
+  isKtcMetric,
+  lineupColumnKey,
+  readsQbBoard,
+} from "@/shared/ktc/columns";
 
 // Relative rather than through this folder's own barrel — the rule
 // `league-filters-dialog.tsx` beside it already lives by: a module inside
@@ -22,6 +26,7 @@ import {
   CONSOLE_WINDOW_LEDGE,
 } from "../console-chrome";
 import {
+  adpBoardLabel,
   cellGapReason,
   column,
   COLUMN_SCOPE_LABELS,
@@ -522,28 +527,36 @@ export function LineupColumnsDialog({
                   unavailable={(scope) => why({ scope })}
                 />
 
-                {/* Two tracks a column with no market cannot answer, so they are
-                    absent rather than greyed: nothing here is dimmed for being
-                    inapplicable to a column the reader is not editing. */}
+                {/* **A track a column cannot answer is absent, never greyed**,
+                    which is why these two are drawn apart rather than as a pair:
+                    nothing here is dimmed for being inapplicable to the column
+                    the reader is editing, and the two axes are read by different
+                    metrics. A *market* is KeepTradeCut's own, so only its four
+                    bays draw the first. A *QB board* is a fact about how the
+                    league starts quarterbacks and both priced valuations split
+                    on it, so the three capital bays draw the second as well —
+                    which is the whole of what a reader gets from this: their
+                    roster's draft capital priced on the superflex board while
+                    they sit in a 1QB league. A projection reads neither. */}
                 {isKtcMetric(col.metric) && (
-                  <>
-                    <KtcBoardKeys
-                      board={col.format}
-                      onChange={(format) => press({ format })}
-                      size="row"
-                      legend
-                      className=""
-                      unavailable={(format) => why({ format })}
-                    />
-                    <KtcLineupKeys
-                      lineup={col.lineup}
-                      onChange={(lineup) => press({ lineup })}
-                      size="row"
-                      legend
-                      className=""
-                      unavailable={(lineup) => why({ lineup })}
-                    />
-                  </>
+                  <KtcBoardKeys
+                    board={col.format}
+                    onChange={(format) => press({ format })}
+                    size="row"
+                    legend
+                    className=""
+                    unavailable={(format) => why({ format })}
+                  />
+                )}
+                {readsQbBoard(col.metric) && (
+                  <KtcLineupKeys
+                    lineup={col.lineup}
+                    onChange={(lineup) => press({ lineup })}
+                    size="row"
+                    legend
+                    className=""
+                    unavailable={(lineup) => why({ lineup })}
+                  />
                 )}
 
                 {/* **The milled cut is copy, not rhythm.** Position *narrows*
@@ -797,9 +810,21 @@ function BayKey({
  * name — two would be a rack that says one thing and announces another.
  */
 function baySetting(col: LineupColumn): string {
+  const scope = LINEUP_METRIC_LABELS[col.metric].scope;
+  const board = adpBoardLabel(col.lineup);
   const setting = isKtcMetric(col.metric)
     ? ktcChoiceLabel(col)
-    : LINEUP_METRIC_LABELS[col.metric].scope;
+    : // **The scope and its board join tight, where the positions join
+      // spaced**, and the difference is not a fudge for width: these two are
+      // one reading — what was counted, priced on which board — where the
+      // narrowing is a second clause about it. It is the spelling the card's
+      // own tile already uses (`Roster·SF` beside `Dyn·SF`) for the same
+      // reason and in the same 58px of line. Spaced, a render at 390 cut it to
+      // `ROSTER ·…`: the ellipsis where the board should be, which is the one
+      // part of the line a reader has forced.
+      board
+      ? `${scope}·${board}`
+      : scope;
   const narrowed = positionsLabel(col.positions);
   if (!narrowed) return setting;
   return setting ? `${setting} · ${narrowed}` : narrowed;
@@ -820,18 +845,38 @@ function bayNumber(index: number): string {
  */
 function reads(col: LineupColumn): string {
   const words = LINEUP_METRIC_LABELS[col.metric];
-  const board = isKtcMetric(col.metric) ? ` ${boardClause(col)}` : "";
+  const board = readsQbBoard(col.metric) ? ` ${boardClause(col)}` : "";
   return `${words.option}${board}${positionsClause(col.positions)}`;
 }
 
 /**
- * The market clause a KeepTradeCut column's sentence ends with.
+ * The board clause a priced column's sentence ends with.
  *
  * Both axes on `auto` collapse to one short phrase rather than spelling the
  * rule twice — "on each league's own market, at each league's own prices" says
- * in two lines what "its own board" says in three words.
+ * in two lines what "its own board" says in three words. A capital column has
+ * only one axis to name and names it in the ADP vocabulary, because "the
+ * superflex board" means a different thing to a reader who has just come from a
+ * KeepTradeCut bay: there it is a column of prices, here it is which drafts the
+ * average was pooled from.
  */
 function boardClause(col: LineupColumn): string {
+  const prices =
+    col.lineup === "auto"
+      ? "each league's own prices"
+      : col.lineup === "sf"
+        ? "superflex prices"
+        : "1QB prices";
+  // A capital column has no market to name, so the sentence is the QB board
+  // alone — and it is spelled out even on `auto`, where the bay's own line
+  // stays silent: the window is where there is room to say what a rule means,
+  // and "each league's own draft board" is exactly the thing a reader who has
+  // never pressed this track would otherwise have to infer.
+  if (!isKtcMetric(col.metric)) {
+    return col.lineup === "auto"
+      ? "Off each league's own draft board."
+      : `Off the ${col.lineup === "sf" ? "superflex" : "1QB"} draft board.`;
+  }
   if (col.format === "auto" && col.lineup === "auto") {
     return "On each league's own board.";
   }
@@ -839,13 +884,7 @@ function boardClause(col: LineupColumn): string {
     col.format === "auto"
       ? "each league's own market"
       : `the ${col.format} board`;
-  const lineup =
-    col.lineup === "auto"
-      ? "each league's own prices"
-      : col.lineup === "sf"
-        ? "superflex prices"
-        : "1QB prices";
-  return `On ${market}, at ${lineup}.`;
+  return `On ${market}, at ${prices}.`;
 }
 
 /**

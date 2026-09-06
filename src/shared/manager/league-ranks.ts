@@ -8,7 +8,7 @@
  *
  * **One solve per roster is the whole design.** `solveLeagueLineup` already
  * prices every player's points, draft capital *and* KeepTradeCut value onto the
- * lineup it returns, so eight of the nine metrics fall out of the solves the
+ * lineup it returns, so nine of the ten metrics fall out of the solves the
  * rank needs anyway — there is no second valuation pass to drift from the
  * first. The ninth, `ktc_picks`, is the one thing not on a player, and it
  * arrives priced for the same reason. Every solve is returned,
@@ -16,14 +16,20 @@
  * league, so the payload carries all of them, not just the manager's.
  * (It used to discard the others; the team picker is what reversed that.)
  *
- * **A forced KeepTradeCut board is four more ranks, not a second solve.** KTC
- * never enters the seating, so a column that has named its own market or QB
- * board changes what a roster is worth and nothing about who is in it:
- * {@link ktcMetricTotals} re-totals the lineups already in hand against a second
- * price table and the four ranks are filed under that variant's key, beside the
- * nine. A caller that has forced nothing passes no variants and gets exactly
- * what it always got — the timeline among them, which asks the league's own
- * board and nothing else.
+ * **A forced board is more ranks, not a second solve.** KTC never enters the
+ * seating, so a column that has named its own market or QB board changes what a
+ * roster is worth and nothing about who is in it: {@link ktcMetricTotals}
+ * re-totals the lineups already in hand against a second price table and the
+ * four ranks are filed under that variant's key, beside the ten. A forced *ADP*
+ * board is the same move one valuation over — {@link capitalMetricTotals}
+ * against a second draft aggregate, three ranks — and it is the one place the
+ * rule had to be *held to* rather than merely observed: `adp_value` is a
+ * tiebreak inside the solve, so a forced board could have re-seated the
+ * unprojected. It does not. The lineup a card shows is the one the league's own
+ * board seated, and every column on the card ranks the manager on that lineup.
+ * A caller that has forced nothing passes no variants and gets exactly what it
+ * always got — the timeline among them, which asks the league's own boards and
+ * nothing else.
  *
  * **A position narrowing is a third way to total the same solves, and it must
  * never be a second seating.** A column narrowed to `QB` asks what the
@@ -60,6 +66,11 @@ import { positionKeySuffix } from "../ktc/columns.ts";
 import { round } from "../projections/optimal.ts";
 import { playsPosition } from "../projections/positions.ts";
 import type { RosProjections } from "../projections/ros.ts";
+import {
+  adpEntryValue,
+  DEFAULT_STEEPNESS,
+  leagueAdpPool,
+} from "./adp-value.ts";
 import type { AdpEntry } from "./adp-value.ts";
 import { solveLeagueLineup } from "./ros-lineups.ts";
 import type { RosLineupLeague } from "./ros-lineups.ts";
@@ -83,7 +94,7 @@ export type RankLeague = {
 };
 
 /**
- * All nine metric totals off one solved lineup and the roster's pick portfolio.
+ * All ten metric totals off one solved lineup and the roster's pick portfolio.
  * Exported for the tests: the sums here are what the ranks compare, so their
  * edge rules — an unpriced player counts zero on every scale, the ROS bench
  * re-rounds the way the starters total already is — are pinned where they live.
@@ -122,29 +133,84 @@ export function lineupMetricTotals(
   positions: readonly LineupPosition[] = [],
 ): Record<LineupMetricId, number> {
   const roster = countedRoster(lineup, positions);
-  const starterCapital = sumOf(roster.starters, (player) => player.adp_value);
-  const benchCapital = sumOf(roster.bench, (player) => player.adp_value);
+  // **The un-narrowed figure is read off the lineup, never re-summed here.**
+  // `projected_points` is the number the card prints beside this rank and the
+  // solver has already `round`ed it over these very seats, so a second
+  // summation could only ever disagree with it — at the last decimal, with
+  // nothing on screen saying which of the two was wrong. A narrowed figure has
+  // no such field to read and takes the same `round`, which is the convention
+  // `ros_bench` is on below and the one the solver used.
+  const starters =
+    positions.length === 0
+      ? lineup.projected_points
+      : round(sumOf(roster.starters, (player) => player.points));
+  const bench = round(sumOf(roster.bench, (player) => player.points));
   return {
-    // **The un-narrowed figure is read off the lineup, never re-summed here.**
-    // `projected_points` is the number the card prints beside this rank and the
-    // solver has already `round`ed it over these very seats, so a second
-    // summation could only ever disagree with it — at the last decimal, with
-    // nothing on screen saying which of the two was wrong. A narrowed figure has
-    // no such field to read and takes the same `round`, which is the convention
-    // `ros_bench` is on below and the one the solver used.
-    ros_starters:
-      positions.length === 0
-        ? lineup.projected_points
-        : round(sumOf(roster.starters, (player) => player.points)),
-    ros_bench: round(sumOf(roster.bench, (player) => player.points)),
-    capital_total: starterCapital + benchCapital,
-    capital_bench: benchCapital,
-    capital_starters: starterCapital,
+    // **Summed from the two halves rather than from the roster**, so the three
+    // reconcile exactly — `ros_total = ros_starters + ros_bench` — the way the
+    // KeepTradeCut quartet does and for the same reason: a reader adding the
+    // tiles up must not find the sum wrong. Re-summing the players instead
+    // would round once where this rounds twice, which is a cent of disagreement
+    // on a card that shows both. The outer `round` is float dust, not a third
+    // rounding: both operands already carry two decimals.
+    ros_total: round(starters + bench),
+    ros_starters: starters,
+    ros_bench: bench,
+    ...capitalTotalsOf(roster, (player) => player.adp_value),
     ...ktcTotalsOf(
       roster,
       (player) => player.ktc_value,
       countedPicks(pickValue, positions),
     ),
+  };
+}
+
+/** The three metrics an ADP board answers. Extracted from the union so the trio
+ * cannot drift from the ids the contract names. */
+export type CapitalMetricId = Extract<LineupMetricId, `capital_${string}`>;
+
+/**
+ * A roster's three draft-capital totals, off one solved lineup and one price
+ * function.
+ *
+ * Split out of {@link lineupMetricTotals} on {@link ktcMetricTotals}' exact
+ * terms, and it arrived for the same reason one axis over: the ADP fold splits
+ * superflex drafts from standard ones, so a column that has forced a QB board
+ * is the same lineups priced against a second table. **The seating does not
+ * move**, which is the one thing worth restating here rather than assuming:
+ * `adp_value` is a tiebreak inside `solveLeagueLineup` and the lineup a card
+ * shows is the one that league's own board seated, so a forced board changes
+ * what a roster's capital is worth and not who is in it. That is the rule the
+ * KeepTradeCut columns have always lived by, held to on an axis that *could*
+ * have re-seated — a re-solve would rank the manager on a lineup nobody fields.
+ */
+export function capitalMetricTotals(
+  lineup: LeagueLineup,
+  price: (player: LineupPlayer) => number | null,
+  positions: readonly LineupPosition[] = [],
+): Record<CapitalMetricId, number> {
+  return capitalTotalsOf(countedRoster(lineup, positions), price);
+}
+
+/**
+ * The trio itself, over players already counted. One summation behind both
+ * entry points, so `capital_total = capital_starters + capital_bench` holds on
+ * the league's own board and on a forced one alike.
+ *
+ * Capital is deliberately not arranged the way the KTC quartet is —
+ * `capital_total` is the players alone, because ADP prices a *player* and there
+ * is no pick ladder here to add.
+ */
+function capitalTotalsOf(
+  roster: CountedRoster,
+  price: (player: LineupPlayer) => number | null,
+): Record<CapitalMetricId, number> {
+  const starters = sumOf(roster.starters, price);
+  const bench = sumOf(roster.bench, price);
+  return {
+    capital_total: starters + bench,
+    capital_bench: bench,
+    capital_starters: starters,
   };
 }
 
@@ -309,17 +375,18 @@ export type RankedRoster = {
  * has. `rosters` comes back in the caller's roster order either way — the
  * ranks and the teams pane must be read off the same set of solves.
  *
- * **Everything past the nine base ranks is a re-total, never a second solve.**
+ * **Everything past the ten base ranks is a re-total, never a second solve.**
  * The cross product a request can ask for is: each position set on the league's
- * own board (nine metrics), plus each forced KeepTradeCut pricing (four
- * metrics) *at* each position set including the un-narrowed one. A rack holds
- * four bays, so that is bounded by four sets against four variants however a
- * reader arranges them, and every one of those totals is summed off the solves
- * already in `solved`. The variants and the sets are crossed rather than paired
- * per column deliberately: what crosses the wire is the two *axes* rather than
- * the columns themselves (see `ktcVariantsOf` and `positionSetsOf`), which is
- * what keeps adding a tile free of a round trip, and the cost of ranking a cell
- * nobody happens to be reading is one more sum over a dozen lineups.
+ * own boards (ten metrics), plus each forced KeepTradeCut pricing (four
+ * metrics) and each forced ADP board (three) *at* each position set including
+ * the un-narrowed one. A rack holds four bays, so that is bounded by four sets
+ * against four pricings however a reader arranges them, and every one of those
+ * totals is summed off the solves already in `solved`. The pricings and the
+ * sets are crossed rather than paired per column deliberately: what crosses the
+ * wire is the three *axes* rather than the columns themselves (see
+ * `ktcVariantsOf`, `adpBoardsOf` and `positionSetsOf`), which is what keeps
+ * adding a tile free of a round trip, and the cost of ranking a cell nobody
+ * happens to be reading is one more sum over a dozen lineups.
  */
 export function rankLeagueLineups(
   league: RankLeague,
@@ -350,6 +417,13 @@ export function rankLeagueLineups(
    * after the colon) that nothing looks up.
    */
   positionSets: readonly (readonly LineupPosition[])[] = [],
+  /**
+   * Extra ADP boards to re-price the same rosters on, one per capital column
+   * that has forced a QB board. Empty for every caller that has not — the
+   * timeline among them, which asks the league's own board and nothing else.
+   * See {@link AdpVariant}.
+   */
+  adpVariants: readonly AdpVariant[] = [],
 ): {
   lineup: LeagueLineup | null;
   ranks: ColumnRanks;
@@ -379,7 +453,7 @@ export function rankLeagueLineups(
   }
   const manager = solved[managerIndex];
 
-  // The nine, on the league's own board over the whole roster — the totals
+  // The ten, on the league's own board over the whole roster — the totals
   // already hung on every solve, so this path is untouched by either axis.
   const base = baseRanks((metric) =>
     rankAmong(solved.map(({ totals }) => totals[metric]), managerIndex),
@@ -387,7 +461,7 @@ export function rankLeagueLineups(
 
   const keyed: Record<string, MetricRank | null> = {};
 
-  // A narrowing is the same nine rosters re-totalled over fewer players. The
+  // A narrowing is the same rosters re-totalled over fewer players. The
   // key is the metric plus the set, which is exactly what `lineupColumnKey`
   // writes on the other side of the seam.
   for (const positions of positionSets) {
@@ -409,7 +483,7 @@ export function rankLeagueLineups(
     }
   }
 
-  // A forced board is the same nine rosters re-totalled on a second price
+  // A forced board is the same rosters re-totalled on a second price
   // table, so it is four more ranks rather than a second solve: `ktcMetricTotals`
   // reads the lineups already in hand. Crossed with the sets, since a column may
   // force a board *and* narrow — `EVERY_POSITION` first, so a variant that has
@@ -434,6 +508,37 @@ export function rankLeagueLineups(
     }
   }
 
+  // A forced ADP board is the same rosters re-priced off a second draft
+  // aggregate: three more ranks, and — as above — no second seating. The pool
+  // is the league's own on every board, because `leagueAdpPool` is teams times
+  // starting slots and a QB board changes neither; anchoring a forced board to
+  // a different pool would be a second curve rather than a second reading of
+  // the same one.
+  const pool = leagueAdpPool(league.total_rosters, league.roster_positions);
+  for (const variant of adpVariants) {
+    for (const positions of [EVERY_POSITION, ...positionSets]) {
+      const totals = solved.map(({ lineup }) =>
+        capitalMetricTotals(
+          lineup,
+          (player) => {
+            const entry = variant.adp.get(player.player_id);
+            return entry === undefined
+              ? null
+              : adpEntryValue(entry, pool, DEFAULT_STEEPNESS);
+          },
+          positions,
+        ),
+      );
+      const suffix = `${variant.key}${positionKeySuffix(positions)}`;
+      for (const metric of CAPITAL_METRIC_IDS) {
+        keyed[`${metric}${suffix}`] = rankAmong(
+          totals.map((one) => one[metric]),
+          managerIndex,
+        );
+      }
+    }
+  }
+
   return {
     lineup: manager.lineup,
     ranks: { ...keyed, ...base },
@@ -446,7 +551,7 @@ export function rankLeagueLineups(
 const EVERY_POSITION: readonly LineupPosition[] = [];
 
 /**
- * The nine ranks as one literal, given something that ranks a metric.
+ * The ten ranks as one literal, given something that ranks a metric.
  *
  * A function rather than a list of the ids because **the literal is the
  * compiler seam**: `LineupRanks` is exhaustive, so a metric added to the
@@ -459,6 +564,7 @@ function baseRanks(
   rankOn: (metric: LineupMetricId) => MetricRank | null,
 ): LineupRanks {
   return {
+    ros_total: rankOn("ros_total"),
     ros_starters: rankOn("ros_starters"),
     ros_bench: rankOn("ros_bench"),
     capital_total: rankOn("capital_total"),
@@ -518,6 +624,37 @@ const KTC_METRIC_IDS: readonly KtcMetricId[] = [
 ];
 
 /**
+ * One extra ADP board to rank on: the aggregate itself, and the key its three
+ * ranks are filed under.
+ *
+ * **The entries rather than the values**, which is where this differs from
+ * {@link RankVariant} and the difference is the league. A KeepTradeCut price is
+ * a number that means the same thing everywhere, so the route can build one map
+ * for the page; an ADP value is a *position on a board* run through a curve
+ * anchored to this league's own startable pool, so the pricing has to happen
+ * where the pool is known. Handing values in would mean either a map per league
+ * per board or a second anchoring, and the second is the one that renders
+ * perfectly while being wrong.
+ *
+ * The key is `qbBoardKeySuffix`'s — `:sf` — written by the caller through that
+ * function rather than spelled here, so the rank a card looks up and the rank
+ * this files are one spelling.
+ */
+export type AdpVariant = {
+  /** `:sf` / `:oneqb` — see `qbBoardKeySuffix`, which is what writes it. */
+  key: string;
+  /** Sleeper player id → this board's entry; undrafted ids absent. */
+  adp: ReadonlyMap<string, AdpEntry>;
+};
+
+/** The three capital metrics, in canonical order — the ids an ADP board re-ranks. */
+const CAPITAL_METRIC_IDS: readonly CapitalMetricId[] = [
+  "capital_total",
+  "capital_bench",
+  "capital_starters",
+];
+
+/**
  * Standard competition rank of one figure among the league's, or null where
  * every figure is zero.
  *
@@ -542,6 +679,7 @@ function rankAmong(totals: readonly number[], mine: number): MetricRank | null {
 
 /** A league the manager holds no roster in: every metric unanswerable. */
 const NO_RANKS: LineupRanks = {
+  ros_total: null,
   ros_starters: null,
   ros_bench: null,
   capital_total: null,

@@ -4,7 +4,11 @@ import { describe, test } from "node:test";
 import type { LeagueLineup, LineupMetricId, LineupPosition } from "@/shared/contract";
 
 import { lineupColumnKey } from "../ktc/columns.ts";
-import { lineupMetricTotals, rankLeagueLineups } from "./league-ranks.ts";
+import {
+  capitalMetricTotals,
+  lineupMetricTotals,
+  rankLeagueLineups,
+} from "./league-ranks.ts";
 import type { LeagueRosterRow, RankLeague } from "./league-ranks.ts";
 import type { RosProjections } from "../projections/ros.ts";
 import type { AdpEntry } from "./adp-value.ts";
@@ -140,6 +144,7 @@ describe("lineupMetricTotals — a position narrowing", () => {
   test("counts only the players in the set, on every lens", () => {
     const totals = lineupMetricTotals(narrowableFixture(), 9000, ["QB"]);
     assert.deepEqual(totals, {
+      ros_total: 24,
       ros_starters: 18,
       ros_bench: 6,
       capital_total: 250,
@@ -225,6 +230,7 @@ describe("lineupMetricTotals — a position narrowing", () => {
 describe("lineupMetricTotals", () => {
   test("sums each lens off one lineup, counting nulls as zero", () => {
     assert.deepEqual(lineupMetricTotals(lineupFixture(), 9000), {
+      ros_total: 9.75,
       ros_starters: 7.5,
       ros_bench: 2.25,
       capital_total: 140,
@@ -235,6 +241,20 @@ describe("lineupMetricTotals", () => {
       ktc_bench: 1500,
       ktc_picks: 9000,
     });
+  });
+
+  // Three figures on one scale, and a reader adding the two halves must land on
+  // the whole — which is why `ros_total` is summed from the halves rather than
+  // re-summed off the roster: that would round once where these round twice,
+  // and disagree by a cent on a card showing all three.
+  test("the three ROS metrics reconcile, whole and narrowed", () => {
+    const whole = lineupMetricTotals(lineupFixture(), 9000);
+    assert.equal(whole.ros_total, whole.ros_starters + whole.ros_bench);
+    const narrowed = lineupMetricTotals(narrowableFixture(), 9000, ["QB"]);
+    assert.equal(
+      narrowed.ros_total,
+      narrowed.ros_starters + narrowed.ros_bench,
+    );
   });
 
   // The reason the four KTC metrics are arranged the way they are: a reader
@@ -491,6 +511,7 @@ describe("rankLeagueLineups", () => {
 
     assert.equal(result.lineup, null);
     assert.deepEqual(result.ranks, {
+      ros_total: null,
       ros_starters: null,
       ros_bench: null,
       capital_total: null,
@@ -505,8 +526,9 @@ describe("rankLeagueLineups", () => {
 });
 
 
-/** The nine metric ids, so a stray key in the un-narrowed answer is visible. */
-const NINE: LineupMetricId[] = [
+/** The ten metric ids, so a stray key in the un-narrowed answer is visible. */
+const TEN: LineupMetricId[] = [
+  "ros_total",
   "ros_starters",
   "ros_bench",
   "capital_total",
@@ -536,6 +558,167 @@ function key(
     positions,
   });
 }
+
+describe("capitalMetricTotals", () => {
+  // The trio behind both entry points, so `capital_total` is the two halves on
+  // the league's own board and on a forced one alike.
+  test("re-prices one solve against a second board and still reconciles", () => {
+    const totals = capitalMetricTotals(lineupFixture(), () => 7);
+    assert.equal(totals.capital_starters + totals.capital_bench, totals.capital_total);
+  });
+
+  test("an unpriced player contributes nothing rather than breaking the sum", () => {
+    // Null is not zero anywhere else on this wire, but a *sum* has to put
+    // something there — and the all-zero rule is what catches the case where
+    // that makes the whole metric meaningless.
+    const totals = capitalMetricTotals(lineupFixture(), () => null);
+    assert.equal(totals.capital_total, 0);
+  });
+});
+
+/**
+ * A forced ADP board, which is the KeepTradeCut variant's move one valuation
+ * over — and the one place the "a forced board never re-seats" rule had to be
+ * *held to* rather than merely observed: `adp_value` is a tiebreak inside the
+ * solve, so a board handed to the solver would change who is on the card.
+ */
+describe("rankLeagueLineups — a forced ADP board", () => {
+  test("is three more ranks under its own key, beside the base ten", () => {
+    const board: RosProjections = {
+      a: unprojected("a", ["QB"]),
+      b: unprojected("b", ["QB"]),
+      c: unprojected("c", ["QB"]),
+      d: unprojected("d", ["QB"]),
+    };
+    // Two apiece, so a seat and a bench spot are both filled and all three
+    // capital metrics have something to say.
+    const l = league([roster(1, "me", ["a", "c"]), roster(2, "t2", ["b", "d"])], {
+      roster_positions: ["QB", "BN"],
+    });
+    // On the league's own board the manager's players went late; on the forced
+    // one they went first, so the two answers must differ and both must be
+    // there.
+    const own = new Map([
+      ["a", full(40)],
+      ["c", full(40)],
+      ["b", full(1)],
+      ["d", full(1)],
+    ]);
+    const forced = new Map([
+      ["a", full(1)],
+      ["c", full(1)],
+      ["b", full(40)],
+      ["d", full(40)],
+    ]);
+    const { ranks } = rankLeagueLineups(
+      l,
+      "me",
+      board,
+      own,
+      new Map(),
+      new Map(),
+      [],
+      [],
+      [{ key: ":sf", adp: forced }],
+    );
+
+    assert.deepEqual(ranks.capital_total, { rank: 2, of: 2 });
+    assert.deepEqual(ranks["capital_total:sf"], { rank: 1, of: 2 });
+    assert.deepEqual(ranks["capital_bench:sf"], { rank: 1, of: 2 });
+    assert.deepEqual(ranks["capital_starters:sf"], { rank: 1, of: 2 });
+    // A board nobody is priced on has nothing to say, which is the all-zero
+    // rule rather than a special case.
+    assert.equal(
+      rankLeagueLineups(l, "me", board, own, new Map(), new Map(), [], [], [
+        { key: ":oneqb", adp: NO_ADP },
+      ]).ranks["capital_total:oneqb"],
+      null,
+    );
+  });
+
+  test("prices the same lineup rather than seating a different one", () => {
+    // The rule the KTC columns have always had, on the one axis that could
+    // have broken it. `adp_value` is the solver's tiebreak among the
+    // unprojected, so a forced board seated by it would rank the manager on a
+    // lineup nobody fields — and the seats on the card beside the rank would be
+    // a different roster's.
+    const board: RosProjections = {
+      a: unprojected("a", ["QB"]),
+      b: unprojected("b", ["QB"]),
+    };
+    const l = league([roster(1, "me", ["a", "b"]), roster(2, "t2", [])], {
+      roster_positions: ["QB", "BN"],
+    });
+    const own = new Map([
+      ["a", full(1)],
+      ["b", full(60)],
+    ]);
+    const forced = new Map([
+      ["a", full(60)],
+      ["b", full(1)],
+    ]);
+    const plain = rankLeagueLineups(l, "me", board, own);
+    const withBoard = rankLeagueLineups(
+      l,
+      "me",
+      board,
+      own,
+      new Map(),
+      new Map(),
+      [],
+      [],
+      [{ key: ":sf", adp: forced }],
+    );
+
+    assert.equal(
+      withBoard.rosters[0]!.lineup.starters[0]?.player?.player_id,
+      plain.rosters[0]!.lineup.starters[0]?.player?.player_id,
+    );
+    // …and every base rank and total is byte-identical, so a bay switching
+    // costs the page nothing it already had.
+    assert.deepEqual(withBoard.rosters[0]!.totals, plain.rosters[0]!.totals);
+    assert.deepEqual(withBoard.ranks.capital_total, plain.ranks.capital_total);
+  });
+
+  test("crosses with a narrowing, and its own key is unmoved", () => {
+    const board: RosProjections = {
+      qb: unprojected("qb", ["QB"]),
+      wr: unprojected("wr", ["WR"]),
+    };
+    const l = league([roster(1, "me", ["qb", "wr"]), roster(2, "t2", ["wr"])]);
+    const forced = new Map([
+      ["qb", full(1)],
+      ["wr", full(40)],
+    ]);
+    const { ranks } = rankLeagueLineups(
+      l,
+      "me",
+      board,
+      NO_ADP,
+      new Map(),
+      new Map(),
+      [],
+      [["QB"]],
+      [{ key: ":sf", adp: forced }],
+    );
+
+    // The un-narrowed key keeps its bare form, and the crossed one is the
+    // board's suffix then the set's — exactly what `lineupColumnKey` writes.
+    assert.ok(ranks["capital_total:sf"]);
+    assert.deepEqual(ranks["capital_total:sf:qb"], { rank: 1, of: 2 });
+    // Asked of the card's own function rather than spelled here, which is the
+    // claim: the server files a rank under the string the card reads it by.
+    assert.equal(
+      lineupColumnKey({
+        metric: "capital_total",
+        format: "auto",
+        lineup: "sf",
+        positions: ["QB"],
+      }),
+      "capital_total:sf:qb",
+    );
+  });
+});
 
 describe("rankLeagueLineups — a position narrowing", () => {
   /** One QB seat and one flex, so a narrowing can disagree with the whole. */
@@ -575,8 +758,8 @@ describe("rankLeagueLineups — a position narrowing", () => {
 
   // The regression that matters most. Every column on the page that has not
   // narrowed reads a bare metric id, so a set on the request must add keys and
-  // never rename one — an `all` token on the nine would blank every card.
-  test("the nine keep their bare names and their answers when sets are asked for", () => {
+  // never rename one — an `all` token on the ten would blank every card.
+  test("the ten keep their bare names and their answers when sets are asked for", () => {
     const plain = rankLeagueLineups(narrowableLeague(), "me", BOARD, NO_ADP);
     const narrowed = rankLeagueLineups(
       narrowableLeague(),
@@ -589,17 +772,17 @@ describe("rankLeagueLineups — a position narrowing", () => {
       [["QB"], ["TE", "WR"]],
     );
 
-    assert.deepEqual(Object.keys(plain.ranks).sort(), [...NINE].sort());
-    for (const metric of NINE) {
+    assert.deepEqual(Object.keys(plain.ranks).sort(), [...TEN].sort());
+    for (const metric of TEN) {
       assert.deepEqual(narrowed.ranks[metric], plain.ranks[metric]);
     }
-    // …and the sets that were asked for are all nine each, beside them.
+    // …and the sets that were asked for are all ten each, beside them.
     assert.deepEqual(
       Object.keys(narrowed.ranks).sort(),
       [
-        ...NINE,
-        ...NINE.map((metric) => key(metric, ["QB"])),
-        ...NINE.map((metric) => key(metric, ["TE", "WR"])),
+        ...TEN,
+        ...TEN.map((metric) => key(metric, ["QB"])),
+        ...TEN.map((metric) => key(metric, ["TE", "WR"])),
       ].sort(),
     );
   });
@@ -619,7 +802,7 @@ describe("rankLeagueLineups — a position narrowing", () => {
       [["DL"]],
     );
 
-    for (const metric of NINE) {
+    for (const metric of TEN) {
       assert.equal(ranks[key(metric, ["DL"])], null);
     }
     // The un-narrowed answers are untouched by the empty narrowing beside them.
