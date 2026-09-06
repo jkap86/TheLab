@@ -316,23 +316,36 @@ export function SwitchTrack<T extends string>({
               title={why ?? undefined}
               className={
                 "lab-anim min-w-0 truncate rounded-full border font-mono uppercase " +
-                "transition-[color,box-shadow,transform] duration-150 " +
+                // 140ms on the row arm, which is the only one whose key travels
+                // — the other two change colour and shadow alone.
+                (row
+                  ? "transition-[color,box-shadow,transform] duration-[140ms] "
+                  : "transition-[color,box-shadow] duration-150 ") +
                 "focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-active/60 " +
                 "disabled:cursor-not-allowed " +
                 (row
-                  ? // **The gutter and the tracking are measured, not chosen,
-                    // and the position axis is what measures them.** At 390 the
-                    // case is 358px, which leaves the axes housing 298 and the
-                    // track 292 inside its own padding; ten keys, eleven 3px
-                    // gaps and two hairlines is 25.7px a key, of which the
-                    // design's `px-1` and 0.04em leave 17.7px against `DEF` at
-                    // ~21.9 — every defensive key clipped to two characters, on
-                    // the one axis whose whole point is naming a position. At
-                    // 2px gaps, `px-0.5` and no tracking it is 22.8 against
-                    // 20.5. From `sm` up the case is 560, the track 412 and the
-                    // design's own figures are comfortable, so they are what a
-                    // desktop draws.
-                    "flex-1 px-0.5 py-1.5 text-[length:var(--fs-10)] tracking-normal sm:px-1 sm:tracking-[0.04em] "
+                  ? // **`flex-auto` below `sm`, never `flex-1`, and that is the
+                    // whole of why the position keys keep their legends.**
+                    // Tailwind spells `flex-1` as `flex: 1 1 0%`, so every key
+                    // claims a basis of zero and the track hands all ten an
+                    // identical share — 25.2px at 390, of which the border and
+                    // `px-0.5` leave **19.2px of content against the 21px**
+                    // `All` and `DEF` need. Both clipped to a letter and an
+                    // ellipsis, on the one axis whose whole point is naming a
+                    // position, with `document.scrollWidth` still reading 390
+                    // and nothing on screen saying so. `flex-auto` is
+                    // `flex: 1 1 auto`, which sizes each key to its own label
+                    // and then grows it into what is left — 227px of content in
+                    // 276px of track, so the slack is shared and nothing is
+                    // cut. It is the same finding the league card's chip rail
+                    // already records, one component over.
+                    //
+                    // From `sm` up the case is 560 and the track 412, where
+                    // there is room for the equal share the design draws, so a
+                    // desktop keeps `flex-1` and the keys read as one switch.
+                    // The gutter and the tracking step with it for the same
+                    // measurement.
+                    "flex-auto px-0.5 py-1.5 text-[length:var(--fs-10)] tracking-normal sm:flex-1 sm:px-1 sm:tracking-[0.04em] "
                   : small
                     ? "flex-1 px-1 py-[0.1875rem] text-[length:var(--fs-8-5)] tracking-[0.1em] "
                     : "px-3 py-1.5 text-[length:var(--fs-10)] tracking-[0.16em] ") +

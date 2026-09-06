@@ -718,7 +718,7 @@ function BayKey({
       aria-label={`Bay ${bayNumber(index)}, ${words.column}${second ? `, ${second}` : ""}`}
       className={
         `${CONSOLE_BILLET_FACE} lab-anim relative flex w-full flex-col rounded-[0.6875rem] text-left ` +
-        "transition-[transform,box-shadow] duration-150 " +
+        "transition-[transform,box-shadow] duration-[160ms] " +
         "focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-active/60 " +
         // Composed whole, never layered: `--billet-shadow` is the chamfer and
         // the riser is what stands the part out of the hole, and a shadow list
