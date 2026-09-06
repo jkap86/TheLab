@@ -19,7 +19,11 @@
  * two would disagree with nothing on screen saying so.
  */
 
-import type { LeagueLineupEntry, LeagueTeam } from "@/shared/contract";
+import type {
+  LeagueLineupEntry,
+  LeagueTeam,
+  LineupPosition,
+} from "@/shared/contract";
 
 import { ktcPickPrice, pickTier } from "../ktc/picks.ts";
 import type { KtcPickPrice } from "../ktc/picks.ts";
@@ -78,6 +82,24 @@ export function solveLeagueEntry(
    * every page until a reader sets a bay's market or lineup by hand.
    */
   variants: readonly KtcVariantPricing[] = [],
+  /**
+   * The distinct position narrowings this page's columns carry, already parsed
+   * off the request. Empty for a page whose columns all count every position,
+   * which is every page until a reader narrows a bay.
+   *
+   * **They ride through to the ranks and stop there**, and that is a decision
+   * rather than an omission. A narrowing decides what a *rank* counts; it
+   * touches neither the picks resolved above nor the lineups the teams pane
+   * renders, and a {@link LeagueTeam} still carries the nine whole-roster
+   * totals it always did. Shipping a per-position total beside them was the
+   * alternative and nothing would read it: the expanded browser sorts and
+   * prints by a bare {@link LineupMetricId} (`team.totals[metric]`) and the
+   * timeline re-solves through {@link rankLeagueLineups} for the same nine, so
+   * a narrowed total would be a field on every team of every league that no
+   * reader could name — the dead weight the next reader has to prove is dead.
+   * It arrives with a browser that can ask the question.
+   */
+  positionSets: readonly (readonly LineupPosition[])[] = [],
 ): LeagueLineupEntry | null {
   const board = leaguePickBoard(league, season, (pick) =>
     pickValue(ktc, league.total_rosters, pick),
@@ -104,6 +126,7 @@ export function solveLeagueEntry(
       values: variant.values,
       pickValues: variantPickValues(board, league.total_rosters, variant),
     })),
+    positionSets,
   );
   if (!lineup) return null;
   const teams: LeagueTeam[] = rosters.map(({ roster, lineup, totals }) => ({

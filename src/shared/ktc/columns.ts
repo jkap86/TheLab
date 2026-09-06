@@ -94,7 +94,7 @@ export function ktcVariantKey(variant: KtcVariant): string {
  * name a second key — which is also why they can never occupy two bays.
  */
 export function lineupColumnKey(column: LineupColumn): string {
-  return `${pricedKey(column)}${positionSuffix(column.positions)}`;
+  return `${pricedKey(column)}${positionKeySuffix(column.positions)}`;
 }
 
 /** The key a column had before the position axis: metric, then its variant. */
@@ -127,11 +127,18 @@ function pricedKey(column: LineupColumn): string {
  * anyway, no position being spelled `auto`, `dynasty`, `redraft`, `oneqb` or
  * `sf`. The request carries the axes themselves (see {@link parsePositionSets}),
  * not these strings.
+ *
+ * **Exported, because the route composes the same suffix from the other end.**
+ * A rank is filed under a base metric key plus this, where a column is named by
+ * {@link lineupColumnKey} whole — two entry points to one spelling rather than
+ * two spellings a test has to keep in step, which is the standing rule of this
+ * file: the client writes the key and the server writes the key, and a
+ * separator repeated in two places is a separator that can come to differ.
  */
-function positionSuffix(positions: readonly LineupPosition[]): string {
-  return positions.length === 0
-    ? ""
-    : `:${positions.map((one) => one.toLowerCase()).join("+")}`;
+export function positionKeySuffix(
+  positions: readonly LineupPosition[],
+): string {
+  return positions.length === 0 ? "" : `:${positionSetKey(positions)}`;
 }
 
 /**

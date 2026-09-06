@@ -7,16 +7,19 @@
  * `shared/` rather than in `features/tools` because the leagues console builds
  * on it too, which is the line that decides where a client piece goes.
  *
- * There are two shapes of key and two depths of recess, and the pairs are not
+ * There are two shapes of key and four depths of recess, and none of them is
  * interchangeable:
  *
  * - {@link CONSOLE_KEY} is a *pill*, for a key standing on its own in a row of
  *   keys. {@link CONSOLE_KEY_BLOCK} is a *slab*, for a key stacked with others
  *   in a housing where a column of stadiums would read as a list of tablets.
- * - {@link CONSOLE_TRACK} is the tight channel a single key travels in — deep,
- *   so the key reads proud of it. {@link CONSOLE_WELL} is the shallow tray a
- *   whole panel of controls sits in, which at the same depth would read as a
- *   hole rather than a surface.
+ * - {@link CONSOLE_WELL} is the shallow tray a whole panel of controls sits in,
+ *   which at any greater depth would read as a hole rather than a surface.
+ *   {@link CONSOLE_TRACK} is the tight channel a single key travels in — deep,
+ *   so the key reads proud of it. {@link CONSOLE_CHANNEL} is deeper again, for
+ *   a track whose lit key is a *raised face* rather than a flush one. And
+ *   {@link CONSOLE_PART_TRAY} is deepest, because what it holds is parts rather
+ *   than controls, and a part is seated in a hole.
  *
  * And there is a fourth family at the foot of this file — the **billet**, a
  * solid part chamfered on all four edges, which is what a league card's ledge,
@@ -86,6 +89,43 @@ export const CONSOLE_HOUSING =
 /** The deep channel a single raised key sits in — the nav track, a lens toggle. */
 export const CONSOLE_TRACK =
   "rounded-full bg-[image:var(--key-bg)] shadow-[var(--track-shadow)]";
+
+/**
+ * The **third depth**: a channel cut deeper than {@link CONSOLE_TRACK}, for a
+ * track whose lit key is a raised face rather than a flush one.
+ *
+ * A key that carries its own riser and cast — the columns dialog's axis rows —
+ * standing in `--track-shadow`'s shallow groove reads as an object sitting *on*
+ * the track rather than travelling in it, which is the one thing a switch's
+ * shape has to say. So the recess goes deeper and its floor is a hole rather
+ * than key stock: `--key-bg` is a face catching a light, and there is no face
+ * at the bottom of this.
+ *
+ * A **black alpha rather than a token**, on the shares tray's rule: a recess
+ * has to be darker than its surround in *both* themes, which a black alpha is
+ * and a `--foreground` alpha is not. It carries no padding and no gap, for
+ * {@link CONSOLE_KEY_PILL}'s reason — the caller's own `p-*` would lose the
+ * emit-order flip against one written in here.
+ */
+export const CONSOLE_CHANNEL =
+  "rounded-full bg-black/52 " +
+  "shadow-[inset_0_4px_10px_rgba(0,0,0,0.95),inset_0_1px_0_rgba(0,0,0,0.9),inset_0_-1px_0_rgba(255,255,255,0.075)]";
+
+/**
+ * A tray holding **parts**: the columns dialog's bay rack.
+ *
+ * Deeper than {@link CONSOLE_WELL} deliberately, and the difference is the same
+ * one {@link CONSOLE_CHIP_TRAY} draws one grain smaller: a tray holding
+ * *controls* is a surface, and a tray holding *parts* is the absence of one. It
+ * is what makes four milled bays read as parts seated in a hole rather than as
+ * four keys on a panel — which is the whole of how that rack states its budget,
+ * since with every bay always set there is no count to state instead.
+ *
+ * No radius, on {@link CONSOLE_BILLET}'s terms: the caller states its own.
+ */
+export const CONSOLE_PART_TRAY =
+  "bg-black/46 " +
+  "shadow-[inset_0_7px_16px_rgba(0,0,0,0.9),inset_0_1px_0_rgba(0,0,0,0.9),inset_0_-1px_0_rgba(255,255,255,0.07)]";
 
 /**
  * The same channel, from `sm` up only.
@@ -231,9 +271,20 @@ export const CONSOLE_READOUT =
  * and `right` doing nothing at all. So the caller states its own: `relative`
  * on a chip, `absolute` on the ledge. `overflow-hidden` stays, being the half
  * of the contract nothing composes against.
+ *
+ * **And it does not compose with a cast**, which is why
+ * {@link CONSOLE_BILLET_FACE} exists beside it: a shadow list is atomic, so a
+ * caller appending `shadow-[0_10px_20px_…]` to this does not add a cast under
+ * the chamfer, it *replaces* the chamfer — and which of the two arbitrary
+ * `shadow-[…]` utilities wins is Tailwind's emit order rather than the class
+ * attribute's. A billet that throws a shadow onto what is under it spells the
+ * whole list with `var(--billet-shadow)` as its head, on the face alone.
  */
-export const CONSOLE_BILLET =
-  "overflow-hidden bg-[image:var(--billet-bg)] shadow-[var(--billet-shadow)]";
+export const CONSOLE_BILLET_FACE =
+  "overflow-hidden bg-[image:var(--billet-bg)]";
+
+/** The face above, chamfered, for a billet that casts nothing. */
+export const CONSOLE_BILLET = `${CONSOLE_BILLET_FACE} shadow-[var(--billet-shadow)]`;
 
 /**
  * The shallow well cut into a billet's own face — the standing drops into this.

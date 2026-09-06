@@ -74,6 +74,7 @@ export {
   LINEUP_METRIC_IDS,
   LINEUP_METRIC_LABELS,
   MAX_LINEUP_COLUMNS,
+  positionsLabel,
   storeLineupColumns,
   useLineupColumns,
 } from "./lineup-columns";

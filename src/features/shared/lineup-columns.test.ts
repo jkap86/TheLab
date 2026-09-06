@@ -7,16 +7,22 @@ import {
   COLUMN_SCOPES,
   COLUMN_VALUES,
   DEFAULT_LINEUP_COLUMNS,
+  IDP_LINEUP_POSITIONS,
   ktcBoardLabel,
   ktcChoiceLabel,
   LINEUP_METRIC_IDS,
   LINEUP_METRIC_LABELS,
+  LINEUP_POSITION_LABELS,
+  LINEUP_POSITIONS,
   MAX_LINEUP_COLUMNS,
   metricAt,
   metricAxes,
   normalizeLineupColumns,
+  positionGapReason,
+  positionsClause,
+  positionsLabel,
 } from "./lineup-columns.ts";
-import { isKtcMetric } from "../../shared/ktc/columns.ts";
+import { isKtcMetric, lineupColumnKey } from "../../shared/ktc/columns.ts";
 
 /**
  * The rules a stored column selection is read by, all of which are silent when
@@ -25,49 +31,57 @@ import { isKtcMetric } from "../../shared/ktc/columns.ts";
  * The hook and the write are not exercised here — they are `local-store`'s, and
  * that file's own contract is what they follow. What is tested is the pure half
  * both ends share: a selection lost on upgrade, a second bay that quietly
- * deletes the first, a fifth column, and a card left with none.
+ * deletes the first, a fifth column, and a rack with a socket the picker cannot
+ * draw.
  */
 
+/** What each bay actually holds, which is its key rather than its metric. */
+const keysOf = (value: unknown): string[] =>
+  normalizeLineupColumns(value).map(lineupColumnKey);
+
 describe("normalizeLineupColumns", () => {
-  test("a legacy string[] reads as columns on both autos", () => {
-    // The axes did not exist when the value was written, and `auto` is what the
-    // page was doing anyway — so nobody's stored selection moves on upgrade.
-    assert.deepEqual(normalizeLineupColumns(["ros_starters", "ktc_total"]), [
-      column("ros_starters"),
-      column("ktc_total"),
-    ]);
+  test("a legacy string[] reads as columns on every axis's default", () => {
+    // The axes did not exist when the value was written, and `auto` on both
+    // markets and the empty position set are what the page was doing anyway —
+    // so nobody's stored selection moves on upgrade.
+    const chosen = normalizeLineupColumns(["ros_starters", "ktc_total"]);
+    assert.deepEqual(
+      chosen.filter((c) => c.metric === "ros_starters"),
+      [column("ros_starters")],
+    );
+    assert.deepEqual(
+      chosen.filter((c) => c.metric === "ktc_total"),
+      [column("ktc_total")],
+    );
   });
 
   test("two KTC columns on two boards both survive", () => {
-    // The whole point of the new shape: a reader comparing one roster's
-    // superflex worth against its 1QB worth is asking two questions.
-    const stored = [
+    // The whole point of the shape: a reader comparing one roster's superflex
+    // worth against its 1QB worth is asking two questions.
+    const held = keysOf([
       column("ktc_total", "dynasty", "sf"),
       column("ktc_total", "dynasty", "oneqb"),
-    ];
-    assert.equal(normalizeLineupColumns(stored).length, 2);
+    ]);
+    assert.ok(held.includes("ktc_total:dynasty:sf"));
+    assert.ok(held.includes("ktc_total:dynasty:oneqb"));
   });
 
   test("the same board twice is one column", () => {
-    assert.deepEqual(
-      normalizeLineupColumns([
-        column("ktc_total", "dynasty", "sf"),
-        column("ktc_total", "dynasty", "sf"),
-      ]),
-      [column("ktc_total", "dynasty", "sf")],
-    );
+    const held = keysOf([
+      column("ktc_total", "dynasty", "sf"),
+      column("ktc_total", "dynasty", "sf"),
+    ]);
+    assert.equal(held.filter((k) => k === "ktc_total:dynasty:sf").length, 1);
   });
 
   test("a metric with no market cannot occupy two bays", () => {
     // `column` forces both axes to auto on those five, so a hand-edited value
     // carrying a board on one folds back onto the column already there.
-    assert.deepEqual(
-      normalizeLineupColumns([
-        column("ros_starters"),
-        { metric: "ros_starters", format: "dynasty", lineup: "sf" },
-      ]),
-      [column("ros_starters")],
-    );
+    const chosen = normalizeLineupColumns([
+      column("ros_starters"),
+      { metric: "ros_starters", format: "dynasty", lineup: "sf" },
+    ]);
+    assert.equal(chosen.filter((c) => c.metric === "ros_starters").length, 1);
   });
 
   test("caps at the budget", () => {
@@ -77,13 +91,33 @@ describe("normalizeLineupColumns", () => {
     );
   });
 
+  test("and tops a short selection back up to it", () => {
+    // **The cap means *exactly* four now**, which is the rack losing its empty
+    // socket: a selection of three is a bay the picker cannot draw and cannot
+    // offer a way to fill. Enforced on read as well as on write, since the short
+    // value may be one a build predating the change wrote or one a reader's own
+    // hand-edit left.
+    for (const n of [0, 1, 2, 3]) {
+      assert.equal(
+        normalizeLineupColumns(LINEUP_METRIC_IDS.slice(0, n)).length,
+        MAX_LINEUP_COLUMNS,
+        `${n} stored`,
+      );
+    }
+  });
+
+  test("what it tops up with is the defaults, then the rest of the grid", () => {
+    // So a reader whose stored value held one column keeps it and gains the
+    // defaults they were missing, rather than a metric nobody chose.
+    assert.deepEqual(
+      normalizeLineupColumns(["ros_starters", "not_a_metric", null, 7]),
+      DEFAULT_LINEUP_COLUMNS,
+    );
+  });
+
   test("never empty, and never a garbage column", () => {
     assert.deepEqual(normalizeLineupColumns([]), DEFAULT_LINEUP_COLUMNS);
     assert.deepEqual(normalizeLineupColumns("nope"), DEFAULT_LINEUP_COLUMNS);
-    assert.deepEqual(
-      normalizeLineupColumns(["ros_starters", "not_a_metric", null, 7]),
-      [column("ros_starters")],
-    );
   });
 
   test("orders canonically, and stably where one metric holds two bays", () => {
@@ -94,15 +128,121 @@ describe("normalizeLineupColumns", () => {
     ]);
     assert.deepEqual(
       ordered.map((c) => c.metric),
-      ["ros_bench", "ktc_total", "ktc_total"],
+      // The fourth is the top-up: `ros_starters`, the first default not held.
+      ["ros_starters", "ros_bench", "ktc_total", "ktc_total"],
     );
     // The two bays on one metric are ordered by their key, which is the same
     // string the card looks each rank up by — so the order cannot invent a
     // third identity.
     assert.deepEqual(
-      ordered.slice(1).map((c) => c.format),
+      ordered.slice(2).map((c) => c.format),
       ["dynasty", "redraft"],
     );
+  });
+});
+
+/**
+ * The third axis, read back off a stored value.
+ *
+ * Every rule here is silent when it goes wrong in the worst way an axis can be:
+ * a rank is a plausible number whichever question produced it, so a narrowing
+ * lost, doubled or reordered on read is a figure that looks right and answers
+ * something else.
+ */
+describe("the position axis, stored", () => {
+  test("an entry with no positions field reads as the empty set", () => {
+    // Which is what keeps every existing reader's selection through the change:
+    // the axis did not exist when the value was written, and "every position" is
+    // what the page was doing anyway. It is the same rule one grain older that
+    // reads a legacy bare string as a triple on `auto`.
+    const [first] = normalizeLineupColumns([
+      { metric: "ros_starters", format: "auto", lineup: "auto" },
+    ]);
+    assert.deepEqual(first.positions, []);
+  });
+
+  test("an un-narrowed column keys exactly as it did before the axis", () => {
+    // The nine base ranks the route always ships are filed under bare metric
+    // ids, so appending an `all` token to every key would rename every one of
+    // them — a card looking up a rank the server computed under another name,
+    // and an em dash where a number was.
+    assert.equal(lineupColumnKey(column("ros_starters")), "ros_starters");
+    assert.equal(lineupColumnKey(column("ktc_total")), "ktc_total");
+  });
+
+  test("two bays narrowed to different positions are two columns", () => {
+    const held = keysOf([
+      column("ktc_starters", "auto", "auto", ["QB"]),
+      column("ktc_starters", "auto", "auto", ["TE"]),
+    ]);
+    assert.ok(held.includes("ktc_starters:qb"));
+    assert.ok(held.includes("ktc_starters:te"));
+  });
+
+  test("a set is deduped, dropped of unknowns and canonically ordered", () => {
+    // Press order would make one column read two ways — the bay's second line
+    // and the card's tile both print this list.
+    // Found by key rather than by index, because the top-up puts the
+    // *un-narrowed* `ros_starters` in the rack beside this one — they are two
+    // columns, which is the axis working rather than a duplicate.
+    const narrowed = normalizeLineupColumns([
+      { metric: "ros_starters", positions: ["te", "QB", "TE", "OP", 7, null] },
+    ]).find((c) => c.positions.length > 0);
+    assert.deepEqual(narrowed?.positions, ["QB", "TE"]);
+    assert.equal(lineupColumnKey(narrowed!), "ros_starters:qb+te");
+  });
+
+  test("the same two positions in two press orders are one column", () => {
+    const held = keysOf([
+      column("ros_bench", "auto", "auto", ["QB", "TE"]),
+      column("ros_bench", "auto", "auto", ["TE", "QB"]),
+    ]);
+    assert.equal(held.filter((k) => k === "ros_bench:qb+te").length, 1);
+  });
+
+  test("a draft-pick column can never carry one", () => {
+    // A pick is not a player and has no position yet, which is the same fact the
+    // scope axis states by having `Picks` live under KeepTradeCut alone. Forced
+    // in the constructor rather than guarded at each caller, so a stored value
+    // carrying one cannot become a key nothing ranks.
+    assert.deepEqual(
+      column("ktc_picks", "auto", "auto", ["QB"]).positions,
+      [],
+    );
+    assert.equal(lineupColumnKey(column("ktc_picks")), "ktc_picks");
+  });
+});
+
+/** The axis's own words, which the bay, the card's tile and the sentence share. */
+describe("the position axis, spoken", () => {
+  test("every position offered has a label, and the IDP three are among them", () => {
+    for (const one of LINEUP_POSITIONS) {
+      assert.ok(LINEUP_POSITION_LABELS[one]?.length, one);
+    }
+    // The hairlines are read off the vocabulary rather than spelled as indices,
+    // so a position the solver learns lands on the right side of the cut.
+    for (const one of IDP_LINEUP_POSITIONS) {
+      assert.ok(LINEUP_POSITIONS.includes(one), one);
+    }
+  });
+
+  test("the label is slash-joined and the clause is a sentence's tail", () => {
+    // Two spellings of one set, because a 59px tile line and a `Reads` sentence
+    // cannot be the same string — and one function each, so the two surfaces
+    // cannot come to describe one column two ways.
+    assert.equal(positionsLabel([]), "");
+    assert.equal(positionsLabel(["QB", "TE"]), "QB/TE");
+    assert.equal(positionsClause([]), "");
+    assert.equal(positionsClause(["QB"]), " QB only.");
+    assert.equal(positionsClause(["QB", "TE"]), " QB and TE only.");
+    assert.equal(positionsClause(["RB", "WR", "DB"]), " RB, WR and DB only.");
+  });
+
+  test("only a picks column refuses the axis, and says why", () => {
+    for (const scope of COLUMN_SCOPES) {
+      assert.equal(positionGapReason(scope) === null, scope !== "picks", scope);
+    }
+    assert.match(positionGapReason("picks")!, /draft pick/);
   });
 });
 

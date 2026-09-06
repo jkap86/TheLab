@@ -434,12 +434,14 @@ export function LeaguesHome({
           key stands on the row on its own instead, right-aligned above the
           grid it configures.
 
-          The bound the chips carried survives where it always also lived: the
-          dialog refuses to clear the last bay standing (`onClear` is null
-          there), which is the rule that must not become a fall back to
-          `DEFAULT_LINEUP_COLUMNS` — `normalize` does exactly that when handed
-          an empty array, which is right for a stale stored value and wrong for
-          a press.
+          The bound the chips carried has moved again, and further in. It used
+          to be the dialog refusing to clear the last bay standing; with every
+          bay always set there is nothing to clear to, so the rule lives in
+          `normalizeLineupColumns`, which tops a short selection back up to
+          four. What it protects is unchanged and still silent when broken:
+          `normalize` falls back to `DEFAULT_LINEUP_COLUMNS` when handed an
+          *empty* array, which is right for a stale stored value and would be
+          four columns nobody chose if a press could ever reach it.
         */}
         {leagues.length > 0 && (
           <div className="relative mt-3.5 flex items-center justify-end">

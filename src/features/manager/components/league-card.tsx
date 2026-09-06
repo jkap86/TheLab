@@ -25,6 +25,7 @@ import {
   ordinalParts,
   PlateDivider,
   PlateField,
+  positionsLabel,
   ReadingPlate,
   Scanlines,
 } from "@/features/shared";
@@ -486,6 +487,7 @@ function RankWindow({
   const tone = rankColor(percentile);
   const words = LINEUP_METRIC_LABELS[column.metric];
   const parts = rank ? ordinalParts(rank.rank) : null;
+  const scope = tileScope(column, league);
 
   return (
     <div
@@ -500,12 +502,19 @@ function RankWindow({
         <p className="m-0 min-h-[0.6875rem] truncate font-mono text-[length:var(--fs-10)] uppercase leading-[1.2] text-readout-line sm:text-[length:var(--fs-11)] sm:tracking-[0.1em]">
           {words.unit}
         </p>
-        {/* Empty on every KeepTradeCut column, which is why the height is
-            reserved rather than left to the content: a strip of four with one
+        {/* Empty on an un-narrowed KeepTradeCut column, which is why the height
+            is reserved rather than left to the content: a strip of four with one
             scope missing would otherwise read as four windows at four
-            heights. */}
+            heights.
+
+            **Two spellings switched by the cascade**, for the reason the bay in
+            the columns picker has two: at 390 the label box is 65px against
+            `--fs-9`'s ~6.2px an em, which is ten and a half characters — and
+            `Starters · QB/TE` is sixteen. See `tileScope` for which half a phone
+            keeps and why. */}
         <p className="m-0 mt-px min-h-[0.6875rem] truncate font-mono text-[length:var(--fs-9)] uppercase leading-[1.2] tracking-[0.06em] text-readout-label sm:text-[length:var(--fs-10)] sm:tracking-[0.12em]">
-          {tileScope(column, league)}
+          <span className="sm:hidden">{scope.phone}</span>
+          <span className="hidden sm:inline">{scope.wide}</span>
         </p>
       </div>
 
@@ -543,27 +552,52 @@ function RankWindow({
 }
 
 /**
- * A window's second word: the scope for a projections or capital column, and the
- * board a KeepTradeCut column actually read for *this* league.
+ * A window's second line: what was counted, and — where the column narrows —
+ * which positions it was counted over.
  *
- * **Resolved rather than echoed**, which is the difference between a reading
- * and a setting: a column left on `Auto` still priced against one market and
- * one QB board, and a tile that said "Auto" would leave the reader to work out
- * which — while the same two pure functions the route priced the number with
- * are right here, on a card that knows its own league. A second spelling of
- * either rule is a label naming a board the figure under it was not read on.
+ * The first half is the scope for a projections or capital column and the board
+ * a KeepTradeCut column actually read for *this* league. **Resolved rather than
+ * echoed**, which is the difference between a reading and a setting: a column
+ * left on `Auto` still priced against one market and one QB board, and a tile
+ * that said "Auto" would leave the reader to work out which — while the same two
+ * pure functions the route priced the number with are right here, on a card that
+ * knows its own league. A second spelling of either rule is a label naming a
+ * board the figure under it was not read on.
+ *
+ * The second half is `positionsLabel`, slash-joined and never in press order,
+ * which is the same string the picker's bay prints — one spelling, so the
+ * control and the tile cannot describe one column two ways.
+ *
+ * **They do not both fit on a phone, and which one goes is the whole of why
+ * this returns a pair.** At 390 the label box is 65px and this line runs at
+ * `--fs-9`, which is about ten and a half characters; `Starters · QB/TE` is
+ * sixteen and `Dyn·SF · QB/TE` fourteen. Truncated, what a reader loses is the
+ * *tail* — the narrowing, which is both the newer fact and the one that most
+ * changes the figure under it, where the scope is at least implied by the unit
+ * above. So a narrowed column keeps its positions alone below `sm` and the
+ * whole line from `sm` up, where the box is ~225px and sixteen characters is
+ * comfortable. An un-narrowed column is unchanged at every width, which is
+ * every column any existing reader holds.
  */
-function tileScope(column: LineupColumn, league: ManagerLeague): string {
-  if (!isKtcMetric(column.metric)) {
-    return LINEUP_METRIC_LABELS[column.metric].scope;
-  }
-  return ktcBoardLabel(
-    // `leagueType` rather than a read of `settings.type`, on that helper's own
-    // terms: Sleeper omits the field on a standard redraft league, and a second
-    // copy of that fallback is a second chance to forget it — here it would be
-    // a tile reading `Dyn` over a redraft league's number.
-    resolveKtcFormat(column.format, leagueType(league)),
-    resolveKtcLineup(column.lineup, league.roster_positions),
-  );
+function tileScope(
+  column: LineupColumn,
+  league: ManagerLeague,
+): { wide: string; phone: string } {
+  const setting = isKtcMetric(column.metric)
+    ? ktcBoardLabel(
+        // `leagueType` rather than a read of `settings.type`, on that helper's
+        // own terms: Sleeper omits the field on a standard redraft league, and a
+        // second copy of that fallback is a second chance to forget it — here it
+        // would be a tile reading `Dyn` over a redraft league's number.
+        resolveKtcFormat(column.format, leagueType(league)),
+        resolveKtcLineup(column.lineup, league.roster_positions),
+      )
+    : LINEUP_METRIC_LABELS[column.metric].scope;
+  const narrowed = positionsLabel(column.positions);
+  if (!narrowed) return { wide: setting, phone: setting };
+  return {
+    wide: setting ? `${setting} · ${narrowed}` : narrowed,
+    phone: narrowed,
+  };
 }
 
