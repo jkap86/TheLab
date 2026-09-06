@@ -2,71 +2,87 @@
 
 import { useState } from "react";
 
-import type { LeagueLineupEntry, LineupMetricId } from "@/shared/contract";
+import type { LeagueLineupEntry, LeagueTeam, LineupMetricId } from "@/shared/contract";
 
+import { Avatar } from "../avatar";
 // Relative, not through the barrel: this folder's own modules are what a
 // module in it reaches for — the rule the move here brought with it.
-import { CONSOLE_READOUT } from "../console-chrome";
+import {
+  CONSOLE_FIGURE_WELL,
+  CONSOLE_PANE_TRACK,
+  CONSOLE_ROW_WELL,
+} from "../console-chrome";
 import { ordinal } from "../format";
 import { LINEUP_METRIC_IDS, LINEUP_METRIC_LABELS } from "../lineup-columns";
-import { placeAmong, rankColor, rankFill, rankPercentile } from "../rank-ramp";
-import { seatComparisons } from "../seat-compare";
+import { placeAmong, rankColor, sharePercentile } from "../rank-ramp";
+import { slotMedians } from "../seat-compare";
 import { DraftPicks } from "./draft-picks";
 import {
   type BenchReading,
   type Lens,
-  lensUnit,
+  LENSES,
+  LINEUP_LENS_LABELS,
   LineupBreakdown,
   LineupLensKeys,
-  lineupTotal,
 } from "./lineup-breakdown";
+import { Pane, PaneGlass, PaneHead, PaneLedge } from "./pane";
 
 /**
  * The expanded card's team browser: the league's standings on the left, and
  * whichever team is selected — the manager's by default — solved out on the
- * right against the manager's own roster, seat by seat.
+ * right, seat by seat.
  *
- * **Its job is the comparison.** The left pane used to be a list of names with
- * one number beside each; it is a table now — place, team, the gap to the
- * reader's own total, that total, and a meter on the rank ramp — so it answers
- * "where do I sit" rather than only "who is in this league". And the right pane
- * carries the reader's figure beside every seat with the gap between the two
- * drawn as a bar, so *picking* a team reads as a comparison rather than as a
- * different roster. Everything on screen is derived from the
- * `LeagueLineupEntry` the page already holds: no new field, no second request.
+ * **It is two parts on a housing, not one pane of glass.** The expanded half
+ * used to be a lit window holding more lit windows, which flattened the rail,
+ * both panes and the pick plates into one sheet of readings. Each pane is a
+ * milled part now: a **ledge** carrying its own control and its column heads,
+ * and **glass** below it carrying the rows — so a reader can see at a glance
+ * which half of the card a control belongs to, and the rows read as channels
+ * cut into a surface rather than as lines of a table.
  *
- * The column's metric is a per-card control, deliberately unpersisted like the
- * lens beside it: it is a way of reading *this* league's table, not a page
- * preference. Sorting by it is the point of showing it — the list is the
- * standings behind the card's "2nd of 12", so the order and the number must
- * agree. When every team totals zero on the metric the column shows dashes,
- * the same "nothing to say" rule the server ranks null by — and the meters and
- * the ramp go with it, since a full red bar under an all-zero table would claim
- * a last place nobody finished in.
+ * **Each control sits on its own pane's ledge, and that is the comprehension
+ * fix rather than a rearrangement.** `Rank by` and the Points/Capital/KTC lens
+ * shared one row above *both* panes, and neither said which half it moved — a
+ * reader pressing `Capital` had no way to know from the control's position
+ * whether the standings column or the seat figures were about to change.
+ * Sitting on the pane it governs, each one says so without a word.
  *
- * **The panes never stack**, at any card width. A stacked layout put the
- * roster below twelve teams, which is exactly the comparison the pane exists
- * to make; truncation carries the narrow case instead. What gives way on a
- * narrow card is columns rather than layout — the Gap column here, the ghost
- * figure and its two bars in the breakdown — and every row becomes two lines,
- * the name on the first and its figures on the second, which is what takes a
- * name from four characters to a readable one at 390.
+ * **The total readout is gone with that row.** It printed the selected roster's
+ * total under the current lens, which is the same figure the standings' own
+ * Total column prints on that roster's own row, four inches to the left — one
+ * number, twice, and the second copy had no place to sit once the row it lived
+ * on was dissolved.
  *
- * **The columns turn at `lg`, and the control row above them at `sm`**, which
- * is two breakpoints on one component and both are measured rather than
- * chosen. Five cells beside a name want ~750px of window: at `sm` the left
- * pane is 252px, of which the four figure columns take 212 — so the team names
- * render as *one character each* and the roster's names disappear altogether,
- * which is the layout at its most confident and least true. The two-line rows
- * carry every width under that, as they already do at 390, and they only get
- * roomier on the way up. The rack made the same measurement and moved to the
- * same breakpoint for it. The control row is a different question with a
- * different answer: three controls fit one line from `sm` up, so they take it.
+ * **So is the comparison apparatus**, and this is the biggest thing the pass
+ * removes: the standings' `Gap` column and rank meter, and the seat rows' ghost
+ * figure and two bars. All four were one feature — the reader against the
+ * selected team — and with them gone the seat name collapses to a single ink,
+ * because the lit/dimmed ahead-behind rule it wore has nothing left on screen
+ * to decode it. `seatComparisons` still holds that arithmetic and is not
+ * deleted: it is one design decision away from being wanted again, which is the
+ * line the chip rail and the billet ledge were kept on.
  *
- * Both controls sit on one row above both panes rather than inside them, and
- * that is why the **lens lives here** rather than in `LineupBreakdown`:
- * neither pane is wide enough to carry a header, so the state has to be
- * visible to the keys and to the list at once.
+ * **What the panes now say instead is what the numbers *mean*.** A total is
+ * coloured by the team's share of the league's points and a seat figure by the
+ * league's median at that slot — see `sharePercentile` and `slotPercentile` for
+ * why a rank ramp is the wrong input for either. The metric column is still a
+ * per-card control, deliberately unpersisted like the lens beside it, and the
+ * list is still sorted by it, because it is the standings behind the card's
+ * "2nd" and the order and the number must agree.
+ *
+ * **The panes never stack**, at any card width, and they take equal shares of
+ * it. A stacked layout put the roster below twelve teams, which is exactly the
+ * reading the pane exists for; truncation carries the narrow case instead. What
+ * gives way on a narrow card is columns rather than layout — every row becomes
+ * two lines, the name on the first and its figures on the second, which is what
+ * takes a name from four characters to a readable one at 390.
+ *
+ * **The columns turn at `lg`**, which is measured rather than chosen: at `sm`
+ * a pane is ~252px, of which the figure cells take most, so the team names
+ * render as one character each and the roster's names disappear altogether.
+ * The two-line rows carry every width under that, as they already do at 390,
+ * and they only get roomier on the way up. The rack and the seat rows opposite
+ * made the same measurement and turn on the same breakpoint.
  *
  * **It moved here from `features/manager` when the history rail became a second
  * reader** — the line `CONSOLE_KEY`, `ManagerPlate` and `DraftPicks` all moved
@@ -113,14 +129,16 @@ export function LeagueTeams({ entry }: { entry: LeagueLineupEntry }) {
   const teams = [...entry.teams].sort(
     (a, b) => b.totals[metric] - a.totals[metric],
   );
-  const anyNonZero = entry.teams.some((t) => t.totals[metric] !== 0);
-  const total = lineupTotal(selected.lineup, lens);
+  const totals = entry.teams.map((t) => t.totals[metric]);
+  const anyNonZero = totals.some((v) => v !== 0);
 
-  // Null where the roster on screen *is* the reader's, which is what puts the
-  // pane on the league's best instead — and what its header has to say.
-  const opponent =
-    manager && manager.roster_id !== selected.roster_id ? manager : null;
-  const compare = seatComparisons(entry.teams, selected, manager, lens);
+  // The league's middle player at each seat, under the lens the figures are
+  // read on — what each of them is coloured against. See `slotMedians`.
+  const medians = slotMedians(
+    entry.teams,
+    selected.lineup.starters.length,
+    lens,
+  );
 
   const benchMetric = BENCH_METRIC[lens];
   const benchTotals = entry.teams.map((t) => t.totals[benchMetric]);
@@ -134,235 +152,306 @@ export function LeagueTeams({ entry }: { entry: LeagueLineupEntry }) {
   };
 
   return (
-    <div>
-      <div className="mb-3.5 flex flex-wrap items-center gap-2 sm:justify-between sm:gap-3">
-        {/* A labelled recess with the menu raised out of it. The label is the
-            control's name, so the `<select>` needs none of its own — but it
-            keeps an `sr-only` one, because a screen reader reaches the select
-            without the text beside it. */}
-        <label className="inline-flex min-w-0 items-center gap-1.5 rounded-full border border-foreground/8 py-1.5 pl-3 pr-1.5 shadow-[var(--track-shadow)] sm:gap-2 sm:pl-3.5">
-          <span
-            aria-hidden
-            className="shrink-0 font-mono text-[length:var(--fs-9)] uppercase tracking-[0.16em] text-foreground/45 sm:text-[length:var(--fs-10)]"
-          >
-            Rank by
-          </span>
-          <span className="sr-only">Order teams by</span>
-          <span className="relative inline-flex min-w-0 items-center">
-            <select
-              value={metric}
-              onChange={(e) => setMetric(e.target.value as LineupMetricId)}
-              className="min-w-0 cursor-pointer appearance-none rounded-full bg-[image:var(--key-bg)] py-1.5 pl-2.5 pr-6.5 font-mono text-[length:var(--fs-10)] uppercase tracking-[0.14em] text-readout shadow-[var(--key-shadow)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-active/60 sm:pl-3 sm:pr-7 sm:text-[length:var(--fs-11)] sm:tracking-[0.16em]"
-            >
-              {LINEUP_METRIC_IDS.map((id) => (
-                <option key={id} value={id}>
-                  {LINEUP_METRIC_LABELS[id].column}
-                </option>
-              ))}
-            </select>
-            {/* `appearance-none` takes the native caret with it, so the key
-                gets one drawn back in the accent. */}
-            <span
-              aria-hidden
-              className="pointer-events-none absolute right-2.5 text-[length:var(--fs-8)] leading-none text-active sm:right-3"
-            >
-              ▼
-            </span>
-          </span>
-        </label>
-
-        {/* Below `sm` the keys take a line of their own and the total shares
-            the line above with the menu, which is the only way three controls
-            fit a 330px window. The wrapper is `contents` there so those two are
-            laid out by the row itself rather than nested inside a group that
-            would have to wrap as one — the same trick the app rack's brand row
-            turns, and the reason `order` puts them back the other way round
-            once there is room for the group. */}
-        <div className="contents sm:flex sm:items-center sm:gap-2.5">
-          {total && (
-            <span
-              className={`${CONSOLE_READOUT} ml-auto inline-flex items-baseline gap-1.5 rounded-[0.5625rem] px-2.5 py-1.5 sm:order-2 sm:ml-0 sm:rounded-[0.625rem] sm:px-3.5 sm:py-[0.4375rem]`}
+    // `preserve-3d` is what carries the housing's perspective down to the two
+    // parts below. Perspective only projects an element's *direct* children, so
+    // without it the panes' and the picks' `translateZ` would compute to an
+    // identity transform — no error, and no depth. It is safe here for the one
+    // reason it is not on the card's summary: nothing in this subtree clips.
+    <div className="pointer-fine:[transform-style:preserve-3d]">
+      <div className="flex gap-1.5 sm:gap-3 lg:gap-[1.125rem] pointer-fine:[transform:translateZ(7px)]">
+        <Pane>
+          <PaneLedge>
+            {/* A labelled recess with the menu raised out of it, on the pane it
+                orders. The label is the control's name, so the `<select>` needs
+                none of its own — but it keeps an `sr-only` one, because a
+                screen reader reaches the select without the text beside it. */}
+            <label
+              className={`${CONSOLE_PANE_TRACK} flex min-w-0 items-center gap-1.5 p-[3px] pl-[9px] lg:gap-2.5 lg:p-1 lg:pl-3.5`}
             >
               <span
                 aria-hidden
-                className="pointer-events-none absolute inset-0 bg-[image:var(--readout-scanlines)]"
-              />
-              <span className="relative font-mono text-[length:var(--fs-14)] tabular-nums text-readout [text-shadow:var(--readout-text-glow)] sm:text-[length:var(--fs-16)]">
-                {total}
+                className="shrink-0 font-mono text-[length:var(--fs-9)] uppercase tracking-[0.16em] text-[color:var(--billet-label)] lg:text-[length:var(--fs-10)]"
+              >
+                {/* `Sort` on a phone, where the track is ~165px and the key
+                    inside it is what a reader actually reads. */}
+                <span className="lg:hidden">Sort</span>
+                <span className="hidden lg:inline">Sort by</span>
               </span>
-              <span className="relative font-mono text-[length:var(--fs-9)] uppercase tracking-[0.16em] text-readout/60 sm:text-[length:var(--fs-10)]">
-                {lensUnit(lens)}
+              <span className="sr-only">Order teams by</span>
+              <span className="relative flex min-w-0 flex-1 items-center">
+                <select
+                  value={metric}
+                  onChange={(e) => setMetric(e.target.value as LineupMetricId)}
+                  className="min-w-0 flex-1 cursor-pointer appearance-none truncate rounded-full bg-[image:var(--key-bg)] py-[5px] pl-[9px] pr-5 font-mono text-[length:var(--fs-10)] uppercase tracking-[0.12em] text-readout shadow-[var(--key-shadow)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-active/60 lg:py-[7px] lg:pl-[13px] lg:pr-[30px] lg:text-[length:var(--fs-12)] lg:tracking-[0.16em]"
+                >
+                  {LINEUP_METRIC_IDS.map((id) => (
+                    <option key={id} value={id}>
+                      {LINEUP_METRIC_LABELS[id].column}
+                    </option>
+                  ))}
+                </select>
+                {/* `appearance-none` takes the native caret with it, so the key
+                    gets one drawn back in the accent. */}
+                <span
+                  aria-hidden
+                  className="pointer-events-none absolute right-2 text-[length:var(--fs-8)] leading-none text-active lg:right-3 lg:text-[length:var(--fs-9)]"
+                >
+                  ▼
+                </span>
               </span>
-            </span>
-          )}
-          <LineupLensKeys
-            lens={lens}
-            onChange={setLens}
-            className="w-full sm:order-1 sm:w-auto"
-          />
-        </div>
-      </div>
+            </label>
 
-      <div className="flex gap-2.5 lg:gap-4">
-        <div className="w-[40%] min-w-0 shrink-0 lg:w-[42%]">
-          {/* The column heads, in the rows' own widths. `#` and the two
-              figure columns are the desktop's; below `sm` the pane is 132px
-              and the only thing worth naming is the list itself. */}
-          <div className="flex items-center gap-1.5 px-1 pb-1.5 lg:gap-2 lg:px-2.5">
-            <span
-              aria-hidden
-              className="hidden w-6 shrink-0 font-mono text-[length:var(--fs-9)] tracking-[0.14em] text-readout-label lg:block"
-            >
-              #
-            </span>
-            <span className="min-w-0 flex-1 font-mono text-[length:var(--fs-9)] uppercase tracking-[0.14em] text-foreground/60 lg:text-[length:var(--fs-11)]">
-              Teams
-            </span>
-            <span
-              aria-hidden
-              className="hidden w-[62px] shrink-0 text-right font-mono text-[length:var(--fs-9)] uppercase tracking-[0.14em] text-readout-label lg:block"
-            >
-              Gap
-            </span>
-            <span
-              aria-hidden
-              className="hidden w-16 shrink-0 text-right font-mono text-[length:var(--fs-9)] uppercase tracking-[0.14em] text-readout-label lg:block"
-            >
-              Total
-            </span>
-            <span aria-hidden className="hidden w-[30px] shrink-0 lg:block" />
-          </div>
-          <ul className="m-0 list-none p-0">
-            {teams.map((team, i) => {
-              // The place is the row's own position, so it always agrees with
-              // the order the menu above sorted by.
-              const place = { rank: i + 1, of: teams.length };
-              const fill = anyNonZero ? rankFill(place) : 0;
-              // Not `fill`: that is 0 for last *and* for nothing-to-rank, and
-              // only the first of those is red. See `rankPercentile`.
-              const percentile = anyNonZero ? rankPercentile(place) : null;
-              const tone = rankColor(percentile);
-              // The gap describes the row it is printed on — a team above the
-              // reader carries a `+` — while its colour describes the reader,
-              // green where they are the one ahead. The same grammar the seat
-              // rows opposite read by.
-              const delta =
-                manager && anyNonZero
-                  ? team.totals[metric] - manager.totals[metric]
-                  : null;
-              const gapTone =
-                delta === null || delta === 0 || team.roster_id === manager?.roster_id
-                  ? null
-                  : rankColor(delta < 0 ? 100 : 0);
-
-              return (
-                <li key={team.roster_id}>
-                  <button
-                    type="button"
-                    onClick={() => setChosen(team.roster_id)}
-                    aria-pressed={team.roster_id === selected.roster_id}
-                    className={`flex h-12 w-full flex-col justify-center gap-[3px] rounded-[0.4375rem] border-l-2 pl-1 pr-1.5 text-left transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-active/60 lg:h-[34px] lg:flex-row lg:items-center lg:gap-2 lg:rounded-lg lg:pl-2 lg:pr-2.5 ${
-                      team.is_manager ? "border-active" : "border-transparent"
-                    } ${
-                      team.roster_id === selected.roster_id
-                        ? "bg-active/9"
-                        : "hover:bg-foreground/[0.04]"
-                    }`}
-                  >
-                    {/* Full opacity on the readout colour, as everywhere it is
-                        text. The manager's own team is the only one lit. */}
-                    <span
-                      className={`block w-full truncate text-[length:var(--fs-13)] lg:order-2 lg:min-w-0 lg:flex-1 ${
-                        team.is_manager
-                          ? "font-semibold text-readout"
-                          : "text-foreground/80"
-                      }`}
-                    >
-                      {team.name}
-                    </span>
-                    <span className="flex w-full items-center gap-1.5 lg:contents">
-                      <span className="shrink-0 font-mono text-[length:var(--fs-10)] tabular-nums text-readout-label lg:order-1 lg:w-6 lg:text-readout-line">
-                        {ordinal(place.rank)}
-                      </span>
-                      <span
-                        className="hidden w-[62px] shrink-0 text-right font-mono text-[length:var(--fs-10)] tabular-nums text-readout/60 lg:order-3 lg:block"
-                        style={gapTone ? { color: gapTone } : undefined}
-                      >
-                        {team.roster_id === manager?.roster_id
-                          ? "you"
-                          : delta === null
-                            ? "—"
-                            : `${delta > 0 ? "+" : delta < 0 ? "−" : ""}${formatTotal(metric, Math.abs(delta))}`}
-                      </span>
-                      <span
-                        className="order-3 shrink-0 text-right font-mono text-[length:var(--fs-11)] tabular-nums lg:order-4 lg:w-16 lg:text-[length:var(--fs-12)]"
-                        style={{ color: tone }}
-                      >
-                        {anyNonZero
-                          ? formatTotal(metric, team.totals[metric])
-                          : "—"}
-                      </span>
-                      <span
-                        aria-hidden
-                        className="order-2 h-[3px] flex-1 rounded-full bg-[var(--meter-track)] shadow-[inset_0_1px_3px_rgba(0,0,0,0.95)] lg:order-5 lg:w-[30px] lg:flex-none"
-                      >
-                        <span
-                          className="block h-[3px] rounded-full"
-                          style={{
-                            width: `${fill}%`,
-                            background: tone,
-                            boxShadow: `0 0 8px ${rankColor(percentile, 0.5)}`,
-                          }}
-                        />
-                      </span>
-                    </span>
-                  </button>
-                </li>
-              );
-            })}
-          </ul>
-        </div>
-
-        <div className="min-w-0 flex-1">
-          {/* Which two rosters the pane is comparing, named — the ghost column
-              has no header of its own and the figures in it would otherwise be
-              unattributed. */}
-          <div className="flex flex-col gap-0.5 pb-1.5 lg:flex-row lg:items-baseline lg:gap-2">
-            <span className="min-w-0 truncate font-mono text-[length:var(--fs-10)] uppercase tracking-[0.12em] text-readout lg:text-[length:var(--fs-11)] lg:tracking-[0.14em]">
-              {selected.name}
-            </span>
-            {/* Two names and a preposition do not fit a 188px pane on one
-                line — both truncated to nothing, which is the one thing this
-                header cannot do, since it is what attributes the ghost column.
-                So it takes a line of its own below `sm`, the same answer every
-                row in both panes gives. */}
-            <span className="flex min-w-0 items-baseline gap-1 lg:contents">
-              <span className="shrink-0 font-mono text-[length:var(--fs-9)] uppercase tracking-[0.14em] text-readout-label lg:ml-auto">
-                vs
+            {/* The column heads, in the rows' own widths. Below `lg` the pane
+                is ~165px and the only head worth the line is the list's own
+                name — the place and the total are labelled by their shape. */}
+            <div className="mt-1.5 flex items-center gap-2.5 px-[3px] lg:mt-0 lg:px-1 lg:pb-px lg:pt-[9px]">
+              <span
+                aria-hidden
+                className="hidden w-[44px] shrink-0 text-center font-mono text-[length:var(--fs-10)] tracking-[0.14em] text-[color:var(--billet-label)] lg:block"
+              >
+                #
               </span>
-              <span className="min-w-0 truncate font-mono text-[length:var(--fs-9)] uppercase tracking-[0.14em] text-foreground/60 lg:max-w-[190px] lg:shrink-0">
-                {opponent ? opponent.name : "Best in league"}
+              <span aria-hidden className="hidden w-5 shrink-0 @lg:w-6 lg:block" />
+              <PaneHead className="min-w-0 flex-1">Teams</PaneHead>
+              <span
+                aria-hidden
+                className="hidden w-[86px] shrink-0 text-right font-mono text-[length:var(--fs-10)] uppercase tracking-[0.14em] text-[color:var(--billet-label)] lg:block"
+              >
+                Total
               </span>
-            </span>
-          </div>
+            </div>
+          </PaneLedge>
+
+          <PaneGlass className="p-0.5 lg:p-1">
+            <ul className="relative m-0 list-none p-0">
+              {teams.map((team, i) => (
+                <StandingRow
+                  key={team.roster_id}
+                  team={team}
+                  // The place is the row's own position, so it always agrees
+                  // with the order the menu above sorted by.
+                  place={i + 1}
+                  metric={metric}
+                  // Not a rank: see `sharePercentile`. Null where nothing has
+                  // been scored, which is the all-zero rule the server ranks by
+                  // — and which is why the totals go to dashes with it.
+                  tone={
+                    anyNonZero
+                      ? rankColor(sharePercentile(team.totals[metric], totals))
+                      : undefined
+                  }
+                  shown={anyNonZero}
+                  selected={team.roster_id === selected.roster_id}
+                  onSelect={() => setChosen(team.roster_id)}
+                />
+              ))}
+            </ul>
+          </PaneGlass>
+        </Pane>
+
+        <Pane>
+          <PaneLedge>
+            <LensControl lens={lens} onChange={setLens} />
+            {/* Whose roster the seats below belong to. It is the pane's own
+                head rather than a comparison of two teams: the ghost column
+                that needed attributing went with the bars. */}
+            <div className="mt-1.5 flex items-baseline gap-2.5 px-[3px] lg:mt-0 lg:px-1 lg:pb-px lg:pt-[9px]">
+              <PaneHead className="min-w-0 flex-1">{selected.name}</PaneHead>
+              <span
+                aria-hidden
+                className="hidden shrink-0 font-mono text-[length:var(--fs-10)] uppercase tracking-[0.14em] text-[color:var(--billet-label)] lg:block"
+              >
+                Starters
+              </span>
+            </div>
+          </PaneLedge>
+
           {selected.lineup.starters.length > 0 ? (
             <LineupBreakdown
               lineup={selected.lineup}
               lens={lens}
-              compare={compare}
+              medians={medians}
               bench={bench}
             />
           ) : (
             // No seatable lineup (an empty or wholly unknown roster) still has
             // its name above, so the picks below aren't attributed to nobody.
-            <p className="m-0 font-mono text-[length:var(--fs-11)] uppercase tracking-[0.14em] text-foreground/60">
-              No seatable lineup
-            </p>
+            <PaneGlass className="px-2 py-3 lg:px-3">
+              <p className="relative m-0 font-mono text-[length:var(--fs-11)] uppercase tracking-[0.14em] text-foreground/60">
+                No seatable lineup
+              </p>
+            </PaneGlass>
           )}
-        </div>
+        </Pane>
       </div>
 
       <DraftPicks picks={selected.picks} />
     </div>
+  );
+}
+
+/**
+ * The lens, as three keys on the roster pane's ledge — and as one menu below
+ * `lg`, where three keys do not fit a ~165px pane.
+ *
+ * **Two elements for one value, which this app otherwise refuses**, and the two
+ * facts that make it safe here are the ones `WeekStepper` is rendered twice on:
+ * neither copy holds any state — the lens is the caller's and the handler is
+ * the caller's, so they cannot disagree — and both gates are `display: none`,
+ * which takes an element out of the accessibility tree as well as out of the
+ * flow. Exactly one control exists at any width. The alternative is a control
+ * that changes shape, and a `<select>` cannot become three keys.
+ */
+function LensControl({
+  lens,
+  onChange,
+}: {
+  lens: Lens;
+  onChange: (lens: Lens) => void;
+}) {
+  return (
+    <>
+      <label
+        className={`${CONSOLE_PANE_TRACK} flex min-w-0 items-center gap-1.5 p-[3px] pl-[9px] lg:hidden`}
+      >
+        <span
+          aria-hidden
+          className="shrink-0 font-mono text-[length:var(--fs-9)] uppercase tracking-[0.16em] text-[color:var(--billet-label)]"
+        >
+          Value
+        </span>
+        <span className="sr-only">Value lens</span>
+        <span className="relative flex min-w-0 flex-1 items-center">
+          <select
+            value={lens}
+            onChange={(e) => onChange(e.target.value as Lens)}
+            className="min-w-0 flex-1 cursor-pointer appearance-none truncate rounded-full bg-[image:var(--key-bg)] py-[5px] pl-[9px] pr-5 font-mono text-[length:var(--fs-10)] uppercase tracking-[0.12em] text-readout shadow-[var(--key-shadow)] [text-shadow:var(--readout-text-glow)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-active/60"
+          >
+            {LENSES.map((option) => (
+              <option key={option} value={option}>
+                {LINEUP_LENS_LABELS[option].key}
+              </option>
+            ))}
+          </select>
+          <span
+            aria-hidden
+            className="pointer-events-none absolute right-2 text-[length:var(--fs-8)] leading-none text-active"
+          >
+            ▼
+          </span>
+        </span>
+      </label>
+
+      <div
+        className={`${CONSOLE_PANE_TRACK} hidden min-w-0 items-center gap-2 p-1 pl-3.5 lg:flex`}
+      >
+        <span
+          aria-hidden
+          className="shrink-0 font-mono text-[length:var(--fs-10)] uppercase tracking-[0.16em] text-[color:var(--billet-label)]"
+        >
+          Value in
+        </span>
+        <LineupLensKeys lens={lens} onChange={onChange} className="min-w-0 flex-1" />
+      </div>
+    </>
+  );
+}
+
+/**
+ * One team in the standings, as a channel cut into the pane's glass.
+ *
+ * **Two states are drawn as overlays rather than as fills**, and that is what
+ * keeps the row reading as a cut. A selected row takes a wash of accent *and a
+ * deeper shadow* — a plain background would flood the channel and the row would
+ * flatten — and the manager's own row is marked by a lit edge down its left
+ * side, which is the same stock the history rail's fill is drawn from rather
+ * than a second green for "this is yours".
+ *
+ * The colour on the total is the team's **share of the league's points**, not
+ * its rank: see `sharePercentile` for why a table where twelve teams sit within
+ * a point of each other should not read as a blowout.
+ */
+function StandingRow({
+  team,
+  place,
+  metric,
+  tone,
+  shown,
+  selected,
+  onSelect,
+}: {
+  team: LeagueTeam;
+  place: number;
+  metric: LineupMetricId;
+  /** The share ramp's colour, or undefined where there is nothing to colour. */
+  tone: string | undefined;
+  /** False where no roster in the league has scored on this metric. */
+  shown: boolean;
+  selected: boolean;
+  onSelect: () => void;
+}) {
+  return (
+    <li>
+      <button
+        type="button"
+        onClick={onSelect}
+        aria-pressed={selected}
+        className={`${CONSOLE_ROW_WELL} relative mb-[5px] flex h-[66px] w-full flex-col justify-center gap-2 rounded-lg px-[7px] text-left transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-active/60 lg:mb-1 lg:h-[50px] lg:flex-row lg:items-center lg:gap-2.5 lg:rounded-[9px] lg:px-3 ${
+          selected ? "" : "hover:bg-foreground/[0.04]"
+        }`}
+      >
+        {selected && (
+          <span
+            aria-hidden
+            className="pointer-events-none absolute inset-x-0 inset-y-[2px] rounded-lg bg-[color:var(--row-well-selected-bg)] shadow-[var(--row-well-selected-shadow)]"
+          />
+        )}
+        {team.is_manager && (
+          <span
+            aria-hidden
+            className="pointer-events-none absolute inset-y-[5px] left-0 w-[3px] rounded-full bg-[image:var(--lit-bar-bg)] shadow-[0_0_9px_var(--accent-glow)]"
+          />
+        )}
+
+        {/* One node, two layouts: the name shares its line with the mark below
+            `lg` and takes the third cell of the row above it. `lg:contents`
+            rather than two trees — the alternative renders every team twice and
+            reads each of them twice to anything listening. */}
+        <span className="relative flex w-full min-w-0 items-center gap-1.5 lg:contents">
+          {/* **The letter mount, always** — `LeagueTeam` carries no avatar,
+              and that is what the mark is: a lit initial is a claim about an
+              image that was never fetched. `Avatar`'s fallback is exactly this
+              object (a bordered `foreground/5` disc with a semibold letter at
+              `foreground/40`), so it is the component rather than a hand-drawn
+              copy of its own fallback, and the mark grows with the *pane*
+              rather than the viewport — see `Pane`'s `@container`. */}
+          <Avatar url={null} name={team.name} size="sm" />
+          <span
+            className={`relative min-w-0 flex-1 truncate text-[length:var(--fs-14)] lg:order-3 ${
+              team.is_manager
+                ? "font-semibold text-readout [text-shadow:var(--readout-text-glow)]"
+                : "text-foreground/86"
+            }`}
+          >
+            {team.name}
+          </span>
+        </span>
+
+        <span className="relative flex w-full items-center justify-between gap-[7px] lg:contents">
+          <span className="shrink-0 font-mono text-[length:var(--fs-11)] tabular-nums text-readout-label lg:order-1 lg:min-w-[44px] lg:overflow-hidden lg:rounded-md lg:bg-[color:var(--figure-well-bg)] lg:px-[5px] lg:py-1 lg:text-center lg:text-readout-line lg:shadow-[var(--figure-well-shadow)]">
+            {ordinal(place)}
+          </span>
+          <span
+            className={`${CONSOLE_FIGURE_WELL} shrink-0 px-[5px] py-1 text-right font-mono text-[length:var(--fs-12)] tabular-nums lg:order-4 lg:w-[86px] lg:text-[length:var(--fs-13)]`}
+          >
+            {/* The colour rides an inner span so it tints the figure rather
+                than the channel the figure sits in. */}
+            <span style={tone ? { color: tone } : undefined}>
+              {shown ? formatTotal(metric, team.totals[metric]) : "—"}
+            </span>
+          </span>
+        </span>
+      </button>
+    </li>
   );
 }

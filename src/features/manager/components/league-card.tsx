@@ -14,6 +14,7 @@ import {
   CardPlateRow,
   CardRule,
   CONSOLE_CARD_SHELL,
+  CONSOLE_HOUSING_INSET_SHELL,
   CONSOLE_METAL,
   CONSOLE_WINDOW,
   ktcBoardLabel,
@@ -28,6 +29,8 @@ import {
   positionsLabel,
   ReadingPlate,
   Scanlines,
+  StandingBay,
+  StandingStrip,
 } from "@/features/shared";
 
 // Named by module path rather than through `@/features/shared`, and that is the
@@ -38,7 +41,12 @@ import {
 // draws one. Named here, the chunk belongs to this route.
 import { TimelineView } from "@/features/shared/ui/timeline";
 
-import { rankColor, rankFill, rankPercentile } from "../helpers/lineup-metrics";
+import {
+  rankColor,
+  rankFill,
+  rankPercentile,
+  winSharePercentile,
+} from "../helpers/lineup-metrics";
 
 
 /**
@@ -61,14 +69,17 @@ import { rankColor, rankFill, rankPercentile } from "../helpers/lineup-metrics";
  * finish, the four decorative layers, the paddings, the tilt, the plate row
  * and the window. What differs is what the plate says and what the tiles hold.
  *
- * **The header is two plates and the standing is the right-hand one.** It was
- * a billet — one part carrying the name proud on its face and the standing in
- * a well cut beneath it — and the argument for it was a real measurement: two
- * plates compete for one line, the reading plate keeps its width, and the
- * league's name, which is the card's whole subject, truncates into what is
- * left. That measurement has not gone away, which is why the rule it produced
- * comes back with the plates: **`Pts` is dropped below `sm`**, restoring the
- * name to nine characters at 390 rather than four. See `StandingPlate`.
+ * **The header is two plates from `sm` up, and one plate over a milled strip
+ * below it.** Two plates compete for one line: the reading plate keeps its
+ * width and the league's name, which is the card's whole subject, truncates
+ * into what is left. That measurement is why the billet ledge existed, and it
+ * did not go away when the ledge did — at 362px the name was ~95px, cut to
+ * "Dynasty Wa…", *after* `Pts` had already been dropped from the plate
+ * opposite to buy that much. So on a phone the plate row carries the league
+ * alone at full width and the standing comes down onto its own part under the
+ * rule: all three fields are back, `standingFields`' phone rule is gone with
+ * the plate it was buying width from, and the name stops truncating. See
+ * {@link StandingStrip}.
  *
  * **The settings are a lit window again**, where they were four paired chips
  * in a recessed tray. `LeagueChipRail` and `LeagueConfigWindow` are two
@@ -278,6 +289,12 @@ export function LeagueCard({
 
           <CardRule />
 
+          {/* The standing, on a phone. It is `sm:hidden` and the plate above is
+              `hidden sm:contents`, so exactly one of the two exists at any
+              width — never both in the DOM, which would read the same three
+              figures twice to anything listening. */}
+          <StandingStripFields league={league} />
+
           {/* What game this league is playing, where the identity line used to
               be. It is the lineup checker's own window and the same component,
               so a league described one way there cannot be described another
@@ -326,35 +343,64 @@ export function LeagueCard({
           */}
         </summary>
 
-        {/* The expanded half sits *outside* the 3D context on purpose: a table
-            of twelve teams inside a `preserve-3d` subtree pays for a composited
-            layer per row and gains nothing, since none of it is tilted. It is
-            a lit window like every other reading on the card, rather than the
-            second slab of glass it used to be. */}
-        <div className={`${CONSOLE_WINDOW} mt-3 rounded-xl px-[1.125rem] pb-[1.125rem] pt-4`}>
-          <Scanlines />
-          <div className="relative">
-            <TimelineView
-              subject={{
-                leagueId: league.league_id,
-                season,
-                username,
-                board,
-              }}
-              entry={entry ?? null}
-              // The reader's own team, so a past stop marks and ranks the same
-              // team the present table does. Read off the payload the table is
-              // drawn from, so the two cannot disagree; null while the lineups
-              // read is in flight, which marks no team rather than the wrong one.
-              managerRosterId={
-                entry?.teams.find((t) => t.is_manager)?.roster_id ?? null
-              }
-            >
-              <p className="m-0 font-mono text-[length:var(--fs-11)] uppercase tracking-[0.16em] text-readout-label">
-                No rosters read for this league yet
-              </p>
-            </TimelineView>
-          </div>
+        {/* **The expanded half is an inner housing, not a lit window.** It was
+            `CONSOLE_WINDOW` — a pane of glass holding more panes of glass, which
+            is what made the history rail, the two panes and the pick plates read
+            as one flat sheet of readings rather than as parts of an instrument.
+            It is the bezel those parts are *mounted on* now, which is the
+            grammar the lineup checker's week view already wears one tool over
+            (`CONSOLE_HOUSING_INSET`), and the 14px radius is the inner one — a
+            nested surface repeating the card's own 18px reads as a card that has
+            slipped out of its frame.
+
+            It stays *outside* the summary's `preserve-3d` subtree, as it always
+            has, and owns a shallow perspective of its own instead. That is not
+            the same claim: `preserve-3d` cannot survive a clip and `perspective`
+            can, so the housing can both hold its parts on their own planes and
+            keep the `overflow: hidden` its radius needs. The three depths are
+            small and ordered by what a reader reaches for — the panes forward,
+            the rail behind them, the picks furthest back — so the card reads as
+            three layers rather than three boxes.
+
+            All of it rides `pointer-fine:`, on the summary's own argument and
+            for the same budget: a plane here is a composited layer *per league*
+            on a page with no virtualization, and there is no hover to flatten
+            it on a touch device. A coarse pointer gets the identical housing
+            flat. */}
+        <div
+          className={`${CONSOLE_HOUSING_INSET_SHELL} mt-3.5 rounded-[0.875rem] p-1.5 sm:p-3 pointer-fine:[perspective:1400px]`}
+        >
+          {/* **No wrapper between the housing and its parts**, and this is
+              the half of the perspective that is silent when it is missing: a
+              `perspective` projects an element's *direct children only*, and an
+              intermediate `<div>` is `transform-style: flat` — so the rail, the
+              panes and the picks would compute their `translateZ` against no
+              projection at all, and the housing would be three flat boxes with
+              a depth nobody can see and no error to say so. There was one here
+              (the old lit window needed a `relative` layer to hold its content
+              above the scanlines); the housing has no scanlines, so it is gone.
+              `LeagueTeams` carries the `preserve-3d` that reaches its own two
+              parts, for the same reason one level down. */}
+          <TimelineView
+            subject={{
+              leagueId: league.league_id,
+              season,
+              username,
+              board,
+            }}
+            entry={entry ?? null}
+            // The reader's own team, so a past stop marks and ranks the same
+            // team the present table does. Read off the payload the table is
+            // drawn from, so the two cannot disagree; null while the lineups
+            // read is in flight, which marks no team rather than the wrong one.
+            managerRosterId={
+              entry?.teams.find((t) => t.is_manager)?.roster_id ?? null
+            }
+          >
+            <p className="m-0 font-mono text-[length:var(--fs-11)] uppercase tracking-[0.16em] text-readout-label">
+              No rosters read for this league yet
+            </p>
+          </TimelineView>
         </div>
       </details>
     </li>
@@ -362,34 +408,40 @@ export function LeagueCard({
 }
 
 /**
- * Record, standings rank and points rank, on the plate opposite the league.
+ * Record, standings rank and points rank — the card's standing, in the two
+ * places one card puts it.
  *
  * **Three fields or as few as none**, and the absences are the point. A league
  * whose rosters have not been read has no record and no rank — nothing to
- * state — and the plate is not drawn at all, where drawing an empty one would
- * read as a rendering fault and drawing `0–0 · 1st` would be a claim. Each
- * field appears exactly when its own answer exists, so a league mid-way through
- * its first week can carry a record with no ranks behind it.
+ * state — and neither the plate nor the strip is drawn at all, where drawing an
+ * empty one would read as a rendering fault and drawing `0–0 · 1st` would be a
+ * claim. Each field appears exactly when its own answer exists, so a league
+ * mid-way through its first week can carry a record with no ranks behind it.
  *
- * **The points rank comes off the plate below `sm`, and restoring that rule is
- * how this pass answers its own open question.** Three fields and their
- * dividers are ~225px of a 322px row, and the league plate opposite is left
- * with four characters — "D…" where the league name is the card's whole
- * subject. Dropping the third gives it nine, and the points rank is the one of
- * the three a reader can most nearly infer from the other two. The billet
- * existed precisely because this measurement is real; going back to plates
- * without going back to the rule would ship the failure the billet was built
- * to fix. `ReadingPlate` and `PlateField` already step their own type down
- * there, which is what buys the other two fields their room, and is free.
+ * **All three survive at every width now, which is the phone header's whole
+ * point.** The rule that dropped `Pts` below `sm` existed to buy the league
+ * name width back from the plate opposite it — and below `sm` there is no
+ * plate opposite it any more: the standing is a strip of its own under the
+ * rule, and the name has the row. Deleting the rule rather than keeping it is
+ * what makes the strip worth the 60px it costs.
  *
- * The card's rank *windows* are untouched by any of it: this is the plate's
+ * **Each field carries its own percentile**, because the two readings colour by
+ * different rules and only this function knows which is which: a rank is its
+ * place in the field on the ramp the windows below already run, and a record is
+ * its win share stretched across the band records land in. The colour is spent
+ * only on the strip — the plate stays one ink, since three ramp colours on a
+ * pill the width of a thumb is a bar chart rather than a reading.
+ *
+ * The card's rank *windows* are untouched by any of it: this is the standing's
  * three figures, not the four the strip below ranks.
  */
 function standingFields(
   league: ManagerLeague,
-): { label: string; value: string; phone: boolean }[] {
-  // `phone: false` is dropped below `sm` — see the note above.
-  const fields: { label: string; value: string; phone: boolean }[] = [];
+): { label: string; value: string; percentile: number }[] {
+  const fields: { label: string; value: string; percentile: number }[] = [];
+  // The field size every rank here is out of. `rankFill` answers 0 for a
+  // one-roster league, which is the same "no spread to show" the meters take.
+  const of = league.total_rosters;
   // **Rank leads, and the record follows it.** The standing is what the plate
   // is read for — the record is how it was arrived at — so it takes the
   // position a reader's eye lands on first, nearest the card's own edge.
@@ -397,40 +449,87 @@ function standingFields(
     fields.push({
       label: "Rank",
       value: ordinal(league.standings_rank),
-      phone: true,
+      percentile: rankFill({ rank: league.standings_rank, of }),
     });
   }
   if (league.record) {
-    fields.push({ label: "Rec", value: formatRecord(league.record), phone: true });
+    fields.push({
+      label: "Rec",
+      value: formatRecord(league.record),
+      percentile: winSharePercentile(league.record.wins, league.record.losses),
+    });
   }
   if (league.points_rank !== null) {
-    fields.push({ label: "Pts", value: ordinal(league.points_rank), phone: false });
+    fields.push({
+      label: "Pts",
+      value: ordinal(league.points_rank),
+      percentile: rankFill({ rank: league.points_rank, of }),
+    });
   }
   return fields;
 }
 
+/**
+ * The standing on the plate row, from `sm` up.
+ *
+ * `hidden sm:contents` on the wrapper rather than a class on the plate itself:
+ * `ReadingPlate` carries its own `ml-auto`, and `display: contents` is what
+ * lets the plate stay a direct flex item of the row — laid out by the row,
+ * pushed right by its own margin — while the wrapper's box disappears
+ * entirely. Below `sm` the whole subtree is out of the flow *and* out of the
+ * accessibility tree, so the strip below is the only copy of these three
+ * figures at that width rather than a second one nobody can see.
+ */
 function StandingPlate({ league }: { league: ManagerLeague }) {
   const fields = standingFields(league);
   if (fields.length === 0) return null;
 
   return (
-    <ReadingPlate>
-      {fields.map((field, i) => (
-        // The divider is a sibling of the fields rather than a child of one, so
-        // the plate's own gap spaces all three evenly — nested, a divider would
-        // carry the gap twice and sit twice as far from the field beside it.
-        <Fragment key={field.label}>
-          {i > 0 && (
-            <span className={field.phone ? undefined : "hidden sm:inline-flex"}>
-              <PlateDivider />
-            </span>
-          )}
-          <span className={field.phone ? undefined : "hidden sm:inline-flex"}>
+    <span className="hidden sm:contents">
+      <ReadingPlate>
+        {fields.map((field, i) => (
+          // The divider is a sibling of the fields rather than a child of one, so
+          // the plate's own gap spaces all three evenly — nested, a divider would
+          // carry the gap twice and sit twice as far from the field beside it.
+          <Fragment key={field.label}>
+            {i > 0 && <PlateDivider />}
             <PlateField label={field.label}>{field.value}</PlateField>
-          </span>
-        </Fragment>
+          </Fragment>
+        ))}
+      </ReadingPlate>
+    </span>
+  );
+}
+
+/**
+ * The same standing as a part bolted to the housing, below `sm`.
+ *
+ * Three equal bays whatever the count, so a league carrying a record and no
+ * ranks fills the strip rather than leaving two thirds of a machined part
+ * empty — `flex-1` on the bay is what does it, and it is the reason the strip
+ * is drawn at all only when there is something to put in it.
+ *
+ * The figures take the ramp: see `standingFields` for which rule each field's
+ * percentile comes from, and {@link StandingBay} for why the colour lands here
+ * and not on the plate.
+ */
+function StandingStripFields({ league }: { league: ManagerLeague }) {
+  const fields = standingFields(league);
+  if (fields.length === 0) return null;
+
+  return (
+    <StandingStrip>
+      {fields.map((field) => (
+        <StandingBay
+          key={field.label}
+          label={field.label}
+          tone={rankColor(field.percentile)}
+          glow={rankColor(field.percentile, 0.35)}
+        >
+          {field.value}
+        </StandingBay>
       ))}
-    </ReadingPlate>
+    </StandingStrip>
   );
 }
 
@@ -525,7 +624,17 @@ function RankWindow({
           className="m-0 truncate font-display font-semibold leading-none tracking-[-0.025em] tabular-nums"
           style={{
             color: tone,
-            textShadow: `0 0 20px ${rankColor(percentile, 0.4)}`,
+            // **Struck into the glass rather than printed on it**: a lit lip
+            // along the top of every stroke and four dark steps under it,
+            // which is `--chrome-extrude-shadow`'s grammar at readout scale.
+            // The figure keeps its ramp colour and gains its weight from the
+            // light catching the cut rather than from a second hue — which is
+            // the only way to make it heavier without spending the card's one
+            // remaining colour. The static layers are a token because they
+            // *invert* for light mode (the lip goes dark, the steps go light);
+            // the halo is a continuous ramp value with no utility to generate,
+            // so it composes onto the end of the same comma list.
+            textShadow: `var(--figure-engrave), 0 0 22px ${rankColor(percentile, 0.4)}`,
           }}
         >
           <span className="text-[length:var(--fs-26)] sm:text-[length:var(--fs-32)]">

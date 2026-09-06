@@ -4,24 +4,29 @@ import type { LeagueLineup, LineupPlayer, MetricRank } from "@/shared/contract";
 
 // Relative, not through the barrel: this folder's own modules are what a
 // module in it reaches for — the rule the move here brought with it.
-import { CONSOLE_TRACK } from "../console-chrome";
+import { CONSOLE_FIGURE_WELL, CONSOLE_ROW_WELL } from "../console-chrome";
 import { ordinal } from "../format";
-import { rankColor, rankPercentile } from "../rank-ramp";
-import { type Lens, lensValue, type SeatCompare } from "../seat-compare";
+import { rankColor, rankPercentile, slotPercentile } from "../rank-ramp";
+import { type Lens, lensValue } from "../seat-compare";
+import { PaneGlass } from "./pane";
 
 /**
- * A league card's rest-of-season lineup, read against another one: the optimal
- * starters in slot order with the reader's own figure beside each seat, the
- * bench behind a disclosure, and a total for the seated starters.
+ * A league card's rest-of-season lineup: the optimal starters in slot order,
+ * each on the pane's glass, with the bench behind a disclosure.
  *
- * **Each seat is a comparison, not a reading.** The team on screen is whichever
- * one the standings pane has selected, and the ghost column is the reader's own
- * player at the same seat — so picking a team on the left reads as "which seats
- * do I win" rather than as "here is a different roster". Where the reader's own
- * team is the one on screen there is nothing to compare it to, so the ghost
- * becomes the league's best at that seat and the pane's header says so. The
- * arithmetic is `seatComparisons`, computed by `LeagueTeams` because it is the
- * component that can see every team.
+ * **Each seat is a reading against the league, not against another roster.**
+ * It used to be a comparison — the reader's own player as a ghost figure beside
+ * every seat, with two bars drawn between the two — and that whole apparatus is
+ * gone, along with the standings' `Gap` column it was the other half of. What
+ * replaces it is a colour that says more with less room: a seat's figure is
+ * drawn against **the league's median at that same slot**, so a green QB1 is
+ * one that beats the twelve rosters' middle quarterback rather than one whose
+ * number happens to be large. See `slotPercentile` and `slotMedians`.
+ *
+ * With the comparison gone the seat name collapses to **one ink**. The old
+ * lit/dimmed ahead-behind rule is deliberately not kept: there is nothing left
+ * on screen to decode it, and a name drawn two ways for reasons a reader cannot
+ * see is worse than a name drawn one way.
  *
  * The number column is one lens at a time — rest-of-season points, the
  * draft-capital value, or KeepTradeCut's price. Flipping the *whole* column is
@@ -33,26 +38,24 @@ import { type Lens, lensValue, type SeatCompare } from "../seat-compare";
  * in for another: what a player will *do* from here, what a draft room thought
  * of him, and what he is worth to acquire.
  *
- * **The lens is owned by `LeagueTeams`, not by this component.** Its keys and
- * its total sit on the panes' shared control row, above both panes, because
- * neither pane is wide enough to carry a header of its own — so the state has
- * to live where both the keys and this list can see it. It is still per-card
- * and deliberately unpersisted: a peek at the other valuation, not a page
- * preference.
+ * **The lens is owned by `LeagueTeams`, not by this component**, and it sits on
+ * this pane's own **ledge** rather than on a row above both panes — which is
+ * the comprehension fix that pass is named for: a control over the seat figures
+ * belongs to the pane holding them. It is still per-card and deliberately
+ * unpersisted: a peek at the other valuation, not a page preference.
  *
- * The rows are a lit readout rather than plain text. It is the same surface as
- * the card's metric tiles and the account readout, and it is what keeps ten
- * rows of numbers from reading as a paragraph.
+ * **Every row is a channel cut into the glass, and every figure a smaller one
+ * cut into that.** One pattern at two depths, which is the whole of the pane's
+ * depth — no gradient, no border, and nothing to draw a rule with.
  *
- * **Below `lg` every row is two lines** — the name on its own, its figures
- * under it — and the ghost figure and both bars give way to the signed gap
- * alone. The panes sit side by side at every width (see `LeagueTeams` for why
- * they must, and for why the columns wait until `lg`), which leaves this one
- * 188px at 390: three numeric columns beside a name there is a name of four
- * characters. One row rather than two trees, through `lg:contents` on the
- * second line's wrapper, which is the trick the app rack's brand row already
- * turns — the alternative renders every seat twice and reads each of them
- * twice to anything listening.
+ * **Below `lg` every row is two lines** — the face and the name on the first,
+ * the slot and the figure under them. The panes sit side by side at every width
+ * (see `LeagueTeams` for why they must, and for why the columns wait until
+ * `lg`), which leaves this one ~165px at 390: three cells beside a name there
+ * is a name of four characters. One row rather than two trees, through
+ * `lg:contents` on the second line's wrapper, which is the trick the app rack's
+ * brand row already turns — the alternative renders every seat twice and reads
+ * each of them twice to anything listening.
  */
 
 /** Sleeper's slot names, shortened to fit a chip. Unmapped ones render as-is. */
@@ -81,18 +84,18 @@ function figure(value: number | null, lens: Lens): string {
   return lens === "points" ? value.toFixed(1) : value.toLocaleString("en-US");
 }
 
-function cell(player: LineupPlayer | null, lens: Lens): string {
-  return figure(lensValue(player, lens), lens);
-}
-
 /**
- * The starters' total under the current lens, so the headline number always
- * agrees with the column beneath it. Both valuations sum client-side off the
- * very fields the rows show — no second valuation to disagree with — and the
- * points total is the server's own, which is the one that carries a rounding
- * rule. Null where the lens has nothing to total, which is what keeps a
- * `0.0 pts` off a card whose projections never landed and a `0 ktc` off one
- * whose board could not be read.
+ * The starters' total under the current lens.
+ *
+ * **Nothing draws this today.** It fed the readout above the panes, which is
+ * deleted: that figure is the same one the standings' Total column already
+ * prints on the selected roster's own row, and the row it sat on was dissolved
+ * when each control moved onto its own pane's ledge. It is kept rather than
+ * removed on `peekActiveSeason`'s terms — it is the one place the rounding rule
+ * for a lens total is written down (points take the server's own figure, which
+ * carries it; both valuations sum client-side off the very fields the rows
+ * show, so there is no second valuation to disagree with), and the null is what
+ * keeps a `0.0 pts` off a card whose projections never landed.
  */
 export function lineupTotal(lineup: LeagueLineup, lens: Lens): string | null {
   if (lens === "points") {
@@ -110,8 +113,15 @@ export function lineupTotal(lineup: LeagueLineup, lens: Lens): string | null {
   return total > 0 ? total.toLocaleString("en-US") : null;
 }
 
-/** What each lens is called, and the unit its total is labelled with. */
-const LENS_LABELS: Record<Lens, { key: string; unit: string }> = {
+/**
+ * What each lens is called, and the unit its total is labelled with.
+ *
+ * Exported because the roster pane draws these keys twice — as three keys on
+ * its ledge above `lg` and as one `<select>` below it, where three do not fit a
+ * ~165px pane — and a second spelling of the words is two vocabularies for one
+ * control.
+ */
+export const LINEUP_LENS_LABELS: Record<Lens, { key: string; unit: string }> = {
   points: { key: "Points", unit: "pts" },
   capital: { key: "Capital", unit: "cap" },
   ktc: { key: "KTC", unit: "ktc" },
@@ -120,18 +130,23 @@ const LENS_LABELS: Record<Lens, { key: string; unit: string }> = {
 /** In control order — the two derived from this page's own data, then the market. */
 export const LENSES: readonly Lens[] = ["points", "capital", "ktc"];
 
-/** A lens's total unit, for the readout beside the keys. */
+/**
+ * A lens's total unit.
+ *
+ * Unread since the total readout went, and kept with {@link lineupTotal} for
+ * its reason: the two are one reading and would come back together.
+ */
 export function lensUnit(lens: Lens): string {
-  return LENS_LABELS[lens].unit;
+  return LINEUP_LENS_LABELS[lens].unit;
 }
 
 /**
  * The lens keys, as tactile keys in one housing: the resting shadow carries a
  * 3px riser and the pressed one drops to 1px, so the key travels.
  *
- * The housing takes its width from the caller, because the row it sits in is
- * the caller's: below `sm` the keys have a line of their own and share it three
- * ways, where above it they stand beside the total readout at their own size.
+ * The housing takes its width from the caller, because the recess it sits in is
+ * the caller's — on the roster pane's ledge it shares a track with the `Value
+ * in` caption, which is what says the control belongs to that pane.
  */
 export function LineupLensKeys({
   lens,
@@ -146,7 +161,10 @@ export function LineupLensKeys({
     <div
       role="group"
       aria-label="Value lens"
-      className={`${CONSOLE_TRACK} inline-flex gap-1 p-1 ${className}`}
+      // No track of its own: it sits *inside* the ledge's own recess beside the
+      // `Value in` caption, and a channel drawn inside a channel is two cuts
+      // where the design has one.
+      className={`inline-flex gap-[5px] ${className}`}
     >
       {LENSES.map((option) => (
         <button
@@ -157,13 +175,13 @@ export function LineupLensKeys({
           // An unselected option is bare text *on the track*, not a second
           // key: three raised faces in one channel is a row of buttons, where
           // one raised and the rest flush is a switch showing its position.
-          className={`flex-1 rounded-full border px-3 py-1.5 font-mono text-[length:var(--fs-10)] uppercase tracking-[0.16em] transition-[color,box-shadow] duration-150 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-active/60 sm:flex-none ${
+          className={`min-w-0 flex-1 rounded-full border px-3 py-[7px] text-center font-mono text-[length:var(--fs-11)] uppercase tracking-[0.16em] transition-[color,box-shadow] duration-150 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-active/60 ${
             lens === option
               ? "border-active/45 bg-[image:var(--key-bg)] text-readout shadow-[var(--key-shadow)] [text-shadow:var(--readout-text-glow)]"
-              : "border-transparent text-foreground/58 hover:text-readout"
+              : "border-transparent text-foreground/62 hover:text-readout"
           }`}
         >
-          {LENS_LABELS[option].key}
+          {LINEUP_LENS_LABELS[option].key}
         </button>
       ))}
     </div>
@@ -171,127 +189,155 @@ export function LineupLensKeys({
 }
 
 /**
- * One seat, and how the reader stands at it.
+ * A player's face, in a mount the size of the row's own line.
  *
- * **Only one of the two tracks is ever filled**, and it is the one on the
- * leader's side: the left track sits under the figure on screen and the right
- * under the ghost, so the gap is drawn pointing at whoever has the better
- * player there. Its *colour* is the reader's, not the leader's — green where
- * they win the seat and red where they lose it — which is the same grammar the
- * standings' Gap column reads by, where the number describes the row and the
- * colour describes you.
+ * Sleeper publishes a thumbnail per player id and nothing else is needed to
+ * reach it, so the face costs no fetch of ours: the mount behind it is what a
+ * reader sees while it loads, when there is no such thumbnail, and for an
+ * **empty seat**, which has no player at all.
  *
- * A seat with nothing to compare draws neither track and dims neither name.
- * That covers a seat the current lens is silent on — an unprojected stash, a
- * player off KeepTradeCut's board — and a seat where the two sides are level,
- * which on the reader's own team means they hold the league's best there.
+ * **It is a background layer rather than an `<img>`, and a render is what
+ * settled that.** The handoff calls for an ordinary `<img>` on the grounds that
+ * the prototype's own reason for a background does not apply here — which is
+ * true, and there is a second reason that does. A great many of these ids have
+ * no thumbnail: a team defence's id is a team code, and Sleeper's board turns
+ * over faster than its art does. A **broken `<img>` paints a glyph**, over the
+ * letter, even at `alt=""` — measured, on a seat whose thumbnail 404s — where a
+ * background that fails paints nothing at all and the mount underneath is
+ * exactly the fallback it was put there to be. The element is `aria-hidden`
+ * decoration either way, so there is no semantics to lose by it.
+ *
+ * The mount is `Avatar`'s letter disc spelled here rather than that component
+ * reused, and for the same reason: `Avatar` draws *either* a face *or* a
+ * letter, where a headshot wants the letter **behind** it.
+ *
+ * `background-position: center top` because a headshot is framed head and
+ * shoulders, and a centred crop of one in a 26px disc is a chin.
+ */
+function PlayerFace({ player }: { player: LineupPlayer | null }) {
+  return (
+    <span
+      aria-hidden
+      className="relative flex size-5 shrink-0 items-center justify-center overflow-hidden rounded-full border border-foreground/10 bg-foreground/5 font-display text-[length:var(--fs-9-6)] font-semibold text-foreground/40 lg:size-[26px] lg:text-[length:var(--fs-12)]"
+    >
+      {player?.name?.charAt(0).toUpperCase() ?? null}
+      {player && (
+        <span
+          className="absolute inset-0 bg-cover bg-top"
+          style={{
+            backgroundImage: `url(https://sleepercdn.com/content/nfl/players/thumb/${player.player_id}.jpg)`,
+          }}
+        />
+      )}
+    </span>
+  );
+}
+
+/**
+ * **An initial and a surname below `lg`.** A ~136px name column at this type
+ * size does not hold "Amon-Ra St. Brown", and an ellipsis eats the surname —
+ * which is the half of a player's name a reader identifies him by. Above `lg`
+ * the full name has the room and keeps it.
+ *
+ * A one-word name (a team defence, an id with no name on the feed) is returned
+ * whole: there is no first initial to take.
+ */
+function shortName(name: string): string {
+  const space = name.indexOf(" ");
+  return space > 0 ? `${name.charAt(0)}. ${name.slice(space + 1)}` : name;
+}
+
+/** One seat's name, at both widths, from one node. */
+function SeatName({
+  player,
+  className = "",
+}: {
+  player: LineupPlayer | null;
+  className?: string;
+}) {
+  const name = player ? (player.name ?? player.player_id) : "Empty";
+  const short = player?.name ? shortName(player.name) : name;
+
+  return (
+    <span
+      className={`relative min-w-0 flex-1 truncate text-[length:var(--fs-14)] text-foreground/85 ${className}`}
+    >
+      <span className="lg:hidden">{short}</span>
+      <span className="hidden lg:inline">{name}</span>
+    </span>
+  );
+}
+
+/**
+ * One seat, as a channel cut into the pane's glass.
+ *
+ * **The figure's colour is the league's median at this slot**, not its own
+ * magnitude and not a rank — see `slotPercentile`. A seat the lens says nothing
+ * about draws an em dash and no colour at all: an absent figure has no standing
+ * against a median, and painting it red would claim the worst answer in the
+ * league for a player nobody has an answer about.
  */
 function SeatRow({
   player,
   slot,
   lens,
-  compare,
+  median,
 }: {
   player: LineupPlayer | null;
   slot: string;
   lens: Lens;
-  compare: SeatCompare;
+  /** The league's middle figure at this seat, or 0 where there is none. */
+  median: number;
 }) {
-  // The ramp's own two ends rather than a literal green and red: it reads them
-  // from `--rank-l` and `--rank-c`, which is what inverts them for light mode.
-  const stop =
-    compare.standing === null ? null : compare.standing === "ahead" ? 100 : 0;
-  const tone = stop === null ? null : rankColor(stop);
-  const glow = stop === null ? null : rankColor(stop, 0.4);
-  const bar = (side: "shown" | "ghost") => {
-    const led =
-      compare.delta !== null &&
-      (side === "shown" ? compare.delta > 0 : compare.delta < 0);
-    return {
-      width: led ? `${compare.fill}%` : "0%",
-      background: led && tone ? tone : "transparent",
-      boxShadow: led && glow ? `0 0 8px ${glow}` : undefined,
-    };
-  };
+  const value = lensValue(player, lens);
+  const tone = value === null ? undefined : rankColor(slotPercentile(value, median));
 
   return (
-    <li className="relative flex h-12 flex-col justify-center gap-[3px] border-b border-active/8 last:border-b-0 lg:h-[34px] lg:flex-row lg:items-center lg:gap-[9px]">
-      {/* Lit where the reader wins the seat, dimmed where they lose it, and
-          left at the reading colour where there is nothing to compare — a dash
-          is not a defeat. */}
-      <span
-        className={`block w-full truncate text-[length:var(--fs-13)] lg:order-2 lg:min-w-0 lg:flex-1 ${
-          compare.standing === "ahead"
-            ? "text-readout"
-            : compare.standing === "behind"
-              ? "text-foreground/72"
-              : "text-foreground/85"
-        }`}
-      >
-        {player ? (player.name ?? player.player_id) : "Empty"}
+    <li
+      className={`${CONSOLE_ROW_WELL} relative mb-[5px] flex h-[66px] flex-col justify-center gap-2 rounded-lg px-[7px] lg:mb-1 lg:h-[50px] lg:flex-row lg:items-center lg:gap-2.5 lg:rounded-[9px] lg:px-3`}
+    >
+      {/* One node, two layouts: the face and the name share the first line
+          below `lg` and take the row's second and third cells above it. */}
+      <span className="relative flex w-full min-w-0 items-center gap-[7px] lg:contents">
+        <PlayerFace player={player} />
+        <SeatName player={player} className="lg:order-3" />
       </span>
 
-      {/* The seat's figures. One node, two layouts: a line of its own below
-          `lg`, and five cells of the row above it. */}
-      <span className="flex w-full items-baseline gap-2 lg:contents">
-        <span className="shrink-0 font-mono text-[length:var(--fs-10)] tracking-[0.1em] text-readout/60 lg:order-1 lg:w-[30px] lg:text-[length:var(--fs-11)] lg:tracking-[0.12em]">
+      <span className="relative flex w-full items-center gap-2 lg:contents">
+        <span className="shrink-0 font-mono text-[length:var(--fs-11)] tracking-[0.1em] text-readout/62 lg:order-1 lg:w-[42px] lg:overflow-hidden lg:rounded-md lg:bg-[color:var(--figure-well-bg)] lg:px-[5px] lg:py-1 lg:text-center lg:text-[length:var(--fs-12)] lg:tracking-[0.12em] lg:shadow-[var(--figure-well-shadow)]">
           {SLOT_LABELS[slot] ?? slot}
         </span>
-        <span className="flex-1 text-right font-mono text-[length:var(--fs-12)] tabular-nums text-readout lg:order-3 lg:w-[54px] lg:flex-none lg:text-[length:var(--fs-11)]">
-          {cell(player, lens)}
-        </span>
         <span
-          aria-hidden
-          className="hidden h-1 w-[52px] shrink-0 justify-end rounded-l-full bg-[var(--meter-track)] shadow-[inset_0_1px_3px_rgba(0,0,0,0.95)] lg:order-4 lg:flex"
+          className={`${CONSOLE_FIGURE_WELL} min-w-0 flex-1 px-[5px] py-1 text-right font-mono text-[length:var(--fs-13)] tabular-nums lg:order-4 lg:w-[74px] lg:flex-none`}
         >
-          <span className="block h-1 rounded-l-full" style={bar("shown")} />
-        </span>
-        <span
-          aria-hidden
-          className="hidden h-1 w-[52px] shrink-0 rounded-r-full bg-[var(--meter-track)] shadow-[inset_0_1px_3px_rgba(0,0,0,0.95)] lg:order-5 lg:block"
-        >
-          <span className="block h-1 rounded-r-full" style={bar("ghost")} />
-        </span>
-        <span className="hidden w-[52px] shrink-0 text-right font-mono text-[length:var(--fs-11)] tabular-nums text-readout-muted lg:order-6 lg:block">
-          {figure(compare.ghost, lens)}
-        </span>
-        {/* Below `lg` the ghost and its two tracks are one signed number: three
-            numeric affordances is a desktop luxury. */}
-        <span
-          className="shrink-0 font-mono text-[length:var(--fs-11)] tabular-nums text-readout-muted lg:hidden"
-          style={tone ? { color: tone } : undefined}
-        >
-          {compare.delta === null
-            ? ""
-            : `${compare.delta > 0 ? "+" : compare.delta < 0 ? "−" : ""}${figure(Math.abs(compare.delta), lens)}`}
+          <span style={tone ? { color: tone } : undefined}>
+            {figure(value, lens)}
+          </span>
         </span>
       </span>
     </li>
   );
 }
 
-/**
- * A bench player: the same two layouts as a seat, with no comparison to make.
- *
- * The 174px on the end is what lines the bench figures up under the seat
- * figures above them — the two tracks and the ghost column, plus the gaps
- * between them — so the column reads as one column rather than two that nearly
- * agree.
- */
+/** A bench player: the same channel, with no seat to be read against. */
 function BenchRow({ player, lens }: { player: LineupPlayer; lens: Lens }) {
   return (
-    <li className="relative flex h-11 flex-col justify-center gap-[3px] border-b border-active/8 last:border-b-0 lg:h-8 lg:flex-row lg:items-center lg:gap-[9px]">
-      <span className="block w-full truncate text-[length:var(--fs-13)] text-foreground/85 lg:order-2 lg:min-w-0 lg:flex-1">
-        {player.name ?? player.player_id}
+    <li
+      className={`${CONSOLE_ROW_WELL} relative mb-[5px] flex h-[66px] flex-col justify-center gap-2 rounded-lg px-[7px] lg:mb-1 lg:h-[50px] lg:flex-row lg:items-center lg:gap-2.5 lg:rounded-[9px] lg:px-3`}
+    >
+      <span className="relative flex w-full min-w-0 items-center gap-[7px] lg:contents">
+        <PlayerFace player={player} />
+        <SeatName player={player} className="lg:order-3" />
       </span>
-      <span className="flex w-full items-baseline gap-2 lg:contents">
-        <span className="shrink-0 font-mono text-[length:var(--fs-10)] tracking-[0.1em] text-readout-label lg:order-1 lg:w-[30px] lg:tracking-[0.12em]">
+      <span className="relative flex w-full items-center gap-2 lg:contents">
+        <span className="shrink-0 font-mono text-[length:var(--fs-11)] tracking-[0.1em] text-readout-label lg:order-1 lg:w-[42px] lg:overflow-hidden lg:rounded-md lg:bg-[color:var(--figure-well-bg)] lg:px-[5px] lg:py-1 lg:text-center lg:text-[length:var(--fs-12)] lg:tracking-[0.12em] lg:shadow-[var(--figure-well-shadow)]">
           {player.positions[0] ?? "—"}
         </span>
-        <span className="flex-1 text-right font-mono text-[length:var(--fs-12)] tabular-nums text-readout lg:order-3 lg:w-[54px] lg:flex-none lg:text-[length:var(--fs-11)]">
-          {cell(player, lens)}
+        <span
+          className={`${CONSOLE_FIGURE_WELL} min-w-0 flex-1 px-[5px] py-1 text-right font-mono text-[length:var(--fs-13)] tabular-nums text-readout lg:order-4 lg:w-[74px] lg:flex-none`}
+        >
+          {figure(lensValue(player, lens), lens)}
         </span>
-        <span aria-hidden className="hidden lg:order-4 lg:block lg:w-[174px]" />
       </span>
     </li>
   );
@@ -310,25 +356,20 @@ export type BenchReading = { total: string; place: MetricRank | null };
 export function LineupBreakdown({
   lineup,
   lens,
-  compare,
+  medians,
   bench,
 }: {
   lineup: LeagueLineup;
   lens: Lens;
-  /** One comparison per starter, index-aligned — see `seatComparisons`. */
-  compare: readonly SeatCompare[];
+  /** The league's median at each seat, index-aligned — see `slotMedians`. */
+  medians: readonly number[];
   /** The bench's total and place, or null where it has nothing to say. */
   bench: BenchReading | null;
 }) {
   const benchTone = rankColor(rankPercentile(bench?.place ?? null));
 
   return (
-    <div className="relative overflow-hidden rounded-xl border border-black/85 bg-[image:var(--readout-bg)] px-2.5 py-0.5 shadow-[var(--readout-shadow)] lg:px-3.5 lg:py-1">
-      <span
-        aria-hidden
-        className="pointer-events-none absolute inset-0 bg-[image:var(--readout-scanlines)]"
-      />
-
+    <PaneGlass className="p-0.5 lg:p-1">
       <ul className="relative m-0 list-none p-0">
         {lineup.starters.map((seat, i) => (
           <SeatRow
@@ -336,57 +377,64 @@ export function LineupBreakdown({
             slot={seat.slot}
             player={seat.player}
             lens={lens}
-            compare={
-              compare[i] ?? { ghost: null, delta: null, fill: 0, standing: null }
-            }
+            median={medians[i] ?? 0}
           />
         ))}
       </ul>
 
       {lineup.unknown_slots.length > 0 && (
         // A partial lineup must say so — see `unknown_slots` on the contract.
-        <p className="relative m-0 py-2 font-mono text-[length:var(--fs-11)] uppercase tracking-[0.14em] text-foreground/60">
+        <p className="relative m-0 px-2 py-2 font-mono text-[length:var(--fs-11)] uppercase tracking-[0.14em] text-foreground/60">
           Not shown: {lineup.unknown_slots.join(", ")}
         </p>
       )}
 
       {lineup.bench.length > 0 && (
         <details className="group/bench relative">
-          <summary className="flex h-11 cursor-pointer list-none items-center gap-1.5 font-mono text-[length:var(--fs-10)] uppercase tracking-[0.12em] text-foreground/60 transition-colors hover:text-readout lg:h-[38px] lg:gap-2.5 lg:text-[length:var(--fs-11)] lg:tracking-[0.14em]">
-            <span className="flex-1">Bench {lineup.bench.length}</span>
+          {/* **An inset lip rather than a border.** A rule drawn across the
+              glass is a line printed on it; a lip is the glass's own edge
+              catching the light, which is what the rows either side of it are
+              already made of. */}
+          <summary className="flex h-[50px] cursor-pointer list-none items-center gap-1.5 px-[7px] font-mono text-[length:var(--fs-11)] uppercase tracking-[0.12em] text-foreground/68 shadow-[var(--glass-lip-shadow)] transition-colors hover:text-readout lg:h-[46px] lg:gap-2.5 lg:px-3 lg:text-[length:var(--fs-12)] lg:tracking-[0.14em]">
+            <span className="min-w-0 flex-1 truncate">
+              Bench {lineup.bench.length}
+            </span>
             {bench && (
               <>
-                <span className="tabular-nums text-readout/60">
+                {/* **The total drops below `lg`**, where the place and the
+                    caret are what the row is for: at ~165px three figures and a
+                    word leave the word nothing. It is on the standings row
+                    opposite at every width, which is where a reader compares
+                    benches anyway. */}
+                <span className="hidden shrink-0 tabular-nums text-readout/62 lg:inline">
                   {bench.total}
                 </span>
                 {/* The place among the league's benches, on the same ramp the
                     card's rank tiles run — and neutral rather than red where
                     there is no place to report. */}
                 <span
-                  className="w-7 text-right tabular-nums lg:w-[34px]"
+                  className="w-[30px] shrink-0 text-right tabular-nums lg:w-10"
                   style={{ color: benchTone }}
                 >
                   {bench.place ? ordinal(bench.place.rank) : "—"}
                 </span>
               </>
             )}
-            {/* Held to the ghost column's width above it, so the caret closes
-                the row rather than floating in the middle of it. */}
             <span
               aria-hidden
-              className="w-6 text-right text-readout-label lg:w-[52px]"
+              className="w-3.5 shrink-0 text-right text-[length:var(--fs-12)] text-readout-label lg:w-[22px] lg:text-[length:var(--fs-13)]"
             >
               <span className="group-open/bench:hidden">▸</span>
               <span className="hidden group-open/bench:inline">▾</span>
             </span>
           </summary>
-          <ul className="m-0 list-none border-t border-active/8 p-0">
+          <ul className="m-0 list-none p-0 pt-1">
             {lineup.bench.map((player) => (
               <BenchRow key={player.player_id} player={player} lens={lens} />
             ))}
           </ul>
         </details>
       )}
-    </div>
+    </PaneGlass>
   );
 }

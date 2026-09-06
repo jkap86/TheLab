@@ -1,5 +1,9 @@
 import type { LeagueTeam, LineupPlayer } from "@/shared/contract";
 
+// Relative with an extension: this module runs under Node's own test runner,
+// which resolves neither the alias nor a bare specifier.
+import { median } from "./rank-ramp.ts";
+
 /**
  * A seat, as a comparison: what the team on screen has there, what the reader
  * has there, and the gap between the two.
@@ -48,6 +52,48 @@ export function lensValue(
  * overflowing its track.
  */
 const GAP_SCALE = 1.4;
+
+/**
+ * The league's median figure at each starting seat, index-aligned with any
+ * roster's `starters`.
+ *
+ * **This is what a seat's figure is coloured against**, and the choice of
+ * comparison is the whole reason the colour is worth printing at all. Read on
+ * its own magnitude a quarterback would be green in every league and a kicker
+ * red in every league, because the two are not on one scale and never were.
+ * Read against the twelve rosters' *middle player at that same seat*, a green
+ * QB1 is one that actually beats the league's and a red one is a hole to fix —
+ * which is a statement about the roster rather than about the position.
+ *
+ * **Seats are matched by index**, on {@link seatComparisons}' own rule and for
+ * its reason: `roster_positions` is the league's own starting lineup and is
+ * identical across every roster in it, so `starters[i]` is the same seat on
+ * every team — and a league running two `RB` slots takes RB1's median from
+ * every team's RB1.
+ *
+ * **A null is left out rather than counted as zero**, the rule every field
+ * this reads is documented by. An unprojected stash, a player no synced draft
+ * priced and one off KeepTradeCut's board are absent answers, and folding them
+ * in as zeroes would drag every median toward the floor — colouring half a
+ * league's seats green against a middle nobody occupies. A seat no roster has
+ * a figure for comes back **0**, which `slotPercentile` reads as "nothing to
+ * compare against" and draws neutral.
+ *
+ * Derived in the browser from the entry the page already holds — a second read
+ * of data in hand, not a second request.
+ */
+export function slotMedians(
+  teams: readonly LeagueTeam[],
+  seats: number,
+  lens: Lens,
+): number[] {
+  return Array.from({ length: seats }, (_, i) => {
+    const across = teams
+      .map((team) => lensValue(team.lineup.starters[i]?.player, lens))
+      .filter((value): value is number => value !== null);
+    return median(across);
+  });
+}
 
 export type SeatCompare = {
   /**
