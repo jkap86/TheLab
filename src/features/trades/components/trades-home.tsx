@@ -11,6 +11,7 @@ import {
   storeTradeValueBasis,
   useKtcBoard,
   useStoredAccount,
+  useTradeDataStamp,
   useTradeValueBasis,
 } from "@/features/shared";
 
@@ -22,6 +23,7 @@ import {
   tradeSeekBounds,
 } from "../filters";
 import type { TradeFilters, TradeNames, TradeSeek } from "../filters";
+import { tradeCountLabel, tradeCountReading } from "../trade-count";
 import { useTodayIso } from "../hooks/use-today-iso";
 import { useTradeLeagues } from "../hooks/use-trade-leagues";
 import { useTrades } from "../hooks/use-trades";
@@ -67,7 +69,12 @@ export function TradesHome({
 }) {
   const account = useStoredAccount();
   const today = useTodayIso();
-  const { leagues, byId, error: leaguesError } = useTradeLeagues(season);
+  // When this device last saw a sync land. It joins both reads' subjects so a
+  // reader who has just synced is not answered out of a browser cache filled
+  // before they did — see `features/shared/trade-freshness` for why the two
+  // routes keep their cache headers and this rides the URL instead.
+  const stamp = useTradeDataStamp();
+  const { leagues, byId, error: leaguesError } = useTradeLeagues(season, stamp);
 
   const [leagueFilters, setLeagueFilters] = useState(DEFAULT_LEAGUE_FILTERS);
   const [filters, setFilters] = useState<TradeFilters>(DEFAULT_TRADE_FILTERS);
@@ -95,8 +102,9 @@ export function TradesHome({
       filters,
       bounds: tradeSeekBounds(seek, today),
       user: account?.user_id ?? null,
+      stamp,
     }),
-    [season, leagues, leagueFilters, narrowingLeagues, filters, seek, today, account],
+    [season, leagues, leagueFilters, narrowingLeagues, filters, seek, today, account, stamp],
   );
   const requestKey = tradeQueryKey(request);
 
@@ -109,10 +117,21 @@ export function TradesHome({
   );
   const facetsKey = tradeQueryKey(facetsRequest);
 
-  const { data, loading, loadingMore, hasMore, loadMore, error } = useTrades(
-    request,
-    requestKey,
-  );
+  // `error` is the first page's — nothing loaded, so it replaces the board.
+  // `loadMoreError` is the walk's, and it deliberately does not: the reader is
+  // looking at trades that loaded fine, and a dropped request must not take
+  // them off screen. See `useTrades`.
+  const {
+    data,
+    loading,
+    loadingMore,
+    hasMore,
+    loadMore,
+    retryLoadMore,
+    retry,
+    error,
+    loadMoreError,
+  } = useTrades(request, requestKey);
 
   // Names come off whatever the board has loaded; a facet can name a player no
   // loaded page does, which is why the panel merges its own `names` in. The id
@@ -177,7 +196,7 @@ export function TradesHome({
           role="status"
           className="font-mono text-[length:var(--fs-11)] uppercase tracking-[0.16em] tabular-nums text-foreground/70"
         >
-          <TradeCount data={data} loading={loading} />
+          <TradeCount data={data} loading={loading} hasMore={hasMore} />
         </p>
         <SeekKey seek={seek} onChange={setSeek} today={today} />
         {/* The dialog takes the **unfiltered** list: every count in it is over
@@ -246,17 +265,33 @@ export function TradesHome({
         </p>
       )}
 
+      {/* **The first page's failure only.** A later page failing leaves the
+          board exactly as the reader left it and says so under the last card —
+          see `TradesList`. Replacing a hundred loaded cards with this box over
+          one dropped request is the thing that split `error` in two. */}
       {error ? (
-        <p
-          role="alert"
-          className="relative inline-flex items-center gap-3 rounded-full border border-error/28 bg-[image:var(--alert-bg)] px-5 py-2.5 font-mono text-[length:var(--fs-13)] text-error shadow-[inset_0_1px_0_rgba(255,255,255,0.12),0_3px_0_rgba(0,0,0,0.7)]"
-        >
-          <span
-            aria-hidden
-            className="size-[0.4375rem] rounded-full bg-error shadow-[0_0_10px_var(--error)]"
-          />
-          {error}
-        </p>
+        <div className="relative flex flex-wrap items-center gap-4">
+          <p
+            role="alert"
+            className="m-0 inline-flex items-center gap-3 rounded-full border border-error/28 bg-[image:var(--alert-bg)] px-5 py-2.5 font-mono text-[length:var(--fs-13)] text-error shadow-[inset_0_1px_0_rgba(255,255,255,0.12),0_3px_0_rgba(0,0,0,0.7)]"
+          >
+            <span
+              aria-hidden
+              className="size-[0.4375rem] rounded-full bg-error shadow-[0_0_10px_var(--error)]"
+            />
+            {error}
+          </p>
+          {/* The board restarts on a subject change, so without this the only
+              way to ask the same question again was to touch a filter — which
+              asks a different one. */}
+          <button
+            type="button"
+            onClick={retry}
+            className="shrink-0 rounded-full border border-foreground/10 bg-[image:var(--key-bg)] px-4 py-2 font-mono text-[length:var(--fs-11)] uppercase tracking-[0.16em] text-foreground/80 shadow-[var(--key-shadow)] hover:text-readout active:translate-y-0.5"
+          >
+            Retry
+          </button>
+        </div>
       ) : loading ? (
         <p className="relative font-mono text-[length:var(--fs-11)] uppercase tracking-[0.16em] text-foreground/60">
           Reading the board…
@@ -279,7 +314,9 @@ export function TradesHome({
           board={ktcBoard}
           hasMore={hasMore}
           loadingMore={loadingMore}
+          loadMoreError={loadMoreError}
           onLoadMore={loadMore}
+          onRetry={retryLoadMore}
         />
       )}
     </div>
@@ -291,26 +328,24 @@ export function TradesHome({
  * circle leave.
  *
  * Two numbers because they are two questions, the same distinction the two
- * dialogs draw. A count that failed reads as an em dash rather than a zero: the
- * route degrades its denominators without failing the list, and a zero would
- * claim an empty board under rows that are on screen.
+ * dialogs draw. **A count that failed is not a count of what loaded**: it used
+ * to fall back to `data.trades.length` and print that as the answer, so the
+ * first page of a board with thousands of trades read "100 trades". The rule
+ * and its four readings live in `../trade-count`, which is pure and tested —
+ * the difference between an exact total and a floor is one character of markup
+ * and a claim the reader cannot check.
  */
 function TradeCount({
   data,
   loading,
+  hasMore,
 }: {
   data: { trades: readonly unknown[]; total: number | null; scopeTotal: number | null } | null;
   loading: boolean;
+  /** Whether the walk can still go on, which is what makes a floor a floor. */
+  hasMore: boolean;
 }) {
-  if (loading || !data) return <>Reading…</>;
-  const n = data.total ?? data.trades.length;
-  const m = data.scopeTotal;
-  return (
-    <>
-      {n.toLocaleString()}
-      {m !== null && m !== n ? ` of ${m.toLocaleString()}` : ""} trades
-    </>
-  );
+  return <>{tradeCountLabel(tradeCountReading(data, loading, hasMore))}</>;
 }
 
 /**

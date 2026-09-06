@@ -383,15 +383,24 @@ function playersPresentSql(
  * 9ms on the identical question; see {@link circleSql}, which keeps the same
  * correlation over the stored mapping.
  *
- * **It is the one place that still resolves an owner through `rosters` rather
- * than through `trade_participants`, and that is a measurement rather than an
- * oversight.** This asks about *a named roster of the trade* — correlated to
- * `alias`, one index-only lookup either way — on the board's hot path, where the
- * plan is measured at 9ms and the whole risk of touching it is a plan flip
- * nothing here would notice. The circle and the facet were switched because they
- * are the reads with no `LIMIT`, where the same lookup runs over the season.
- * Switching this one is a `scripts/explain-trade-facets.ts` run away, and should
- * not happen without one.
+ * **The manager half reads `trade_participants`, and it reads the *historical*
+ * owner.** It used to look the roster up in `rosters` and compare today's
+ * `owner_id`, which made "trades manager A was in" mean "trades made by
+ * whoever's roster A happens to hold now" — so a roster changing hands moved
+ * every one of its past trades from one manager's filter to another's. The
+ * question a bay asks is about the past, so it is answered from the column that
+ * records the past; see {@link tradeParticipantsRebuildSql} for how that column
+ * is kept immutable, and the `1788000000008` migration for what Sleeper does
+ * and does not make knowable.
+ *
+ * The planner note the old spelling carried survives the switch intact, because
+ * the shape did: this is still a single correlated index lookup on a primary
+ * key, on the board's hot path. `rosters` is keyed `(league_id, roster_id)` and
+ * `trade_participants` `(transaction_id, roster_id)`, both fully bound from `t`
+ * and `alias`, so the subquery is still a function of `t` and still cannot be
+ * pulled up. What it needs to stay index-only is a covering index carrying
+ * `owner_id_at_trade`, which the migration adds — the primary key's own
+ * `INCLUDE` list names `owner_id` and cannot be altered.
  *
  * Four details in the level itself:
  *
@@ -437,10 +446,10 @@ function sidesSql(
 
     if (side.manager !== null) {
       conditions.push(`EXISTS (
-        SELECT 1 FROM rosters r
-         WHERE r.league_id = t.league_id
-           AND r.roster_id = ${rosterIdIntSql(alias)}
-           AND r.owner_id = ${bind(side.manager)})`);
+        SELECT 1 FROM trade_participants tp${index + 1}
+         WHERE tp${index + 1}.transaction_id = t.transaction_id
+           AND tp${index + 1}.roster_id = ${rosterIdIntSql(alias)}
+           AND tp${index + 1}.owner_id_at_trade = ${bind(side.manager)})`);
     }
 
     for (let prior = 0; prior < index; prior++) {
@@ -582,6 +591,129 @@ export function tradeParticipantsSql(where = ""): string {
 }
 
 /**
+ * The per-league rebuild: refresh who holds each roster **now**, and write the
+ * historical snapshot **once**.
+ *
+ * **This replaced a `DELETE` followed by an `INSERT`, and the delete was the
+ * bug.** The derivation above reads `rosters.owner_id` as it stands, so wiping
+ * the league's rows and re-deriving them on every sync meant a roster changing
+ * hands re-attributed every trade that roster had ever been in. The old doc
+ * comment named that consequence and called it "the only thing that can be
+ * said", which was true of a table with one owner column and stopped being true
+ * the moment a second one existed: Sleeper publishes no ownership history, but
+ * *this database* has been watching, and what it saw when it first met the trade
+ * is worth more than what it can see today.
+ *
+ * So the write is an upsert whose conflict clause names **only** the two facts
+ * that are about the present:
+ *
+ * - `owner_id` — today's holder, refreshed every sync, which is what it always
+ *   meant.
+ * - `league_id` — carried so a row cannot be stranded under the wrong league,
+ *   though nothing moves a trade between leagues.
+ *
+ * and **never** `owner_id_at_trade` or `owner_provenance`. The protection is
+ * that there is no branch for a later edit to flatten — the same shape
+ * `stampManagers` takes to keep `synced_at` out of a discovery pass. A row's
+ * snapshot is written by its `INSERT` and by nothing else, for as long as the
+ * row lives.
+ *
+ * `'ingest'` is what the insert claims for a new row, and it is a claim about
+ * *provenance* rather than about accuracy: this is the roster's owner at the
+ * moment the app first observed the trade. For a league that syncs regularly
+ * that is the trade-time owner; for one first synced years after the fact it is
+ * not, and the value is there so a reader can tell which they are looking at.
+ * See the `1788000000008` migration.
+ *
+ * The derivation is reused verbatim as a subquery rather than restated, so the
+ * rebuild and the backfill in `1788000000003` stay one definition of "who was in
+ * this trade" — which is what `sql.test.ts` pins.
+ */
+export function tradeParticipantsRebuildSql(where = ""): string {
+  return `INSERT INTO trade_participants
+            (transaction_id, league_id, roster_id, owner_id,
+             owner_id_at_trade, owner_provenance)
+  SELECT d.transaction_id, d.league_id, d.roster_id, d.owner_id,
+         d.owner_id, 'ingest'
+    FROM (${tradeParticipantsSql(where)}) d
+      ON CONFLICT (transaction_id, roster_id) DO UPDATE SET
+         league_id = EXCLUDED.league_id,
+         owner_id = EXCLUDED.owner_id`;
+}
+
+/**
+ * Rows this league's trades no longer name, deleted.
+ *
+ * The reconciliation the upsert cannot do, and it is deliberately **not** the
+ * complement of the derivation: it asks `transactions` alone, never `rosters`.
+ * A pair drops out of the derivation for two very different reasons — the trade
+ * stopped naming that roster (a re-fetched transaction whose `roster_ids`
+ * changed, a trade that is no longer `complete`), and the roster is currently
+ * orphaned. Only the first is a reason to forget the history; the second is a
+ * fact about today, and {@link tradeParticipantsOrphanSql} is what records it
+ * without throwing the snapshot away.
+ *
+ * `$1` is the league id.
+ */
+export const TRADE_PARTICIPANTS_PRUNE_SQL = `DELETE FROM trade_participants tp
+ WHERE tp.league_id = $1
+   AND NOT EXISTS (
+     SELECT 1
+       FROM transactions t
+       CROSS JOIN LATERAL jsonb_array_elements_text(${asArray("t.roster_ids")}) ri
+      WHERE t.transaction_id = tp.transaction_id
+        AND t.league_id = tp.league_id
+        AND t.type = 'trade' AND t.status = 'complete'
+        AND tp.roster_id = ${rosterIdIntSql("ri")})`;
+
+/**
+ * A roster nobody holds any more reads as holding nobody.
+ *
+ * The derivation requires `r.owner_id IS NOT NULL`, so an orphaned roster
+ * simply falls out of the upsert and its row would otherwise keep whichever
+ * owner it last had — in a column that means *now*, which is the same wrong
+ * claim in miniature that this whole migration is about. Written as its own
+ * statement rather than folded into the upsert because it is the one case with
+ * nothing to upsert from.
+ *
+ * `owner_id_at_trade` is untouched, which is the point: who dealt is still
+ * known, and only who holds the seat today is not.
+ *
+ * `$1` is the league id.
+ */
+export const TRADE_PARTICIPANTS_ORPHAN_SQL = `UPDATE trade_participants tp
+   SET owner_id = NULL
+ WHERE tp.league_id = $1
+   AND tp.owner_id IS NOT NULL
+   AND NOT EXISTS (
+     SELECT 1 FROM rosters r
+      WHERE r.league_id = tp.league_id
+        AND r.roster_id = tp.roster_id
+        AND r.owner_id IS NOT NULL)`;
+
+/**
+ * Who was party to each trade on a page, as one object per trade.
+ *
+ * A correlated subquery in the page's `SELECT` list rather than a second round
+ * trip, which is what makes historical attribution free: the target list is
+ * evaluated after the ordered index walk and its `LIMIT`, so this runs a
+ * primary-key lookup for the hundred rows the page actually returns and for
+ * nothing else. A separate `getTradeParticipantOwners` read would be another
+ * pooled connection on the request's critical path, which is the fan-out this
+ * route spends its structure avoiding.
+ *
+ * `jsonb_object_agg` because a roster id is an integer and JSON keys are text;
+ * `assembleTrade` reads it back through the same `asNumber` guard it reads
+ * Sleeper's own blobs with. Null where the trade has no participant rows at all
+ * — a league synced before the table existed, or one whose rosters were all
+ * orphaned — which the assembler folds to "fall back to today's owner".
+ */
+export const TRADE_PARTICIPANT_OWNERS_SQL = `(
+    SELECT jsonb_object_agg(tp.roster_id::text, tp.owner_id_at_trade)
+      FROM trade_participants tp
+     WHERE tp.transaction_id = t.transaction_id)`;
+
+/**
  * One resolved circle as a `WHERE` fragment.
  *
  * The three shapes are three different questions and only the first is a plain
@@ -603,6 +735,12 @@ export function tradeParticipantsSql(where = ""): string {
  *   the table exists: this predicate runs over the *whole season* on the reads
  *   that have no `LIMIT` — the facets and both denominators — where it was the
  *   dominant cost even with `rosters_league_roster_owner_idx` under it.
+ *
+ *   **It reads `owner_id_at_trade`, not `owner_id`.** "Trades my leaguemates
+ *   were in" is a question about the past, and answering it from present-day
+ *   ownership meant a roster changing hands silently moved a season of trades
+ *   from one person's circle into another's — see
+ *   {@link tradeParticipantsRebuildSql}.
  *
  * All three are `EXISTS`/`ANY` filters over `transactions` alone, so the board's
  * `ORDER BY` is still satisfied straight from `transactions_trade_keyset_idx`
@@ -635,7 +773,7 @@ function circleSql(
       return `EXISTS (
         SELECT 1 FROM trade_participants tp
          WHERE tp.transaction_id = t.transaction_id
-           AND tp.owner_id = ANY(${ids}::varchar[]))`;
+           AND tp.owner_id_at_trade = ANY(${ids}::varchar[]))`;
   }
 }
 
@@ -753,12 +891,19 @@ export const TRADE_FACET_SQL: Record<
    * three-way trade can name both, so the stored mapping has two rows for them
    * exactly as the join had — the key is `(transaction_id, roster_id)`, which is
    * the grain the menu has to collapse.
+   *
+   * **The value is `owner_id_at_trade`, so the menu lists who *dealt*.** Off
+   * today's owner the menu would offer a manager who has never made a trade
+   * — because they took over a roster that had — and would omit the manager who
+   * actually made them. It is also the column the bay filter it feeds compares
+   * against, and a menu counted on one column and applied on another is an
+   * option that returns nothing.
    */
   managers: {
     columns: `t.transaction_id`,
     aggregate: `SELECT value, count(*)::bigint AS count
        FROM (
-         SELECT DISTINCT pop.transaction_id, tp.owner_id AS value
+         SELECT DISTINCT pop.transaction_id, tp.owner_id_at_trade AS value
            FROM pop
            JOIN trade_participants tp ON tp.transaction_id = pop.transaction_id
        ) dealt

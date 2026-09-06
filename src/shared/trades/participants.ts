@@ -1,14 +1,18 @@
 import type { PoolClient } from "pg";
 
-import { tradeParticipantsSql } from "./sql";
+import {
+  TRADE_PARTICIPANTS_ORPHAN_SQL,
+  TRADE_PARTICIPANTS_PRUNE_SQL,
+  tradeParticipantsRebuildSql,
+} from "./sql";
 
 /**
  * Keeping `trade_participants` in step with the trades and rosters it is
- * derived from.
+ * derived from — **without rewriting the history it also holds.**
  *
- * The thin I/O half of {@link tradeParticipantsSql}, which is where the
- * derivation itself lives and is tested — this file is two statements and a
- * comment about when they run.
+ * The thin I/O half of {@link tradeParticipantsRebuildSql} and the two
+ * reconciling statements beside it, which is where the derivations live and are
+ * tested; this file is three statements and a comment about when they run.
  */
 
 /**
@@ -22,37 +26,48 @@ import { tradeParticipantsSql } from "./sql";
  * having. Committing with the rows it describes, or not at all, is the only
  * arrangement where that cannot happen.
  *
- * **Replaced wholesale rather than merged, and unconditionally.** Three reasons,
- * and the third is the one that rules out anything cleverer:
+ * **It used to be `DELETE` then `INSERT`, and that was the historical
+ * attribution bug.** The derivation reads `rosters.owner_id` as it stands now,
+ * so wiping the league's rows and re-deriving them on every sync re-attributed
+ * every past trade of any roster that had changed hands: manager A's October
+ * trades became manager B's the first time B's ownership synced, in the circle,
+ * in the managers menu, in the bay filter and on the card. The old comment here
+ * named that as a *reason* the rebuild had to be wholesale. It was the reason it
+ * could not be.
  *
- * - It is a *derivation*, so there is no upstream answer to be wrong about. The
- *   "guard the delete on a non-empty fetch" rule is about a collection Sleeper
- *   might have failed to send; these rows come from the same transaction's own
- *   committed writes, and a league that genuinely trades nothing genuinely has
- *   none.
- * - It is small. One `league_id` is one season of one league, so a few dozen
- *   trades and a couple of hundred rows — the same order as the `traded_picks`
- *   and `league_users` replacements a few statements above it.
- * - **An owner change rewrites rows no new trade touched.** The mapping reads
- *   `rosters.owner_id` as it stands now, so a manager taking over a roster
- *   changes the attribution of every trade that roster was ever in. An
- *   incremental rebuild over the weeks this sync re-fetched would miss exactly
- *   that, and miss it silently.
+ * So it is three statements, and each does one thing the others cannot:
  *
- * It reads the *stored* transactions rather than the graph in hand for the same
- * reason: this sync re-fetched a window of weeks, and the league's earlier
- * trades — which are most of them — are only in the table.
+ * 1. **Upsert** ({@link tradeParticipantsRebuildSql}) — inserts rows for pairs
+ *    not seen before, stamping the historical snapshot once, and refreshes
+ *    today's owner on rows that already exist. Its conflict clause names
+ *    neither `owner_id_at_trade` nor `owner_provenance`, so a repeated sync
+ *    cannot move them; there is no branch for a later edit to flatten.
+ * 2. **Prune** ({@link TRADE_PARTICIPANTS_PRUNE_SQL}) — drops rows the league's
+ *    trades no longer name at all. Asked of `transactions` alone, so a roster
+ *    that is merely orphaned today does not lose its history.
+ * 3. **Orphan** ({@link TRADE_PARTICIPANTS_ORPHAN_SQL}) — nulls today's owner
+ *    where nobody holds the roster, which is the one case with nothing to
+ *    upsert from.
+ *
+ * **Still unconditional, and still over the stored transactions rather than the
+ * graph in hand.** This sync re-fetched a window of weeks and the league's
+ * earlier trades — which are most of them — are only in the table; and an owner
+ * change still has to reach every row of the league, because `owner_id` is
+ * about the present and moves for trades nobody touched. What is no longer
+ * unconditional is the *history*, which is exactly the column that should never
+ * have moved.
+ *
+ * The order matters in one place only: prune before the orphan pass, so the
+ * update does not walk rows about to be deleted. The upsert is first because a
+ * pair it inserts is by definition one the prune keeps.
  */
 export async function rebuildTradeParticipants(
   client: PoolClient,
   leagueId: string,
 ): Promise<void> {
-  await client.query(`DELETE FROM trade_participants WHERE league_id = $1`, [
+  await client.query(tradeParticipantsRebuildSql(` AND t.league_id = $1`), [
     leagueId,
   ]);
-  await client.query(
-    `INSERT INTO trade_participants (transaction_id, league_id, roster_id, owner_id)
-     ${tradeParticipantsSql(` AND t.league_id = $1`)}`,
-    [leagueId],
-  );
+  await client.query(TRADE_PARTICIPANTS_PRUNE_SQL, [leagueId]);
+  await client.query(TRADE_PARTICIPANTS_ORPHAN_SQL, [leagueId]);
 }

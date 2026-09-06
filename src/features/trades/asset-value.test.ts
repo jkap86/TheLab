@@ -8,6 +8,7 @@ import {
   bundleValue,
   formatAssetValue,
   NO_ASSET_VALUES,
+  TRADE_BASIS_NOTES,
   TRADE_BASIS_UNITS,
   type ValueLens,
 } from "./asset-value.ts";
@@ -225,4 +226,26 @@ test("every basis has a unit to print", () => {
   for (const unit of Object.values(TRADE_BASIS_UNITS)) {
     assert.match(unit, /^[A-Z]{3}$/);
   }
+});
+
+/**
+ * The unit is three characters, so the sentence explaining it lives beside it —
+ * and one of the three sentences is doing real work.
+ *
+ * This board is history, and every KeepTradeCut figure on it is *today's*
+ * price: there is no stored record of what that market said in 2021. A reader
+ * is entitled to read a value printed against a trade as the value at the time,
+ * which would make the number wrong rather than merely unexplained.
+ */
+test("every basis has a note, and the KTC one says the values are current", () => {
+  assert.deepEqual(Object.keys(TRADE_BASIS_NOTES).sort(), [
+    "capital",
+    "ktc",
+    "ros",
+  ]);
+  for (const note of Object.values(TRADE_BASIS_NOTES)) {
+    assert.ok(note.length > 0);
+  }
+  assert.match(TRADE_BASIS_NOTES.ktc, /current/i);
+  assert.match(TRADE_BASIS_NOTES.ktc, /repriced|today/i);
 });

@@ -210,17 +210,45 @@ describe("tradeFilterSql", () => {
       assert.doesNotMatch(sql, /<>/);
     });
 
-    test("a named manager is a primary-key lookup correlated to the trade", () => {
-      // `rosters` is keyed `(league_id, roster_id)` and both come from `t`, so
-      // the subquery is a function of the trade and cannot be pulled up, where
-      // the decorrelatable spelling measured 205ms against 9ms. It is also the
-      // one owner lookup still made against `rosters` rather than against
-      // `trade_participants` — deliberately, since it is on the board's
-      // measured hot path and the switch buys nothing a plan could show.
+    test("a named manager is asked of who dealt, not of who holds the roster now", () => {
+      // The bug this pins: read off `rosters.owner_id`, "trades manager A was
+      // in" meant "trades made by whoever holds A's roster today", so a roster
+      // changing hands moved a season of trades from one manager's filter into
+      // another's. A bay asks about the past, so it reads the column that
+      // records the past.
       const { sql } = build(query({ sides: [side({ manager: "u1" })] }));
-      assert.match(sql, /FROM rosters r\s+WHERE r\.league_id = t\.league_id/);
-      assert.match(sql, /r\.roster_id = \(CASE WHEN ri1 ~ '\^\[0-9\]\+\$' THEN ri1::int END\)/);
-      assert.match(sql, /r\.owner_id = \$\d+/);
+      assert.match(sql, /FROM trade_participants tp1/);
+      assert.match(sql, /tp1\.owner_id_at_trade = \$\d+/);
+      assert.doesNotMatch(
+        sql,
+        /tp1\.owner_id = /,
+        "today's owner must not decide who made a past trade",
+      );
+      assert.doesNotMatch(sql, /FROM rosters r/);
+    });
+
+    test("the manager lookup stays a correlated primary-key probe", () => {
+      // The planner note survives the switch because the shape did.
+      // `trade_participants` is keyed `(transaction_id, roster_id)` and both
+      // are bound from `t` and the bay's own roster, so the subquery is still a
+      // function of the trade and cannot be pulled up — where the
+      // decorrelatable spelling measured 205ms against 9ms.
+      const { sql } = build(query({ sides: [side({ manager: "u1" })] }));
+      assert.match(sql, /tp1\.transaction_id = t\.transaction_id/);
+      assert.match(
+        sql,
+        /tp1\.roster_id = \(CASE WHEN ri1 ~ '\^\[0-9\]\+\$' THEN ri1::int END\)/,
+      );
+    });
+
+    test("two bays get two participant aliases, so neither shadows the other", () => {
+      // The levels nest, and a shared alias inside nested `EXISTS` is legal SQL
+      // that reads as one thing and means another.
+      const { sql } = build(
+        query({ sides: [side({ manager: "u1" }), side({ manager: "u2" })] }),
+      );
+      assert.match(sql, /trade_participants tp1/);
+      assert.match(sql, /trade_participants tp2/);
     });
 
     test("the players are pre-filtered through the index they have one for", () => {
@@ -626,6 +654,71 @@ describe("the scope and narrowing halves", () => {
     );
     assert.ok(sql.length > 0);
     assert.ok(!sql.trimStart().startsWith("AND"));
+  });
+});
+
+/**
+ * The startup boundary, from the other side: what it must **not** do.
+ *
+ * The block above pins each half of the rule. These pin the two failures that
+ * would be invisible — a boundary that kept dropping trades after the startup
+ * was over, and a boundary drawn from the wrong draft — because both look
+ * exactly like a league that simply did not trade.
+ */
+describe("the startup boundary drops nothing it should not", () => {
+  test("nothing rejects a trade for being *after* the cutoff", () => {
+    // The comparison is one-sided by construction: `<= sd.last_picked` is the
+    // only place a transaction timestamp meets the boundary, so a trade after
+    // it cannot be rejected however the rest of the clause reads. A `>=` or a
+    // `BETWEEN` creeping in here would silently empty the board of exactly the
+    // trades it exists to show.
+    const boundary = TRADES_POPULATION_SQL.slice(
+      TRADES_POPULATION_SQL.indexOf("startup_draft sd"),
+    );
+    const comparisons = boundary.match(/coalesce\(t\.status_updated, t\.created\)\s*[<>]=?/g) ?? [];
+    assert.deepEqual(comparisons, ["coalesce(t.status_updated, t.created) <="]);
+    assert.doesNotMatch(boundary, /coalesce\(t\.status_updated, t\.created\)\s*>/);
+  });
+
+  test("a completed startup is judged on its cutoff alone, never on its status", () => {
+    // The status arm rejects only while the draft is *unfinished*; once it is
+    // `complete` the league's trades are decided by the last pick. Spelled
+    // `<> 'complete'` rather than `= 'in_progress'`, so a status Sleeper has
+    // not documented does not quietly reject a whole league.
+    assert.match(TRADES_POPULATION_SQL, /sd\.status <> 'complete'/);
+    assert.doesNotMatch(TRADES_POPULATION_SQL, /sd\.status = 'complete'/);
+  });
+
+  test("the boundary is drawn from the first draft, so a rookie draft is not it", () => {
+    // An inaugural dynasty league runs a rookie draft after its startup in the
+    // same league year. Bounding on the later draft's last pick would hide
+    // months of real trades between the two — and they are the league's first
+    // real market, which is the thing this board is for.
+    assert.match(STARTUP_DRAFT_SQL, /ORDER BY d\.league_id, d\.start_time ASC NULLS LAST/);
+    assert.doesNotMatch(STARTUP_DRAFT_SQL, /start_time DESC/);
+  });
+
+  test("only a league with no previous season has a startup at all", () => {
+    // A continuing dynasty league's draft is a rookie draft — additive to
+    // rosters that already exist — so it bounds nothing and the league is
+    // simply absent from the CTE. All three of Sleeper's spellings of "no
+    // previous season" read the same way.
+    assert.match(
+      STARTUP_DRAFT_SQL,
+      /coalesce\(l\.previous_league_id, ''\) IN \('', '0'\)/,
+    );
+  });
+
+  test("the cutoff reads the two-argument coalesce, not the sort key", () => {
+    // `TRADE_SORT_SQL` folds a null to zero, which would put an undated trade
+    // in 1970 — on the *far* side of every cutoff, so a league with a boundary
+    // would keep every undated trade instead of dropping it. The boundary is
+    // deliberately the two-argument form, which stays null and is handled
+    // explicitly one line above.
+    const boundary = TRADES_POPULATION_SQL.slice(
+      TRADES_POPULATION_SQL.indexOf("startup_draft sd"),
+    );
+    assert.ok(!boundary.includes(TRADE_SORT_SQL));
   });
 });
 

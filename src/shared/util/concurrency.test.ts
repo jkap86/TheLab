@@ -1,7 +1,11 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 
-import { collectWithConcurrency, mapWithConcurrency } from "./concurrency.ts";
+import {
+  collectWithConcurrency,
+  concurrencyGate,
+  mapWithConcurrency,
+} from "./concurrency.ts";
 
 test("results come back in the input's order, not completion order", async () => {
   const results = await collectWithConcurrency([30, 10, 20], 3, async (ms) => {
@@ -102,4 +106,93 @@ test("a fan-out shorter than its bound never over-spawns workers", async () => {
     return n;
   });
   assert.equal(started, 2);
+});
+
+/**
+ * The gate, which is `collectWithConcurrency` for a fan-out whose branches are
+ * different shapes — the trades route's enrichment, where seven reads return
+ * seven types and every one of them takes a pool connection.
+ */
+test("the gate never lets more than its limit run at once", async () => {
+  const gate = concurrencyGate(3);
+  let inFlight = 0;
+  let peak = 0;
+
+  await Promise.all(
+    [...Array(12).keys()].map((n) =>
+      gate(async () => {
+        peak = Math.max(peak, ++inFlight);
+        await new Promise((resolve) => setTimeout(resolve, 1));
+        inFlight--;
+        return n;
+      }),
+    ),
+  );
+
+  assert.equal(peak, 3);
+});
+
+test("the gate keeps each branch's own type", async () => {
+  // The whole reason it exists rather than a `collectWithConcurrency` over a
+  // union: the tuple survives, so the call site still reads as the fan-out it
+  // is and nothing has to be cast back apart.
+  const gate = concurrencyGate(2);
+  const [name, count, flag] = await Promise.all([
+    gate(async () => "players"),
+    gate(async () => 7),
+    gate(async () => true),
+  ]);
+
+  assert.equal(name.toUpperCase(), "PLAYERS");
+  assert.equal(count + 1, 8);
+  assert.equal(flag, true);
+});
+
+test("a task that throws releases its slot", async () => {
+  // Every branch the trades route puts through this is allowed to fail, so one
+  // rejection must not wedge the gate for the rest of the request.
+  const gate = concurrencyGate(1);
+  await assert.rejects(
+    gate(async () => {
+      throw new Error("connection reset");
+    }),
+    /connection reset/,
+  );
+  assert.equal(await gate(async () => "still open"), "still open");
+});
+
+test("waiters are served in the order they arrived", async () => {
+  // A stack would starve its oldest waiter under sustained pressure, which on a
+  // request-scoped gate is one read of the eight never running.
+  const gate = concurrencyGate(1);
+  const order: number[] = [];
+  await Promise.all(
+    [1, 2, 3, 4].map((n) =>
+      gate(async () => {
+        order.push(n);
+        await new Promise((resolve) => setTimeout(resolve, 1));
+      }),
+    ),
+  );
+  assert.deepEqual(order, [1, 2, 3, 4]);
+});
+
+test("a limit below one is still a working gate", async () => {
+  const gate = concurrencyGate(0);
+  assert.equal(await gate(async () => "ran"), "ran");
+});
+
+test("an ungated call is unaffected by a saturated gate", async () => {
+  // The projections read sits outside the gate deliberately: it fetches from
+  // Sleeper rather than Postgres, and queueing a network wait behind database
+  // work rations the wrong thing.
+  const gate = concurrencyGate(1);
+  let held!: () => void;
+  const blocker = gate(
+    () => new Promise<void>((resolve) => (held = resolve)),
+  );
+
+  assert.equal(await Promise.resolve("network"), "network");
+  held();
+  await blocker;
 });

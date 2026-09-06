@@ -89,15 +89,31 @@ export async function fetchTradesPage({
  */
 export async function fetchTradeLeagues({
   season,
+  stamp,
   signal,
 }: {
   season: string;
+  /**
+   * When this device last saw a sync land, or `""` — see
+   * `features/shared/trade-freshness`.
+   *
+   * **This route is the one that most needs it.** Its answer is cached for five
+   * minutes, and a sync importing a league's first trade is exactly what makes
+   * it wrong: the trade shows up on the board while the league selector, the
+   * filter counts and the card's own league *name* still come from a payload
+   * that had never heard of that league. The board's own thirty seconds would
+   * mostly have expired on its own; five minutes will not.
+   */
+  stamp?: string;
   signal?: AbortSignal;
 }): Promise<TradeLeaguesPayload> {
-  const res = await apiFetch(
-    `/api/trades/leagues?season=${encodeURIComponent(season)}`,
-    { signal, fallbackError: "Failed to load leagues" },
-  );
+  const search = new URLSearchParams({ season });
+  if (stamp) search.set("synced", stamp);
+
+  const res = await apiFetch(`/api/trades/leagues?${search}`, {
+    signal,
+    fallbackError: "Failed to load leagues",
+  });
   return (await res.json()) as TradeLeaguesPayload;
 }
 

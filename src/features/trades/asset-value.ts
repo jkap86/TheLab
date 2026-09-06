@@ -209,6 +209,32 @@ export const TRADE_BASIS_UNITS: Record<TradeValueBasis, string> = {
 };
 
 /**
+ * What each unit means, in one sentence, for the `title` a card hangs on it.
+ *
+ * **The KeepTradeCut one is the reason this exists.** This board is history —
+ * a 2021 trade is on it — and every KTC figure beside one is *today's* market
+ * price, because there is no stored history of that market to read instead. A
+ * reader is entitled to assume the opposite: that a value printed against a
+ * trade is what the assets were worth when it was made. Nothing on the card
+ * said which, and a wrong reading of a number is worse than no number.
+ *
+ * It is a tooltip and a panel line rather than a caveat on every card, which is
+ * the trade this app makes everywhere: the three-character unit is what the
+ * layout has room for, so the unit carries the sentence rather than restating
+ * it. See `ValuePanel`, which says it in words for a reader who opens it.
+ *
+ * **Rewriting history is not what this is describing.** `shared/ktc` holds one
+ * current value per player; reconstructing what a market said in 2021 would
+ * need a snapshot nobody took, and the honest fix is to snapshot forward from
+ * now — which is a feature, not a wording change.
+ */
+export const TRADE_BASIS_NOTES: Record<TradeValueBasis, string> = {
+  capital: "Draft capital, from the ADP curve",
+  ktc: "Current KeepTradeCut market — historical trades are repriced at today's values",
+  ros: "Projected points, rest of season, on this league's scoring",
+};
+
+/**
  * A value as the card prints it: grouped thousands, or an em dash.
  *
  * The dash is the whole three-way grammar the rest of the app is written in,

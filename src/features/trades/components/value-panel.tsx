@@ -211,6 +211,23 @@ export function ValuePanel({
                   ? "Auto reads a dynasty league on the dynasty board and everything else on redraft."
                   : "Only the KTC basis reads a board."}
               </p>
+              {/* **Said once, here, rather than on every card.** The board is
+                  history and this market is not: there is no stored record of
+                  what KeepTradeCut said in 2021, so an old trade is priced at
+                  today's values — which a reader would otherwise reasonably
+                  take for the price at the time. The unit on each card carries
+                  the same sentence as a `title`; this is where it is in words.
+
+                  Only on the KTC basis, because it is the only one that is a
+                  *market*: a draft curve and a rest-of-season projection are
+                  both explicitly about now and neither reads as a historical
+                  price. */}
+              {ktcBasis && (
+                <p className="mt-2 font-mono text-[length:var(--fs-11)] leading-normal text-foreground/52">
+                  Historical trades are repriced using the current
+                  KeepTradeCut market, not the market at the time.
+                </p>
+              )}
             </div>
 
             <div className="mt-4 border-t border-foreground/10 pt-4">
@@ -277,11 +294,24 @@ const BASES: Record<
     legend: "Capital",
     note: "Draft capital — the ADP curve, 10,000 at pick 1",
   },
+  /**
+   * **"Current", and the word is load-bearing.** This board is history — a 2021
+   * trade is on it — and every KeepTradeCut figure beside one is *today's*
+   * price, because there is no stored history of that market to read instead.
+   * Named "KTC" the label invites the opposite reading, that a value shown
+   * against a trade is what the assets were worth when it was made; the number
+   * is then wrong rather than merely unexplained, which is the distinction this
+   * app draws everywhere between an answer and no answer.
+   *
+   * The other two bases need no such word: draft capital is a curve fitted over
+   * the corpus and a projection is explicitly rest-of-*season*, so neither
+   * reads as a historical price to begin with.
+   */
   ktc: {
-    title: "KTC",
+    title: "Current KTC",
     unit: "KTC",
-    legend: "KTC",
-    note: "KeepTradeCut — the market board",
+    legend: "Current KTC",
+    note: "KeepTradeCut's market as it stands today",
   },
   ros: {
     title: "Pts ROS",
@@ -300,7 +330,7 @@ const BASES: Record<
  */
 function keyLegend(basis: TradeValueBasis, board: KtcBoardChoice): string {
   if (basis !== "ktc") return BASES[basis].legend;
-  return `KTC ${board.charAt(0).toUpperCase()}${board.slice(1)}`;
+  return `Current KTC ${board.charAt(0).toUpperCase()}${board.slice(1)}`;
 }
 
 /**

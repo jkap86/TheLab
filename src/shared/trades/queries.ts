@@ -17,6 +17,7 @@ import {
   TRADE_COLUMNS_SQL,
   TRADE_FACET_SQL,
   TRADE_ORDER_SQL,
+  TRADE_PARTICIPANT_OWNERS_SQL,
   tradeCursorSql,
   tradeFilterSql,
   tradeNarrowingSql,
@@ -91,13 +92,17 @@ export async function listTrades(query: TradeQuery): Promise<TradesPage> {
 
   const { rows } = await pool.query<TradeRow>(
     `${STARTUP_DRAFT_CTE}
-      SELECT ${TRADE_COLUMNS_SQL}
+      SELECT ${TRADE_COLUMNS_SQL},
+             ${TRADE_PARTICIPANT_OWNERS_SQL} AS participant_owners
       ${TRADES_POPULATION_SQL}${filters}${resume}
       ${TRADE_ORDER_SQL}
       LIMIT ${limit}`,
     params,
   );
 
+  // Today's owners, which the assembler uses only where the row's own snapshot
+  // cannot answer — see `assembleTrade`. Cached per league, so on any page but
+  // the first few this is a map lookup.
   const page = rows.slice(0, query.limit);
   const owners = await getRosterOwners([
     ...new Set(page.map((r) => r.league_id)),
@@ -677,4 +682,53 @@ async function readLeagueRosters(
   const out: Record<string, readonly string[]> = {};
   for (const r of rows) out[r.league_id] = r.players;
   return out;
+}
+
+/**
+ * Forget everything this module holds about these leagues and these people,
+ * because a sync has just rewritten the rows behind it.
+ *
+ * **The four caches here are the ones a league graph actually invalidates**,
+ * and they are keyed three different ways, which is why this is one function
+ * rather than four exported handles: the owners and the rostered players by
+ * league id, the draft order by `league|season`, and the managers by user id.
+ * A caller holding a league and its members should not have to know that.
+ *
+ * `userIds` is the league's own membership as the sync wrote it, which is
+ * exactly the set whose `league_users` rows moved — so the managers cache is
+ * pruned by name rather than cleared, and every other league's names on the box
+ * survive a sync of this one.
+ *
+ * The draft order is pruned by predicate because its key is a pair and the
+ * caller knows only half of it: a league's every season goes, which is right —
+ * a graph write can add a draft, set an order, or complete one, and none of
+ * those is scoped to the season the sync was for.
+ */
+export function forgetTradeLeagueReads(
+  leagueIds: readonly string[],
+  userIds: readonly string[],
+): number {
+  let dropped = 0;
+
+  for (const id of leagueIds) {
+    if (ownersCache.get(id) !== undefined) dropped += 1;
+    ownersCache.delete(id);
+    if (leagueRostersCache.get(id) !== undefined) dropped += 1;
+    leagueRostersCache.delete(id);
+  }
+
+  if (leagueIds.length > 0) {
+    const leagues = new Set(leagueIds);
+    dropped += draftOrderCache.prune((key) => {
+      const at = key.indexOf("|");
+      return at !== -1 && leagues.has(key.slice(0, at));
+    });
+  }
+
+  for (const id of userIds) {
+    if (managersCache.get(id) !== undefined) dropped += 1;
+    managersCache.delete(id);
+  }
+
+  return dropped;
 }
