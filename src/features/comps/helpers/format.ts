@@ -1,4 +1,4 @@
-import type { CompCorpusInfo, CompCriterionId } from "@/shared/contract";
+import type { CompCorpusInfo, CompCriterionId, DraftCapital } from "@/shared/contract";
 import { UDFA_PICK } from "../../../shared/comps/criteria.ts";
 
 /**
@@ -6,8 +6,8 @@ import { UDFA_PICK } from "../../../shared/comps/criteria.ts";
  *
  * Every figure on the page is tabular mono, and the three rules here are the
  * ones a second spelling would drift on: a delta's sign is U+2212 rather than
- * a hyphen and a zero carries no sign at all; a draft pick at or past the
- * UDFA mark prints as the word rather than a number nobody was drafted at;
+ * a hyphen and a zero carries no sign at all; a known UDFA prints as the word,
+ * an unknown draft slot as an em dash and never as either;
  * and a criterion's chip prints its figure in the unit the criterion's own
  * readout uses, so `Tgt sh 27%` on a chip is the same reading as `Tgt sh 27%`
  * in the pane.
@@ -30,10 +30,25 @@ export function signedDelta(value: number, digits = 0): string {
   return `${sign}${num(Math.abs(value), digits)}`;
 }
 
-/** `UDFA` at or past the undrafted mark, else `#<pick>`. */
-export function draftLabel(pick: number | null): string {
-  if (pick === null || pick >= UDFA_PICK) return "UDFA";
-  return `#${pick}`;
+/**
+ * `#<pick>`, `UDFA`, or an em dash — the three states of {@link DraftCapital},
+ * each printed as itself. Null used to print as `UDFA` too, and under a corpus
+ * whose source carried no draft position that put the word under every
+ * player on the page; an em dash is what the rest of the app prints for a
+ * fact it does not have.
+ */
+export function draftLabel(draft: DraftCapital): string {
+  if (draft === null) return "—";
+  if (draft === "udfa") return "UDFA";
+  return `#${draft}`;
+}
+
+/**
+ * A draft read off a chip, which carries the *number* the distance ran on:
+ * a known UDFA reads as `UDFA_PICK`, so at or past the mark it is the word.
+ */
+export function draftReadLabel(read: number): string {
+  return read >= UDFA_PICK ? "UDFA" : `#${read}`;
 }
 
 /** A criterion's figure as its chip prints it. */
@@ -47,7 +62,7 @@ export function criterionValue(criterion: CompCriterionId, raw: number): string 
     case "ppg":
       return num(raw, 1);
     case "draft":
-      return draftLabel(raw);
+      return draftReadLabel(raw);
     case "age":
     case "exp":
       // A windowed read never lands here, and a fact is a whole number.

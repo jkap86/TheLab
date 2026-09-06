@@ -1,17 +1,20 @@
-import type { CompPlayerFacts } from "@/shared/contract";
+import type { CompPlayerFacts, DraftCapital } from "@/shared/contract";
 
 /**
- * A player's age, experience and draft slot **at a past season**, derived from
- * the stored Sleeper players map.
+ * A player's age, experience and draft slot **at a past season**: the first
+ * two derived from the stored Sleeper players map, the third handed in from
+ * the source that publishes it.
  *
  * The map is Sleeper's *current* players and every dated field on it is
- * current too, so none of the three can be read off it directly; each is a
- * derivation, and each has a failure mode the loader would otherwise write
- * into a NOT NULL column and never mention again. Pure, with the record as an
- * argument, so all four arms are testable without a database.
+ * current too, so neither age nor experience can be read off it directly;
+ * each is a derivation, and each has a failure mode the loader would
+ * otherwise write into a NOT NULL column and never mention again. Pure, with
+ * the record as an argument, so every arm is testable without a database.
  *
- * **Age is exact and the others are not.** A birth date and a season give an
- * age to the day; everything below is about the two that do not.
+ * **Age is exact and experience is not.** A birth date and a season give an
+ * age to the day; the experience reading below is about the one that does
+ * not. Draft capital is neither: it is a fact that does not move with the
+ * season, and the map does not carry it at all — see `./draft-source`.
  */
 
 /** What the loader reads off one row of the players map. */
@@ -25,8 +28,6 @@ export type PlayerRecord = {
   rookie_year: number | null;
   /** Sleeper's *current* years of experience. */
   years_exp: number | null;
-  /** Overall NFL draft pick, where any source could supply one. */
-  draft_pick: number | null;
 };
 
 /** How the experience figure was arrived at, for the load report. */
@@ -63,6 +64,14 @@ export function playerFactsAt(
   season: number,
   /** The season the players map currently describes — `years_exp`'s baseline. */
   currentSeason: number,
+  /**
+   * His draft capital from `./draft-source`, or null where that source has
+   * no row for him. **Null is not a reason to skip the row**: it is the one
+   * fact of the three the column is allowed to be silent on, because the
+   * distance and the page both have an honest reading of "unknown" for it —
+   * and neither has one for a missing age.
+   */
+  draft: DraftCapital = null,
 ): FactsResolution {
   const age = ageAt(record.birth_date, season);
   if (age === null) {
@@ -76,7 +85,7 @@ export function playerFactsAt(
 
   return {
     ok: true,
-    facts: { age: age.value, exp: experience.value, draft: draftPick(record) },
+    facts: { age: age.value, exp: experience.value, draft },
     basis: experience.basis,
   };
 }
@@ -132,28 +141,4 @@ export function experienceAt(
   }
 
   return null;
-}
-
-/**
- * The overall draft pick, or null.
- *
- * **Null is the ordinary answer under the Sleeper source**, and the difference
- * between that and "undrafted" is the one thing about this column worth
- * knowing. `/v1/players/nfl` does not publish an NFL draft position, so the
- * loader has nowhere to read one from and writes null — which the distance
- * reads as {@link UDFA_PICK}, "after everyone".
- *
- * The consequence is not a wrong ranking: with every row null the criterion is
- * a constant, so its z-gap is zero for every candidate and it orders nothing.
- * It is a criterion that quietly stops discriminating, which is why the
- * loader's report names the fill rate rather than leaving it to be discovered.
- * A source that does publish draft capital — nflverse's own ids file carries
- * `draft_ovr` beside a `sleeper_id` — fills this column with no other change,
- * which is why it is read here rather than hard-coded to null.
- */
-export function draftPick(record: PlayerRecord): number | null {
-  const pick = record.draft_pick;
-  if (pick === null || !Number.isInteger(pick)) return null;
-  if (pick < 1 || pick > 500) return null;
-  return pick;
 }

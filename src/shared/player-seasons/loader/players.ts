@@ -15,11 +15,11 @@ import type { PlayerRecord } from "./facts.ts";
  * the house rule `getMatchablePlayers` states: junk in an untyped blob must
  * read as "unknown", never fail the statement for every other player in it.
  *
- * `draft_pick` is read from the two paths a Sleeper blob could plausibly carry
- * one under and is expected to answer null from this source — see `./facts`
- * for what that costs and what would fill it. Reading it rather than writing
- * `null` outright is what makes a source that does publish draft capital a
- * change to the source and to nothing else.
+ * **No draft position is read here, because the blob carries none.** It used
+ * to be read off two paths a Sleeper blob "could plausibly carry one under",
+ * and answered null on every one of twelve thousand rows — which the page then
+ * printed as `UDFA`. Draft capital comes from `./draft-source` and is joined
+ * to these records by Sleeper id in `./rows`.
  */
 export async function readPlayerRecords(): Promise<Map<string, PlayerRecord>> {
   const { rows } = await pool.query<{
@@ -29,7 +29,6 @@ export async function readPlayerRecords(): Promise<Map<string, PlayerRecord>> {
     birth_date: string | null;
     rookie_year: number | null;
     years_exp: number | null;
-    draft_pick: number | null;
   }>(
     `SELECT player_id,
             coalesce(full_name, nullif(trim(concat_ws(' ', first_name, last_name)), '')) AS name,
@@ -38,11 +37,7 @@ export async function readPlayerRecords(): Promise<Map<string, PlayerRecord>> {
                  THEN left(data->>'birth_date', 10) END AS birth_date,
             CASE WHEN data->'metadata'->>'rookie_year' ~ '^[0-9]{4}$'
                  THEN (data->'metadata'->>'rookie_year')::int END AS rookie_year,
-            years_exp,
-            CASE WHEN data->'metadata'->>'draft_pick' ~ '^[0-9]{1,3}$'
-                 THEN (data->'metadata'->>'draft_pick')::int
-                 WHEN data->>'draft_pick' ~ '^[0-9]{1,3}$'
-                 THEN (data->>'draft_pick')::int END AS draft_pick
+            years_exp
        FROM players
       WHERE position IS NOT NULL`,
   );

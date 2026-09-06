@@ -23,9 +23,11 @@ import type { CompsScoring } from "@/shared/player-seasons";
  * season the NFL has not finished.
  *
  * It needs `DATABASE_URL` (the npm script passes `--env-file=.env`, so a
- * checkout's own `.env` is enough) and outbound access to Sleeper. It reads the
- * stored **players map** for the identity and the dated fields behind age,
- * experience and draft capital, so `npm run dev` should have run at least once
+ * checkout's own `.env` is enough) and outbound access to Sleeper and to
+ * GitHub, where the draft-capital crosswalk is published (see
+ * `loader/draft-source`). It reads the stored **players map** for the identity
+ * and the dated fields behind age and
+ * experience, so `npm run dev` should have run at least once
  * — or the players sync should have — before this does; a load against an
  * empty map skips every row and says so rather than writing anything.
  *
@@ -156,10 +158,12 @@ async function main(): Promise<number> {
     `[comps:load]   experience  ${report.experience.rookie_year} from rookie_year, ` +
       `${report.experience.years_exp} derived from years_exp`,
   );
-  // Named rather than left to be discovered: with no draft capital the Draft
-  // criterion is a constant and stops discriminating. See `loader/facts`.
+  // Named rather than left to be discovered: a run where `unknown` dominates
+  // is a crosswalk that has stopped matching, not a class of undrafted
+  // players — see `loader/draft-source`.
   console.log(
-    `[comps:load]   draft pick  ${report.draftFilled} of ${meta.rows} rows filled`,
+    `[comps:load]   draft       ${report.draft.drafted} drafted, ` +
+      `${report.draft.undrafted} undrafted, ${report.draft.unknown} unknown`,
   );
 
   const skips = Object.entries(report.skipped).sort((a, b) => b[1] - a[1]);

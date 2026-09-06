@@ -21,10 +21,10 @@ import {
 import {
   coverageLabel,
   criterionValue,
-  num,
   signedDelta,
   weightLabel,
 } from "../helpers/format";
+import { compSeasonRows, payoffRows } from "../helpers/season-lines";
 import { CAPTION, LIT, Window } from "./controls";
 
 /**
@@ -38,6 +38,12 @@ import { CAPTION, LIT, Window } from "./controls";
  * also keeps the payoff column honest: the following season is comparable to
  * that season and to nothing else. What each criterion actually read is on
  * its own chip below, tagged with the window it came off.
+ *
+ * **Both panes draw the lines the comp's position draws**, through
+ * `helpers/season-lines` — the one rule the subject housing reads too. The
+ * card used to draw a receiver's rows under every position, so a quarterback
+ * comp read `Rec yd 0 · Tgt sh 0% · YPRR —` above a rushing figure it never
+ * showed.
  *
  * The similarity figure and the deltas take the rank ramp rather than a
  * colour of their own — the same two hues the manager card's tiles run on,
@@ -77,25 +83,12 @@ export function CompCard({
   const sim = comp.similarity;
   const tone = rankColor(sim);
   const rookie = comp.years_on_file === 1;
-  const rb = comp.position === "RB";
   const coverage = coverageLabel(comp.coverage);
   const played = comp.next.played;
 
-  const leftRows: [string, string][] = [
-    ["Age", String(comp.age)],
-    ["PPG", num(comp.line.ppg, 1)],
-    [rb ? "Rush yd" : "Rec yd", num(rb ? comp.line.rush : comp.line.recyd)],
-    ["Rec", String(comp.line.rec)],
-    ["Tgt sh", comp.line.tgtsh === null ? "—" : `${num(comp.line.tgtsh)}%`],
-    ["YPRR", comp.line.yprr === null ? "—" : comp.line.yprr.toFixed(2)],
-    ["GP", String(comp.line.gp)],
-  ];
-
+  const leftRows = compSeasonRows(comp);
   const rightRows: { label: string; value: string; delta: number | null; lit?: boolean }[] = [
-    { label: "PPG", value: num(comp.next.ppg, 1), delta: comp.next.ppg - comp.line.ppg },
-    { label: "Rec yd", value: num(comp.next.recyd), delta: comp.next.recyd - comp.line.recyd },
-    { label: "Rec", value: String(comp.next.rec), delta: comp.next.rec - comp.line.rec },
-    { label: "GP", value: String(comp.next.gp), delta: comp.next.gp - comp.line.gp },
+    ...payoffRows(comp),
     { label: "Finish", value: comp.next.finish ?? "—", delta: null, lit: true },
   ];
 
@@ -143,8 +136,8 @@ export function CompCard({
                 : `${comp.position} · ${place} of ${of}`
             }
           >
-            {leftRows.map(([label, value]) => (
-              <StatRow key={label} label={label} value={value} />
+            {leftRows.map((row) => (
+              <StatRow key={row.id} label={row.label} value={row.value} />
             ))}
           </Pane>
 

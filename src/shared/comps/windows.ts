@@ -75,7 +75,8 @@ export function windowReading(
   window: CompWindowId,
 ): WindowReading {
   if (!isStatField(field)) {
-    return { value: factValue(row.facts, field), used: 1, of: 1 };
+    const value = factValue(row.facts, field);
+    return { value, used: value === null ? 0 : 1, of: 1 };
   }
 
   const of = spanOf(window, row.history.length);
@@ -114,18 +115,27 @@ function spanOf(window: CompWindowId, onFile: number): number {
 }
 
 /**
- * A fact's reading. The one fact that needs a rule is draft capital: an
- * undrafted player is read as {@link UDFA_PICK}, because "after everyone" is
- * an ordinal position on the board rather than an absence — see the constant.
+ * A fact's reading. The one fact that needs a rule is draft capital, and it
+ * has two arms that must not be folded into one: a player *known* to have
+ * gone undrafted is read as {@link UDFA_PICK}, because "after everyone" is an
+ * ordinal position on the board rather than an absence — see the constant —
+ * while a slot nobody could supply is **null**, which the distance treats as
+ * it treats a null target share: the pair is absent from the row rather than
+ * scored. Reading the second as the first is how a corpus loaded from a source
+ * with no draft column printed every player in it as a UDFA.
  */
-function factValue(facts: CompPlayerFacts, field: "age" | "draft" | "exp"): number {
+function factValue(
+  facts: CompPlayerFacts,
+  field: "age" | "draft" | "exp",
+): number | null {
   switch (field) {
     case "age":
       return facts.age;
     case "exp":
       return facts.exp;
     case "draft":
-      return facts.draft ?? UDFA_PICK;
+      if (facts.draft === null) return null;
+      return facts.draft === "udfa" ? UDFA_PICK : facts.draft;
   }
 }
 

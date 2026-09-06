@@ -3,11 +3,13 @@ import { describe, test } from "node:test";
 
 import type { CompCorpusInfo } from "@/shared/contract";
 
+import { UDFA_PICK } from "../../../shared/comps/criteria.ts";
 import {
   corpusNote,
   coverageLabel,
   criterionValue,
   draftLabel,
+  draftReadLabel,
   scoringLabel,
   signedDelta,
   weightLabel,
@@ -21,10 +23,18 @@ describe("the comps figures", () => {
     assert.equal(signedDelta(-320), "−320");
   });
 
-  test("a draft pick at or past the UDFA mark is the word, and a null is too", () => {
+  test("draft capital prints its three states as themselves", () => {
     assert.equal(draftLabel(69), "#69");
-    assert.equal(draftLabel(260), "UDFA");
-    assert.equal(draftLabel(null), "UDFA");
+    assert.equal(draftLabel("udfa"), "UDFA");
+    // Unknown is not undrafted. Printing the word for a null is what put
+    // `UDFA` under a first-round pick.
+    assert.equal(draftLabel(null), "—");
+  });
+
+  test("a chip's draft read is the word only at or past the UDFA mark", () => {
+    assert.equal(draftReadLabel(262), "#262");
+    assert.equal(draftReadLabel(UDFA_PICK), "UDFA");
+    assert.equal(criterionValue("draft", UDFA_PICK), "UDFA");
   });
 
   test("a chip prints each criterion in its own unit", () => {

@@ -304,13 +304,21 @@ export function isWindowed(criterion: Pick<CompCriterion, "fields">): boolean {
 }
 
 /**
- * The pick an undrafted player is read as, one past the last pick a
- * seven-round draft can hold. "Came off the board after everyone" is an
- * ordinal statement about draft capital rather than an absence, which is why
- * it enters the distance where a null target share does not — and the subject
- * grid prints it as `UDFA`, never as a number, from the same constant.
+ * The pick an undrafted player is read as, just past the longest board of the
+ * seven-round era. "Came off the board after everyone" is an ordinal statement
+ * about draft capital rather than an absence, which is why a known UDFA enters
+ * the distance where a null target share — or an *unknown* draft slot — does
+ * not; and a chip prints any read at or past it as `UDFA`, never as a number,
+ * from the same constant.
+ *
+ * **It was 260, and 260 is a real pick.** Compensatory picks run a board past
+ * the 256 seven rounds nominally hold — 2022's ran to 262, and pick 262 of it
+ * was Brock Purdy — so a constant at 260 read the last three picks of that
+ * draft as undrafted and printed them so. 265 clears every board there has
+ * been; the day one runs longer, this moves, and the label rule above is why
+ * it cannot silently be a pick somebody was actually taken at.
  */
-export const UDFA_PICK = 260;
+export const UDFA_PICK = 265;
 
 export function criterionById(id: CompCriterionId): CompCriterion {
   const found = CRITERIA.find((c) => c.id === id);

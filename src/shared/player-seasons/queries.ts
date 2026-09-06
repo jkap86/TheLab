@@ -26,6 +26,8 @@ type PlayerSeasonRow = {
   age: string;
   experience: number;
   draft_pick: number | null;
+  /** True where the source knew he went undrafted; false beside a null pick is unknown. */
+  undrafted: boolean;
   games: number;
   fantasy_pts: string;
   fantasy_ppg: string;
@@ -41,7 +43,7 @@ type PlayerSeasonRow = {
 export async function readStoredSeasons(): Promise<StoredSeason[]> {
   const { rows } = await pool.query<PlayerSeasonRow>(
     `SELECT player_id, player_name, position, season, age, experience,
-            draft_pick, games, fantasy_pts, fantasy_ppg, rec, rec_yards,
+            draft_pick, undrafted, games, fantasy_pts, fantasy_ppg, rec, rec_yards,
             target_share, rush_yards, yprr, snap_share,
             position || rank() OVER (
               PARTITION BY season, position ORDER BY fantasy_pts DESC
@@ -60,7 +62,10 @@ export async function readStoredSeasons(): Promise<StoredSeason[]> {
     facts: {
       age: Number(row.age),
       exp: row.experience,
-      draft: row.draft_pick,
+      // Three states off two columns — see the migration that added the
+      // second. A null pick is undrafted only where the row says so; otherwise
+      // it is a slot nobody could supply, which is not the same fact.
+      draft: row.draft_pick ?? (row.undrafted ? "udfa" : null),
     },
     line: {
       ppg: Number(row.fantasy_ppg),

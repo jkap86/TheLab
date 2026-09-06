@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { describe, test } from "node:test";
 
-import { ageAt, draftPick, experienceAt, playerFactsAt } from "./facts.ts";
+import { ageAt, experienceAt, playerFactsAt } from "./facts.ts";
 import type { PlayerRecord } from "./facts.ts";
 
 const record = (over: Partial<PlayerRecord> = {}): PlayerRecord => ({
@@ -11,7 +11,6 @@ const record = (over: Partial<PlayerRecord> = {}): PlayerRecord => ({
   birth_date: "1999-05-20",
   rookie_year: 2021,
   years_exp: 5,
-  draft_pick: null,
   ...over,
 });
 
@@ -81,26 +80,24 @@ describe("experienceAt", () => {
   });
 });
 
-describe("draftPick", () => {
-  test("a plausible overall pick is taken", () => {
-    assert.equal(draftPick(record({ draft_pick: 1 })), 1);
-    assert.equal(draftPick(record({ draft_pick: 259 })), 259);
-  });
-
-  test("anything outside a draft board is absent", () => {
-    for (const pick of [null, 0, -1, 501, 1.5]) {
-      assert.equal(draftPick(record({ draft_pick: pick as number })), null, String(pick));
-    }
-  });
-});
-
 describe("playerFactsAt", () => {
   test("resolves the three facts and names which experience reading answered", () => {
-    const answer = playerFactsAt(record({ draft_pick: 42 }), 2023, 2025);
+    const answer = playerFactsAt(record(), 2023, 2025, 42);
     assert.equal(answer.ok, true);
     if (!answer.ok) return;
     assert.deepEqual(answer.facts, { age: 24.3, exp: 2, draft: 42 });
     assert.equal(answer.basis, "rookie_year");
+  });
+
+  test("draft capital is carried through as handed in, and an unknown one does not skip the row", () => {
+    // The one fact of the three the column may be silent on: the distance and
+    // the page both have an honest reading of "unknown" for it.
+    const udfa = playerFactsAt(record(), 2023, 2025, "udfa");
+    assert.equal(udfa.ok && udfa.facts.draft, "udfa");
+    const unknown = playerFactsAt(record(), 2023, 2025);
+    assert.equal(unknown.ok, true);
+    if (!unknown.ok) return;
+    assert.equal(unknown.facts.draft, null);
   });
 
   test("a row with no birth date is skipped with a reason, never defaulted", () => {
@@ -123,14 +120,5 @@ describe("playerFactsAt", () => {
     assert.equal(answer.ok, false);
     if (answer.ok) return;
     assert.match(answer.reason, /rookie year|experience/);
-  });
-
-  test("an absent draft pick is not a refusal — it is the ordinary answer here", () => {
-    // Sleeper publishes no NFL draft position, so this column is expected to
-    // be null under that source. The row is still a season somebody played.
-    const answer = playerFactsAt(record({ draft_pick: null }), 2023, 2025);
-    assert.equal(answer.ok, true);
-    if (!answer.ok) return;
-    assert.equal(answer.facts.draft, null);
   });
 });

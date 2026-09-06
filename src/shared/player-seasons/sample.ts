@@ -29,8 +29,10 @@ import type { CompCorpus, CorpusSeason, CorpusSubject } from "./corpus";
 
 // [name, season, pos, age, draft, ppg, pts, recyd, rec, tgtsh, rush, yprr,
 //  snap, gp, exp, next.ppg, next.recyd, next.rec, next.gp, next.finish]
+// `draft` is the overall pick, or the word for a player the prototype lists as
+// undrafted — it wrote 260 for that, which is a real pick; see `UDFA_PICK`.
 type SeasonTuple = [
-  string, number, string, number, number,
+  string, number, string, number, number | "udfa",
   number, number, number, number, number, number, number, number, number, number,
   number, number, number, number, string,
 ];
@@ -57,7 +59,7 @@ const SEASONS: readonly SeasonTuple[] = [
   ["Tee Higgins", 2021, "WR", 22, 33, 13.6, 191, 1091, 74, 22, 0, 2.10, 82, 14, 1, 13.9, 1029, 74, 15, "WR20"],
   ["Keenan Allen", 2020, "WR", 28, 76, 17.4, 244, 992, 100, 27, 0, 1.85, 89, 14, 7, 14.7, 1138, 106, 16, "WR15"],
   ["Christian McCaffrey", 2019, "RB", 23, 8, 29.4, 471, 1005, 116, 20, 1387, 1.90, 93, 16, 2, 22.0, 149, 17, 3, "RB60"],
-  ["Austin Ekeler", 2021, "RB", 26, 260, 22.4, 344, 647, 70, 17, 911, 1.50, 76, 16, 4, 21.0, 722, 107, 17, "RB3"],
+  ["Austin Ekeler", 2021, "RB", 26, "udfa", 22.4, 344, 647, 70, 17, 911, 1.50, 76, 16, 4, 21.0, 722, 107, 17, "RB3"],
   ["Jonathan Taylor", 2021, "RB", 22, 41, 22.4, 373, 360, 40, 9, 1811, 1.20, 68, 17, 1, 12.9, 143, 28, 11, "RB37"],
   ["Bijan Robinson", 2024, "RB", 22, 8, 18.9, 321, 431, 61, 12, 1456, 1.35, 74, 17, 1, 19.4, 510, 65, 16, "RB4"],
   ["Saquon Barkley", 2018, "RB", 21, 2, 24.1, 386, 721, 91, 18, 1307, 1.60, 82, 16, 0, 16.2, 438, 52, 13, "RB18"],
@@ -66,7 +68,7 @@ const SEASONS: readonly SeasonTuple[] = [
 
 // [name, pos, age, draft, ktc, ppg, pts, recyd, rec, tgtsh, rush, yprr, snap, gp, exp]
 type SubjectTuple = [
-  string, string, number, number, number,
+  string, string, number, number | "udfa", number,
   number, number, number, number, number, number, number, number, number, number,
 ];
 

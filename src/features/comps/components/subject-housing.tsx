@@ -12,7 +12,8 @@ import {
 import type { CompSubject } from "@/shared/contract";
 import { K_MAX, K_MIN } from "@/shared/comps";
 
-import { draftLabel, num } from "../helpers/format";
+import { num } from "../helpers/format";
+import { subjectReadouts } from "../helpers/season-lines";
 import { CAPTION, LIT, Rail, ToggleKey, Window } from "./controls";
 
 /** The most matches the list shows; the rest are narrowed to. */
@@ -231,22 +232,14 @@ export function SubjectHousing({
 }
 
 /**
- * The nine lit windows: the subject's last line. Draft renders `UDFA` at or
- * past the mark, and a running back's yardage window is his rushing.
+ * The lit windows: the subject's last line and his three facts, in the lines
+ * his position draws — a quarterback gets his rushing and no target share,
+ * where every position used to get a receiver's nine. `season-lines` is the
+ * rule. Draft prints its three states as themselves: a pick, `UDFA`, or an
+ * em dash where no source could say.
  */
 function SubjectReadouts({ subject }: { subject: CompSubject }) {
-  const rb = subject.position === "RB";
-  const cells: [string, string][] = [
-    ["Age", String(subject.age)],
-    ["Exp", `${subject.exp} yr`],
-    ["Draft", draftLabel(subject.draft)],
-    ["PPG", num(subject.line.ppg, 1)],
-    [rb ? "Rush yd" : "Rec yd", num(rb ? subject.line.rush : subject.line.recyd)],
-    ["Tgt sh", subject.line.tgtsh === null ? "—" : `${num(subject.line.tgtsh)}%`],
-    ["YPRR", subject.line.yprr === null ? "—" : subject.line.yprr.toFixed(2)],
-    ["Snap", subject.line.snap === null ? "—" : `${num(subject.line.snap)}%`],
-    ["GP", String(subject.line.gp)],
-  ];
+  const cells = subjectReadouts(subject).map((row) => [row.label, row.value] as const);
   return (
     <div className="relative mt-4 grid gap-2.5 [grid-template-columns:repeat(auto-fit,minmax(6.5rem,1fr))]">
       {cells.map(([label, value]) => (
