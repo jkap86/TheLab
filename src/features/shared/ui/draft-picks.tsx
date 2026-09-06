@@ -1,5 +1,6 @@
 import type { RosterPick } from "@/shared/contract";
 
+import { CONSOLE_BILLET, CONSOLE_WINDOW_LEDGE } from "../console-chrome";
 import { ordinal } from "../format";
 
 /**
@@ -22,6 +23,12 @@ import { ordinal } from "../format";
  * worth nothing — is not available to make here, because there is no zero on
  * screen to mistake it for. `ktc_picks` on the card is the number that *is*
  * summed, and it is the one that owes the reader that distinction.
+ *
+ * **Each season is a part rather than a plate**, on the grammar the panes above
+ * it took: milled stock, a ledge carrying the year, and the pills in a tray cut
+ * into the face below. The rule that used to separate this block from the table
+ * went with it — a housing does not need a line drawn across it to say where one
+ * part ends and the next begins.
  *
  * Renders nothing when the roster owns no picks — every redraft league, and
  * any dynasty whose pick market this sync can't see. There is no empty state
@@ -47,20 +54,33 @@ export function DraftPicks({ picks }: { picks: readonly RosterPick[] }) {
   }
 
   return (
-    <div className="mt-4 border-t border-foreground/10 pt-4">
-      <p className="m-0 mb-2.5 font-mono text-[length:var(--fs-11)] uppercase tracking-[0.14em] text-foreground/60">
+    <div className="mt-4 sm:mt-[1.125rem] pointer-fine:[transform:translateZ(3px)]">
+      <p className="m-0 mb-2.5 font-mono text-[length:var(--fs-12)] uppercase tracking-[0.14em] text-foreground/70 lg:mb-3">
         Draft picks
       </p>
-      <ul className="m-0 grid list-none grid-cols-1 gap-2.5 p-0 sm:grid-cols-2 lg:grid-cols-3">
+      {/* One column on a phone, three on a card wide enough to hold a season's
+          pills without wrapping them to four lines. */}
+      <ul className="m-0 grid list-none grid-cols-1 gap-2.5 p-0 sm:grid-cols-2 lg:grid-cols-3 lg:gap-3">
         {bySeason.map(({ season, picks }) => (
+          // **A season is a part, not a recessed plate.** It was
+          // `--plate-bg` inside a lit window, which put a flat card on glass;
+          // the expanded half is a housing holding parts now, so a season is
+          // milled stock with its own ledge and its own tray — the same three
+          // surfaces the panes above it are built from, at the size a handful
+          // of pills wants.
           <li
             key={season}
-            className="rounded-xl border border-foreground/8 bg-[image:var(--plate-bg)] px-3.5 py-3 shadow-[var(--plate-shadow)]"
+            className={`${CONSOLE_BILLET} relative rounded-[0.875rem] p-[7px] lg:p-2`}
           >
-            <p className="m-0 mb-2.5 font-mono text-[length:var(--fs-11)] uppercase tracking-[0.14em] text-foreground/60">
+            <p
+              className={`${CONSOLE_WINDOW_LEDGE} relative m-0 rounded-lg px-[11px] py-1.5 font-mono text-[length:var(--fs-11)] uppercase tracking-[0.16em] text-[color:var(--billet-name)] [text-shadow:var(--billet-name-shadow)] lg:px-3`}
+            >
               {season}
             </p>
-            <span className="flex min-w-0 flex-wrap gap-1.5">
+            {/* The pills sit in a hole cut in the part, which is what makes
+                them read as loose components in a tray rather than as chips
+                printed on its face. */}
+            <span className="relative mt-[7px] flex min-w-0 flex-wrap gap-1.5 rounded-[0.625rem] bg-[color:var(--recess-bg)] p-[7px] shadow-[var(--track-shadow)] lg:mt-2 lg:gap-[7px] lg:p-2">
               {picks.map((pick, i) => (
                 <span
                   // Position in the sorted list is the identity the payload
@@ -68,10 +88,10 @@ export function DraftPicks({ picks }: { picks: readonly RosterPick[] }) {
                   // name, so nothing on the pick itself is unique.
                   key={i}
                   title={pick.from ? `from ${pick.from}` : undefined}
-                  className={`inline-flex items-baseline gap-1.5 rounded-full px-2.5 py-1 font-mono text-[length:var(--fs-11)] shadow-[inset_0_1px_0_rgba(255,255,255,0.14)] ${
+                  className={`inline-flex items-baseline gap-[7px] rounded-full px-3 py-1.5 font-mono text-[length:var(--fs-12)] ${
                     pick.from
-                      ? "bg-active/14 text-readout"
-                      : "bg-foreground/[0.06] text-foreground/72"
+                      ? "bg-active/16 text-readout shadow-[var(--pick-pill-shadow-lit)] [text-shadow:var(--readout-text-glow)]"
+                      : "bg-foreground/[0.07] text-foreground/82 shadow-[var(--pick-pill-shadow)]"
                   }`}
                 >
                   {/* The zero-pad is what makes "1.05" read as a slot rather
@@ -87,7 +107,7 @@ export function DraftPicks({ picks }: { picks: readonly RosterPick[] }) {
                     </span>
                   )}
                   {pick.value !== null && (
-                    <span className="tabular-nums opacity-60">
+                    <span className="tabular-nums opacity-62">
                       {pick.value.toLocaleString("en-US")}
                     </span>
                   )}

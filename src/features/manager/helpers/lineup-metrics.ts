@@ -40,8 +40,12 @@ export function formatRank(rank: MetricRank | null): string {
  * resolves neither the alias nor the barrel.
  */
 export {
+  median,
   placeAmong,
   rankColor,
   rankFill,
   rankPercentile,
+  sharePercentile,
+  slotPercentile,
+  winSharePercentile,
 } from "../../shared/rank-ramp.ts";

@@ -656,6 +656,112 @@
   --billet-unit: rgba(237, 237, 237, 0.88);
   --billet-label: rgba(237, 237, 237, 0.76);
   --billet-scope: rgba(237, 237, 237, 0.7);
+
+  /*
+   * ── The expanded card's cut parts ────────────────────────────────────────
+   *
+   * The expanded half of a league card is an inner *housing* holding raised
+   * parts, and inside each part's glass every row is a channel cut into it
+   * with a smaller channel cut into that for the figure. Two depths, one
+   * grammar, and both are written here rather than as class-string literals
+   * for the reason every bevel in this file is: a cut into near-black glass is
+   * darker than the glass with a lit lip at its bottom edge, and a cut into
+   * pale glass is darker *and* takes a dark lip — an `rgba()` typed into a
+   * Tailwind arbitrary value cannot turn over, it can only dim.
+   */
+  /*
+   * The colour of a **hole cut in a surface** — the channel a pane's control
+   * sits in, the tray a season's pick pills sit in, the recess the history
+   * rail runs in. One token because they are one material question at one
+   * depth; what separates them is `--track-shadow` against `--well-shadow`,
+   * which is a depth rather than a colour.
+   *
+   * **It cannot be a black alpha, and that is the whole reason it exists.**
+   * This file's usual rule is that a recess is spelled `bg-black/N`, because a
+   * black alpha is darker than its surround in *both* schemes where a
+   * `--foreground` alpha is not. That holds for a recess whose contents are
+   * *lit* — a key, a readout — and fails for one whose contents are **ink on
+   * metal**: on a near-white ledge, 34% black is a mid-grey slab, and the
+   * `--billet-label` stamped on it measures 3.4:1. A shallower slate cut keeps
+   * the recess legible as a recess and the label legible as a label (6.4:1),
+   * which is the same inversion every bevel here already makes.
+   */
+  --recess-bg: rgba(0, 0, 0, 0.32);
+  --row-well-bg: rgba(0, 0, 0, 0.22);
+  --row-well-shadow: inset 0 2px 5px rgba(0, 0, 0, 0.68),
+    inset 0 -1px 0 rgba(159, 255, 242, 0.1);
+  /*
+   * The selected row, drawn as an inset overlay rather than a fill: a fill
+   * would flood the channel and the row would stop reading as a cut at all.
+   * So the well simply deepens and takes a wash of accent.
+   */
+  --row-well-selected-bg: rgba(0, 255, 229, 0.07);
+  --row-well-selected-shadow: inset 0 2px 6px rgba(0, 0, 0, 0.6),
+    inset 0 -1px 0 rgba(159, 255, 242, 0.16);
+  --figure-well-bg: rgba(0, 0, 0, 0.34);
+  --figure-well-shadow: inset 0 2px 5px rgba(0, 0, 0, 0.8),
+    inset 0 -1px 0 rgba(159, 255, 242, 0.14);
+  /*
+   * The lit bar: the history rail's fill and the mark down the manager's own
+   * row. One gradient because they are one object at two sizes, and a second
+   * spelling is two greens for "this is yours" on one card.
+   */
+  --lit-bar-bg: linear-gradient(180deg, #9ffff2, #00d9c3);
+  --lit-bar-shadow: 0 0 10px var(--accent-glow),
+    inset 0 1px 0 rgba(255, 255, 255, 0.5);
+  /* The channel that bar runs in — deeper than a meter's, since a thumb rides
+     it and the fill has to read as sitting *in* the groove. */
+  --rail-channel-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.98),
+    inset 0 -1px 0 rgba(255, 255, 255, 0.07);
+  /*
+   * A draft pick as a *part in a tray* rather than a flat pill: a lit top lip
+   * and a small drop under it. Two, because an acquired pick's lip is mint —
+   * it is already lit stock — where an ordinary one's is white.
+   */
+  --pick-pill-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.16),
+    0 1px 2px rgba(0, 0, 0, 0.5);
+  --pick-pill-shadow-lit: inset 0 1px 0 rgba(159, 255, 242, 0.35),
+    0 1px 2px rgba(0, 0, 0, 0.55);
+  /* The lip that closes a pane's glass above its bench summary, where a border
+     would read as a rule drawn on the glass rather than as its own edge. */
+  --glass-lip-shadow: inset 0 1px 0 rgba(0, 0, 0, 0.6),
+    inset 0 2px 0 rgba(255, 255, 255, 0.05);
+  /*
+   * ── Two engraved figure stacks ───────────────────────────────────────────
+   *
+   * `--chrome-extrude-shadow`'s grammar at readout scale: a lit lip along the
+   * top of every stroke and stacked dark steps under it, so the figure reads
+   * as struck *into* the glass rather than printed on it. The figure keeps its
+   * ramp colour and the depth comes from the light catching the cut, which is
+   * what lets a coloured number gain weight without gaining a second hue.
+   *
+   * **Both stop short of their glow, which the caller appends**: the last
+   * layer is `0 0 22px rankColor(percentile, 0.4)`, a continuous value with no
+   * utility to generate, so it goes through `style` — and a `text-shadow` is a
+   * comma list, which composes. The static half is here because *it* is what
+   * has to turn over for light mode: on pale glass the lip is the dark line
+   * and the steps are the light ones.
+   */
+  --figure-engrave: 0 -1px 0 rgba(255, 255, 255, 0.34), 0 1px 0 rgba(0, 0, 0, 0.92),
+    0 2px 0 rgba(0, 0, 0, 0.8), 0 3px 1px rgba(0, 0, 0, 0.62),
+    0 4px 6px rgba(0, 0, 0, 0.5);
+  /* The header strip's figures, one step lighter: they sit on metal rather
+     than on glass, which already carries its own light. */
+  --standing-engrave: 0 -1px 0 rgba(255, 255, 255, 0.3), 0 1px 0 rgba(0, 0, 0, 0.9),
+    0 2px 0 rgba(0, 0, 0, 0.75), 0 3px 4px rgba(0, 0, 0, 0.55);
+  /*
+   * The phone header's standing strip: a plate bolted to the housing, so it is
+   * chamfered on all four edges and throws a real shadow onto the face behind
+   * it. `--billet-shadow` is the same idea for a part that *straddles* an
+   * edge; this one stands on the housing's face and is cut deeper for it.
+   */
+  --standing-strip-shadow: inset 0 2px 0 rgba(255, 255, 255, 0.55),
+    inset 0 -2px 0 rgba(0, 0, 0, 0.7), inset 2px 0 0 rgba(255, 255, 255, 0.12),
+    inset -2px 0 0 rgba(0, 0, 0, 0.4), 0 2px 3px rgba(0, 0, 0, 0.55),
+    0 10px 16px -8px #000, 0 22px 38px -22px #000;
+  --standing-well-shadow: inset 0 3px 6px rgba(0, 0, 0, 0.62),
+    inset 0 -1px 0 rgba(255, 255, 255, 0.2);
+  --standing-label-shadow: 0 1px 0 rgba(255, 255, 255, 0.12);
 }
 
 /*
@@ -960,6 +1066,60 @@
   --billet-unit: #223339;
   --billet-label: #3a4d54;
   --billet-scope: #3e5158;
+
+  /*
+   * The cut parts, turned over. A recess into pale glass is *darker* than the
+   * glass, as it is into dark glass — so the two well backgrounds keep their
+   * shape and change their ink from black to the slate every light bevel in
+   * this file is cut with. What genuinely inverts is the lip: a mint line
+   * along a cut's bottom edge is a highlight on near-black glass and a smear
+   * on near-white, so here the bottom edge is a *light* lip catching the light
+   * from above, which is what the same geometry means on a pale face.
+   */
+  --recess-bg: rgba(15, 23, 42, 0.1);
+  --row-well-bg: rgba(15, 23, 42, 0.08);
+  --row-well-shadow: inset 0 2px 5px rgba(15, 23, 42, 0.2),
+    inset 0 -1px 0 rgba(255, 255, 255, 0.85);
+  --row-well-selected-bg: rgba(13, 148, 136, 0.1);
+  --row-well-selected-shadow: inset 0 2px 6px rgba(15, 23, 42, 0.24),
+    inset 0 -1px 0 rgba(255, 255, 255, 0.9);
+  --figure-well-bg: rgba(15, 23, 42, 0.12);
+  --figure-well-shadow: inset 0 2px 5px rgba(15, 23, 42, 0.26),
+    inset 0 -1px 0 rgba(255, 255, 255, 0.9);
+  /* The accent's light-mode teal, which is the one the ramp and every lit key
+     already use — a mint bar on a pale console reads as nothing at all. */
+  --lit-bar-bg: linear-gradient(180deg, #14a294, #0b6d63);
+  --lit-bar-shadow: 0 0 10px var(--accent-glow),
+    inset 0 1px 0 rgba(255, 255, 255, 0.4);
+  --rail-channel-shadow: inset 0 2px 4px rgba(15, 23, 42, 0.32),
+    inset 0 -1px 0 rgba(255, 255, 255, 0.9);
+  --pick-pill-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.9),
+    0 1px 2px rgba(15, 23, 42, 0.2);
+  --pick-pill-shadow-lit: inset 0 1px 0 rgba(255, 255, 255, 0.75),
+    0 1px 2px rgba(15, 23, 42, 0.24);
+  --glass-lip-shadow: inset 0 1px 0 rgba(15, 23, 42, 0.18),
+    inset 0 2px 0 rgba(255, 255, 255, 0.9);
+  /*
+   * The engraving inverts wholly, which is the one place these stacks are not
+   * the dark ones lightened: a stroke cut into a pale face is dark inside and
+   * throws its *lit* steps downward, so the lip above the stroke is the dark
+   * line here and the steps beneath it are the light ones. Written the other
+   * way round the figure reads as embossed — standing proud of glass it is
+   * meant to be cut into.
+   */
+  --figure-engrave: 0 -1px 0 rgba(15, 23, 42, 0.34), 0 1px 0 rgba(255, 255, 255, 0.95),
+    0 2px 0 rgba(255, 255, 255, 0.8), 0 3px 1px rgba(255, 255, 255, 0.62),
+    0 4px 6px rgba(15, 23, 42, 0.18);
+  --standing-engrave: 0 -1px 0 rgba(15, 23, 42, 0.3), 0 1px 0 rgba(255, 255, 255, 0.92),
+    0 2px 0 rgba(255, 255, 255, 0.78), 0 3px 4px rgba(15, 23, 42, 0.16);
+  --standing-strip-shadow: inset 0 2px 0 rgba(255, 255, 255, 0.95),
+    inset 0 -2px 0 rgba(15, 23, 42, 0.3), inset 2px 0 0 rgba(255, 255, 255, 0.8),
+    inset -2px 0 0 rgba(15, 23, 42, 0.16), 0 2px 3px rgba(15, 23, 42, 0.22),
+    0 10px 16px -8px rgba(15, 23, 42, 0.45),
+    0 22px 38px -22px rgba(15, 23, 42, 0.55);
+  --standing-well-shadow: inset 0 3px 6px rgba(15, 23, 42, 0.26),
+    inset 0 -1px 0 rgba(255, 255, 255, 0.95);
+  --standing-label-shadow: 0 1px 0 rgba(255, 255, 255, 0.9);
 }
 
 @theme inline {
@@ -1234,6 +1394,40 @@ body {
   border-radius: 9999px;
   background-image: var(--key-bg);
   box-shadow: var(--key-shadow), 0 0 8px var(--accent-glow);
+}
+
+/*
+ * The **history bay's** rail: the same control one size up, an 18px key over an
+ * 8px groove where the base is 14 over 6.
+ *
+ * A modifier rather than a change to `.lab-rail` itself, because that class has
+ * a second reader — the comps page's criteria weights — whose channel is a
+ * different height and whose input is stretched over it with `inset-0`. Growing
+ * the shared thumb would move the grip off its groove there, on a page this
+ * design does not cover.
+ *
+ * `margin-top` is the half-difference between the input's own box and the
+ * thumb, spelled rather than centred because a WebKit thumb is positioned
+ * against the *runnable track*, which carries no height of its own here. The
+ * two engines are kept in step by hand: there is no shorthand reaching two
+ * vendor pseudo-elements, and a thumb centred on one and not the other is a
+ * slider whose grip sits a few pixels off its groove in one browser.
+ */
+.lab-rail-bay,
+.lab-rail-bay::-webkit-slider-runnable-track,
+.lab-rail-bay::-moz-range-track {
+  height: 1.75rem;
+}
+
+.lab-rail-bay::-webkit-slider-thumb {
+  width: 18px;
+  height: 18px;
+  margin-top: 5px;
+}
+
+.lab-rail-bay::-moz-range-thumb {
+  width: 18px;
+  height: 18px;
 }
 
 .lab-rail:focus-visible {

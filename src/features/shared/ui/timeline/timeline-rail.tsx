@@ -72,12 +72,19 @@ export function TimelineRail({
           menu reads as something that fell out of the card. The caption is also
           the only thing that says what the rail *is* once the `History` key it
           replaced is gone. */}
-      <span className="flex min-w-[11rem] flex-1 items-center gap-2 rounded-full border border-foreground/8 py-1 pl-3.5 pr-2 shadow-[var(--track-shadow)]">
+      <span className="flex min-w-[11rem] flex-1 items-center gap-2 rounded-full bg-[color:var(--recess-bg)] py-[5px] pl-3 pr-1.5 shadow-[var(--track-shadow)] sm:gap-2.5 sm:pl-4 sm:pr-2">
+        {/* **`Hist` at a phone's width**, which is the caption's own version of
+            the rule the theme key's legend keeps: the bay is one flex row and
+            the two step keys, the channel and the thumb are what a reader
+            actually grips, so the word is the part that gives. It is
+            `aria-hidden` either way — the slider inside carries the control's
+            whole name. */}
         <span
           aria-hidden
-          className="shrink-0 font-mono text-[length:var(--fs-10)] uppercase tracking-[0.16em] text-foreground/45"
+          className="shrink-0 font-mono text-[length:var(--fs-10)] uppercase tracking-[0.16em] text-foreground/62 sm:text-[length:var(--fs-11)]"
         >
-          History
+          <span className="sm:hidden">Hist</span>
+          <span className="hidden sm:inline">History</span>
         </span>
         {/* Back is *older*, so the leading key steps left along the rail — a
             step further into the past and therefore a larger `back`. */}
@@ -88,23 +95,30 @@ export function TimelineRail({
           onClick={() => onChange(stop.back + 1)}
         />
 
-        <span className="relative flex h-6 min-w-0 flex-1 items-center">
+        <span className="relative flex h-7 min-w-0 flex-1 items-center">
           {/* The channel and its fill are the card's own meter grammar, one
               grain down: a cut groove with a lit bar counting up to where the
               reader is standing. It is `aria-hidden` because the input over it
-              carries the whole control's semantics. */}
+              carries the whole control's semantics.
+
+              **Deeper than a meter's, because a thumb rides it.** A rank tile's
+              bar is a hairline drawn on glass and this is a groove a key sits
+              *in* — `--rail-channel-shadow` is the cut and `--lit-bar-bg` the
+              bar, the same lit stock the manager's own row is marked with, so
+              "this is where you are" is one colour on this card rather than
+              two. */}
           <span
             aria-hidden
-            className="absolute inset-x-0 h-1.5 rounded-full bg-[var(--meter-track)] shadow-[inset_0_1px_3px_rgba(0,0,0,0.95)]"
+            className="absolute inset-x-0 h-2 rounded-full bg-[var(--meter-track)] shadow-[var(--rail-channel-shadow)]"
           >
             <span
-              className="block h-1.5 rounded-full bg-active shadow-[0_0_8px_var(--accent-glow)]"
+              className="block h-2 rounded-full bg-[image:var(--lit-bar-bg)] shadow-[var(--lit-bar-shadow)]"
               style={{ width: `${fill}%` }}
             />
           </span>
           <input
             type="range"
-            className="lab-rail relative z-10 min-w-0 flex-1"
+            className="lab-rail lab-rail-bay relative z-10 min-w-0 flex-1"
             min={0}
             max={moves}
             step={1}
@@ -131,13 +145,13 @@ export function TimelineRail({
       {/* The moment, as the reading it is. `Now` is a word rather than today's
           date, because the present is not a date a reader has scrubbed to. */}
       <span
-        className={`${CONSOLE_READOUT} inline-flex shrink-0 items-baseline gap-1.5 rounded-[0.625rem] px-3 py-1.5`}
+        className={`${CONSOLE_READOUT} inline-flex shrink-0 items-baseline gap-1.5 rounded-[0.625rem] px-3 py-[7px] sm:gap-[7px] sm:px-3.5 sm:py-2`}
       >
         <span
           aria-hidden
           className="pointer-events-none absolute inset-0 bg-[image:var(--readout-scanlines)]"
         />
-        <span className="relative font-mono text-[length:var(--fs-12)] tabular-nums text-readout [text-shadow:var(--readout-text-glow)]">
+        <span className="relative font-mono text-[length:var(--fs-13)] tabular-nums text-readout [text-shadow:var(--readout-text-glow)] sm:text-[length:var(--fs-14)]">
           {atNow ? "Now" : formatInstantDate(stop.at)}
         </span>
         {!atNow && stop.at !== null && (
@@ -154,7 +168,11 @@ export function TimelineRail({
       <span
         role="group"
         aria-label="Rail ends"
-        className={`${CONSOLE_TRACK} inline-flex shrink-0 gap-1 p-1`}
+        // **A line of its own below `sm`.** The bay is one wrapping row and the
+        // scrubber plus the moment already fill a 340px one; a two-key switch
+        // pushed onto the end of it would wrap to a third line as a pair of
+        // keys floating left of nothing. Full width, it reads as the row it is.
+        className={`${CONSOLE_TRACK} inline-flex w-full shrink-0 gap-1 bg-[color:var(--recess-bg)] p-[5px] sm:w-auto`}
       >
         <EndKey
           label="Start"
@@ -198,7 +216,7 @@ function EndKey({
       title={title}
       aria-pressed={on}
       onClick={onClick}
-      className={`rounded-full border px-2.5 py-1 font-mono text-[length:var(--fs-10)] uppercase tracking-[0.16em] transition-[color,box-shadow] duration-150 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-active/60 ${
+      className={`flex-1 rounded-full border px-3 py-1.5 text-center font-mono text-[length:var(--fs-11)] uppercase tracking-[0.16em] transition-[color,box-shadow] duration-150 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-active/60 sm:flex-none sm:px-[13px] ${
         on
           ? "border-active/45 bg-[image:var(--key-bg)] text-readout shadow-[var(--key-shadow)] [text-shadow:var(--readout-text-glow)]"
           : "border-transparent text-foreground/58 hover:text-readout"
@@ -235,10 +253,10 @@ function StepKey({
       title={label}
       disabled={disabled}
       onClick={onClick}
-      className={`grid size-6 shrink-0 place-items-center rounded-full border text-[length:var(--fs-12)] leading-none transition-[color,box-shadow,transform] duration-150 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-active/60 ${
+      className={`grid size-7 shrink-0 place-items-center rounded-full border text-[length:var(--fs-14)] leading-none transition-[color,box-shadow,transform] duration-150 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-active/60 ${
         disabled
-          ? "border-transparent text-foreground/20"
-          : "border-foreground/10 bg-[image:var(--key-bg)] text-foreground/70 shadow-[var(--key-shadow)] hover:text-readout active:translate-y-0.5 active:shadow-[var(--key-shadow-pressed)]"
+          ? "border-transparent text-foreground/24"
+          : "border-foreground/12 bg-[image:var(--key-bg)] text-foreground/78 shadow-[var(--key-shadow)] hover:text-readout active:translate-y-0.5 active:shadow-[var(--key-shadow-pressed)]"
       }`}
     >
       <span aria-hidden="true">{glyph}</span>

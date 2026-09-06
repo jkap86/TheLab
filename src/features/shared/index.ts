@@ -19,6 +19,7 @@ export {
   CONSOLE_GLASS,
   CONSOLE_HOUSING,
   CONSOLE_HOUSING_INSET,
+  CONSOLE_HOUSING_INSET_SHELL,
   CONSOLE_KEY,
   CONSOLE_KEY_BLOCK,
   CONSOLE_KEY_PILL,
@@ -156,6 +157,8 @@ export {
   PlateField,
   ReadingPlate,
   Scanlines,
+  StandingBay,
+  StandingStrip,
 } from "./ui/card-plate";
 export { ConsoleGround } from "./ui/console-ground";
 // A roster's future picks, grouped by season, and the league table it sits
