@@ -165,6 +165,49 @@ export function lookupSeasonAdp(season: string): Promise<DraftAdpBoards> {
   return entry.boards;
 }
 
+/**
+ * Forget the pricing facts for these leagues, because a sync has just rewritten
+ * their rows.
+ *
+ * Keyed by league id exactly, so this is a `delete` per league rather than a
+ * predicate — the entries are one per league and the caller knows which.
+ * Answers how many entries went, which is the only thing
+ * {@link invalidateTradeCaches} has to report with.
+ */
+export function forgetTradeLeagueMarkets(leagueIds: readonly string[]): number {
+  let dropped = 0;
+  for (const id of leagueIds) {
+    if (leagueMarketCache.get(id) !== undefined) dropped += 1;
+    leagueMarketCache.delete(id);
+  }
+  return dropped;
+}
+
+/**
+ * Forget a season's draft-capital board.
+ *
+ * A league sync writes `drafts` and `draft_picks`, which is the population this
+ * aggregate is taken over — so a draft finishing changes the board, and the
+ * fifteen-minute window it would otherwise sit behind is exactly the wait this
+ * exists to skip after an explicit sync.
+ *
+ * **The players cache is deliberately not touched here or anywhere else.** It
+ * stands in front of Sleeper's global NFL map, which no league sync writes; a
+ * league graph landing has nothing to say about a player's name, and dropping
+ * twenty thousand entries to answer a question nobody asked would turn every
+ * sync into a cold board for the next reader.
+ */
+export function forgetSeasonAdp(season: string | null): number {
+  const entries = globalScope[SEASON_ADP_KEY];
+  if (!entries) return 0;
+  if (season === null) {
+    const size = entries.size;
+    entries.clear();
+    return size;
+  }
+  return entries.delete(season) ? 1 : 0;
+}
+
 /** For tests, and for a sync that has just replaced what this holds. */
 export function clearTradeEnrichmentCaches(): void {
   playersCache.clear();

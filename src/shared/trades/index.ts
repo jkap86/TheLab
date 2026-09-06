@@ -40,6 +40,8 @@ export type {
   TradeSideQuery,
 } from "./params";
 export { rebuildTradeParticipants } from "./participants";
+export { invalidateTradeCaches } from "./invalidate";
+export type { TradeCacheInvalidation } from "./invalidate";
 export { draftOrderKey, pickSlotKey } from "./pick-slots";
 export {
   countTradeTotals,

@@ -117,6 +117,37 @@ export class BoundedCache<V> {
     this.entries.delete(key);
   }
 
+  /**
+   * Drop every key `matches` accepts, and answer how many went.
+   *
+   * **For the caller that knows what it invalidated but not what it is keyed
+   * by.** A league sync rewrites one league's rows, and the caches standing in
+   * front of them are keyed variously by league id, by `league|season`, and by
+   * `user:season:circle` — so "forget this league" is a predicate over keys
+   * rather than a list of them, and the alternative is {@link clear}, which
+   * throws away every *other* league's answers to protect one.
+   *
+   * A predicate rather than a prefix because the keys are not all
+   * prefix-shaped: a circle's is keyed by the reader first and the season
+   * third. Callers live in `shared/trades/invalidate`, which is where the
+   * spelling of each key and the predicate that matches it sit side by side —
+   * one place, so a key format and its invalidation cannot drift apart
+   * silently.
+   *
+   * Iterating a copy of the keys rather than the live map: deleting during a
+   * `Map` iteration is defined, but a snapshot costs one array of strings and
+   * removes the question.
+   */
+  prune(matches: (key: string) => boolean): number {
+    let dropped = 0;
+    for (const key of [...this.entries.keys()]) {
+      if (!matches(key)) continue;
+      this.entries.delete(key);
+      dropped += 1;
+    }
+    return dropped;
+  }
+
   /** For tests and for a sync that knows it has invalidated everything. */
   clear(): void {
     this.entries.clear();

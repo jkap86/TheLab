@@ -44,6 +44,15 @@ export {
   storeTradeValueBasis,
   useTradeValueBasis,
 } from "./trade-value-basis";
+// What a browser must stop trusting once a sync has landed on this device —
+// see the module for why the two trade routes' cache headers stay as they are.
+export {
+  NO_TRADE_STAMP,
+  markTradeDataSynced,
+  parseTradeDataStamp,
+  useTradeDataStamp,
+} from "./trade-freshness";
+export type { TradeDataStamp } from "./trade-freshness";
 export { KtcBoardKeys } from "./ui/ktc-board-keys";
 export { formatInstantDate, formatInstantTime, ordinal, ordinalParts } from "./format";
 // The rank ramp and its two readings. The trades board joined the manager

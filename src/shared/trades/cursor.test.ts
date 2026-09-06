@@ -47,6 +47,32 @@ describe("trade cursors", () => {
     }
   });
 
+  /**
+   * **Tied timestamps are the ordinary case, not an edge one.** Sleeper stamps
+   * a trade to the second and a league's draft-day flurry puts several on the
+   * same one, so a cursor carrying only the instant would resume at "everything
+   * strictly older than that second" — losing every tied trade the page had not
+   * reached — or at "everything at or older", repeating the ones it had. The
+   * id is the tie-break, and it has to survive the round trip for the page
+   * boundary to be stable at all.
+   */
+  test("two trades on the same instant are two distinct positions", () => {
+    const at = 1_786_000_000_000;
+    const first = encodeTradeCursor({ at, transaction_id: "t2" });
+    const second = encodeTradeCursor({ at, transaction_id: "t1" });
+    assert.notEqual(first, second);
+    assert.deepEqual(decodeTradeCursor(first), { at, transaction_id: "t2" });
+    assert.deepEqual(decodeTradeCursor(second), { at, transaction_id: "t1" });
+  });
+
+  test("the same position encodes to the same token every time", () => {
+    // The token is a value a reader holds across a redeploy, and the paging
+    // hook compares subjects by string — an encoding that varied would restart
+    // a board that had not changed.
+    const cursor = { at: 1_786_000_000_000, transaction_id: "t1" };
+    assert.equal(encodeTradeCursor(cursor), encodeTradeCursor({ ...cursor }));
+  });
+
   test("an id containing the delimiter round trips", () => {
     // Sleeper's ids are digit strings today; splitting on the *first* colon is
     // what keeps that from being an assumption this has to hold to.

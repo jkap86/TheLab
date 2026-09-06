@@ -141,3 +141,156 @@ describe("assembleTrade", () => {
     assert.equal(trade.sides[0].faab, 0);
   });
 });
+
+/**
+ * Who a trade is attributed to, once a roster has changed hands.
+ *
+ * **The failure these pin is silent and it is a wrong answer, not a thin one.**
+ * `owners` is the roster → user map as it stands *today*, and it used to be the
+ * only thing a side was labelled from — so the moment manager B took over
+ * manager A's roster, every trade A had ever made was drawn, filtered and
+ * counted as B's. Nothing errors, nothing looks broken, and the card says
+ * somebody made a trade they never made.
+ *
+ * `participant_owners` is the stored snapshot — who held each roster when this
+ * app first observed the trade — written once and never rewritten (see
+ * `tradeParticipantsRebuildSql`). What is asserted here is the precedence: the
+ * snapshot wins, today's owner is the fallback, and neither is allowed to
+ * disappear.
+ */
+describe("assembleTrade, once a roster has changed hands", () => {
+  /** Manager B holds both rosters now; A and C held them when they dealt. */
+  const nowOwners = new Map([
+    [1, "userB"],
+    [2, "userB"],
+  ]);
+
+  test("a side is named by who dealt, not by who holds the roster now", () => {
+    const trade = assembleTrade(
+      row({
+        adds: { "4034": 1, "1234": 2 },
+        participant_owners: { "1": "userA", "2": "userC" },
+      }),
+      nowOwners,
+    );
+
+    assert.deepEqual(
+      trade.sides.map((s) => s.user_id),
+      ["userA", "userC"],
+    );
+  });
+
+  test("today's owner is the fallback where the snapshot cannot answer", () => {
+    // A roster with no participant row — orphaned when the trade was first
+    // stored, or a league synced before the column existed. Today's owner is
+    // the only thing available and is better than an unnamed side.
+    const trade = assembleTrade(
+      row({ participant_owners: { "1": "userA" } }),
+      nowOwners,
+    );
+
+    assert.deepEqual(
+      trade.sides.map((s) => s.user_id),
+      ["userA", "userB"],
+    );
+  });
+
+  test("no snapshot at all leaves every side on today's owner", () => {
+    for (const absent of [null, undefined, {}, [], "nonsense", 7]) {
+      const trade = assembleTrade(row({ participant_owners: absent }), nowOwners);
+      assert.deepEqual(
+        trade.sides.map((s) => s.user_id),
+        ["userB", "userB"],
+        `participant_owners: ${JSON.stringify(absent)}`,
+      );
+    }
+  });
+
+  test("an unnamed side stays unnamed rather than dropping the trade", () => {
+    const trade = assembleTrade(row({ participant_owners: {} }), new Map());
+    assert.equal(trade.sides.length, 2);
+    assert.deepEqual(
+      trade.sides.map((s) => s.user_id),
+      [null, null],
+    );
+  });
+
+  test("a junk key or a non-string owner is skipped, not trusted", () => {
+    // The column is untyped and read like every other Sleeper blob here: a key
+    // that is not a roster id, or an owner that is not a name, falls to the
+    // same place an absent entry does.
+    const trade = assembleTrade(
+      row({
+        participant_owners: { "1": null, abc: "userZ", "2": "userC" },
+      }),
+      nowOwners,
+    );
+
+    assert.deepEqual(
+      trade.sides.map((s) => s.user_id),
+      ["userB", "userC"],
+    );
+  });
+
+  test("a pick originating with a trading roster is priced to who dealt it", () => {
+    // The one origin case the snapshot can answer: a pick that came from a
+    // roster this trade names. Inferring that trader from today's owner is
+    // exactly the mistake the column exists to stop.
+    const trade = assembleTrade(
+      row({
+        draft_picks: [
+          { season: "2026", round: 1, roster_id: 2, owner_id: 1 },
+        ],
+        participant_owners: { "1": "userA", "2": "userC" },
+      }),
+      nowOwners,
+    );
+
+    assert.equal(trade.sides[0].picks[0].user_id, "userC");
+  });
+
+  test("a pick from outside the trade falls to today's owner", () => {
+    // Sleeper stores no ownership history, so an origin that is not a party to
+    // this trade can only ever be "the roster this pick belongs to, held today
+    // by X". That is a limit, and it is the honest reading of it.
+    const trade = assembleTrade(
+      row({
+        roster_ids: [1, 2],
+        draft_picks: [{ season: "2026", round: 1, roster_id: 9, owner_id: 1 }],
+        participant_owners: { "1": "userA", "2": "userC" },
+      }),
+      new Map([...nowOwners, [9, "userOutside"]]),
+    );
+
+    assert.equal(trade.sides[0].picks[0].user_id, "userOutside");
+  });
+
+  test("a three-way trade resolves each side's history independently", () => {
+    // The requirement that a multi-team trade keeps its shape while ownership
+    // moves under one of its participants: roster 3 changed hands, the other
+    // two did not, and each side answers for itself.
+    const trade = assembleTrade(
+      row({
+        roster_ids: [1, 2, 3],
+        adds: { "4034": 1, "1234": 2, "9999": 3 },
+        participant_owners: { "1": "userA", "2": "userC", "3": "userD" },
+      }),
+      new Map([
+        [1, "userA"],
+        [2, "userC"],
+        // Roster 3 has since moved to B.
+        [3, "userB"],
+      ]),
+    );
+
+    assert.equal(trade.sides.length, 3, "a three-way stays a three-way");
+    assert.deepEqual(
+      trade.sides.map((s) => [s.roster_id, s.user_id]),
+      [
+        [1, "userA"],
+        [2, "userC"],
+        [3, "userD"],
+      ],
+    );
+  });
+});

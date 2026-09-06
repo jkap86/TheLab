@@ -2,7 +2,7 @@ import type { PoolClient } from "pg";
 
 import { bulkInsert, jsonb as j, pool, withTransaction } from "@/shared/db";
 import type { SleeperLeague } from "@/shared/sleeper";
-import { rebuildTradeParticipants } from "@/shared/trades";
+import { invalidateTradeCaches, rebuildTradeParticipants } from "@/shared/trades";
 
 import { dedupeBy } from "./dedupe";
 import type { LeagueGraph } from "./graph";
@@ -63,6 +63,16 @@ export async function persistGoneLeagues(
     ],
     trailing: { column: "gone_at", sql: "now()" },
     onConflict: `(league_id) DO UPDATE SET gone_at = now()`,
+  });
+
+  // The row carries a name, a size and the settings blobs the board prices a
+  // league by, so a first write of one is a change the trades caches are
+  // standing in front of. No members and no season are named because none were
+  // written: a tombstone has no membership, and the enumeration payload's
+  // season is not evidence that the season's draft board moved.
+  invalidateTradeCaches({
+    leagueIds: leagues.map((l) => l.league_id),
+    reason: "leagues tombstoned",
   });
 }
 
@@ -153,6 +163,15 @@ export async function persistUnsyncedLeagues(
       { column: "sync_attempt_at", sql: "now()" },
     ],
     onConflict: `(league_id) DO UPDATE SET sync_attempt_at = now()`,
+  });
+
+  // Same reading as the tombstone above: a brand-new row here is the first time
+  // the board can name this league at all, so what it holds about one is stale
+  // by definition. A row that already existed took only its attempt stamp,
+  // which nothing caches — the cost of forgetting it anyway is one lookup.
+  invalidateTradeCaches({
+    leagueIds: leagues.map((l) => l.league_id),
+    reason: "leagues parked unsynced",
   });
 }
 
@@ -506,6 +525,26 @@ async function writeLeagueGraph(
  * so there is nothing to forget; the invalidation returns with them, and it is
  * `affectedOwnerIds` on {@link writeLeagueGraph} that it needs back.
  *
+ * **The trades board's caches are a different matter, and they are dropped
+ * here.** Those *are* ported — the roster owners, the league's pricing facts,
+ * its draft order, its members' names, the season's capital board and every
+ * resolved circle — and until this line existed nothing dropped them, so a
+ * league could be synced whole and then answered for out of the previous ten to
+ * fifteen minutes. See `shared/trades/invalidate` for what is forgotten, what
+ * deliberately is not, and why it is targeted rather than a `clear()`.
+ *
+ * **After the `await`, which is the whole of its correctness.** `withTransaction`
+ * either resolves — the rows are committed and real — or throws, and a throw
+ * leaves this line unreached: a rolled-back write has changed nothing, so
+ * forgetting anything for it would buy a cold board during exactly the upstream
+ * trouble that produced the rollback.
+ *
+ * **A *partial* graph still invalidates**, which is the one arm worth stating.
+ * `missing` being non-empty means a mandatory collection came back empty and
+ * the stored rows for it were kept — but everything else in the payload *was*
+ * written, and `rebuildTradeParticipants` ran over the result. Those are real
+ * changes and the caches in front of them are stale for them.
+ *
  * **It reports rather than returning void**, and the two fields it reports are
  * the distinction the callers turn on — see {@link PersistLeagueGraphResult}.
  */
@@ -513,6 +552,17 @@ export async function persistLeagueGraph(
   g: LeagueGraph,
 ): Promise<PersistLeagueGraphResult> {
   const missing = await withTransaction((client) => writeLeagueGraph(client, g));
+
+  invalidateTradeCaches({
+    leagueIds: [g.league.league_id],
+    season: g.league.season,
+    // The membership as this sync stored it, which is the set whose names and
+    // whose circles moved. Empty when the users fetch came back empty — the
+    // guarded delete kept the stored rows, so nothing about them changed and
+    // there is nothing to forget.
+    userIds: g.users.map((u) => u.user_id),
+    reason: "league graph synced",
+  });
 
   return {
     persisted: true,

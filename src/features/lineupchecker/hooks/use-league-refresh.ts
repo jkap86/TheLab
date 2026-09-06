@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 
 import type { LeagueSyncPayload } from "@/shared/contract";
-import { apiFetch, errorMessage } from "@/features/shared";
+import { apiFetch, errorMessage, markTradeDataSynced } from "@/features/shared";
 
 export type LeagueRefreshControl = {
   /**
@@ -103,6 +103,18 @@ export function useLeagueRefresh(leagueId: string): LeagueRefreshControl {
         { method: "POST", fallbackError: "Couldn't sync this league" },
       );
       const body = (await res.json()) as LeagueSyncPayload;
+      // A press that actually landed is the one moment a browser's own cached
+      // trade responses are known to be behind — the league's rosters, members
+      // and transactions have just been rewritten. `synced` is the server's own
+      // reading of "what is stored is now current" (true for both `synced` and
+      // `fresh`), which is the same field the card gates its re-read on, so the
+      // note, the re-read and this cannot reach different conclusions about one
+      // press. A cooldown or a refusal changed nothing and marks nothing.
+      //
+      // Outside the `live` guard deliberately: this is device state, not this
+      // component's, and a reader who collapsed the card before the answer
+      // landed still caused the sync.
+      if (body.synced) markTradeDataSynced();
       if (live.current) setOutcome({ pending: false, result: body, error: null });
       return body;
     } catch (err: unknown) {

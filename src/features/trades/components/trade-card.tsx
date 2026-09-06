@@ -31,6 +31,7 @@ import {
   assetPrice,
   bundleValue,
   formatAssetValue,
+  TRADE_BASIS_NOTES,
   TRADE_BASIS_UNITS,
   type ValueLens,
 } from "../asset-value";
@@ -41,7 +42,7 @@ import {
   type TradeBundle,
 } from "../exchange";
 import { pickLabel, pickOriginRoster } from "../pick-display";
-import type { TradesData } from "../trades-data";
+import type { TradeCardView } from "../trades-data";
 
 /**
  * One trade, as a housing with a lit window per participating roster.
@@ -67,21 +68,26 @@ import type { TradesData } from "../trades-data";
  * removed: the values are shown and the comparison is left to the reader. Do
  * not reintroduce one.
  *
- * `memo`'d because the list re-renders on every appended page and a card's
- * props are stable — the maps it reads are the folded ones, which only change
- * when a page lands.
+ * `memo`'d because the list re-renders on every appended page — and the memo
+ * only *holds* because of what `view` is. It used to be the whole folded board,
+ * which is a new object every time a page lands, so `memo` compared a changed
+ * prop for every card and re-rendered all of them: appending page twenty cost
+ * twenty pages of re-renders, and the board got slower the further a reader
+ * scrolled. A `view` is its own page's maps, built once and shared by that
+ * page's trades, so a card's props are fixed from its first render. See
+ * `trades-data` for why a page's own maps are the right ones to read.
  */
 export const TradeCard = memo(function TradeCard({
   trade,
   league,
-  data,
+  view,
   basis,
   board,
 }: {
   trade: Trade;
   /** Null before the leagues request lands, or if it failed. */
   league: ManagerLeague | null;
-  data: TradesData;
+  view: TradeCardView;
   /** Which of the three bases every figure on the board is on — `ValuePanel`. */
   basis: TradeValueBasis;
   /** The reader's KeepTradeCut market choice — see `useKtcBoard`. */
@@ -144,7 +150,7 @@ export const TradeCard = memo(function TradeCard({
               key={side.roster_id}
               trade={trade}
               side={side}
-              data={data}
+              view={view}
             />
           ))}
         </div>
@@ -194,15 +200,15 @@ function TradeDate({ at }: { at: number | null }) {
 function SideColumn({
   trade,
   side,
-  data,
+  view,
   lens,
 }: {
   trade: Trade;
   side: TradeSide;
-  data: TradesData;
+  view: TradeCardView;
   lens: ValueLens;
 }) {
-  const manager = side.user_id ? data.managers[side.user_id] : undefined;
+  const manager = side.user_id ? view.managers[side.user_id] : undefined;
   const received = receivedBundle(side);
   const given = givenBundle(trade, side);
 
@@ -221,8 +227,19 @@ function SideColumn({
             that changed when the reader flipped the panel would otherwise be
             indistinguishable from one that moved. It is the same rule the
             manager card's lens keys live by — three figures on three scales
-            never share a column without one. */}
-        <span className="ml-auto shrink-0 font-mono text-[length:var(--fs-9)] uppercase tracking-[0.18em] text-readout-label">
+            never share a column without one.
+
+            **The `title` is what says the KTC figures are *today's*.** This
+            board is history, and a value printed beside a 2021 trade reads as
+            what the assets were worth then; there is no stored market history
+            to make that true, so the card says which market it is on instead.
+            A sentence per card would be three words of unit under a paragraph
+            of caveat — see `TRADE_BASIS_NOTES`, and `ValuePanel`, which states
+            it in full for a reader who opens it. */}
+        <span
+          title={TRADE_BASIS_NOTES[lens.basis]}
+          className="ml-auto shrink-0 font-mono text-[length:var(--fs-9)] uppercase tracking-[0.18em] text-readout-label"
+        >
           {TRADE_BASIS_UNITS[lens.basis]}
         </span>
         {/* What the haul is worth, or `—` where nothing in it could be priced.
@@ -234,7 +251,7 @@ function SideColumn({
             the trade, which this card rules out by name above. */}
         <span className="shrink-0 font-mono text-[length:var(--fs-18)] tabular-nums text-readout [text-shadow:var(--readout-text-glow)]">
           {formatAssetValue(
-            bundleValue(trade.league_id, received, data.assetValues, lens),
+            bundleValue(trade.league_id, received, view.assetValues, lens),
           )}
         </span>
       </header>
@@ -244,7 +261,7 @@ function SideColumn({
         bundle={received}
         trade={trade}
         side={side}
-        data={data}
+        view={view}
         lens={lens}
       />
       {given && (
@@ -258,7 +275,7 @@ function SideColumn({
             bundle={given}
             trade={trade}
             side={side}
-            data={data}
+            view={view}
             lens={lens}
           />
         </>
@@ -288,14 +305,14 @@ function AssetTrack({
   bundle,
   trade,
   side,
-  data,
+  view,
   lens,
 }: {
   direction: "in" | "out";
   bundle: TradeBundle;
   trade: Trade;
   side: TradeSide;
-  data: TradesData;
+  view: TradeCardView;
   lens: ValueLens;
 }) {
   const inbound = direction === "in";
@@ -323,7 +340,7 @@ function AssetTrack({
   return (
     <ul className="relative m-0 flex list-none flex-col gap-[9px] p-0">
       {bundle.players.map((id) => {
-        const player = data.players[id];
+        const player = view.players[id];
         return (
           <li key={`p${id}`} className={row}>
             <span aria-hidden className={`font-mono ${signTone}`}>
@@ -342,7 +359,7 @@ function AssetTrack({
               )}
             </span>
             <AssetFigure
-              price={assetPrice(trade.league_id, id, data.assetValues, lens)}
+              price={assetPrice(trade.league_id, id, view.assetValues, lens)}
               lit={inbound}
             />
           </li>
@@ -351,7 +368,7 @@ function AssetTrack({
 
       {bundle.picks.map((pick, i) => {
         const slot =
-          data.pickSlots[
+          view.pickSlots[
             pickSlotKey(trade.league_id, pick.season, pick.roster_id)
           ] ?? null;
         // The origin is drawn exactly when it is a *surprise* — a pick that did
@@ -370,7 +387,7 @@ function AssetTrack({
                 : null)
             : side.roster_id,
         );
-        const from = origin === null ? null : data.managers[pick.user_id ?? ""];
+        const from = origin === null ? null : view.managers[pick.user_id ?? ""];
 
         return (
           <li
@@ -392,7 +409,7 @@ function AssetTrack({
               )}
             </span>
             <AssetFigure
-              price={assetPrice(trade.league_id, pick, data.assetValues, lens)}
+              price={assetPrice(trade.league_id, pick, view.assetValues, lens)}
               lit={inbound}
             />
           </li>

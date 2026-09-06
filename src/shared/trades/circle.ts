@@ -140,6 +140,44 @@ async function resolveIds(
   return circle === "leaguemates" ? [user, ...mates] : mates;
 }
 
+/**
+ * Forget the resolved circles of these readers, because a sync has just changed
+ * what a circle of theirs resolves to.
+ *
+ * **Targeted, because a circle is per reader and a sync is per league.** The
+ * key is `user:season:circle`, so "forget everything this league's members
+ * knew" is a predicate over the first two segments; clearing the whole cache
+ * would make every *other* reader on the box re-derive a hundred-league answer
+ * to protect one league's members. `season` narrows further where the caller
+ * knows it, and a null season forgets the reader's circles in every season —
+ * which is what a caller that cannot name one should ask for.
+ *
+ * **First-order only, and that is a stated limit rather than an oversight.** A
+ * league's membership changing also changes who the *leaguemates of its
+ * members* are, and those readers are not in `users`. Chasing that is a second
+ * query per sync to invalidate a cache; what it would buy is bounded by
+ * {@link CIRCLE_TTL_MS}, which is the staleness this cache was always designed
+ * to carry. What the targeted pass fixes is the case a reader can actually
+ * observe: syncing your own leagues and then finding your own circle stale.
+ */
+export function forgetTradeCircles(
+  users: readonly string[],
+  season: string | null,
+): number {
+  if (users.length === 0) return 0;
+  const readers = new Set(users);
+  return circleCache.prune((key) => {
+    // Split from the left twice: a user id and a season carry no colon, and the
+    // circle name is whatever is left — so this cannot be confused by one.
+    const first = key.indexOf(":");
+    if (first === -1) return false;
+    const second = key.indexOf(":", first + 1);
+    if (second === -1) return false;
+    if (!readers.has(key.slice(0, first))) return false;
+    return season === null || key.slice(first + 1, second) === season;
+  });
+}
+
 /** For tests and for a sync that knows it has changed what these read. */
 export function clearTradeCircleCache(): void {
   circleCache.clear();

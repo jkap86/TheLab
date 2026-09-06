@@ -1,5 +1,9 @@
 export { BoundedCache } from "./bounded-cache";
-export { mapWithConcurrency, collectWithConcurrency } from "./concurrency";
+export {
+  concurrencyGate,
+  mapWithConcurrency,
+  collectWithConcurrency,
+} from "./concurrency";
 export { errorMessage } from "./errors";
 export { easternDate } from "./et-date";
 export { startBackgroundLoop } from "./background-loop";

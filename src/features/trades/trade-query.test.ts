@@ -43,12 +43,16 @@ const request = (over: {
   filters?: Partial<TradeFilters>;
   bounds?: { from: number | null; to: number | null };
   user?: string | null;
+  stamp?: string;
 } = {}) => ({
   season: "2026",
   scope: over.scope ?? ({ kind: "all" } as LeagueScope),
   filters: { ...DEFAULT_TRADE_FILTERS, ...over.filters },
   bounds: over.bounds ?? { from: null, to: null },
   user: over.user === undefined ? null : over.user,
+  // A device that has never synced, which is the ordinary case and the one that
+  // keeps every other assertion in this file about the plain cacheable URL.
+  stamp: over.stamp ?? "",
 });
 
 /**
@@ -308,6 +312,80 @@ describe("tradeQueryKey", () => {
       tradeQueryKey(request({ filters: { circle: "mine" }, user: "u9" })),
       tradeQueryKey(request({ filters: { circle: "mine" }, user: "u8" })),
     );
+  });
+});
+
+/**
+ * The post-sync stamp.
+ *
+ * It narrows nothing and the route has no parameter by its name; what it does
+ * is make the URL a URL the browser has nothing cached under, once, so that a
+ * reader who has just watched a sync finish is not answered out of a cache
+ * filled before it. See `features/shared/trade-freshness`.
+ */
+describe("the sync stamp", () => {
+  test("a device that has never synced sends the plain URL", () => {
+    // The common case, and the one the two routes' cache headers exist for. A
+    // parameter here would split every reader's cache for nothing.
+    const params = tradeQueryParams(request());
+    assert.equal(params.get("synced"), null);
+    assert.ok(!tradeQueryKey(request()).includes("synced"));
+  });
+
+  test("a stamp rides the request and reaches the key", () => {
+    // Reaching the key is the point: the key is the paging hook's subject, so a
+    // stamp inside it restarts the board rather than merely fetching its next
+    // page against a fresher URL.
+    const params = tradeQueryParams(request({ stamp: "1788000000000" }));
+    assert.equal(params.get("synced"), "1788000000000");
+    assert.notEqual(
+      tradeQueryKey(request({ stamp: "1788000000000" })),
+      tradeQueryKey(request()),
+    );
+  });
+
+  test("two syncs are two boards, and one sync is one", () => {
+    assert.notEqual(
+      tradeQueryKey(request({ stamp: "1788000000000" })),
+      tradeQueryKey(request({ stamp: "1788000000001" })),
+    );
+    assert.equal(
+      tradeQueryKey(request({ stamp: "1788000000000" })),
+      tradeQueryKey(request({ stamp: "1788000000000" })),
+    );
+  });
+
+  test("it changes nothing else about the request", () => {
+    // A cache-busting token that also moved a narrowing would be a filter
+    // nobody set. Every other parameter is identical either way.
+    const plain = tradeQueryParams(
+      request({ filters: { circle: "mine" }, user: "u9" }),
+    );
+    const stamped = tradeQueryParams(
+      request({ filters: { circle: "mine" }, user: "u9", stamp: "17" }),
+    );
+    stamped.delete("synced");
+    assert.equal(stamped.toString(), plain.toString());
+  });
+
+  test("it stays on the request line when a long scope moves into a body", () => {
+    // It is a *cache* token, so it has to be part of what the browser keys the
+    // response by — moved into a body it would bust nothing. (A POST is not
+    // cached at all, so this is belt and braces; what it protects is the rule
+    // rather than this case.)
+    const wideScope = {
+      kind: "exclude" as const,
+      ids: Array.from(
+        { length: 400 },
+        (_, i) => `13920404781${String(i).padStart(6, "0")}`,
+      ),
+    };
+    const { method, search, body } = tradeHttpRequest(
+      tradeQueryParams(request({ scope: wideScope, stamp: "1788000000000" })),
+    );
+    assert.equal(method, "POST");
+    assert.equal(search.get("synced"), "1788000000000");
+    assert.ok(!(body ?? "").includes("synced"));
   });
 });
 

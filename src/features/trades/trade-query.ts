@@ -44,6 +44,22 @@ export type TradeRequest = {
    * the unnarrowed one rather than an empty one.
    */
   user: string | null;
+  /**
+   * When this device last saw a sync land, or `""` where it never has — see
+   * `features/shared/trade-freshness`.
+   *
+   * **It narrows nothing and the server ignores it**, which is the whole of
+   * what it is: a cache-busting token, so that a reader who has just synced is
+   * not answered out of a browser cache filled before they did. It rides
+   * {@link TradeRequest} rather than being appended by the fetch because it has
+   * to reach {@link tradeQueryKey} — that key is the paging hook's subject, so
+   * a stamp inside it is what makes the board *restart* on a sync rather than
+   * merely re-fetch its next page against a fresher URL.
+   *
+   * A device that has never synced sends nothing, so the ordinary request is
+   * the ordinary cacheable URL.
+   */
+  stamp: string;
 };
 
 /**
@@ -107,6 +123,11 @@ export function tradeQueryParams(request: TradeRequest): URLSearchParams {
     (side) => side.players.length + side.picks.length > 1,
   );
   if (graded) params.set("match", request.filters.match);
+
+  // Last, and only where there is one. The server has no parameter by this
+  // name and does not need one — what it does is make the URL a URL the browser
+  // has nothing cached under, once, after a sync. See `TradeRequest.stamp`.
+  if (request.stamp) params.set("synced", request.stamp);
 
   return params;
 }

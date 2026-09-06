@@ -28,9 +28,27 @@ import {
   readTradeValues,
 } from "@/shared/trades";
 import type { TradeQuery } from "@/shared/trades";
+import { concurrencyGate } from "@/shared/util";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
+
+/**
+ * How many of this request's database-bound enrichment reads may be open at
+ * once.
+ *
+ * **Sized against the pool rather than against the fan-out.** `DEFAULT_POOL_MAX`
+ * is ten and the counts run alongside this on a first page, so four leaves room
+ * for a second concurrent cold reader and for the crawler's own writes. Raising
+ * it recovers a little cold latency and spends it out of everybody else's
+ * budget; the knob to reach for first is the pool, and the reason not to is
+ * that a pool sized for a fan-out is a pool sized for one route.
+ *
+ * Per request, not per process — the gate is created inside the handler — so
+ * two readers are never queued behind each other. What is bounded is what *one*
+ * request can take.
+ */
+const TRADE_ENRICHMENT_DB_CONCURRENCY = 4;
 
 /**
  * One page of the trades board — see {@link TradesPagePayload} for the payload
@@ -189,6 +207,21 @@ async function resolveNames(trades: readonly Trade[], season: string) {
 
   const leagueIds = [...new Set(trades.map((t) => t.league_id))];
 
+  // **Seven of these eight reads reach Postgres, and `Promise.all` over them is
+  // one request holding seven pool connections.** The pool's default is ten, so
+  // two concurrent cold readers were enough to exhaust it — and the reads are
+  // *cold* precisely when the caches are empty, which is when they are also
+  // slowest. The gate makes it seven, four at a time: a cold request pays a
+  // round or two of latency and can no longer take the pool away from every
+  // other one. On a warm request the reads are cache hits that never touch a
+  // connection, so the gate is a counter increment.
+  //
+  // **The projections read is deliberately outside it.** It fetches from
+  // Sleeper rather than from Postgres, so gating it would queue a network wait
+  // behind database work for no reason — the thing being rationed is
+  // connections. It is the one branch here that is not competing for them.
+  const db = concurrencyGate(TRADE_ENRICHMENT_DB_CONCURRENCY);
+
   const [
     players,
     managers,
@@ -199,13 +232,13 @@ async function resolveNames(trades: readonly Trade[], season: string) {
     adp,
     projections,
   ] = await Promise.all([
-    lookupPlayers(playerIds),
-    getTradeManagers(managerIds),
-    getDraftSlots(draftKeys),
-    lookupLeagueMarkets(leagueIds),
-    getTradeLeagueRosters(leagueIds),
-    lookupKtcMarkets(),
-    resolveSeasonAdp(season),
+    db(() => lookupPlayers(playerIds)),
+    db(() => getTradeManagers(managerIds)),
+    db(() => getDraftSlots(draftKeys)),
+    db(() => lookupLeagueMarkets(leagueIds)),
+    db(() => getTradeLeagueRosters(leagueIds)),
+    db(() => lookupKtcMarkets()),
+    db(() => resolveSeasonAdp(season)),
     resolveProjections(season),
   ]);
 
