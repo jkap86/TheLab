@@ -38,6 +38,15 @@ export const LOCK_KEYS = {
   ktcHistory: [8675309, 3],
   /** Sleeper players-map refresh (`shared/players/sync.ts`). */
   players: [8675309, 5],
+  /**
+   * The comps corpus load (`shared/player-seasons/loader`).
+   *
+   * A script rather than a loop, so this is not held on a schedule — it is
+   * what makes a second loader started by accident report that one is already
+   * running rather than queueing behind it with an eighteen-week Sleeper
+   * fan-out in hand.
+   */
+  compsCorpus: [8675309, 6],
 } as const satisfies Record<string, AdvisoryLockKey>;
 
 /**

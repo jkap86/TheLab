@@ -125,6 +125,162 @@ export const CRITERIA: readonly CompCriterion[] = [
 
 export const CRITERION_IDS: readonly CompCriterionId[] = CRITERIA.map((c) => c.id);
 
+/**
+ * The positions this feature can comp, and the reason the list is short.
+ *
+ * `player_seasons` is the criteria table and nothing else, so what a comp can
+ * be run on is exactly what those thirteen columns describe: fantasy
+ * production, receiving, rushing, snaps, and the three facts. A kicker or a
+ * defence has none of that in a form these criteria read, so they are not
+ * offered as subjects rather than being offered and quietly compared on
+ * columns that are zero for all of them — the failure this list exists to
+ * prevent. A position outside it is a 404 from the comps route, not a WR
+ * comparison wearing somebody else's name.
+ */
+export const COMP_POSITIONS = ["QB", "RB", "WR", "TE"] as const;
+
+export type CompPosition = (typeof COMP_POSITIONS)[number];
+
+export function isCompPosition(position: string): position is CompPosition {
+  return (COMP_POSITIONS as readonly string[]).includes(position);
+}
+
+/**
+ * Which criteria mean something for a position.
+ *
+ * **A quarterback is the case this exists for.** The corpus carries no passing
+ * column — the schema is the criteria table, and no criterion reads one — so a
+ * QB comp runs on fantasy production, rushing, snaps and the three facts.
+ * Receiving yards, target share and yards per route are not merely weak for a
+ * quarterback; they are zero or null for every one of them, which would make a
+ * receiving criterion a constant the distance cannot learn anything from while
+ * still looking, in the panel, like a question that was asked. So they are not
+ * offered.
+ *
+ * Rushing is the mirror image and is offered everywhere, because a receiver
+ * with carries is a real and rare thing rather than a category error.
+ *
+ * The route does **not** reject a pair that falls outside this list. A
+ * criterion that means nothing for a position still has a defined reading, the
+ * panel cannot produce such a request, and a 400 on a URL nothing generates is
+ * a failure mode bought for no protection. What this governs is what is
+ * *offered*, which is where the silence would otherwise be.
+ */
+export const POSITION_CRITERIA: Record<CompPosition, readonly CompCriterionId[]> = {
+  QB: ["age", "draft", "ppg", "pts", "rush", "snap", "gp", "exp"],
+  RB: ["age", "draft", "ppg", "pts", "recyd", "tgtsh", "rush", "yprr", "snap", "gp", "exp"],
+  WR: ["age", "draft", "ppg", "pts", "recyd", "tgtsh", "rush", "yprr", "snap", "gp", "exp"],
+  TE: ["age", "draft", "ppg", "pts", "recyd", "tgtsh", "rush", "yprr", "snap", "gp", "exp"],
+};
+
+export function criterionAppliesTo(
+  criterion: CompCriterionId,
+  position: string,
+): boolean {
+  if (!isCompPosition(position)) return true;
+  return POSITION_CRITERIA[position].includes(criterion);
+}
+
+/**
+ * What each position's panel opens on, as `criterion -> the windows it reads`.
+ * A criterion absent from a preset is off; one present is on with those
+ * weighted windows.
+ *
+ * **The defaults were receiving-centric for every position, and that was
+ * wrong for two of the four.** A running back compared on target share and
+ * yards per route is being asked a receiver's question: those two decide
+ * almost nothing about a back's season and the two that do — carries and
+ * rushing yards — were switched off. So `rush` is heavy for an RB, `recyd`
+ * (which reads receptions beside yards, and pass-catching backs are the ones
+ * whose comps matter) keeps real weight, and `yprr` drops to a supporting
+ * figure rather than a headline one. A quarterback's preset is what his
+ * columns can actually answer.
+ *
+ * WR and TE are two entries rather than one for a reason worth stating: they
+ * are close today and the difference is deliberate — a tight end's target
+ * share is a larger share of what decides his season than a receiver's, and
+ * his rushing is not a signal at all. Sharing one entry would make the day
+ * they diverge an edit to a name rather than to a table.
+ *
+ * `WR` is byte-for-byte the state {@link CRITERIA} declares, which is what
+ * keeps "the panel's own defaults" and "the WR preset" one thing rather than
+ * two that can drift.
+ */
+export const POSITION_PRESETS: Record<
+  CompPosition,
+  Readonly<Partial<Record<CompCriterionId, readonly WeightedWindow[]>>>
+> = {
+  WR: {
+    age: [{ id: "last", w: 1.4 }],
+    draft: [{ id: "last", w: 0.6 }],
+    ppg: [{ id: "last", w: 1.6 }, { id: "chigh", w: 0.8 }],
+    recyd: [{ id: "last", w: 1 }],
+    tgtsh: [{ id: "last", w: 1 }],
+    yprr: [{ id: "avg2", w: 1 }],
+    exp: [{ id: "last", w: 0.8 }],
+  },
+  TE: {
+    age: [{ id: "last", w: 1.4 }],
+    draft: [{ id: "last", w: 0.6 }],
+    ppg: [{ id: "last", w: 1.6 }, { id: "chigh", w: 0.8 }],
+    recyd: [{ id: "last", w: 1 }],
+    tgtsh: [{ id: "last", w: 1.2 }],
+    yprr: [{ id: "avg2", w: 1 }],
+    snap: [{ id: "last", w: 0.8 }],
+    exp: [{ id: "last", w: 0.8 }],
+  },
+  RB: {
+    age: [{ id: "last", w: 1.4 }],
+    draft: [{ id: "last", w: 0.6 }],
+    ppg: [{ id: "last", w: 1.6 }, { id: "chigh", w: 0.8 }],
+    rush: [{ id: "last", w: 1.6 }, { id: "avg2", w: 0.8 }],
+    recyd: [{ id: "last", w: 1 }],
+    tgtsh: [{ id: "last", w: 0.6 }],
+    yprr: [{ id: "avg2", w: 0.4 }],
+    snap: [{ id: "last", w: 0.8 }],
+    exp: [{ id: "last", w: 0.8 }],
+  },
+  QB: {
+    age: [{ id: "last", w: 1.4 }],
+    draft: [{ id: "last", w: 0.6 }],
+    ppg: [{ id: "last", w: 1.6 }, { id: "chigh", w: 0.8 }],
+    pts: [{ id: "last", w: 0.8 }],
+    rush: [{ id: "last", w: 1.2 }, { id: "avg2", w: 0.6 }],
+    gp: [{ id: "last", w: 0.6 }],
+    exp: [{ id: "last", w: 0.8 }],
+  },
+};
+
+/**
+ * The criteria table a position's panel opens on: every criterion in canonical
+ * order, switched on with the preset's windows where the preset names it and
+ * off with {@link CRITERIA}'s own windows where it does not.
+ *
+ * A criterion that does not apply to the position (see
+ * {@link POSITION_CRITERIA}) comes back off, whatever the preset says, so one
+ * table cannot both offer and hide the same key.
+ *
+ * A position with no preset — nothing outside {@link COMP_POSITIONS} is
+ * offered as a subject, so this is the null-subject case rather than an
+ * unknown-position one — falls back to {@link CRITERIA} exactly, which is what
+ * the panel showed before it knew whose comps it was configuring.
+ */
+export function defaultCriteriaFor(position: string | null): CompCriterion[] {
+  const preset =
+    position !== null && isCompPosition(position) ? POSITION_PRESETS[position] : null;
+  if (!preset) return CRITERIA.map((c) => ({ ...c, wins: c.wins.map((w) => ({ ...w })) }));
+
+  return CRITERIA.map((criterion) => {
+    const wins = preset[criterion.id];
+    const applies = criterionAppliesTo(criterion.id, position!);
+    return {
+      ...criterion,
+      on: applies && wins !== undefined,
+      wins: (wins ?? criterion.wins).map((w) => ({ ...w })),
+    };
+  });
+}
+
 /** The nine production fields a window applies to. */
 export const WINDOW_FIELDS: readonly CompStatField[] = [
   "ppg",

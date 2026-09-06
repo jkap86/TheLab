@@ -1,8 +1,9 @@
 import type { CompPair, CompCriterionId, CompWindowId } from "@/shared/contract";
 import {
-  CRITERIA,
   DEFAULT_PAIR_WEIGHT,
   WINDOWS,
+  criterionAppliesTo,
+  defaultCriteriaFor,
   isWindowed,
 } from "../../../shared/comps/criteria.ts";
 import type { CompCriterion } from "../../../shared/comps/criteria.ts";
@@ -19,9 +20,16 @@ import type { CompCriterion } from "../../../shared/comps/criteria.ts";
  * runner, the arrangement `features/trades/query-fns.ts` already makes.
  */
 
-/** The table as the panel opens: a fresh copy of the defaults, windows included. */
-export function defaultCriteria(): CompCriterion[] {
-  return CRITERIA.map((c) => ({ ...c, wins: c.wins.map((w) => ({ ...w })) }));
+/**
+ * The table as the panel opens for a position: a fresh copy of that position's
+ * preset, windows included.
+ *
+ * With no position — before a subject is picked — it is the vocabulary's own
+ * defaults, which are the receiver preset. See `shared/comps/criteria` for why
+ * a running back opening on a receiver's criteria was worth fixing.
+ */
+export function defaultCriteria(position: string | null = null): CompCriterion[] {
+  return defaultCriteriaFor(position);
 }
 
 export function toggleCriterion(
@@ -75,20 +83,45 @@ export function setWeight(
 }
 
 /**
- * The pairs the distance runs on: every window of every criterion that is
- * on, in panel order — which is also the order the comp card draws its chips
- * in, since the route echoes the list it was handed.
+ * The criteria a position's panel shows.
+ *
+ * **A criterion the panel hides must not reach the request**, which is the one
+ * thing this and {@link activePairs} have to agree about. A reader who leaves
+ * target share on for a receiver and then picks a quarterback would otherwise
+ * be shown a panel with no target share in it and handed a board ranked partly
+ * on target share, with nothing on screen naming the criterion doing the work.
+ * So both filter through the same predicate.
  */
-export function activePairs(list: readonly CompCriterion[]): CompPair[] {
-  return list
+export function visibleCriteria(
+  list: readonly CompCriterion[],
+  position: string | null,
+): CompCriterion[] {
+  if (position === null) return [...list];
+  return list.filter((c) => criterionAppliesTo(c.id, position));
+}
+
+/**
+ * The pairs the distance runs on: every window of every criterion that is on
+ * *and applies to the subject's position*, in panel order — which is also the
+ * order the comp card draws its chips in, since the route echoes the list it
+ * was handed.
+ */
+export function activePairs(
+  list: readonly CompCriterion[],
+  position: string | null = null,
+): CompPair[] {
+  return visibleCriteria(list, position)
     .filter((c) => c.on)
     .flatMap((c) =>
       c.wins.map((w) => ({ criterion: c.id, window: w.id, weight: w.w })),
     );
 }
 
-export function activeCount(list: readonly CompCriterion[]): number {
-  return list.filter((c) => c.on).length;
+export function activeCount(
+  list: readonly CompCriterion[],
+  position: string | null = null,
+): number {
+  return visibleCriteria(list, position).filter((c) => c.on).length;
 }
 
 /**

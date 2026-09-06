@@ -1,10 +1,11 @@
 import { NextResponse } from "next/server";
 
+import { COMP_POSITIONS, isCompPosition } from "@/shared/comps";
 import type { ApiErrorPayload, CompPlayersPayload } from "@/shared/contract";
 import { getKtcBoards } from "@/shared/ktc";
 import { ktcBoardValue } from "@/shared/ktc/roster";
 import { corpusBounds, getCompCorpus, toCompSubject } from "@/shared/player-seasons";
-import type { CompCorpus } from "@/shared/player-seasons";
+import type { CompCorpus, CorpusRead } from "@/shared/player-seasons";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -24,16 +25,21 @@ export const dynamic = "force-dynamic";
  * league on this page for `auto` to resolve against. A board that cannot be
  * read costs the plate its figure and nothing else. The sample corpus carries
  * its own prices, since its ids are not Sleeper's.
+ *
+ * **An unloaded corpus answers 200 with no players**, carrying `source:
+ * "unavailable"` and the provenance block, so the page draws a state it can
+ * explain rather than an error it can only print. See `player-seasons/read`.
  */
 export async function GET() {
-  let corpus: CompCorpus;
+  let read: CorpusRead;
   try {
-    corpus = await getCompCorpus();
+    read = await getCompCorpus();
   } catch (error) {
     console.error("[comps] corpus read failed:", error);
     const payload: ApiErrorPayload = { error: "Failed to load the comps corpus" };
     return NextResponse.json(payload, { status: 500 });
   }
+  const { corpus, info } = read;
 
   const priced = await priceSubjects(corpus);
 
@@ -41,13 +47,21 @@ export async function GET() {
     source: corpus.source,
     subject_season: corpus.subject_season,
     corpus: corpusBounds(corpus),
+    corpus_info: info,
+    positions: [...COMP_POSITIONS],
     ktc_updated_at: priced.updated_at,
-    players: corpus.subjects.map((s) =>
-      toCompSubject(
-        corpus.source === "stored" ? { ...s, ktc: priced.values(s.player_id) } : s,
-        corpus.subject_season,
+    players: corpus.subjects
+      // A position this feature cannot comp is not offered as a subject. A
+      // corpus loaded with a wider set than `COMP_POSITIONS` — a kicker, a
+      // defence — would otherwise put a name in the search field whose comps
+      // would be a board of zeroes, and the route behind it 404s.
+      .filter((s) => isCompPosition(s.position))
+      .map((s) =>
+        toCompSubject(
+          corpus.source === "stored" ? { ...s, ktc: priced.values(s.player_id) } : s,
+          corpus.subject_season,
+        ),
       ),
-    ),
   };
 
   return NextResponse.json(payload, {

@@ -13,13 +13,18 @@ import {
   closenessBars,
   criterionById,
   isWindowed,
+  observationTag,
   pairKey,
-  similarityPercent,
   windowById,
-  windowTag,
 } from "@/shared/comps";
 
-import { criterionValue, num, signedDelta, weightLabel } from "../helpers/format";
+import {
+  coverageLabel,
+  criterionValue,
+  num,
+  signedDelta,
+  weightLabel,
+} from "../helpers/format";
 import { CAPTION, LIT, Window } from "./controls";
 
 /**
@@ -39,6 +44,19 @@ import { CAPTION, LIT, Window } from "./controls";
  * and the two that invert for light mode. The chip's closeness is a **bar
  * count** as well as a hue, and a delta carries its sign, so neither reading
  * rests on colour alone.
+ *
+ * **The similarity is the server's**, not a transform applied here. It is
+ * calibrated against the whole eligible pool's distance distribution, and the
+ * browser holds only the top `k` of that pool — a percentage computed here
+ * would be anchored to ten rows rather than to the field they were drawn from.
+ * See `shared/comps/similarity`.
+ *
+ * **Two things a card says that it used not to.** A row compared on less than
+ * the whole question carries a coverage badge, because a distance divided by
+ * the weight it *had* cannot say how much of the question it answered — and a
+ * comp whose player was not there the following year says so on the payoff
+ * pane, because that is a real outcome and zeroes with nothing above them read
+ * as a data problem.
  */
 export function CompCard({
   comp,
@@ -56,10 +74,12 @@ export function CompCard({
   showPayoff: boolean;
   similarityMode: "percent" | "distance";
 }) {
-  const sim = similarityPercent(comp.distance);
+  const sim = comp.similarity;
   const tone = rankColor(sim);
   const rookie = comp.years_on_file === 1;
   const rb = comp.position === "RB";
+  const coverage = coverageLabel(comp.coverage);
+  const played = comp.next.played;
 
   const leftRows: [string, string][] = [
     ["Age", String(comp.age)],
@@ -103,6 +123,17 @@ export function CompCard({
           />
         </div>
 
+        {/* Only where it is below the whole question — see `coverageLabel`. */}
+        {coverage && (
+          <p
+            className="relative -mt-2.5 mb-3.5 inline-flex items-center gap-1.5 rounded-full border border-foreground/10 bg-foreground/[0.04] py-[0.1875rem] pl-[0.4375rem] pr-2 text-[length:var(--fs-9)] uppercase tracking-[0.14em] text-foreground/[0.72]"
+            title="Stat coverage measures how much of the selected comparison criteria are available for this historical season. The rest were not scored — a missing stat is never read as a zero."
+          >
+            <span aria-hidden className="h-1.5 w-1.5 shrink-0 rounded-full bg-foreground/40" />
+            {coverage}
+          </p>
+        )}
+
         <div className="grid gap-4 [grid-template-columns:repeat(auto-fit,minmax(15rem,1fr))]">
           <Pane
             title={`${comp.season} season`}
@@ -118,7 +149,14 @@ export function CompCard({
           </Pane>
 
           {showPayoff && (
-            <Pane title={`${comp.season + 1} season`} note={`vs ${comp.season}`}>
+            <Pane
+              title={`${comp.season + 1} season`}
+              // A player who was not there the following year is a real
+              // outcome and the most important one on the board — see
+              // `CompNextSeason.played`. Zeroes with `vs 2021` over them read
+              // as a gap in the data, which is the one thing they are not.
+              note={played ? `vs ${comp.season}` : "did not play"}
+            >
               {rightRows.map((row) => (
                 <StatRow key={row.label} label={row.label} value={row.value} lit={row.lit}>
                   <span
@@ -218,10 +256,13 @@ function Chip({ comp, pair }: { comp: CompMatch; pair: CompPair }) {
   const litTone =
     gap === null ? "transparent" : gap < 0.3 ? rankColor(92) : gap < 0.7 ? rankColor(60) : rankColor(24);
   const off = "color-mix(in srgb, var(--foreground) 14%, transparent)";
-  const tag = windowTag(
+  // The pair's own counts rather than the row's length: a two-year window with
+  // a value in one of its two seasons is `1 of 2 yr`, and calling it `2 yr`
+  // would say the average is twice as well founded as it is.
+  const tag = observationTag(
     isWindowed(criterion),
     pair.window,
-    comp.years_on_file,
+    { used: reading?.used ?? null, of: reading?.of ?? 1 },
     windowById(pair.window).tag,
   );
 

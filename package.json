@@ -9,6 +9,7 @@
     "lint": "eslint",
     "typecheck": "tsc --noEmit",
     "test": "node --experimental-strip-types --test \"src/**/*.test.ts\"",
+    "comps:load-corpus": "node --env-file=.env --experimental-strip-types --import ./scripts/register-alias.mjs scripts/load-comps-corpus.ts",
     "check": "npm run lint && npm run typecheck && npm test",
     "migrate:up": "node --env-file=.env node_modules/.bin/node-pg-migrate up -m db/migrations",
     "migrate:down": "node --env-file=.env node_modules/.bin/node-pg-migrate down -m db/migrations",

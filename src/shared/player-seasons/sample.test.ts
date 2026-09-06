@@ -1,22 +1,42 @@
 import assert from "node:assert/strict";
 import { describe, test } from "node:test";
 
-import type { CompPair } from "@/shared/contract";
-import { CRITERIA, WINDOWS, isWindowed } from "../comps/criteria.ts";
+import type { CompPair, CompWindowId } from "@/shared/contract";
+import {
+  CRITERIA,
+  UDFA_PICK,
+  WINDOWS,
+  criterionById,
+  isStatField,
+  isWindowed,
+  pairKey,
+} from "../comps/criteria.ts";
+import type { CompField } from "../comps/criteria.ts";
+import { MIN_WEIGHTED_COVERAGE } from "../comps/coverage.ts";
 import { isEligible, rankComps } from "../comps/knn.ts";
+import type { CompRow } from "../comps/windows.ts";
 
 import { SAMPLE_CORPUS } from "./sample.ts";
 
 /**
- * The sample corpus is a transcription, and a transcription is checked by
- * running it: the prototype's own arithmetic, run over its own tables, ranks
- * these players in this order at these distances (to six places). The port
- * must agree — the arithmetic is the spec, and this is the one test that
- * reads it end to end rather than rule by rule.
+ * The sample corpus end to end: the whole ranking, run against an independent
+ * implementation of the documented arithmetic rather than rule by rule.
  *
- * The expected rows were produced by extracting the prototype's `CORPUS`,
- * `PREV`, `windowValue` and distance loop from `Comps.dc.html` and running
- * them under Node; nothing here was typed by hand.
+ * **This used to pin the design prototype's own output to six decimal places**
+ * — its `CORPUS`, `PREV`, `windowValue` and distance loop extracted from
+ * `Comps.dc.html` and run under Node — and those figures no longer apply,
+ * because the prototype z-scored the candidate pool **plus the subject** and
+ * this does not. That was not a transcription error to preserve; it was the
+ * bug `shared/comps/knn` documents at length, where an extreme subject widens
+ * the scale and thereby turns down the criterion he is extreme on.
+ *
+ * A frozen snapshot of the *new* numbers would be a test that only says the
+ * code still does what it did, which is worth much less. So the reference
+ * below is a second, deliberately naive implementation of the formula as this
+ * repo's own documentation states it: pool-only statistics, a pair gap that is
+ * the mean of its fields' z-gaps, a weighted RMS over the available weight.
+ * If the module and this file agree over twenty-six seasons, four windows and
+ * eleven criteria, they agree about the spec.
  */
 
 const defaultPairs = (): CompPair[] =>
@@ -31,16 +51,107 @@ const everyWindow = (): CompPair[] =>
       : c.wins.map((w) => ({ criterion: c.id, window: w.id, weight: w.w })),
   );
 
-function rank(name: string, pairs: CompPair[], k: number) {
+/* ── the reference implementation ─────────────────────────────────────── */
+
+/** The documented window read, written out rather than imported. */
+function refValue(row: CompRow, field: CompField, window: CompWindowId): number | null {
+  if (!isStatField(field)) {
+    if (field === "age") return row.facts.age;
+    if (field === "exp") return row.facts.exp;
+    return row.facts.draft ?? UDFA_PICK;
+  }
+  const span =
+    window === "last"
+      ? 1
+      : window === "avg2"
+        ? Math.min(2, row.history.length)
+        : row.history.length;
+  const series: number[] = [];
+  for (let i = 0; i < span; i++) {
+    const value = row.history[i][field];
+    if (value !== null) series.push(value);
+  }
+  if (series.length === 0) return null;
+  if (window === "chigh") return Math.max(...series);
+  return series.reduce((a, b) => a + b, 0) / series.length;
+}
+
+/** Mean and population SD over the **pool alone**. */
+function refStats(values: number[]): { mean: number; sd: number } {
+  if (values.length === 0) return { mean: 0, sd: 1 };
+  const mean = values.reduce((a, b) => a + b, 0) / values.length;
+  const variance = values.reduce((a, b) => a + (b - mean) ** 2, 0) / values.length;
+  const sd = Math.sqrt(variance);
+  return { mean, sd: sd > 0 ? sd : 1 };
+}
+
+type RefRanked = { name: string; season: number; distance: number; coverage: number };
+
+function refRank(
+  subject: CompRow,
+  pool: readonly (CompRow & { name: string; season: number })[],
+  pairs: readonly CompPair[],
+): RefRanked[] {
+  const stats = (field: CompField, window: CompWindowId) =>
+    refStats(
+      pool
+        .map((row) => refValue(row, field, window))
+        .filter((v): v is number => v !== null),
+    );
+
+  const subjectReadable = pairs.filter((pair) =>
+    criterionById(pair.criterion).fields.every(
+      (field) => refValue(subject, field, pair.window) !== null,
+    ),
+  );
+  const comparable = subjectReadable.reduce((sum, p) => sum + p.weight, 0);
+  if (comparable === 0) return [];
+
+  const out: RefRanked[] = [];
+  for (const row of pool) {
+    let acc = 0;
+    let available = 0;
+    for (const pair of subjectReadable) {
+      const fields = criterionById(pair.criterion).fields;
+      const readings = fields.map((field) => ({
+        a: refValue(row, field, pair.window),
+        b: refValue(subject, field, pair.window),
+        field,
+      }));
+      if (readings.some((r) => r.a === null)) continue;
+      let gapSum = 0;
+      for (const { a, b, field } of readings) {
+        const { mean, sd } = stats(field, pair.window);
+        gapSum += Math.abs((a! - mean) / sd - (b! - mean) / sd);
+      }
+      const gap = gapSum / fields.length;
+      acc += pair.weight * gap * gap;
+      available += pair.weight;
+    }
+    const coverage = available / comparable;
+    if (coverage + 1e-9 < MIN_WEIGHTED_COVERAGE) continue;
+    out.push({
+      name: row.name,
+      season: row.season,
+      distance: Math.sqrt(acc / available),
+      coverage,
+    });
+  }
+  return out.sort((a, b) => a.distance - b.distance || b.coverage - a.coverage);
+}
+
+/* ── the runs ─────────────────────────────────────────────────────────── */
+
+function poolFor(name: string) {
   const subject = SAMPLE_CORPUS.subjects.find((s) => s.name === name)!;
   const pool = SAMPLE_CORPUS.seasons.filter((s) =>
     isEligible(s, subject, { posLock: true, excludeOwn: true, from: 2018, to: 2024 }),
   );
-  return rankComps(subject, pool, pairs).slice(0, k);
+  return { subject, pool };
 }
 
-const shape = (ranked: ReturnType<typeof rank>) =>
-  ranked.map((r) => [r.row.name, r.row.season, Number(r.distance.toFixed(6))]);
+const shape = (rows: { name: string; season: number; distance: number }[]) =>
+  rows.map((r) => [r.name, r.season, Number(r.distance.toFixed(9))]);
 
 describe("the sample corpus", () => {
   test("is the prototype's: 26 seasons, 12 subjects entering 2026, three rookie rows", () => {
@@ -59,84 +170,79 @@ describe("the sample corpus", () => {
     assert.ok(SAMPLE_CORPUS.seasons.some((s) => s.player_id === nacua.player_id));
   });
 
-  test("ranks Puka Nacua as the prototype does under the default criteria", () => {
-    const ranked = rank("Puka Nacua", defaultPairs(), 10);
-    assert.deepEqual(shape(ranked), [
-    ["Tyreek Hill", 2018, 0.734071],
-    ["Nico Collins", 2024, 0.737608],
-    ["Amon-Ra St. Brown", 2022, 0.769159],
-    ["Chris Godwin", 2019, 0.795879],
-    ["A.J. Brown", 2022, 0.863177],
-    ["DK Metcalf", 2020, 0.899203],
-    ["Stefon Diggs", 2020, 0.920164],
-    ["Mike Evans", 2018, 1.212792],
-    ["Justin Jefferson", 2022, 1.268953],
-    ["Ja'Marr Chase", 2021, 1.306956]
-    ]);
-    // And the per-pair gaps the chips draw from, on the nearest comp.
-    for (const [key, gap] of [
-    ["age:last", 0.000000],
-    ["draft:last", 0.240238],
-    ["ppg:last", 0.060944],
-    ["ppg:chigh", 0.062427],
-    ["recyd:last", 0.842019],
-    ["tgtsh:last", 1.905963],
-    ["yprr:avg2", 0.182410],
-    ["exp:last", 0.000000]
-    ] as const) {
-      assert.equal(Number(ranked[0].pairs[key].gap!.toFixed(6)), gap, key);
-    }
+  test("every sample season played the year after — the sample holds no zero outcome", () => {
+    // Worth pinning because it is the sample's own limitation and part of why
+    // it is not a corpus to reason from: twenty-six hand-picked good seasons,
+    // every one of them followed by another.
+    assert.ok(SAMPLE_CORPUS.seasons.every((s) => s.next.played));
+    assert.deepEqual(SAMPLE_CORPUS.covered_seasons, [2018, 2019, 2020, 2021, 2022, 2023, 2024, 2025]);
+    assert.equal(SAMPLE_CORPUS.max_completed_season, 2025);
   });
 
-  test("ranks a running back against running backs only", () => {
-    const ranked = rank("Bijan Robinson", defaultPairs(), 10);
-    assert.ok(ranked.every((r) => r.row.position === "RB"));
-    assert.ok(ranked.every((r) => r.row.name !== "Bijan Robinson"));
-    assert.deepEqual(shape(ranked), [
-    ["Jonathan Taylor", 2021, 0.900543],
-    ["Austin Ekeler", 2021, 1.201472],
-    ["Alvin Kamara", 2020, 1.217297],
-    ["Saquon Barkley", 2018, 1.348530],
-    ["Christian McCaffrey", 2019, 2.186706]
-    ]);
+  for (const [name, pairs, label] of [
+    ["Puka Nacua", defaultPairs(), "the default criteria"],
+    ["Bijan Robinson", defaultPairs(), "a running back"],
+    ["Rome Odunze", defaultPairs(), "a subject with a rookie row in the pool"],
+    ["Puka Nacua", everyWindow(), "every criterion on every window"],
+  ] as const) {
+    test(`agrees with an independent implementation of the formula: ${label}`, () => {
+      const { subject, pool } = poolFor(name);
+      const ranking = rankComps(subject, pool, [...pairs]);
+      const reference = refRank(subject, pool, pairs);
+
+      assert.ok(ranking.ranked.length > 0);
+      assert.deepEqual(
+        shape(ranking.ranked.map((r) => ({ ...r.row, distance: r.distance }))),
+        shape(reference),
+      );
+      // Coverage too: every sample row is complete, so every one is 1.
+      assert.ok(ranking.ranked.every((r) => r.coverage === 1));
+      assert.equal(ranking.excludedLowCoverage, 0);
+    });
+  }
+
+  test("a running back is ranked against running backs only", () => {
+    const { subject, pool } = poolFor("Bijan Robinson");
+    const ranking = rankComps(subject, pool, defaultPairs());
+    assert.ok(ranking.ranked.every((r) => r.row.position === "RB"));
+    assert.ok(ranking.ranked.every((r) => r.row.name !== "Bijan Robinson"));
   });
 
-  test("ranks a rookie-year subject as the prototype does", () => {
-    assert.deepEqual(shape(rank("Rome Odunze", defaultPairs(), 10)), [
-    ["Tee Higgins", 2021, 0.645656],
-    ["Garrett Wilson", 2023, 0.737310],
-    ["CeeDee Lamb", 2021, 0.785682],
-    ["DK Metcalf", 2020, 1.082913],
-    ["Terry McLaurin", 2022, 1.128353],
-    ["Brandon Aiyuk", 2023, 1.146774],
-    ["Amon-Ra St. Brown", 2022, 1.262284],
-    ["Mike Evans", 2018, 1.308263],
-    ["Chris Godwin", 2019, 1.458810],
-    ["A.J. Brown", 2022, 1.493481]
-    ]);
-  });
+  test("the scale is the pool's, and an extreme subject does not widen it", () => {
+    // The prototype's own bug, checked on real rows. Two subjects, both above
+    // every candidate's PPG so the gaps are all measured the same way round:
+    // the *scale* the gaps are in must be identical, and it must be the pool's
+    // own standard deviation. Under the old rule the subject's value entered
+    // that standard deviation, so the 400 run would have read a scale several
+    // times wider than the 100 run and every gap on it correspondingly
+    // smaller — the criterion he was most unusual on, quietly turned down.
+    const { subject, pool } = poolFor("Puka Nacua");
+    const pairs: CompPair[] = [{ criterion: "ppg", window: "last", weight: 1 }];
 
-  test("agrees with the prototype over every criterion and every window", () => {
-    assert.deepEqual(shape(rank("Puka Nacua", everyWindow(), 25)), [
-    ["Amon-Ra St. Brown", 2022, 0.864198],
-    ["Nico Collins", 2024, 0.876656],
-    ["Stefon Diggs", 2020, 0.939864],
-    ["A.J. Brown", 2022, 1.050265],
-    ["Keenan Allen", 2020, 1.091472],
-    ["Mike Evans", 2018, 1.101699],
-    ["DK Metcalf", 2020, 1.116924],
-    ["Chris Godwin", 2019, 1.137579],
-    ["Davante Adams", 2020, 1.223320],
-    ["CeeDee Lamb", 2021, 1.244900],
-    ["Ja'Marr Chase", 2021, 1.386804],
-    ["Tee Higgins", 2021, 1.394229],
-    ["Garrett Wilson", 2023, 1.409468],
-    ["Terry McLaurin", 2022, 1.420010],
-    ["Brandon Aiyuk", 2023, 1.474087],
-    ["Tyreek Hill", 2018, 1.568923],
-    ["Justin Jefferson", 2022, 1.619303],
-    ["Cooper Kupp", 2021, 1.701010],
-    ["Michael Thomas", 2019, 1.720691]
-    ]);
+    const withPpg = (ppg: number): CompRow => ({
+      ...subject,
+      history: [{ ...subject.history[0], ppg }, ...subject.history.slice(1)],
+    });
+
+    /** The scale recovered from two candidates: their PPG apart per z apart. */
+    const recoveredSd = (subjectPpg: number): number => {
+      const ranked = rankComps(withPpg(subjectPpg), pool, pairs).ranked;
+      const gapOf = new Map(
+        ranked.map((r) => [`${r.row.name}:${r.row.season}`, r.pairs[pairKey("ppg", "last")].gap!]),
+      );
+      const [a, b] = [ranked[0].row, ranked[ranked.length - 1].row];
+      const ppgApart = Math.abs(a.history[0].ppg - b.history[0].ppg);
+      const zApart = Math.abs(gapOf.get(`${a.name}:${a.season}`)! - gapOf.get(`${b.name}:${b.season}`)!);
+      return ppgApart / zApart;
+    };
+
+    const poolPpg = pool.map((p) => p.history[0].ppg);
+    const mean = poolPpg.reduce((x, y) => x + y, 0) / poolPpg.length;
+    const poolSd = Math.sqrt(
+      poolPpg.reduce((sum, v) => sum + (v - mean) ** 2, 0) / poolPpg.length,
+    );
+
+    assert.ok(Math.abs(recoveredSd(100) - poolSd) < 1e-9);
+    assert.ok(Math.abs(recoveredSd(400) - poolSd) < 1e-9);
   });
 });
