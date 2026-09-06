@@ -28,6 +28,7 @@ import {
   CONSOLE_WINDOW,
 } from "../console-chrome";
 import { Scanlines } from "./card-plate";
+import { CollapseTray } from "./collapse-tray";
 
 /**
  * The shares drawer: a native `<dialog>` pinned to one edge of the viewport,
@@ -60,15 +61,21 @@ import { Scanlines } from "./card-plate";
  * an order of magnitude longer — ~1,500 players on that same account. Do not
  * promote it to `preserve-3d` to match the cards.
  *
- * **A row is one button, and it used to be two.** The chevron that expanded a
- * row into the leagues holding it is gone: pressing the row narrows the league
- * grid behind the drawer to exactly those leagues, and the grid is the better
- * answer — the same leagues, with their cards, one press earlier. The
- * constraint that shaped the old row is worth keeping written down, because it
- * is *why* the row is a `<button>` and not a `<details>`: a `<summary>` maps to
- * a leaf `button`, so a control nested inside one is unreliably reachable, and
- * a row with two jobs could not have been a disclosure. With one job it could
- * — and it still is not, because there is nothing left to disclose.
+ * **A row is one button, and on one panel it is two again — but never a
+ * `<details>`.** The chevron that expanded a row into the leagues holding it
+ * went away early: pressing the row narrows the league grid behind the drawer
+ * to exactly those leagues, and the grid is the better answer — the same
+ * leagues, with their cards, one press earlier. What the leaguemate panel has
+ * since put back is a *different* disclosure, opening onto what that person
+ * rosters, which the grid cannot show because those are not the reader's own
+ * players.
+ *
+ * The constraint that shaped the old row is what decides its shape now: a
+ * `<summary>` maps to a leaf `button`, so a control nested inside one is
+ * unreliably reachable. Two sibling `<button>`s in the `<li>` keep the row's
+ * own press and the disclosure apart and both on the keyboard — which is also
+ * what lets a row be expanded and unpicked, or picked and shut. See
+ * {@link SharesDrawer}'s `disclosure`.
  *
  * The row's leagues are still *data* on the caller's side: the record column is
  * folded out of them there and arrives here already spelled — see
@@ -116,6 +123,27 @@ export type SharesDrawerRow = {
   };
   /** A short trailing fact — a team, say. Absent is fine, and is on a person. */
   note?: string | null;
+  /**
+   * A second line under the name, in the accent, naming what the row is
+   * *holding* rather than what it is.
+   *
+   * A different line from {@link note} because it is a different claim: a note
+   * is a fact about the row (an NFL team), where this is a narrowing the reader
+   * built out of it and can undo — so it is drawn lit, and the row is drawn lit
+   * with it. The leaguemate panel puts the combos held on this row here, which
+   * is the only thing on a collapsed row that says a chip inside it is pressed.
+   */
+  subline?: string | null;
+  /**
+   * The row is implicated in the narrowing **without being picked itself**.
+   *
+   * Two states rather than one, because they are two things a reader can undo
+   * separately: `selected` is this row's own press and reads as pressed —
+   * `key-shadow-pressed` and an inset glow — where `lit` is something picked
+   * *inside* it and reads as a lamp on an unpressed key. A leaguemate row can
+   * be either, both, or neither.
+   */
+  lit?: boolean;
   /** How many of the counted leagues hold this row. */
   held: number;
   /**
@@ -147,6 +175,21 @@ export type SharesDrawerRow = {
    */
   started?: number | null;
   benched?: number | null;
+};
+
+/**
+ * A row that opens, as {@link SharesDrawer}'s `disclosure` prop takes it.
+ *
+ * Four callbacks rather than a rendered node per row: the tray's contents are
+ * built for the row that is open, not for the four hundred that are shut.
+ */
+export type SharesDrawerDisclosure = {
+  expanded: (id: string) => boolean;
+  onToggle: (id: string) => void;
+  /** The key's accessible name — it carries a glyph and no text. */
+  label: (row: SharesDrawerRow, expanded: boolean) => string;
+  /** Rendered inside the `<li>`, in a measured-height tray. */
+  render: (row: SharesDrawerRow) => ReactNode;
 };
 
 /** A set of leagues' combined record, already spelled — see {@link SharesDrawerRow.record}. */
@@ -214,6 +257,10 @@ export function SharesDrawer({
   populationNote,
   defaultSort = "share",
   detail,
+  deckControls,
+  disclosure,
+  selectedStrip,
+  matchRow,
   loading,
   error,
   emptyMessage,
@@ -272,6 +319,47 @@ export function SharesDrawer({
    * whole deck would leave a reader unable to see what they were inside of.
    */
   detail?: { deck: ReactNode; body: ReactNode } | null;
+  /**
+   * More controls for the deck's second band, beside Sort and Columns.
+   *
+   * The leaguemate panel's `Roster` track rides here. It is a slot rather than
+   * a prop per control because what a panel needs to narrow *its own* rows is
+   * the panel's business, where Sort and Columns are every panel's.
+   */
+  deckControls?: ReactNode;
+  /**
+   * A row that opens, and what it opens into.
+   *
+   * **A sibling `<button>` in the `<li>`, never a `<details>`.** A `<summary>`
+   * maps to a leaf `button`, so a control nested in one is unreliably reachable
+   * — and this row already has a press of its own, which narrows the grid. Two
+   * siblings keeps the two apart and both on the keyboard: a row can be
+   * expanded and unpicked, or picked and shut.
+   *
+   * The expansion state is the caller's, and is deliberately not persisted: it
+   * is a way of reading the list, the call this drawer already makes about
+   * `sort`. It survives the drawer closing because the drawer stays mounted.
+   */
+  disclosure?: SharesDrawerDisclosure | null;
+  /**
+   * A strip inside the `<li>` while the row is picked — the players panel's
+   * Owned · Taken · Available track.
+   *
+   * A callback rather than a node on the row, so it is built for the handful of
+   * rows that are picked rather than for all four hundred that are not.
+   */
+  selectedStrip?: ((row: SharesDrawerRow) => ReactNode) | null;
+  /**
+   * What the search field matches, where a row's own name is not the whole of
+   * it.
+   *
+   * The leaguemate panel matches a typed name against the players a person
+   * rosters as well as against the person — which is what makes its placeholder
+   * honest. It is an override rather than a field on the row because it is only
+   * ever asked with a needle in hand: a per-row index built eagerly would be
+   * work every reader pays and only a typing one uses.
+   */
+  matchRow?: ((row: SharesDrawerRow, needle: string) => boolean) | null;
   loading: boolean;
   error: string | null;
   /** What to say when there is genuinely nothing, as opposed to nothing matching. */
@@ -289,6 +377,16 @@ export function SharesDrawer({
   /** Whether anything is narrowing — the empty state's claim depends on it. */
   filtersActive?: boolean;
   onClearFilters?: () => void;
+  /**
+   * Whether this row is picked — **a `subjectSlot` question, never a
+   * `subjectKey` one.**
+   *
+   * The subject handed over carries no mode, because the row does not know one:
+   * a row is one narrowing whatever reading it is on. A caller comparing full
+   * keys would have a row drop out of its own selected state the moment its
+   * mode moved off the resting one, which on the players panel takes the mode
+   * track down with it — the control deleting itself on first use.
+   */
   selected: (subject: Subject) => boolean;
   onToggle: (subject: Subject) => void;
 }) {
@@ -344,8 +442,14 @@ export function SharesDrawer({
 
   const needle = query.trim().toLowerCase();
   const shown = useMemo(() => {
+    // The name is what a search means unless a panel says otherwise, and only
+    // a panel that says otherwise pays for it — see `matchRow`.
     const kept = needle
-      ? rows.filter((r) => r.name.toLowerCase().includes(needle))
+      ? rows.filter((r) =>
+          matchRow
+            ? matchRow(r, needle)
+            : r.name.toLowerCase().includes(needle),
+        )
       : rows;
 
     const share = (n: number | null | undefined) =>
@@ -377,7 +481,7 @@ export function SharesDrawer({
       }
       return a.row.name.localeCompare(b.row.name);
     });
-  }, [rows, needle, leagueCount, sortKey]);
+  }, [rows, needle, leagueCount, sortKey, matchRow]);
 
   // A narrowed list scrolled halfway down reads as an empty one.
   useEffect(() => {
@@ -524,6 +628,11 @@ export function SharesDrawer({
                 onLift={setLifted}
                 onChange={writeCols}
               />
+              {/* The panel's own narrowing, after the two every panel has. It
+                  wraps with them rather than taking a band of its own: three
+                  tracks on one wrapping row is the deck kept to the height the
+                  list is worth. */}
+              {deckControls}
             </div>
           </div>
           )}
@@ -557,6 +666,11 @@ export function SharesDrawer({
                     {sortKey === id ? " ▼" : ""}
                   </span>
                 ))}
+                {/* The trailing key's width, so a label stays over the readout
+                    it names. The header is laid out from the same numbers the
+                    row is and this is the one the row grew — without it every
+                    label on this panel sits a key to the right of its cell. */}
+                {disclosure && <span className="w-6 shrink-0" />}
               </div>
               <div
                 aria-hidden
@@ -631,6 +745,8 @@ export function SharesDrawer({
                     leagueCount={leagueCount}
                     selected={selected({ kind, id: prepared.row.id })}
                     onSelect={() => onToggle({ kind, id: prepared.row.id })}
+                    disclosure={disclosure ?? null}
+                    selectedStrip={selectedStrip ?? null}
                   />
                 ))}
               </ul>
@@ -978,14 +1094,21 @@ function ShareRow({
   leagueCount,
   selected,
   onSelect,
+  disclosure,
+  selectedStrip,
 }: {
   prepared: Prepared;
   cols: readonly SharesColumnId[];
   leagueCount: number;
   selected: boolean;
   onSelect: () => void;
+  disclosure: SharesDrawerDisclosure | null;
+  selectedStrip: ((row: SharesDrawerRow) => ReactNode) | null;
 }) {
   const { row } = prepared;
+  const open = disclosure?.expanded(row.id) ?? false;
+  // Picked, or holding something picked inside it — see `SharesDrawerRow.lit`.
+  const on = selected || Boolean(row.lit);
 
   return (
     <li
@@ -994,46 +1117,108 @@ function ShareRow({
         "motion-safe:hover:-translate-y-0.5 hover:border-active/40 hover:shadow-[var(--key-shadow),0_16px_26px_-14px_rgba(0,0,0,0.9),0_0_26px_-10px_var(--accent-glow)] " +
         (selected
           ? "border-active/50 shadow-[var(--key-shadow-pressed),inset_0_0_22px_color-mix(in_srgb,var(--accent)_14%,transparent),0_0_24px_-10px_var(--accent-glow)]"
-          : "border-foreground/9 shadow-[var(--key-shadow)]")
+          : row.lit
+            ? // A lamp on an unpressed key: the accent border and the halo say
+              // something in here is narrowing, and the resting `key-shadow`
+              // says this row itself is not the thing that was pressed.
+              "border-active/50 shadow-[var(--key-shadow),0_0_24px_-10px_var(--accent-glow)]"
+            : "border-foreground/9 shadow-[var(--key-shadow)]")
       }
     >
-      <button
-        type="button"
-        onClick={onSelect}
-        aria-pressed={selected}
-        className="flex w-full min-w-0 flex-wrap items-center gap-2 rounded-xl px-[0.6875rem] py-2 text-left focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-active/60 @md:flex-nowrap"
+      {/* The row's own press and its disclosure are siblings, and the wrapper
+          exists only where there is a second one. Below `@md` the cells wrap
+          under the name, so the key aligns to the **top** of a two- or
+          three-line row rather than floating at its middle. */}
+      <div
+        className={
+          disclosure
+            ? "flex min-w-0 items-start gap-0.5 pr-2 @md:items-center"
+            : "min-w-0"
+        }
       >
-        <Badge badge={row.badge} selected={selected} />
+        <button
+          type="button"
+          onClick={onSelect}
+          aria-pressed={selected}
+          className={`flex w-full min-w-0 flex-1 flex-wrap items-center gap-2 rounded-xl py-2 pl-[0.6875rem] text-left focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-active/60 @md:flex-nowrap ${
+            disclosure ? "pr-1" : "pr-[0.6875rem]"
+          }`}
+        >
+          <Badge badge={row.badge} selected={on} />
 
-        {/* `basis` is the row minus the badge and its gap, so three cells
-            cannot fit beside it and wrap to a line of their own — see the note
-            on `ShareRow`. Above `@md` it is `auto` and the row is one line. */}
-        <span className="min-w-0 flex-1 basis-[calc(100%-2.375rem)] @md:basis-auto">
-          {/* Full opacity on the accent as text, per the theme rule: an alpha
-              on it drops light mode's teal below AA. */}
-          <span
-            className={`block truncate text-[length:var(--fs-13)] tracking-[-0.005em] ${
-              selected ? "font-semibold text-readout" : "text-foreground/85"
+          {/* `basis` is the row minus the badge and its gap, so three cells
+              cannot fit beside it and wrap to a line of their own — see the
+              note on `ShareRow`. Above `@md` it is `auto` and the row is one
+              line. */}
+          <span className="min-w-0 flex-1 basis-[calc(100%-2.375rem)] @md:basis-auto">
+            {/* Full opacity on the accent as text, per the theme rule: an alpha
+                on it drops light mode's teal below AA. */}
+            <span
+              className={`block truncate text-[length:var(--fs-13)] tracking-[-0.005em] ${
+                on ? "font-semibold text-readout" : "text-foreground/85"
+              }`}
+            >
+              {row.name}
+            </span>
+            {row.note && (
+              <span className="block truncate font-mono text-[length:var(--fs-9)] uppercase tracking-[0.16em] text-foreground/46">
+                {row.note}
+              </span>
+            )}
+            {row.subline && (
+              <span className="block truncate font-mono text-[length:var(--fs-9)] uppercase tracking-[0.16em] text-active">
+                {row.subline}
+              </span>
+            )}
+          </span>
+
+          {cols.map((id) => (
+            <Cell
+              key={id}
+              id={id}
+              prepared={prepared}
+              leagueCount={leagueCount}
+            />
+          ))}
+        </button>
+
+        {disclosure && (
+          <button
+            type="button"
+            aria-expanded={open}
+            aria-label={disclosure.label(row, open)}
+            onClick={() => disclosure.onToggle(row.id)}
+            // **A 44px target on a coarse pointer**, and a 24×28 key above
+            // `@md` where the row is one line and the pointer is a mouse. The
+            // top margin is what centres the small key on that single line
+            // once the wrapper has aligned it to the top for the wrapped one.
+            className={`mt-1.5 inline-flex size-11 shrink-0 items-center justify-center rounded-[0.5625rem] border font-mono text-[length:var(--fs-11)] transition-[box-shadow,border-color,color] duration-150 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-active/60 @md:mt-0 @md:h-7 @md:w-6 @md:rounded-[0.4375rem] @md:text-[length:var(--fs-9)] ${
+              open
+                ? "border-active/50 bg-[image:var(--key-bg)] text-active shadow-[var(--key-shadow-pressed)]"
+                : "border-foreground/10 bg-[image:var(--key-bg)] text-foreground/55 shadow-[var(--key-shadow)] hover:text-readout"
             }`}
           >
-            {row.name}
-          </span>
-          {row.note && (
-            <span className="block truncate font-mono text-[length:var(--fs-9)] uppercase tracking-[0.16em] text-foreground/46">
-              {row.note}
-            </span>
-          )}
-        </span>
+            <span aria-hidden>{open ? "▲" : "▼"}</span>
+          </button>
+        )}
+      </div>
 
-        {cols.map((id) => (
-          <Cell
-            key={id}
-            id={id}
-            prepared={prepared}
-            leagueCount={leagueCount}
-          />
-        ))}
-      </button>
+      {/* The strip a picked row grows, and the tray an opened one does. Both
+          are inside the `<li>` so they carry the row's own lit border with
+          them — a control that narrows *this* row belongs to it. */}
+      {selected && selectedStrip?.(row)}
+
+      {/* **Rendered for the row that is open, and for no other.** A
+          `CollapseTray` keeps its children mounted while shut — which is right
+          for the one tray in a deck and wrong for one per row: on an account
+          with several hundred leaguemates it is several hundred folds of every
+          stored roster and a `ResizeObserver` apiece, all to draw nothing.
+          The cost is that a closing tray is empty while it collapses, which is
+          the direction nobody watches; the opening one still measures, because
+          the children are in the commit that flips `open`. */}
+      {disclosure && (
+        <CollapseTray open={open}>{open ? disclosure.render(row) : null}</CollapseTray>
+      )}
     </li>
   );
 }

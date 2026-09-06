@@ -51,6 +51,7 @@ export {
   LEAGUE_TYPE_SQL,
   getLeagueLineupRow,
   getLeaguemateIds,
+  getLeagueRosters,
   getManagerDraftAdp,
   getManagerLeaguemates,
   getManagerLeagueIds,
@@ -65,6 +66,7 @@ export type {
   DraftAdpBoards,
   LeagueRow,
   LeaguemateRow,
+  LeagueRosterRosterRow,
   ManagerLeagueRow,
 } from "./queries";
 export { solveLeagueLineup } from "./ros-lineups";

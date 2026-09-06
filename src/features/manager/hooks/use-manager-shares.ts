@@ -5,12 +5,13 @@ import { useEffect, useRef, useState } from "react";
 import type {
   KtcBoardChoice,
   ManagerLeaguematesPayload,
+  ManagerLeaguemateRostersPayload,
   ManagerPlayersPayload,
 } from "@/shared/contract";
 import { apiFetch, isAbortError } from "@/features/shared";
 
 /**
- * The two shares reads, on `useManagerLineups`' idiom: one `AbortController`
+ * The three shares reads, on `useManagerLineups`' idiom: one `AbortController`
  * lineage, a reset **during render** on a subject change, an `isAbortError`
  * guard on the way out.
  *
@@ -143,5 +144,35 @@ export function useManagerLeaguemates(
     season,
     enabled,
     "Failed to load leaguemates",
+  );
+}
+
+/**
+ * Every roster in those leagues, not just the manager's — the read behind the
+ * leaguemate rail and the Owned · Taken · Available track.
+ *
+ * **It is latched on *either* drawer**, which is the one place the three
+ * diverge, and it is a judgement rather than an oversight. The leaguemate panel
+ * needs it the moment it opens, because the rail is what the panel gained; the
+ * players panel needs it one press later, when a row is picked and the three
+ * mode keys want their counts. Gating it on that press instead would leave the
+ * counts on em dashes at exactly the moment a reader first looks at them, and
+ * the fallback while it is in flight — the resting `owned` mode, off a map the
+ * page already holds — is the one reading that needs nothing from here.
+ *
+ * It is the heaviest of the three by an order of magnitude, which is why it is
+ * behind a latch at all rather than fetched with the page.
+ */
+export function useManagerLeaguemateRosters(
+  username: string,
+  season: string | null,
+  enabled: boolean,
+): SharesRead<ManagerLeaguemateRostersPayload> {
+  return useSharesResource(
+    "leaguemate-rosters",
+    username,
+    season,
+    enabled,
+    "Failed to load league rosters",
   );
 }

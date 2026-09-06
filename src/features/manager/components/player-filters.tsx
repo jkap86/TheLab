@@ -1,8 +1,9 @@
 "use client";
 
-import { type ReactNode, useId, useLayoutEffect, useMemo, useRef } from "react";
+import { type ReactNode, useId, useMemo } from "react";
 
 import {
+  CollapseTray,
   CONSOLE_KEY_PILL,
   CONSOLE_WELL,
   CONSOLE_WINDOW,
@@ -84,7 +85,17 @@ export function PlayerFilters({
   return (
     <>
       <FiltersKey open={open} count={active} onPress={onToggleOpen} controls={trayId} />
-      <FilterTray id={trayId} open={open}>
+      {/* The measured-height shell, now `features/shared`'s — the leaguemate
+          panel's expanded row is its second reader. The basis is what puts the
+          tray on a line of its own inside the deck's wrapping search row (see
+          the note there), and the negative margin it takes while shut is what
+          cancels that line's gap. */}
+      <CollapseTray
+        id={trayId}
+        open={open}
+        className="basis-full"
+        closedClassName="-mt-[0.3125rem]"
+      >
         <div className={`${CONSOLE_WELL} flex flex-col gap-[0.4375rem] p-2`}>
           <FacetRow label="Pos">
             <Chip
@@ -197,80 +208,8 @@ export function PlayerFilters({
             </button>
           </div>
         </div>
-      </FilterTray>
+      </CollapseTray>
     </>
-  );
-}
-
-/**
- * The collapsible shell the tray rides in.
- *
- * **The open height is measured, not a `0fr`→`1fr` grid row.** Chrome's `fr`
- * interpolation stalls whenever the subtree is written to in the same frame,
- * which leaves the tray frozen open with nothing on screen saying why — and a
- * `max-height` guess either clips a wrapped row of team chips or eases against
- * a number nothing on screen matches. The inner wrapper is unconstrained (the
- * shell above it does the clipping) so its `offsetHeight` is the natural
- * content height, and a `ResizeObserver` on it is what keeps that true when a
- * chip row wraps or the panel is resized under an open tray.
- *
- * **It takes a full basis and `min-h-0`.** The deck's search row is the
- * wrapping container it sits in — see the note there — so the basis is what
- * puts it on a line of its own, and the negative margin it carries while shut
- * is what cancels that line's gap. `min-h-0` is kept for the reason it is on
- * the list tray below: `min-height: auto` is a content-based floor that would
- * pin a collapsed flex item at its open height the moment this is laid out in
- * a column instead.
- *
- * **The transition list is identical in both states.** Rewriting `transition`
- * in the same frame as the animated property cancels the transition, which is
- * why the state carries opacity and a margin and nothing else — and why focus
- * is taken out of the collapsed tray with `inert` rather than with a
- * `visibility` that would have to be delayed.
- *
- * **`inert` is what takes the collapsed controls out of the tab order.**
- * `pointer-events: none` stops the mouse and nothing else; without it a
- * keyboard reader tabs out of the search field into an invisible panel of
- * chips, a menu and four range handles.
- */
-function FilterTray({
-  id,
-  open,
-  children,
-}: {
-  id: string;
-  open: boolean;
-  children: ReactNode;
-}) {
-  const shellRef = useRef<HTMLDivElement>(null);
-  const trayRef = useRef<HTMLDivElement>(null);
-
-  useLayoutEffect(() => {
-    const shell = shellRef.current;
-    const tray = trayRef.current;
-    if (!shell || !tray) return;
-    const apply = () => {
-      shell.style.height = open ? `${tray.offsetHeight}px` : "0px";
-    };
-    apply();
-    const observer = new ResizeObserver(apply);
-    observer.observe(tray);
-    return () => observer.disconnect();
-  }, [open]);
-
-  return (
-    <div
-      ref={shellRef}
-      // `lab-anim` is the app's marker for anything decorative that moves, so
-      // reduced motion opens the tray at once rather than not at all.
-      className={`lab-anim min-h-0 shrink-0 basis-full overflow-hidden [transition:height_260ms_cubic-bezier(0.2,0.9,0.3,1),opacity_200ms_ease,margin-top_260ms_cubic-bezier(0.2,0.9,0.3,1)] ${
-        open ? "opacity-100" : "pointer-events-none -mt-[0.3125rem] opacity-0"
-      }`}
-    >
-      <div ref={trayRef} id={id} inert={!open}>
-        {children}
-      </div>
-    </div>
   );
 }
 
