@@ -1647,6 +1647,34 @@ ink and the meaning is in the number. A held row is never drawn empty, because
 at 1 of 113 a true-width bar reads as "none" rather than as "one". **A missing
 value is an em dash, never a zero**, in all five.
 
+**The share cell is the held count alone, where the two week columns keep their
+`n/total`.** It printed `24/79`, and the denominator was the one figure on the
+row that could not differ between rows — the panel's own title bar already
+states it (`Across 79 of 113 leagues`), so a hundred rows carried a hundred
+copies of a number stated once above them. It is the rank tiles' decision one
+panel over (see The rank is the reading), and the same half survives it:
+`leagueCount` still folds the trailing percentage and still scales the meter,
+so what says "of what" is the percentage and the bar rather than a repeated
+figure. `start` and `bench` are deliberately untouched — a started count against
+a benched one *is* the reading those two panels are for, and neither is the
+population's own total.
+
+**A players row's badge is a headshot with the initial behind it, and the
+position moved into the note.** The square position bezel was a fact already
+available in the `Pos` facet above it; a face is the thing a reader identifies a
+row by. It is `PlayerFace`'s pattern rather than `Badge`'s existing `imageUrl`
+arm, and the difference is the whole of why there are two arms: a great many
+Sleeper ids have no thumbnail, and a broken `<img>` paints the platform's own
+placeholder glyph over the fallback letter even at `alt=""`, where a background
+image that 404s paints nothing and the letter underneath is exactly the fallback
+it was put there to be. `bg-top` and not `bg-center` — a Sleeper headshot is
+framed head and shoulders, and a centred crop of one in a 1.875rem disc is a
+chin. **The leaguemate badge keeps the `<img>`**: a stored avatar is a picture
+somebody uploaded and is there when the row says it is. The initial is quieter
+behind a face than a label that was the whole of what the bezel said, and the
+note joins with `filter(Boolean)`, so a player with no stored team reads `WR`
+rather than `WR · ` — a dangling separator promising a fact that is not there.
+
 **A closed dialog says nothing, which is what the title-bar readout is for.**
 The league filters already narrowed these shares — `LeaguesHome` hands both
 drawers `leagueFiltered` and the folds count over exactly that list, which is
@@ -1997,6 +2025,31 @@ filters at all, is unchanged: no key, a two-child search row 36px tall, nothing
 past its panel. Exactly one `<h1>`, `document.documentElement.scrollWidth`
 equal to the viewport at both widths, and **no console output of any kind** —
 no React warning about the controlled select or the layout effect.
+
+**The bare share count and the row headshot** were verified the same way and for
+the same reason — a temporary `/preview` route rendering the real
+`PlayerSharesDrawer` and `LeaguemateSharesDrawer` against fixtures, driven over
+CDP at 1280 and 390 in both schemes, then deleted. One mechanic is this pass's
+own: `waitUntil: "networkidle"` never settles here, because every headshot
+request hangs against a CDN the sandbox has no route to, so the drive waits on
+`domcontentloaded` and a timeout instead.
+
+Every arm landed. The share cell reads `24 · 30%` over its meter with the
+denominator gone, and the meter is unmoved — 100% at 79 of 79, 30% at 24, and
+the 6% floor still drawn at 1. The badge is `rounded-full` carrying a
+`background-image` child at `50% 0%` with the initial at `text-foreground/50`
+behind it, and the leaguemate rows carry **no** such child, which is the
+`<img>` arm untouched. The note reads `WR · CIN`, `WR` alone for a player with
+no stored team, `—` for one with neither, and `DEF · DEN` for a team unit. At
+both widths and in both schemes: zero elements past the panel's own box,
+`document.documentElement.scrollWidth` equal to the viewport, `:modal` true, one
+`<h1>`, and **no console output** but the eight failed headshot requests, which
+are the fallback arm being exercised rather than a fault.
+
+**Not verified against real data**, and the one thing a render here cannot check
+is the headshot itself: `sleepercdn.com` is unreachable from where this was
+built, so every face rendered as its letter mount — which is the fallback
+working, and says nothing about how a row reads with a picture in it.
 
 ### The expanded leaguemate, and a player's three readings
 

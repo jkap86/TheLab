@@ -116,8 +116,21 @@ export type SharesDrawerRow = {
   badge: {
     /** Round for a person, square for a position. */
     round?: boolean;
-    /** A stored avatar, where the row has one. */
+    /** A stored avatar, where the row has one. It *replaces* the label. */
     imageUrl?: string | null;
+    /**
+     * A headshot drawn *over* the label rather than instead of it.
+     *
+     * A separate arm from {@link imageUrl} because the two fail differently.
+     * An avatar is a picture the user uploaded and is there when the row says
+     * it is; a Sleeper headshot is missing for a great many ids, and a broken
+     * `<img>` paints the platform's own placeholder glyph over the fallback
+     * even at `alt=""`. A background image that 404s paints nothing, and the
+     * initial underneath is exactly the fallback it is there to be — which is
+     * `PlayerFace`'s reasoning in `lineup-breakdown.tsx`, and why this copies
+     * that pattern rather than reusing the `<img>` above.
+     */
+    faceUrl?: string | null;
     /** What to draw when there is no image — a position, or an initial. */
     label: string;
   };
@@ -1246,11 +1259,19 @@ function Badge({
   return (
     <span
       aria-hidden
-      className={`inline-flex size-[1.875rem] shrink-0 items-center justify-center overflow-hidden border border-foreground/12 bg-[image:var(--bezel-bg)] shadow-[var(--bezel-shadow)] ${shape} ${
+      className={`relative inline-flex size-[1.875rem] shrink-0 items-center justify-center overflow-hidden border border-foreground/12 bg-[image:var(--bezel-bg)] shadow-[var(--bezel-shadow)] ${shape} ${
         badge.round
           ? "text-[length:var(--fs-12)] font-semibold"
           : "font-mono text-[length:var(--fs-9)] uppercase tracking-[0.06em]"
-      } ${selected ? "text-readout" : "text-foreground/68"}`}
+      } ${
+        // A letter *behind* a face is a fallback rather than the content, so it
+        // is drawn quieter than a label that is the whole of what the bezel says.
+        badge.faceUrl
+          ? "text-foreground/50"
+          : selected
+            ? "text-readout"
+            : "text-foreground/68"
+      }`}
     >
       {badge.imageUrl ? (
         /* eslint-disable-next-line @next/next/no-img-element */
@@ -1261,6 +1282,14 @@ function Badge({
         />
       ) : (
         badge.label
+      )}
+      {/* `bg-top`, never `bg-center`: a Sleeper headshot is framed head and
+          shoulders, and a centred crop of one in a 1.875rem disc is a chin. */}
+      {badge.faceUrl && (
+        <span
+          className="absolute inset-0 bg-cover bg-top"
+          style={{ backgroundImage: `url(${badge.faceUrl})` }}
+        />
       )}
     </span>
   );
@@ -1317,8 +1346,16 @@ function Cell({
         sub = row.record.pctLabel;
       }
       break;
+    // **The held count alone, where the two week columns below keep their
+    // `n/total`.** The panel's own title bar already states the population
+    // (`Across 79 of 113 leagues`), so a denominator repeated on every row is
+    // the same figure a hundred times over — and it is the one figure on the
+    // row that cannot differ between rows. What is left is the reading a share
+    // is scanned for: how many, with the percentage and the meter saying how
+    // many *of* what. `leagueCount` still folds `pct` and still scales the
+    // meter, so nothing about the arithmetic moved.
     case "share":
-      main = `${row.held}/${leagueCount}`;
+      main = String(row.held);
       trail = `${pct}%`;
       bar = true;
       break;

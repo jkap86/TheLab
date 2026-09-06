@@ -144,14 +144,25 @@ export function PlayerSharesDrawer({
           key: player.player_id,
           id: player.player_id,
           name: player.name,
-          note: player.team,
+          // **The position joins the note rather than being lost with the
+          // square bezel.** `filter(Boolean)` is what stops a player with no
+          // stored team reading as `WR · ` — a dangling separator promising a
+          // fact that is not there. `UNKNOWN_VALUE` keeps a player with no
+          // position reading here the way he already reads in the `Pos` facet.
+          note: [player.position ?? UNKNOWN_VALUE, player.team]
+            .filter(Boolean)
+            .join(" · "),
           held: player.leagues.length,
           // Folded here rather than in the drawer — see `SharesDrawerRow.record`.
           record: rowRecord(player.leagues),
           value: player.ktc_value,
           age: player.age,
           draftClass: player.draft_class,
-          badge: { label: player.position ?? UNKNOWN_VALUE },
+          badge: {
+            round: true,
+            faceUrl: `https://sleepercdn.com/content/nfl/players/thumb/${player.player_id}.jpg`,
+            label: player.name.charAt(0).toUpperCase(),
+          },
         })),
     [players, filters, ageBounds, classBounds],
   );
