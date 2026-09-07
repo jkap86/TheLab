@@ -626,7 +626,7 @@
   --milled-hairline: rgba(0, 0, 0, 0.45);
   --milled-hairline-highlight: 1px 0 0 rgba(255, 255, 255, 0.07);
   /*
-   * Ink on metal, in the four levels the billet uses. These are not the
+   * Ink on metal, in the levels the billet uses. These are not the
    * `--readout-*` trio, which is type on lit *glass*: a label stamped into a
    * machined face is the metal's own colour lightened, and drawing it in the
    * readout's mint would say the ledge was a window. Every one was checked
@@ -656,6 +656,26 @@
   --billet-unit: rgba(237, 237, 237, 0.88);
   --billet-label: rgba(237, 237, 237, 0.76);
   --billet-scope: rgba(237, 237, 237, 0.7);
+  /*
+   * The family's **lit** level: a word on metal that is a state rather than a
+   * reading — the league info strip's format tag, which is the one thing on
+   * that part a reader is meant to pick out before reading it.
+   *
+   * It is the sixth level of *this* family rather than a reach for
+   * `--readout-text`, and the handoff asks for the reach by name. The reach is
+   * right in dark, where the two are one colour and the tag measures 8.6–11:1
+   * in its well; it is a fault in light, where `--readout-text` is a deep teal
+   * drawn for near-black glass and the well it lands on here is pale metal —
+   * measured against that well's own three stops it runs 3.5 / 4.2 / 4.9:1,
+   * under the floor across most of the face at 11px. So the dark value is the
+   * handoff's `#9ffff2` to the digit and the light one is the same teal taken
+   * down until it clears: 4.9 / 5.8 / 6.9:1, and 8.7 / 5.8 on the billet's own
+   * face should a lit word ever sit there.
+   *
+   * This is `--billet-label`'s note one ink over — a level whose value the
+   * measurement, not the handoff, decided.
+   */
+  --billet-accent: #9ffff2;
 
   /*
    * ── The expanded card's cut parts ────────────────────────────────────────
@@ -1066,6 +1086,8 @@
   --billet-unit: #223339;
   --billet-label: #3a4d54;
   --billet-scope: #3e5158;
+  /* The lit level, turned over rather than dimmed — see the dark block. */
+  --billet-accent: #08554d;
 
   /*
    * The cut parts, turned over. A recess into pale glass is *darker* than the

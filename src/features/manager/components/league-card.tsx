@@ -82,13 +82,23 @@ import {
  * the plate it was buying width from, and the name stops truncating. See
  * {@link StandingStrip}.
  *
- * **The settings are a lit window again**, where they were four paired chips
- * in a recessed tray. `LeagueChipRail` and `LeagueConfigWindow` are two
- * arrangements of one read — both go through `readLeagueConfig`, so neither
- * can drift from the other or from the Filters dialog that narrows by the same
- * rules — and this card takes the window because that is what the other two
- * cards draw. The rail stays where it is, with its tokens: nothing is deleted
- * by a card choosing the other arrangement.
+ * **The settings are a milled strip**, where they were four paired chips in a
+ * recessed tray and, before this pass, a lit window.
+ * `LeagueChipRail` and `LeagueConfigWindow` are two arrangements of one read —
+ * both go through `readLeagueConfig`, so neither can drift from the other or
+ * from the Filters dialog that narrows by the same rules — and this card takes
+ * the strip because that is what the other two cards draw. The rail stays where
+ * it is, with its tokens: nothing is deleted by a card choosing the other
+ * arrangement.
+ *
+ * **The strip and the standing are the card's two bolted-on parts, in that
+ * order.** Settings first, directly under the rule and the plate that names the
+ * league, because what game this is is a property of the league; the standing
+ * second, against the four rank windows it belongs with, because it is a
+ * result. They are cut from one piece of stock — see {@link StandingStrip} —
+ * so the pair reads as one block with a groove between rather than as two
+ * unrelated readouts, which is what lets the gap between them close to 8px.
+ * Above `sm` there is nothing here to order: the standing is on the plate row.
  *
  * **The card wears the metal finish** ({@link CONSOLE_METAL}), which is a set
  * of token overrides on the `<details>` rather than a single element of
@@ -227,7 +237,7 @@ export function LeagueCard({
       <details className={`group/card ${CONSOLE_METAL} flex min-w-0 flex-1 flex-col`}>
         <summary
           className={
-            `lab-card-3d ${CONSOLE_CARD_SHELL} pb-[1.125rem] pt-[1.875rem] flex flex-1 cursor-pointer list-none flex-col font-mono ` +
+            `lab-card-3d ${CONSOLE_CARD_SHELL} flex flex-1 cursor-pointer list-none flex-col font-mono ` +
             // **The gutter is 14px below `sm`**, where the card takes 18px from
             // `sm` up. Four windows across a 362px card is what asks for it —
             // the strip is the card's full width less this inset, and the four
@@ -242,9 +252,19 @@ export function LeagueCard({
             // for, both lines where it had — so the card had to ask
             // `standingFields` which one it was clearing. A plate hangs 13px
             // above the edge whether or not there is a plate opposite it, so
-            // 30px clears it in every case and there is nothing left to
+            // one number clears it in every case and there is nothing left to
             // branch on.
-            "px-3.5 sm:px-[1.125rem] " +
+            //
+            // **The whole inset is smaller below `sm`** — `26 / 14 / 14`
+            // against the desktop `30 / 18 / 18` — which is the same argument
+            // as the gutter one line down, spent on the other two axes. The
+            // card carries four parts on a phone (the settings strip, the
+            // standing, the four rank windows and, open, the browser under
+            // them) and every one of them wants the width; 26px still clears a
+            // plate hung 13px above the edge with 13 to spare, which is what
+            // the top padding is *for* rather than a rhythm it happens to sit
+            // on.
+            "px-3.5 pb-3.5 pt-[1.625rem] sm:px-[1.125rem] sm:pb-[1.125rem] sm:pt-[1.875rem] " +
             // **The open card's housing freezes under the rack.** See the note
             // below the component on why it is the `summary` and nothing else.
             "group-open/card:sticky group-open/card:top-[var(--card-freeze-top)] group-open/card:z-20 " +
@@ -290,30 +310,41 @@ export function LeagueCard({
 
           <CardRule />
 
+          {/* What game this league is playing, where the identity line used to
+              be. It is the lineup checker's own strip and the same component,
+              so a league described one way there cannot be described another
+              here — and the team count is stated once, as the strip's own
+              `Teams`, which is the only place the card still names the field
+              size the ranks below are out of. `18px` sits between the windows'
+              22px and the plates, so the planes read front to back.
+
+              **It comes before the standing, which reverses the order this card
+              carried until now.** The two are the card's only bolted-on parts
+              and they answer two different questions: what game this league is,
+              and how the manager is doing at it. The first is a property of the
+              league, so it belongs directly under the rule with the league's own
+              name on the plate above it; the second is a result, and it belongs
+              beside the four ranks that grade it rather than separated from them
+              by a line of settings. Below `sm` that is a visible swap; from `sm`
+              up the standing is on the plate row and there is nothing here to
+              reorder. */}
+          <LeagueConfigWindow
+            league={league}
+            className="mt-3 sm:mt-3.5 pointer-fine:[transform:translateZ(18px)]"
+          />
+
           {/* The standing, on a phone. It is `sm:hidden` and the plate above is
               `hidden sm:contents`, so exactly one of the two exists at any
               width — never both in the DOM, which would read the same three
               figures twice to anything listening. */}
           <StandingStripFields league={league} />
 
-          {/* What game this league is playing, where the identity line used to
-              be. It is the lineup checker's own window and the same component,
-              so a league described one way there cannot be described another
-              here — and the team count is stated once, as the window's own
-              `Teams`, which is the only place the card still names the field
-              size the ranks below are out of. `18px` sits between the windows'
-              22px and the plates, so the planes read front to back. */}
-          <LeagueConfigWindow
-            league={league}
-            className="mt-3.5 pointer-fine:[transform:translateZ(18px)]"
-          />
-
           {/* The ranks get the row to themselves, under the rail rather than
               beside it — so the windows stay a direct child of the summary,
               which is what keeps their `translateZ` alive. A wrapper here would
               be a flat rendering context and the depth would silently go. */}
           <div
-            className={`relative mt-2.5 grid gap-1.5 sm:gap-2 ${GRID_COLS[columns.length] ?? GRID_COLS[2]} pointer-fine:[transform:translateZ(22px)]`}
+            className={`relative mt-2 grid gap-1.5 sm:mt-2.5 sm:gap-2 ${GRID_COLS[columns.length] ?? GRID_COLS[2]} pointer-fine:[transform:translateZ(22px)]`}
           >
             {columns.map((column) => (
               <RankWindow
@@ -614,7 +645,7 @@ function RankWindow({
 
   return (
     <div
-      className={`${CONSOLE_WINDOW} flex min-w-0 flex-col rounded-[0.625rem] px-[7px] py-2 sm:px-2 sm:py-2.5`}
+      className={`${CONSOLE_WINDOW} flex min-w-0 flex-col rounded-[0.625rem] p-1.5 sm:px-2 sm:py-2.5`}
     >
       <Scanlines />
       <div className="relative">
@@ -641,7 +672,7 @@ function RankWindow({
         </p>
       </div>
 
-      <div className="relative mt-auto pt-2">
+      <div className="relative mt-auto pt-[5px] sm:pt-2">
         {/* A computed colour, so it goes through `style` — the ramp is
             continuous and there is no utility class to generate for it. */}
         <p
@@ -661,18 +692,18 @@ function RankWindow({
             textShadow: `var(--figure-engrave), 0 0 22px ${rankColor(percentile, 0.4)}`,
           }}
         >
-          <span className="text-[length:var(--fs-26)] sm:text-[length:var(--fs-32)]">
+          <span className="text-[length:var(--fs-24)] sm:text-[length:var(--fs-32)]">
             {parts ? parts.figure : "—"}
           </span>
           {parts && (
-            <span className="text-[length:var(--fs-12)] font-normal tracking-normal opacity-55 sm:text-[length:var(--fs-15)]">
+            <span className="text-[length:var(--fs-11)] font-normal tracking-normal opacity-55 sm:text-[length:var(--fs-15)]">
               {parts.suffix}
             </span>
           )}
         </p>
         <span
           aria-hidden
-          className="mt-2 block h-0.5 rounded-full bg-[color:var(--glass-meter-track)] sm:mt-[0.8125rem]"
+          className="mt-[5px] block h-0.5 rounded-full bg-[color:var(--glass-meter-track)] sm:mt-[0.8125rem]"
         >
           <span
             className="block h-0.5 rounded-full"

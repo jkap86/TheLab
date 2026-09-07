@@ -2,7 +2,7 @@ import type { ReactNode } from "react";
 
 import type { ManagerLeague } from "@/shared/contract";
 
-import { CONSOLE_CHIP, CONSOLE_CHIP_TRAY, CONSOLE_WINDOW } from "../console-chrome";
+import { CONSOLE_CHIP, CONSOLE_CHIP_TRAY } from "../console-chrome";
 import {
   isBestBall,
   leagueType,
@@ -15,18 +15,28 @@ import {
   LedgeBay,
   LedgeFigure,
   MilledHairline,
-  Scanlines,
 } from "./card-plate";
 
 /**
- * What game this league is playing, as one lit window across the card.
+ * What game this league is playing, as one **milled strip** across the card.
  *
  * On `/manager` it replaces the identity line that used to sit here —
  * `team name · N-team · status`. The team name went because the card is about
  * the league rather than about what the manager called their team in it, the
  * status went because it was a word nobody acted on, and the team count moved
- * *into* the window where it is the scale every slot count beside it is read
+ * *into* the strip where it is the scale every slot count beside it is read
  * against.
+ *
+ * **It was lit glass and is metal now, which is the point rather than the
+ * finish.** The card's other bolted-on part is the standing strip below it, and
+ * the two were cut from different stock: one a readout reporting on itself, one
+ * a machined part. They are the same stock now — `--billet-bg` under the same
+ * grain and specular, the same `--standing-strip-shadow` chamfer, the same
+ * wells and the same engraved ink — so a reader sees two parts of one
+ * instrument rather than a window sitting next to a plate. What survives of the
+ * window is the *distinction it drew*: a lit tag is still the one thing on the
+ * line a reader picks out before reading it, and it is lit in the metal's own
+ * accent ink now rather than in the readout's mint. See `--billet-accent`.
  *
  * **It lives in `features/shared` because a trade card reads it too**, on the
  * line that moved `CONSOLE_KEY`, `ManagerPlate` and `card-plate.tsx` here: a
@@ -34,8 +44,12 @@ import {
  * ask of a card — a haul is worth a different thing in a dynasty superflex
  * league than in a redraft one, and until this landed the board printed both
  * under the same numbers with nothing on the card saying which game it was.
- * Since the two cards read the same rules, a league described one way on
- * `/manager` cannot be described another on `/trades`.
+ * Since the three cards read the same rules, a league described one way on
+ * `/manager` cannot be described another on `/trades` or `/lineupchecker` —
+ * which is also why the redesign lands on all three rather than on the one page
+ * the handoff behind it scopes. Two arrangements of one read is what
+ * {@link LeagueChipRail} is; two *spellings of one arrangement* is the drift
+ * the convergence pass removed.
  *
  * **Nothing here is derived twice.** Every rule already has exactly one
  * spelling in `features/shared/league-filters`, and this reads them:
@@ -58,41 +72,54 @@ import {
  * **Where it sits and what plane it sits on are the caller's**, which is why
  * they arrive as a `className` rather than being written in here — the same
  * arrangement `LeagueFiltersDialog` takes its `triggerClassName` by, and for
- * the same reason: two cards mount this and only the card knows its own
- * surroundings. A manager card is a 3D context and gives the window
- * `translateZ(18px)`, between the tiles' 22px and the plates, so its planes
+ * the same reason: three cards mount this and only the card knows its own
+ * surroundings. A manager card is a 3D context and gives the strip
+ * `translateZ(18px)`, between the windows' 22px and the plates, so its planes
  * read front-to-back; a trade card is flat, and a `translateZ` there would buy
  * a composited layer per card on a board that appends a hundred at a time and
  * never unmounts one.
  *
- * **The readings are three groups, and each wraps whole.** They used to sit
- * loose in the flex row, so a narrow card broke the line wherever it ran out of
- * width — between the QB and SF ladders, or between `Teams` and `Starters`,
- * leaving a label stranded on a line of its own with its number on the next.
- * The three are *what game* (the format and lineup-mode tags), *the scale*
- * (teams and starters) and *the lineup* (the three ladders and the TE premium),
- * each an `inline-flex` `whitespace-nowrap` span, so the only wrap points left
- * are the two between them. The dividers stay siblings *between* the groups —
- * two of them, not five — which is what lets the window's own `gap-x` space
- * them and keeps a divider from ever ending a wrapped line.
+ * **One line that never wraps, at every width.** The readings used to sit loose
+ * in a wrapping row and break wherever the width ran out — a label stranded on
+ * one line with its number on the next, and, below `lg`, `TE prem` dropped onto
+ * a line of its own. Three groups on `flex-nowrap` is the arrangement instead:
+ * *what game* (the tags), *the scale* (teams and starters) and *the lineup*
+ * (the three ladders and the premium), each `shrink-0 whitespace-nowrap` with a
+ * groove between, so the line is one instrument reading rather than a paragraph
+ * of settings.
  *
- * **The lineup group is the one exception, below `lg`.** Three ladders and the
- * TE premium are the widest of the three and they are the group that outgrew
- * the window: at a phone's width, with the page's type scaled up, the row
- * measures wider than the card and `TE prem` is clipped by the window's own
- * edge — silently, because a `whitespace-nowrap` span in a wrapping row simply
- * overflows. So this one group wraps internally there and `TE prem` drops to a
- * line under the ladders, which is the field that reads correctly on a line of
- * its own: it is a fact about the TE slot rather than another number on the
- * league's scale, so it does not have to sit beside the ladder to be read.
- * `gap-y-2` is what keeps the two lines from touching. Above `lg` nothing
- * changed — the group is `flex-nowrap whitespace-nowrap` again, and the
- * boundaries between the three groups are untouched at every width.
+ * **A narrow line gives up words and one redundancy, never a reading**, and it
+ * gives them up in **two stages at two measured widths**. A line that does not
+ * wrap is a line that *clips*, silently — the strip's own `overflow-hidden` is
+ * what would do it — so both thresholds are numbers rather than tastes. Every
+ * figure below is the content the groups actually need against the content box
+ * the card actually gives them, at `--type-scale`.
  *
- * Like every lit surface on the card it carries its own scanlines, and like
- * every one of them the layer is a child rather than a second background,
- * because CSS has no way to spell the overlay on an element that already has
- * one.
+ * - **Below `md` the pips go and the TE premium folds onto the TE ladder's own
+ *   figure** as `1+0.5` (see {@link narrowTeFigure}). The full line needs
+ *   **611–619px** and the card's content box is **544px at 640** and **672px at
+ *   768** — so it clips through the whole `sm` band and fits from `md` with
+ *   ~55px to spare. The pips are the only thing on the line that says something
+ *   the figure beside them already says, and the premium is a fact about the
+ *   slot it now rides, so those two are what a width buys back. Dropped, the
+ *   line needs ~512px and clears 640 comfortably.
+ * - **Below `sm` the words shorten too** — `Dynasty` → `Dyn`, `Teams` → `Tm`.
+ *   That arm needs **278–293px** against a **314px** box at 390.
+ *
+ * Both spellings of every switched word are in the DOM with one
+ * `display: none`, which is out of the accessibility tree as well as off the
+ * screen: see {@link Word}.
+ *
+ * **The one line that cannot be made to fit is allowed to wrap**, and it is the
+ * Superflex shape below — the only league that carries a *third* tag. It needs
+ * 349px at 390 against 314, and 697px at 768 against 672, so no abbreviation
+ * reaches it: the tag is a whole extra part, not a longer word. Every other
+ * league is `flex-nowrap` and is the design as drawn; that one is `flex-wrap`,
+ * which costs it a second line at narrow widths and nothing at all above ~900,
+ * where the full line fits anyway. Wrapping loses no reading where clipping
+ * would lose the tail of one, and the groups being `shrink-0
+ * whitespace-nowrap` is what keeps the break between two of them rather than
+ * through the middle of a label.
  */
 
 /** The four format words, off the same table the Type rail renders. */
@@ -158,21 +185,27 @@ export function LeagueConfigWindow({
 }) {
   const config = readLeagueConfig(league);
   const { format, lineup, qb, sf, te, starters, teams, tePremium } = config;
+  // The one league shape that carries a *third* tag, and the only thing on the
+  // line that cannot be made to fit — see {@link isUnnamedSuperflex} and the
+  // wrap note below.
+  const crowded = isUnnamedSuperflex(config);
 
   return (
     <div
-      className={`${CONSOLE_WINDOW} flex flex-wrap items-center gap-x-3.5 gap-y-3 rounded-[0.625rem] px-3.5 py-2.5 ${className}`}
+      className={`relative flex items-center gap-1 overflow-hidden rounded-[0.625rem] border border-foreground/13 bg-[image:var(--billet-bg)] px-2 py-[5px] shadow-[var(--standing-strip-shadow)] sm:gap-3 sm:px-3 sm:py-[7px] ${
+        crowded ? "flex-wrap" : "flex-nowrap"
+      } ${className}`}
     >
-      <Scanlines />
+      <BilletFinish />
 
       {/* What game. */}
-      <span className="relative inline-flex flex-nowrap items-center gap-[0.375rem] whitespace-nowrap">
-        <Tag lit>{format}</Tag>
+      <span className="relative inline-flex shrink-0 items-center gap-[5px] whitespace-nowrap">
+        <Tag lit wide={format} narrow={FORMAT_SHORT[format] ?? format} />
         {/* The lineup mode is stated either way — "Managed" is a fact about the
             league, and a tag that appeared only for best ball would leave the
             reader to infer the common case from an absence. It is unlit because
             it is the one of the three that is usually the default. */}
-        <Tag>{lineup}</Tag>
+        <Tag wide={lineup} narrow={LINEUP_SHORT[lineup] ?? lineup} />
         {/*
           The Superflex tag used to appear on every league the `QB+SF ≥ 2` rule
           matched, and the two ladders below say that outright for the ordinary
@@ -187,19 +220,28 @@ export function LeagueConfigWindow({
           handoff raised and could not be answered here (no database is reachable
           from where this was built). Narrowing rather than deleting is the arm
           that is correct under both answers: if no such league exists the tag
-          never renders and the window is the design as drawn, and if one does,
+          never renders and the strip is the design as drawn, and if one does,
           the reader is not left to infer superflex from two ladders that never
           name it. It stays until the query is run.
+
+          It abbreviates like the two beside it, and that is not enough: it is
+          the only tag that can ever be a *third* one, and a third part is a
+          width no shorter word buys back. `crowded` is what that costs — see
+          the wrap note on the component above.
         */}
-        {isUnnamedSuperflex(config) && <Tag lit>Superflex</Tag>}
+        {crowded && <Tag lit wide="Superflex" narrow="SFlx" />}
       </span>
 
       <Divider />
 
       {/* The scale. */}
-      <span className="relative inline-flex flex-nowrap items-baseline gap-3.5 whitespace-nowrap">
-        <Field label="Teams">{teams ?? "—"}</Field>
-        <Field label="Starters">{starters ?? "—"}</Field>
+      <span className="relative inline-flex shrink-0 items-baseline gap-1 whitespace-nowrap sm:gap-3">
+        <Field label="Teams" narrowLabel="Tm">
+          {teams ?? NO_FIGURE}
+        </Field>
+        <Field label="Starters" narrowLabel="St">
+          {starters ?? NO_FIGURE}
+        </Field>
       </span>
 
       <Divider />
@@ -211,71 +253,207 @@ export function LeagueConfigWindow({
           The TE premium comes after the TE ladder deliberately: it is a fact
           about the slot beside it, not another number on the league's own
           scale — which is also why it is inside this group rather than a fourth
-          thing loose in the row. */}
-      <span className="relative inline-flex flex-wrap items-center gap-x-3.5 gap-y-2 lg:flex-nowrap lg:whitespace-nowrap">
+          thing loose in the row. Below `md` it is *inside the TE ladder's own
+          figure*, which is that same argument taken one step further by a
+          width — see {@link narrowTeFigure}. */}
+      <span className="relative inline-flex shrink-0 items-center gap-1 whitespace-nowrap sm:gap-3">
         <Ladder label="QB" slots={qb} />
         <Ladder label="SF" slots={sf} />
-        <Ladder label="TE" slots={te} />
-        <Field label="TE prem">{tePremium ?? "—"}</Field>
+        <Ladder
+          label="TE"
+          slots={te}
+          narrowFigure={narrowTeFigure(te, tePremium)}
+        />
+        <span className="hidden md:contents">
+          <Field label="TE prem">{tePremium ?? NO_FIGURE}</Field>
+        </span>
       </span>
     </div>
   );
 }
 
+/** No answer for a field, in the app's own grammar: never a zero. */
+const NO_FIGURE = "—";
+
 /**
- * A word about the league, on the readout's own type.
+ * The words a phone gives up, and they are only ever *words*.
  *
- * Two weights and no third: `lit` is the accent at full opacity with the inset
- * glow behind it, unlit is a hairline and `--readout-muted`. The accent is
- * never drawn with an alpha as text — light mode's teal is already near its
- * contrast floor — so the dimmer state moves the *ink* rather than fading it.
+ * **Every reading the wide line states is on the narrow line too** — the strip
+ * abbreviates, it does not drop a field. The tags are the widest things on it
+ * and so the ones that shorten, below `sm`; `Teams`/`Starters` shorten with
+ * them. What the line gives up at the *other* threshold is one redundancy and
+ * one relocation rather than a word: see the component note above.
  */
-function Tag({ children, lit }: { children: string; lit?: boolean }) {
+const FORMAT_SHORT: Record<string, string> = {
+  Redraft: "Rdr",
+  Keeper: "Keep",
+  Dynasty: "Dyn",
+  Chopped: "Chop",
+};
+
+const LINEUP_SHORT: Record<string, string> = {
+  Managed: "Mgd",
+  "Best ball": "BB",
+};
+
+/**
+ * The TE ladder's figure where there is no room for a bay beside it: the slot
+ * count with its premium on it.
+ *
+ * A bay of its own is the widest thing a narrow line cannot afford, and the
+ * premium is a fact about the slot rather than another number on the league's
+ * scale — so it rides that slot's figure, which is the same argument that puts
+ * it inside the lineup group at every width.
+ *
+ * **It is a pair only where both halves are real.** `1+0.5` is a reading;
+ * `—+0.5` and `1+—` are two figures a reader has to guess the shape of at
+ * `--fs-12` with one label between them. So a null slot count answers the
+ * dash it would answer anyway, and an unknown premium — a league whose
+ * `scoring_settings` were never synced — leaves the figure alone. Nothing is
+ * lost by the second: what the wide line states there is `TE prem —`, which is
+ * itself the absence of a reading. A **zero** premium is a real answer and is
+ * carried, per {@link scoringValue}.
+ */
+function narrowTeFigure(
+  slots: number | null,
+  premium: number | null,
+): string | number {
+  if (slots === null) return NO_FIGURE;
+  if (premium === null) return slots;
+  return `${slots}+${premium}`;
+}
+
+/**
+ * A word switched by the cascade, where two widths spell it differently.
+ *
+ * Both spellings are in the DOM and one is `display: none`, which takes it out
+ * of the accessibility tree as well as off the screen — so a reader is never
+ * read the same fact twice. It is the rule the rank window's own scope line
+ * already lives by, one component over.
+ *
+ * **Two breakpoints, because the line gives things up in two stages** — see
+ * {@link LeagueConfigWindow}'s note on where each threshold came from. The
+ * classes are spelled out per arm rather than interpolated, since Tailwind
+ * generates what it can see.
+ */
+function Word({
+  wide,
+  narrow,
+  at = "sm",
+}: {
+  wide: string;
+  narrow: string;
+  /** The width above which the long spelling is used. */
+  at?: "sm" | "md";
+}) {
+  if (wide === narrow) return <>{wide}</>;
+  return at === "md" ? (
+    <>
+      <span className="md:hidden">{narrow}</span>
+      <span className="hidden md:inline">{wide}</span>
+    </>
+  ) : (
+    <>
+      <span className="sm:hidden">{narrow}</span>
+      <span className="hidden sm:inline">{wide}</span>
+    </>
+  );
+}
+
+/**
+ * A word about the league, stamped into a well cut in the strip's own face.
+ *
+ * **Two weights and no third**, as before: `lit` is the billet family's own
+ * accent with the accent glow behind it, unlit is `--billet-scope`. What
+ * changed with the material is what "unlit" is made of — on glass the dimmer
+ * state moved the readout's ink, and on metal it moves down the metal's own
+ * ink family. Neither is the accent at an alpha, which light mode's teal
+ * cannot survive.
+ *
+ * The engraving is `--standing-engrave` and the well is the standing strip's,
+ * which is the point of the redesign: the two parts on this card are cut from
+ * one piece of stock.
+ */
+function Tag({
+  wide,
+  narrow,
+  lit,
+}: {
+  wide: string;
+  narrow: string;
+  lit?: boolean;
+}) {
   return (
     <span
       className={
-        "rounded-[0.3125rem] border px-[0.4375rem] py-[0.1875rem] font-mono text-[length:var(--fs-10)] uppercase tracking-[0.14em] " +
+        "rounded-[0.3125rem] bg-[image:var(--billet-well-bg)] px-[7px] py-0.5 font-mono text-[length:var(--fs-9)] uppercase tracking-[0.12em] shadow-[var(--standing-well-shadow)] sm:text-[length:var(--fs-10)] " +
         (lit
-          ? "border-active/40 text-readout [text-shadow:var(--readout-text-glow)] shadow-[inset_0_0_12px_var(--accent-glow)]"
-          : "border-active/22 text-readout-muted")
+          ? "text-[color:var(--billet-accent)] [text-shadow:var(--standing-engrave),0_0_12px_var(--accent-glow)]"
+          : "text-[color:var(--billet-scope)] [text-shadow:var(--standing-engrave)]")
       }
     >
-      {children}
+      <Word wide={wide} narrow={narrow} />
     </span>
   );
 }
 
 /**
- * A readout's own divider — a line on glass.
+ * The groove between two groups of readings — a channel milled into the part.
  *
- * Deliberately **not** `--groove`, which is milled metal: a groove is a channel
- * cut into the housing, and there is no metal inside a lit window to cut.
+ * It was a line drawn on glass (`color-mix` over `--readout-label`), which was
+ * right when this was a window: a groove is a channel cut into metal and there
+ * was no metal here to cut. The strip is metal, so it is `--groove` now, on the
+ * same cut the plate row above it already makes — and, being a token, it turns
+ * over for light mode where a `color-mix` on a readout ink could only dim.
+ *
+ * `shrink-0` is load-bearing on a line that never wraps: the row is
+ * `flex-nowrap`, so a 1px divider left shrinkable is the first thing to
+ * disappear under pressure and it would go without a trace.
  */
 function Divider() {
   return (
     <span
       aria-hidden
-      className="relative h-[1.125rem] w-px bg-[color-mix(in_srgb,var(--readout-label)_40%,transparent)]"
+      className="relative h-4 w-px shrink-0 bg-[image:var(--groove)] shadow-[var(--groove-highlight)]"
     />
   );
 }
 
-/** A label and its number, on the window's two type sizes. */
+/** A label stamped into the part's face. */
+function Label({ children }: { children: ReactNode }) {
+  return (
+    <span className="font-mono text-[length:var(--fs-9)] uppercase tracking-[0.14em] text-[color:var(--billet-label)] [text-shadow:var(--standing-label-shadow)]">
+      {children}
+    </span>
+  );
+}
+
+/** A figure engraved into it, on the one ink every figure on this part shares. */
+function Figure({ children }: { children: ReactNode }) {
+  return (
+    <span className="font-mono text-[length:var(--fs-12)] tabular-nums text-[color:var(--billet-figure)] [text-shadow:var(--standing-engrave)] sm:text-[length:var(--fs-13)]">
+      {children}
+    </span>
+  );
+}
+
+/** A label and its number. */
 function Field({
   label,
+  narrowLabel,
   children,
 }: {
   label: string;
+  /** The same label shortened, where a phone's line cannot carry the word. */
+  narrowLabel?: string;
   children: string | number;
 }) {
   return (
-    <span className="relative inline-flex items-baseline gap-1.5">
-      <span className="font-mono text-[length:var(--fs-9)] uppercase tracking-[0.16em] text-readout-label">
-        {label}
-      </span>
-      <span className="font-mono text-[length:var(--fs-13)] tabular-nums text-readout-line">
-        {children}
-      </span>
+    <span className="relative inline-flex items-baseline gap-[5px]">
+      <Label>
+        <Word wide={label} narrow={narrowLabel ?? label} />
+      </Label>
+      <Figure>{children}</Figure>
     </span>
   );
 }
@@ -291,33 +469,52 @@ function Field({
  * A **null** count draws no ladder at all — see the module note. An empty
  * two-pip ladder is a claim that the league starts none of these, which is a
  * different statement from not knowing.
+ *
+ * **The pips are the one reading a phone drops, and they are the only one it
+ * can.** A pip row is a second spelling of the figure beside it — the whole
+ * point of it is to be countable at a glance on a line a reader is scanning —
+ * so at 390 the figure carries it alone and nothing is lost but the glance.
+ * Their colour is the chip rail's own pair, which is the same pip on the same
+ * stock: a slot milled into the metal, lit or not, measured for both schemes.
  */
-function Ladder({ label, slots }: { label: string; slots: number | null }) {
+function Ladder({
+  label,
+  slots,
+  narrowFigure,
+}: {
+  label: string;
+  slots: number | null;
+  /** What the figure says at a width with no room for a bay beside it. */
+  narrowFigure?: string | number;
+}) {
   const total = slots === null ? 0 : Math.max(2, slots);
+  const figure = slots ?? NO_FIGURE;
 
   return (
-    <span className="relative inline-flex items-center gap-[0.4375rem]">
-      <span className="font-mono text-[length:var(--fs-9)] uppercase tracking-[0.16em] text-readout-label">
-        {label}
-      </span>
+    <span className="relative inline-flex items-center gap-1.5">
+      <Label>{label}</Label>
       {total > 0 && (
-        <span aria-hidden className="inline-flex items-center gap-[2px]">
+        <span aria-hidden className="hidden items-center gap-[2px] md:inline-flex">
           {Array.from({ length: total }, (_, i) => (
             <span
               key={i}
               className={
-                "block h-[13px] w-[5px] rounded-[2px] " +
+                "block h-[13px] w-[4px] rounded-[2px] " +
                 (i < (slots ?? 0)
-                  ? "bg-active shadow-[0_0_7px_var(--accent-glow)]"
-                  : "bg-[color-mix(in_srgb,var(--readout-label)_22%,transparent)]")
+                  ? "bg-[image:var(--pip-lit-bg)] shadow-[var(--pip-lit-shadow)]"
+                  : "bg-[color:var(--pip-unlit-bg)] shadow-[var(--pip-unlit-shadow)]")
               }
             />
           ))}
         </span>
       )}
-      <span className="font-mono text-[length:var(--fs-12)] tabular-nums text-readout-line">
-        {slots ?? "—"}
-      </span>
+      <Figure>
+        {narrowFigure === undefined ? (
+          figure
+        ) : (
+          <Word at="md" wide={String(figure)} narrow={String(narrowFigure)} />
+        )}
+      </Figure>
     </span>
   );
 }
