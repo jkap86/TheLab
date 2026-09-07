@@ -5998,12 +5998,21 @@ identically to the handoff wherever the handoff has an opinion.
 
 ### The Browse pair unfolds at `md`, and takes an accent cap
 
+**Half superseded — there is no fold at all now.** The pair sits on the rack at
+every width; see The phone rack reads left to right, below, which is what paid
+for it and what it cost. Everything here about the *cap* — the filled finish,
+the deep channel, the inverting tokens, the emit-order rules and the light
+half's argument — still holds and is what that pass is built on. What it
+supersedes is the fold below `md` and the measurement that sized it.
+
 **The fold moved `lg` -> `md` on a measurement the old note asked for.** At 768
 on `/manager`: brand 208 + 33 (gap, groove, gap) + readout 68 + 16 + the pair
-with legends 257 + 16 + tool key 40 = **638 against 718**. Below `md` it stays
-folded, and that is the same kind of number rather than caution — as text the
+with legends 257 + 16 + tool key 40 = **638 against 718**. Below `md` it stayed
+folded, and that was the same kind of number rather than caution — as text the
 pair needs 589 against 342, and a rack that wrapped would break the one thing
-`--rack-clear` encodes.
+`--rack-clear` encodes. What that arithmetic assumes is *text*: as two 32px
+glyphs the pair is 77px rather than 257, which is the whole of how it came out
+of the fold without the row wrapping.
 
 **They are the rack's one filled object, and that is an argument rather than a
 finish.** Everything else up there is machined, and these two are the only
@@ -6066,7 +6075,9 @@ and the production boot refuses to start without `DATABASE_URL`**, where
 `db/config.ts`'s documented split doing exactly what it says.
 
 Every arm landed. The wordmark draws at **every** width on every route,
-including 390 with controls. The readout reads `LINEUPS` / `MGR` at 390 and
+including 390 with controls. (**Superseded below 390 on the two pages that
+publish controls** — unfolding the Browse pair took 38px of that row back; see
+The wordmark yields to the controls again, below, for the measurement.) The readout reads `LINEUPS` / `MGR` at 390 and
 `LINEUP CHECKER` / `MANAGER` from 640, and renders **nothing** on `/tools`. The
 rack is **one row at every width** on all four routes, 54px at 390 and 65.1 (or
 62 without a track) at `md`, with `documentElement.scrollWidth` equal to the
@@ -6107,6 +6118,214 @@ the same emit-order trap: both lose to the constant's `px-4 py-2`, so that key
 has been rendering at the standard gutter. It is one line — the shell, or
 arbitrary values — and it is a different component from the four this handoff
 names.
+
+### The phone rack reads left to right, and the Browse pair comes out of its fold
+
+Two changes to the rack **below `md` only**, from a design handoff; `md` and up
+is byte-identical. The tool-name readout moves out of the right-hand cluster to
+sit after the wordmark behind a groove, and the page's two Browse keys stop
+folding behind one sliders key and sit on the rack as icon-only accent caps in
+their own channel. Nothing on the wire moved: no route, no query, no contract
+type, no payload field, no migration.
+
+**The two are one change, and the order is the reason.** The rack said brand …
+name, controls, tray — the one object on it that *reports* wedged in at the head
+of the three that *act*, because the readout inherited the slot the tool key's
+legend vacated. Moving it left is what freed the ~66px the pair needed to come
+out of its fold, and the fold is what cost a press: the keys the pinning exists
+to keep in thumb reach were two presses away on the one device where scrolling
+back up the page is hardest.
+
+**A page owns its glyph as it owns its legend**, which is the seam this file
+already argued one grain out. `RackDrawerKey` gained an `icon` beside `label`,
+and the four drawings live in a `browse-marks.tsx` beside each page's own
+`BROWSE_KEYS` — `/manager` publishes Players and Leaguemates, `/lineupchecker`
+Starters and Opponents. The rack cannot `switch` on the route, so a drawing held
+in `features/tools` would be every page's vocabulary in one folder. They are
+**elements, not components**, because the published array is module-level per
+`usePublishRackControls` and a `() => <Mark />` rebuilt in the render would
+republish every render. The legend does not go with the glyph: at `md` it is
+still the key's whole face, and below `md` it is the button's `sr-only` name —
+one spelling of the word on one element, where an `aria-label` beside a visible
+span at `md` is two places for it to drift.
+
+**`RackControlsKeys` holds no state at all now.** The folded key, its popover,
+the `open` flag, the capture-phase `pointerdown` and the Escape handler are all
+gone with the fold. The rule those carried stays written down, because it comes
+straight back with any dialog mounted in that subtree: a modal `<dialog>` is in
+the top layer only while it still generates a box, so hiding the panel it lives
+in leaves a backdrop over an inert page.
+
+**One track serves both layouts and nothing is rendered twice**, which is what
+keeps the drawer a key opens on a phone the same mounted drawer it opens on a
+desktop. What differs is the recess. The channel is a cut floor below `md` and
+`--track-shadow-deep` over key stock above — not two finishes for one object so
+much as one recess seen through two amounts of it: a 32px circle in 4px of
+channel leaves the floor visible all the way round, where a legend pill in 5px
+of it very nearly fills the track and the sliver left reads as a face's lit lip
+rather than as a floor.
+
+**The auto margin moved onto a cluster, and that is one spelling rather than
+three conditionals.** Brand, groove and readout are one `md:contents` box
+carrying `mr-auto`; putting it on any single one of them would have to know
+which is last, and that depends on the route — a page outside the registry has
+no readout, `/tools` has neither readout nor groove. Two auto margins in one row
+split the slack instead of pinning either end. The wrapper takes `self-stretch`
+for the groove alone: left to `items-center` it would be as tall as the brand
+link and the groove would run 24px rather than the 30 the pill's own content
+height gives it.
+
+**The groove's condition is two, because the two widths separate two different
+things.** At `md` it separates the brand from the tool tray and is gated on
+`showMenu`, untouched. Below `md` it separates the brand from the *readout*, so
+it draws only where there is one — which on `/logs`, a route the registry does
+not own, is the difference between a groove and a tick mark floating beside the
+wordmark. Every route with a readout has a menu, so `showMenu` still gates both.
+
+### The relief pass, and the one token that would not invert
+
+The handoff spells five gradients and shadows for the small rack and names
+tokenising them with light counterparts as **its one open task**. They are eight
+tokens now — `--rack-pill-bg`/`-shadow`, `--rack-bezel-bg`/`-shadow`,
+`--rack-mark-emboss`, `--rack-key-bg`/`-shadow`, `--rack-key-emboss` — each with
+a derived light half, and each reverting at `md` to the token it came from.
+
+**Why a phone-only set at all**, since the same objects at two sizes would
+normally take the same chrome: a bevel is a fixed number of pixels of highlight
+and shadow, so what changes with the object is how much of it there is to read.
+The wide rack is a 62px housing carrying a 44px mount and a 37px key, and a flat
+vertical face has room to state itself there; the phone rack is ~52px carrying a
+34px mount, two 32px caps and a readout, and at `--key-bg`'s two stops it reads
+as a printed lozenge. The two round objects get a *radial* face rather than a
+vertical one, because a vertical gradient on a small circle reads flat — there
+is no corner for the light to be coming from.
+
+**The light halves are derived rather than dimmed**, which is this file's
+standing rule and the whole reason these are tokens instead of literals. In dark
+the relief is bought by *raising the top stop*; light mode's faces already start
+at white, so the same move is made by dropping the *bottom* stop, which gives
+the face the same travel from a light ground rather than from a dark one. Both
+embosses swap sides with it, exactly as `--cap-glyph-emboss` does one object
+over, and every cast is slate rather than black on `--rack-cast`'s reason.
+
+**The channel is a ninth token, and it is the one a render forced.** The handoff
+names `CONSOLE_CHANNEL` for it, which is right in dark to the digit — and that
+constant's floor is a black alpha, chosen on the rule that a recess must be
+darker than its surround in *both* themes. It is, and the rule held for as long
+as its only surface was a milled bay in the columns dialog. On a near-white rack
+pill 52% black is not a channel milled into a part, it is a hole punched through
+one: the darkest object on a light page by a wide margin, with two lit caps
+floating in it. Every other recess in the light scheme is a *shadow on stock*,
+so `--rack-channel-bg`/`-shadow` is that — the same values in dark, a slate tint
+and a lit lower lip in light. `CONSOLE_CHANNEL` itself is deliberately left
+alone: its other caller sits on dark stock in both schemes.
+
+### The wordmark yields to the controls again, and this time it is a width
+
+Unfolding the pair puts a 77px channel on the row where a 39px key used to be,
+and the ~11px this pass took back elsewhere — a 34px bezel against 36, tracking
+0.07em against 0.09, a 3px tool track against 4, a 9px brand gutter against 12,
+5/7px of pill padding against 6/8 — does not cover it. Measured on
+`/lineupchecker`, whose readout is the longer of the two pages that publish
+controls: the row has **9.4px of slack at 390, −5.6 at 375** — where it eats
+into the pill's own right padding — and **−20.6 at 360**, where the tool key
+hangs visibly outside the pill. `/manager`, whose readout is `Mgr`, has 46.5px
+at 390 and fits at 360.
+
+So the legend goes below 390, which is the width the design was drawn and
+measured at, and **the gate is `controls` and not width alone**: a route
+publishing none has the pair's whole 86px spare, and taking the legend off
+`/tools` and `/trades` to fix a row they are not carrying would be a regression
+on four routes to spare two. The flask stays and the link keeps its `sr-only`
+name, so nothing is lost but the word. It is the theme key's own precedent —
+the legend is the first thing to go — and the fallback this file has nominated
+for exactly this situation since the rack was pinned. **Tightening the row
+instead is already measured and recorded**: it buys four pixels, which is not a
+margin on a row whose width the next entry in `tools.ts` changes.
+
+**The readout keeps `Tool.short` below `sm`, which is the handoff's own open
+question answered by measurement.** The prototype spells `Manager` at 390 and
+the README's responsive section says to keep the short form; the two disagree,
+and the number settles it — the long form costs **+37.1px**, which 390 has (9.4
+left) and 375 does not (−5.6). A readout that fits one ordinary phone and
+overflows the next is not a readout. Nothing changed in the code for this; it is
+written down because the prototype shows `Manager` and the next reader would
+otherwise "fix" it.
+
+**32px caps are under the 44px guideline, and that is accepted rather than
+overlooked** — the handoff's other open question. It is the geometry the rack
+already has: the tool key beside them is 32px and has been since it gave up its
+legend, and a 44px cap needs a taller rack, which is the one thing
+`--rack-clear` cannot absorb without becoming five values instead of three. The
+handoff's own alternative is `1a`'s two-row rack, which costs ~44px of
+permanent vertical space on every page.
+
+**`--rack-clear` does not move, and the rack got *shorter*.** The phone pill was
+54px flat; it is **52px** on a page carrying a Browse track (the 40px channel is
+the tallest object) and **50px** on one that is not (a 38px tool key in its
+channel). The gap under it therefore grows from 22px to 24 and 26 — more
+clearance rather than less, and both nearer the `md` arm's own 28px than the
+figure they replace. The token's note gained the split, which is the one it
+already carried at `md` for the same reason.
+
+#### Verified
+
+Driven over CDP against `next dev` with no `DATABASE_URL` — the boot hook skips
+migrations and the loops log their refusals, which is the server coming up
+healthy against nothing — at **360, 375, 390, 640, 768 and 1280 in both
+schemes** on `/manager`, `/lineupchecker`, `/tools`, `/trades`, `/logs` and
+`/comps`: 72 renders. The mechanics are the ones this file records —
+`--no-proxy-server`, `localhost` rather than `127.0.0.1`, a phone viewport from
+`Emulation.setDeviceMetricsOverride`, `data-theme` rather than
+`prefers-color-scheme`, and the `--blink-settings=availablePointerTypes=4,…`
+flags. The pages behind the rack cannot load a league from here, so what is
+driven is the rack and not what is under it.
+
+**Zero failures across all 72**: the rack is one row everywhere,
+`documentElement.scrollWidth` equals the viewport, no element is painted past
+it, the row is inside the box that paints it at every width, exactly one `<h1>`,
+and no console output but the dev server's own and the environment's — a
+`LOGS_TOKEN` warning and the 403s of a sandbox with no route to Sleeper.
+
+The two claims that needed a number landed. **The rack is 52px** on the two
+pages with a track and 50 elsewhere, against 54 before, and 62/65.1 at `md` —
+the desktop figures to the digit. **The `md` path is byte-identical**: the rack
+at 1280 dark, 768 dark and `/tools` at 1280 hash the same before and after, and
+the one that differs (1280 light) differs in 0.25% of subpixels at a max delta
+of 6/255, which is the theme transition's antialiasing rather than a layout or a
+colour.
+
+Every arm: the wordmark draws at 390 and up on the control pages and at every
+width on the four without, the flask alone below it; the groove is `block` where
+a readout follows it, `none` on `/logs` below `md` and `block` there at `md`,
+and absent on `/tools`; the readout reads `MGR`/`LINEUPS` to 390 and
+`MANAGER`/`LINEUP CHECKER` from 640; the channel is 77px holding two 32×32 caps
+with glyphs below `md` and 249.8–259.5px holding two legend pills with the
+glyphs hidden above it. The tokens resolve per scheme and revert at `md` — pill
+`rgb(51,67,74)` against `rgb(255,255,255)`, bezel and tool key radial below `md`
+and `--bezel-bg`/`--key-bg` linear above, the mark's emboss a dark drop shadow
+in dark and a white one in light and `none` at `md`, the channel
+`rgba(0,0,0,0.52)` / `rgba(15,23,42,0.1)` / transparent at `md`.
+
+Pressed at both 390 and 1280, each cap opened its own drawer — `:modal` true,
+the right accessible name, focus in the drawer's search field — flipped its own
+`aria-expanded` and took the `0 0 0 2px` halo while its sibling stayed at rest.
+A real Escape closed it and returned the cap to rest. Tab from the top of the
+document is brand link → Players → Leaguemates → Tools: four stops, no stale
+trigger, `#rack-controls-panel` gone from every render.
+
+1,728 unit tests pass; `lint`, `typecheck` and `build` are clean, and the
+production CSS carries all nine tokens with both halves and the one
+`24.375rem` media query.
+
+**Not verified against real data**, which is the gap to close first: the pages
+behind the rack could not load a league from here. Three things a render cannot
+check — whether two icon caps are as legible to somebody who has not been told
+what they are as the two legends were; whether the 9.4px of slack at 390 on
+`/lineupchecker` survives the next entry in `tools.ts`, since that figure is the
+whole margin the wordmark's gate is set against; and whether the 32px cap is
+comfortable in the hand rather than merely consistent with the tool key beside
+it, which is the one open question no measurement here can close.
 
 ### The rank is the reading, and the denominator is the config window's
 

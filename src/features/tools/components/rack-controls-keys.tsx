@@ -1,12 +1,8 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
+import type { ReactNode } from "react";
 
-import {
-  CONSOLE_KEY_PILL,
-  CONSOLE_KEY_PILL_SHELL,
-  type RackControls,
-} from "@/features/shared";
+import { CONSOLE_KEY_PILL_SHELL, type RackControls } from "@/features/shared";
 
 /**
  * The page's own controls, in the rack: the Browse track.
@@ -22,15 +18,16 @@ import {
  * *not* describe the page — the two keys open drawers — and for those the
  * scroll-depth argument still holds: the header scrolls away after two cards.
  *
- * **What it draws comes from the page, not from this folder — the legends
- * included.** The rack is mounted above `{children}` and cannot see a page's
- * state, so `RackControls` is published upward and this component only mounts
- * it; a page that publishes nothing renders none of this, the rule the tools
- * menu already lives by. The two legends used to be written here, which held
- * while `/manager` was the only page publishing a pair; the lineup checker
+ * **What it draws comes from the page, not from this folder — the legends and
+ * the glyphs included.** The rack is mounted above `{children}` and cannot see
+ * a page's state, so `RackControls` is published upward and this component only
+ * mounts it; a page that publishes nothing renders none of this, the rule the
+ * tools menu already lives by. The two legends used to be written here, which
+ * held while `/manager` was the only page publishing a pair; the lineup checker
  * publishes `Starters` and `Opponents`, and a rack naming both pages' keys
  * would need a `switch` on the route to choose between them. So the keys are
- * data and this maps over them — same track, same fold, same dismissal.
+ * data and this maps over them — and when the phone cap became a picture rather
+ * than a word, the picture joined them for exactly the same reason.
  *
  * **These are the rack's one filled object, and that is an argument rather
  * than a finish.** Everything else up there is machined — a key pressed into a
@@ -53,85 +50,38 @@ import {
  * `drop-shadow` filter, because a glyph's emboss has to follow the stroke's
  * alpha rather than the box around it.
  *
- * **Below `md` the keys collapse behind one icon-only key.** That is answered
- * the way this folder already answered it once: `ToolsMenu` replaced a six-key
- * track with one key and a menu, because the track did not fit and its far end
- * was reachable only by a horizontal swipe nobody would guess at. The two
- * alternatives were a second stacked row, which is what the rack was rewritten
- * to remove and which costs ~112px of an 844px screen *permanently* once the
- * rack is pinned, and leaving the controls on the page at narrow widths, which
- * would mount both drawers' triggers twice.
+ * **The pair sits on the rack at every width, and the fold is gone.** Below
+ * `md` it was one sliders key opening a popover of the same two keys, and what
+ * that cost was a press: the keys the pinning exists to keep in thumb reach
+ * were two presses away on the only device where reaching back up the page is
+ * hard. What paid for unfolding it is the readout moving to the left of the
+ * row, out of the right-hand cluster — see `app-rack.tsx`, where that trade is
+ * measured — plus the legends becoming glyphs: the pair is a 77px channel as
+ * two 32px caps against the 249.8–259.5 the same two keys measure with their
+ * legends on.
  *
- * **The fold is `md`, and it was `lg` because of a measurement that no longer
- * held.** That figure was taken when there were two tracks here: the rack's row
- * was ~900px of content, so at 768 it wrapped to a second line — 114px of
- * pinned rack with the page's first row *underneath* it. This note used to say
- * `md` may well hold one track now and that the breakpoint would stay put until
- * a render said otherwise; the render says otherwise. At 768 on `/manager`:
- * brand link 208 + 33 (gap, groove, gap) + readout 68 + 16 + the pair with
- * their legends 257 + 16 + tool key 40 = **638 against 718**.
- * `/lineupchecker`'s pair is 8px narrower and fits with the same margin.
+ * The keys that carry a legend at `md` therefore carry a **picture** below it,
+ * and the legend stays as the button's `sr-only` name rather than becoming an
+ * `aria-label`: one spelling of the word, on the same element, at both widths.
  *
- * Below `md` the pair stays folded, and that is the same kind of measurement
- * rather than caution: as text it needs 589px against the 342 a phone's pill
- * gives, and a rack that wrapped would break the one assumption `--rack-clear`
- * encodes — that the rack is exactly one row at every width, which is why that
- * token is three values and not five.
+ * **One track serves both layouts and nothing is rendered twice.** It is a
+ * flex item of the rack's own row below `md` and joins it under `md:order-4`
+ * above — no `md:contents` wrapper is needed any more, because with the fold
+ * gone there is no panel around it to stop generating a box. The switch between
+ * the two shapes is the cascade on one element, never state: a client component
+ * in the rack above every page must not have to hydrate to learn a breakpoint.
  *
- * The menu is not a `<dialog>`, for `ToolsMenu`'s reason: those are modal, and
- * a popover holding a couple of keys should not trap focus and dim the page. So
- * the dismissal a dialog gives for free is spelled out — a capture-phase
- * `pointerdown`, so a press that starts outside dismisses before whatever it
- * landed on acts on it, and Escape, which returns focus to the key it came
- * from.
- *
- * **The `close` listener that used to sit here is gone with the View track**,
- * and the rule it enforced is worth keeping written down because it would come
- * straight back with any dialog mounted in this subtree: a modal `<dialog>` is
- * in the top layer only for as long as it still generates a box, so hiding the
- * panel it lives in takes the modal off screen with it and leaves a backdrop
- * over an inert page — a key that reads as dead. Every key here opens one of
- * the page's *own* drawers, which are mounted nowhere near this box, so they
- * can and do dismiss the menu on the press.
- *
- * **The same track serves both layouts, and no markup is rendered twice.** The
- * panel is `display: contents` at `md`, so its box stops existing and the track
- * joins the rack's flex row directly under its own `order` — the trick the
- * brand row above already turns, and the reason the drawer a key opens on a
- * phone is the same mounted drawer it opens on a desktop.
+ * **What went with the fold** is `useState`, `useRef`, `useEffect`, `dismiss`,
+ * the capture-phase `pointerdown` and the Escape handler — this holds no state
+ * at all now. One rule those carried is worth keeping written down, because it
+ * comes straight back with any dialog mounted in this subtree: a modal
+ * `<dialog>` is in the top layer only for as long as it still generates a box,
+ * so hiding the panel it lives in takes the modal off screen with it and leaves
+ * a backdrop over an inert page — a key that reads as dead. Every key here
+ * opens one of the page's *own* drawers, mounted nowhere near this box, which
+ * is what made dismissing on the press safe while there was a menu to dismiss.
  */
 export function RackControlsKeys({ controls }: { controls: RackControls }) {
-  const [open, setOpen] = useState(false);
-  const root = useRef<HTMLDivElement>(null);
-  const trigger = useRef<HTMLButtonElement>(null);
-
-  // Dismiss the menu, and put focus back on the key it came out of — the panel
-  // is about to stop generating a box, and a browser dumps focus to `<body>`
-  // when the element holding it is hidden out from under it.
-  const dismiss = useCallback(() => {
-    setOpen(false);
-    trigger.current?.focus();
-  }, []);
-
-  useEffect(() => {
-    if (!open) return;
-
-    const node = root.current;
-    const onDown = (event: PointerEvent) => {
-      if (!node?.contains(event.target as Node)) setOpen(false);
-    };
-    const onKey = (event: KeyboardEvent) => {
-      if (event.key === "Escape") dismiss();
-    };
-
-    document.addEventListener("pointerdown", onDown, true);
-    document.addEventListener("keydown", onKey);
-    return () => {
-      document.removeEventListener("pointerdown", onDown, true);
-      document.removeEventListener("keydown", onKey);
-    };
-  }, [open, dismiss]);
-
   const { keys, drawer, onOpenDrawer } = controls;
 
   // The cap. Border, face and ink are one set of tokens, and the shadow is
@@ -151,78 +101,63 @@ export function RackControlsKeys({ controls }: { controls: RackControls }) {
       : "shadow-[var(--cap-accent-shadow)]");
 
   return (
-    // Below `md` this is the folded key and the panel it opens; at `md` the box
-    // stops existing and the track inside carries its own order into the rack's
-    // own flex row.
-    <div ref={root} className="relative shrink-0 md:contents">
-      <button
-        ref={trigger}
-        type="button"
-        aria-expanded={open}
-        aria-controls="rack-controls-panel"
-        onClick={() => setOpen((value) => !value)}
-        // The folded key stands for the pair, so it wears the pair's finish.
-        //
-        // **The padding comes off the shell rather than over the pill**, and
-        // that is the thing to keep: `px-2.5` appended to a string already
-        // saying `px-4` is not a narrower key, it is the same key — Tailwind
-        // emits the scale ascending, so the larger value wins whatever the
-        // class attribute says. See `CONSOLE_KEY_PILL_SHELL`.
-        className={`${CONSOLE_KEY_PILL_SHELL} inline-flex items-center px-2.5 py-2 md:hidden ${cap(
-          drawer !== null,
-        )}`}
-      >
-        <CapGlyph>
-          <SlidersMark />
-        </CapGlyph>
-        <span className="sr-only">Browse controls</span>
-      </button>
-
-      <div
-        id="rack-controls-panel"
-        role="group"
-        aria-label="Browse"
-        className={`${
-          open
-            ? "absolute right-0 top-full z-50 mt-2.5 flex min-w-[14.5rem] flex-col items-stretch gap-2 rounded-[0.875rem] border border-foreground/8 bg-[image:var(--key-bg)] p-1.5 shadow-[var(--well-shadow),0_24px_44px_-20px_#000]"
-            : "hidden"
-        } md:contents`}
-      >
-        {/* The deep channel, spelled out rather than composed from
-            `CONSOLE_TRACK`: that constant names `--track-shadow`, and a second
-            `shadow-[…]` beside it would be the same coin flip the cap's own
-            shadow is written whole to avoid. */}
-        <div className="flex items-center gap-[0.4375rem] rounded-full bg-[image:var(--key-bg)] p-[0.3125rem] shadow-[var(--track-shadow-deep)] md:order-4 md:shrink-0">
-          {/* Every key dismisses the menu on the press, and that is safe for
-              exactly one reason: a shares drawer is the *page's* dialog, mounted
-              nowhere near this box, so hiding the menu behind it leaves a clean
-              page. A dialog mounted in here could not do this — see the module
-              note. */}
-          {keys.map(({ kind, label }) => (
-            <button
-              key={kind}
-              type="button"
-              onClick={() => {
-                onOpenDrawer(kind);
-                setOpen(false);
-              }}
-              aria-haspopup="dialog"
-              aria-expanded={drawer === kind}
-              // Shape and finish composed rather than concatenated onto a
-              // string that already names a border colour — same specificity,
-              // and which one wins is decided by Tailwind's emit order. The
-              // legend's emboss is a token for the same reason the face is:
-              // the dark cap lights its ink from above and the light one from
-              // below, and neither is the other at a different alpha.
-              className={`${CONSOLE_KEY_PILL} inline-flex items-center [text-shadow:var(--cap-ink-emboss)] ${cap(
-                drawer === kind,
-              )}`}
-            >
-              {label}
-            </button>
-          ))}
-        </div>
-      </div>
+    // **A cut floor below `md` and `--track-shadow-deep` over key stock
+    // above**, which is not two finishes for one object so much as one recess
+    // seen through two amounts of it. A 32px circle in 4px of channel leaves
+    // the floor visible all the way round and between the two; a legend pill in
+    // 5px of it very nearly fills the track, and the sliver left reads as the
+    // lit lip of a face rather than as a floor at all. So the phone arm goes
+    // deeper and the `md` arm is untouched — the desktop path is not what this
+    // pass is about.
+    //
+    // The floor is `--rack-channel-*` rather than `CONSOLE_CHANNEL`, which is
+    // this same recess and the shape it was drawn from: that constant's floor
+    // is a black alpha, which is a channel on the dark stock its other caller
+    // sits on and a hole punched through a near-white rack. See the token.
+    //
+    // `md:bg-transparent` is what takes the channel's *colour* back off at
+    // `md`; a background colour and a background image are two properties, so
+    // without it the key stock would be an opaque gradient painted over a tint
+    // nobody can see and nobody meant.
+    <div
+      role="group"
+      aria-label="Browse"
+      className="flex shrink-0 items-center gap-[0.3125rem] rounded-full bg-[var(--rack-channel-bg)] p-1 shadow-[var(--rack-channel-shadow)] md:order-4 md:gap-[0.4375rem] md:bg-[image:var(--key-bg)] md:bg-transparent md:p-[0.3125rem] md:shadow-[var(--track-shadow-deep)]"
+    >
+      {keys.map(({ kind, label, icon }) => (
+        <button
+          key={kind}
+          type="button"
+          onClick={() => onOpenDrawer(kind)}
+          aria-haspopup="dialog"
+          aria-expanded={drawer === kind}
+          // Shape and finish composed rather than concatenated onto a string
+          // that already names a border colour — same specificity, and which
+          // one wins is decided by Tailwind's emit order. The legend's emboss
+          // is a token for the same reason the face is: the dark cap lights its
+          // ink from above and the light one from below, and neither is the
+          // other at a different alpha.
+          //
+          // **The geometry comes off the shell, never off `CONSOLE_KEY_PILL`.**
+          // A 32px cap cannot be got by appending `size-8` to a string already
+          // saying `px-4 py-2` — the padding would still be there and the cap
+          // would be a 64px lozenge. So the shell carries no padding, the phone
+          // arm is a square, and `md:size-auto` hands the width back to the
+          // pill's own gutter at `md`.
+          className={`${CONSOLE_KEY_PILL_SHELL} inline-flex size-8 items-center justify-center [text-shadow:var(--cap-ink-emboss)] md:size-auto md:px-4 md:py-2 ${cap(
+            drawer === kind,
+          )}`}
+        >
+          <CapGlyph>{icon}</CapGlyph>
+          {/*
+            The legend, and the cap's accessible name at both widths. `sr-only`
+            below `md` rather than an `aria-label` on the button, so the word
+            has one spelling on one element — a label attribute beside a visible
+            span at `md` is two places for it to drift.
+          */}
+          <span className="sr-only md:not-sr-only">{label}</span>
+        </button>
+      ))}
     </div>
   );
 }
@@ -232,40 +167,19 @@ export function RackControlsKeys({ controls }: { controls: RackControls }) {
  *
  * The emboss is a `filter` on a wrapper rather than a `text-shadow`, because it
  * has to follow the stroke's own alpha — a shadow on the box would be a
- * rectangle's highlight under a picture of three sliders. `z-[1]` keeps it over
+ * rectangle's highlight under a picture of two players. `z-[1]` keeps it over
  * the cap's inset highlight.
+ *
+ * `md:hidden`, because at `md` the cap's face is its legend: a picture beside
+ * the word is the same fact twice on a key 32px tall.
  */
 function CapGlyph({ children }: { children: ReactNode }) {
   return (
-    <span className="relative z-[1] inline-flex [filter:var(--cap-glyph-emboss)]">
+    <span
+      aria-hidden
+      className="relative z-[1] inline-flex [filter:var(--cap-glyph-emboss)] md:hidden"
+    >
       {children}
     </span>
-  );
-}
-
-/**
- * The controls glyph: three channels with a key travelling in each, which is
- * the console's own picture of what is behind this button.
- *
- * 17px rather than the 16 a machined key draws, and a heavier stroke with it:
- * cut into a lit cap it is reading against a face rather than against the
- * rack's own ground, and at 1.7 on 16 the channels closed up.
- */
-function SlidersMark() {
-  return (
-    <svg
-      viewBox="0 0 24 24"
-      className="size-[1.0625rem]"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth={1.9}
-      strokeLinecap="round"
-      aria-hidden
-    >
-      <path d="M4 7h16M4 12h16M4 17h16" />
-      <circle cx="9" cy="7" r="2.1" fill="currentColor" stroke="none" />
-      <circle cx="15" cy="12" r="2.1" fill="currentColor" stroke="none" />
-      <circle cx="8" cy="17" r="2.1" fill="currentColor" stroke="none" />
-    </svg>
   );
 }

@@ -114,8 +114,15 @@
    *
    * Measured rather than guessed, at each of the three widths the rack has:
    *
-   * - base — a 52.5px brand pill (a 36px bezel in 6px of padding, plus its
-   *   border), and the gap under it.
+   * - base — a **50px** brand pill on a page with no Browse track (a 38px tool
+   *   key in its channel, in 5px of padding, plus its border) and **52px** on
+   *   one that has (the 40px Browse channel is the taller object), leaving 26px
+   *   and 24px of gap. It was 54px flat until the Browse pair came out of its
+   *   fold: the pill's padding went 6px to 5, the tool key's channel 4px to 3,
+   *   and the bezel 36px to 34, so the rack got *shorter* while the row got
+   *   busier. The token did not move for it — a shorter rack is more clearance
+   *   rather than less, and both figures sit nearer the `md` arm's own 28px gap
+   *   than the 22px they replace.
    * - `sm` — the same rack, and the shell's own `pt-11` under it.
    * - `md` — a 62px rack (a 44px bezel in 8px of padding, plus its border).
    *   The gap under it is the design's own 28px, and 62px is the height the
@@ -126,15 +133,17 @@
    * — still a rack unit in its own gutter, just not one hovering clear of the
    * edge — so the clearance is the rack's height plus the gap under it and
    * nothing above it. The gap under it is the thing to check after any edit
-   * here, and it is **two numbers rather than one**, because the rack's height
-   * is: a page with no Browse track is 62px at `md` and the identity plate
-   * clears it by the 28px it always did, while a page carrying one is 65.1px
-   * and clears by 24.9. The track is the taller object in that row — a 37.1px
-   * key in 5px of channel, against the brand link's 44px bezel — and that 5px
-   * is the deep channel a *filled* cap needs; see `--track-shadow-deep`. Both
-   * are measured and both are clear, and neither earns a fourth arm on this
-   * token: raising it for the two pages that carry controls would push the
-   * other four down by the same 3px for nothing.
+   * here, and it is **two numbers rather than one at every width**, because the
+   * rack's height is: a page with no Browse track is 62px at `md` and the
+   * identity plate clears it by the 28px it always did, while a page carrying
+   * one is 65.1px and clears by 24.9. The track is the taller object in that
+   * row — a 37.1px key in 5px of channel, against the brand link's 44px bezel —
+   * and that 5px is the deep channel a *filled* cap needs; see
+   * `--track-shadow-deep`. The base arm splits the same way and for the same
+   * reason, 50px against 52. All four are measured and all four are clear, and
+   * none earns a fifth arm on this token: raising it for the two pages that
+   * carry controls would push the other four down by the same 2 or 3px for
+   * nothing.
    *
    * The rack is one row at every width, which is a constraint rather than an
    * observation: the Browse pair folds behind a single key below `md`
@@ -220,6 +229,89 @@
   --bezel-bg: linear-gradient(180deg, #2b3a3f, #0d1618);
   --bezel-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.3), inset 0 -2px 4px rgba(0, 0, 0, 0.85),
     0 6px 14px -6px #000, 0 0 20px -4px rgba(0, 255, 229, 0.4);
+
+  /*
+   * **The phone rack's relief: the four surfaces the small rack is made of.**
+   *
+   * These are the app rack below `md` and nothing else — the pill itself, the
+   * flask's bezel and the tool key, plus the two glyph embosses that go with
+   * the last two. Above `md` every one of them reverts to the token it is
+   * derived from (`--key-bg`, `--bezel-bg`, `--key-shadow`, no filter), which
+   * the class strings in `app-rack.tsx` and `tools-menu.tsx` spell out.
+   *
+   * **Why a phone-only set at all**, since the same objects at two sizes would
+   * normally take the same chrome: a bevel is a fixed number of pixels of
+   * highlight and shadow, so what changes with the object is how much of it
+   * there is to read. The wide rack is a 62px housing carrying a 44px mount and
+   * a 37px key, and a flat vertical face has room to state itself there. The
+   * phone rack is ~52px carrying a 34px mount, two 32px caps and a readout,
+   * and at `--key-bg`'s two stops it reads as a printed lozenge. Each of these
+   * is the same surface with the light raised and the shadow deepened, and the
+   * two round objects get a *radial* face rather than a vertical one, because
+   * a vertical gradient on a small circle reads flat — there is no corner for
+   * the light to be coming from.
+   *
+   * **The light halves are derived rather than dimmed**, which is this file's
+   * standing rule and is the whole reason these are tokens instead of the
+   * literals the handoff spelled. In dark the relief is bought by *raising the
+   * top stop*: more light landing on the face. Light mode's faces already start
+   * at white, so there is nothing to raise — the same move is made by dropping
+   * the *bottom* stop instead, which gives the face the same amount of travel
+   * from a light ground rather than from a dark one. The two embosses swap
+   * sides with it: a glyph on a dark face throws a dark shadow below itself and
+   * one on a light face throws a light one, exactly as `--cap-glyph-emboss`
+   * does one object over. The casts are slate rather than black, on
+   * `--rack-cast`'s reason — pure black over a near-white page reads as dirt.
+   */
+  --rack-pill-bg: linear-gradient(180deg, #33434a 0%, #25333a 42%, #131e22 100%);
+  /*
+   * Four chamfered edges, a riser and both casts on one stack. The four insets
+   * are what a machined part looks like from directly above: lit along the top,
+   * shaded along the bottom, and one pixel of each down the two sides. The
+   * three outer shadows are `--key-shadow`'s riser and `--rack-cast`'s two
+   * casts, which the pill used to take as three separate tokens.
+   */
+  --rack-pill-shadow: inset 0 1.5px 0 rgba(255, 255, 255, 0.34),
+    inset 0 -2px 3px rgba(0, 0, 0, 0.75), inset 1px 0 0 rgba(255, 255, 255, 0.08),
+    inset -1px 0 0 rgba(0, 0, 0, 0.45), 0 2px 0 rgba(0, 0, 0, 0.55), 0 10px 18px -8px #000,
+    0 26px 44px -22px #000, 0 0 26px -12px var(--accent-glow);
+
+  --rack-bezel-bg: radial-gradient(120% 140% at 32% 10%, #47585e 0%, #2b3a3f 46%, #0c1517 100%);
+  --rack-bezel-shadow: inset 0 1.5px 0 rgba(255, 255, 255, 0.42),
+    inset 0 -2px 4px rgba(0, 0, 0, 0.9), 0 2px 3px rgba(0, 0, 0, 0.6), 0 6px 14px -6px #000,
+    0 0 20px -4px var(--accent-glow);
+  /* The flask's own emboss. The accent halo is the mark's, not the mount's —
+     which is why this is a second token rather than `--rack-key-emboss`: the
+     tool key's glyph is foreground ink and has no light of its own to throw. */
+  --rack-mark-emboss: drop-shadow(0 1px 0 rgba(0, 0, 0, 0.6))
+    drop-shadow(0 0 6px var(--accent-glow));
+
+  --rack-key-bg: radial-gradient(120% 150% at 32% 10%, #46565c 0%, #2a383e 48%, #111b1e 100%);
+  --rack-key-shadow: inset 0 1.5px 0 rgba(255, 255, 255, 0.32), 0 2px 0 rgba(0, 0, 0, 0.7),
+    0 6px 12px -6px #000;
+  --rack-key-emboss: drop-shadow(0 1px 0 rgba(0, 0, 0, 0.65));
+
+  /*
+   * The channel the two Browse caps travel in, below `md`.
+   *
+   * **In dark it is `CONSOLE_CHANNEL` to the digit**, and it is a token here
+   * rather than that constant for one reason: the constant's floor is a black
+   * alpha, chosen on the rule that a recess must be darker than its surround in
+   * *both* themes — which it is, and which held for as long as its only surface
+   * was a milled bay in the columns dialog. On a near-white rack pill 52% black
+   * is not a channel milled into a part, it is a hole punched through one: the
+   * darkest object on a light page, by a wide margin, with two lit caps
+   * floating in it. Every other recess in the light scheme is a *shadow on
+   * stock* — see `--track-shadow` and `--well-shadow` — so this one is too, and
+   * its lit bottom lip is what closes it.
+   *
+   * `CONSOLE_CHANNEL` itself is deliberately left alone: its other caller sits
+   * on dark stock in both schemes, so changing it would move a dialog this has
+   * nothing to do with.
+   */
+  --rack-channel-bg: rgba(0, 0, 0, 0.52);
+  --rack-channel-shadow: inset 0 4px 10px rgba(0, 0, 0, 0.95),
+    inset 0 1px 0 rgba(0, 0, 0, 0.9), inset 0 -1px 0 rgba(255, 255, 255, 0.075);
   /*
    * The card as an *instrument housing*, which is what the console cards
    * became: a bezel with lit windows set into it, rather than a pane of glass
@@ -851,6 +943,39 @@
   --bezel-bg: linear-gradient(180deg, #ffffff, #dbe4e7);
   --bezel-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.9), inset 0 -2px 4px rgba(15, 23, 42, 0.14),
     0 6px 14px -6px rgba(15, 23, 42, 0.3), 0 0 20px -4px rgba(13, 148, 136, 0.35);
+
+  /* The phone rack's relief, derived rather than dimmed — see the dark set's
+     note. Every face starts at white here, so the extra travel comes off the
+     *bottom* stop instead of the top; the two glyph embosses light from below
+     rather than above; and every cast is slate. The two radial faces keep their
+     highlight at 32%/10%, which is where the light is coming from in both
+     schemes — what inverts is the ink, not the lamp. */
+  --rack-pill-bg: linear-gradient(180deg, #ffffff 0%, #f2f6f8 42%, #d5dfe3 100%);
+  --rack-pill-shadow: inset 0 1.5px 0 rgba(255, 255, 255, 0.95),
+    inset 0 -2px 3px rgba(15, 23, 42, 0.12), inset 1px 0 0 rgba(255, 255, 255, 0.7),
+    inset -1px 0 0 rgba(15, 23, 42, 0.08), 0 2px 0 rgba(15, 23, 42, 0.12),
+    0 10px 18px -8px rgba(15, 23, 42, 0.28), 0 26px 44px -22px rgba(15, 23, 42, 0.35),
+    0 0 26px -12px var(--accent-glow);
+
+  --rack-bezel-bg: radial-gradient(120% 140% at 32% 10%, #ffffff 0%, #eef4f6 46%, #cbd8dd 100%);
+  --rack-bezel-shadow: inset 0 1.5px 0 rgba(255, 255, 255, 0.95),
+    inset 0 -2px 4px rgba(15, 23, 42, 0.14), 0 2px 3px rgba(15, 23, 42, 0.14),
+    0 6px 14px -6px rgba(15, 23, 42, 0.3), 0 0 20px -4px var(--accent-glow);
+  --rack-mark-emboss: drop-shadow(0 1px 0 rgba(255, 255, 255, 0.9))
+    drop-shadow(0 0 6px var(--accent-glow));
+
+  --rack-key-bg: radial-gradient(120% 150% at 32% 10%, #ffffff 0%, #f0f5f7 48%, #dae3e6 100%);
+  --rack-key-shadow: inset 0 1.5px 0 rgba(255, 255, 255, 0.95),
+    0 2px 0 rgba(15, 23, 42, 0.14), 0 6px 12px -6px rgba(15, 23, 42, 0.3);
+  --rack-key-emboss: drop-shadow(0 1px 0 rgba(255, 255, 255, 0.9));
+
+  /* The Browse channel: a slate recess read off its shadow rather than off a
+     black fill — see the dark set's note for why this one token parts company
+     with `CONSOLE_CHANNEL`. The tint is what keeps it darker than the pill it
+     is cut into; the depth is the inset, and the white lower lip closes it. */
+  --rack-channel-bg: rgba(15, 23, 42, 0.1);
+  --rack-channel-shadow: inset 0 4px 10px rgba(15, 23, 42, 0.26),
+    inset 0 1px 0 rgba(15, 23, 42, 0.16), inset 0 -1px 0 rgba(255, 255, 255, 0.9);
   /*
    * The housing, darkened rather than mirrored — the one place the light
    * scheme is not the dark one inverted.
