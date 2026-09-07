@@ -113,7 +113,13 @@ export function ToolsMenu({
       // plus the `relative` the tray positions against. It sits at the right
       // end of the rack: last in the row below `md`, and `md:ml-auto` above it,
       // where it takes the slack the theme pad used to.
-      className="relative flex shrink-0 items-center rounded-full bg-[image:var(--key-bg)] p-1 shadow-[var(--track-shadow)] md:order-6 md:ml-auto"
+      //
+      // 3px of channel below `md` against 4 above, which is the same 2px the
+      // brand's bezel gave up one end of the row and for the same reason: the
+      // phone rack is carrying two Browse caps it did not carry before. The
+      // key inside keeps its 32px, so what narrows is the surround rather than
+      // the target.
+      className="relative flex shrink-0 items-center rounded-full bg-[image:var(--key-bg)] p-[0.1875rem] shadow-[var(--track-shadow)] md:order-6 md:ml-auto md:p-1"
     >
       <button
         ref={trigger}
@@ -125,7 +131,17 @@ export function ToolsMenu({
         // Icon-only at both widths, and machined rather than filled: the
         // Browse keys beside it are the rack's one accent cap, and two filled
         // objects in one pill would put the emphasis nowhere.
-        className={`inline-flex shrink-0 items-center rounded-full bg-[image:var(--key-bg)] p-2 shadow-[var(--key-shadow)] transition-[transform,box-shadow,color] duration-150 active:translate-y-0.5 active:shadow-[var(--key-shadow-pressed)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-active/60 md:p-2.5 ${
+        //
+        // **Its own face below `md`**, on the phone pill's argument at the
+        // smallest grain this rack has: `--key-bg` is a vertical gradient, and
+        // a vertical gradient on a 32px circle reads as a flat disc — it needs
+        // a corner for the light to come from before it reads as domed, which
+        // is what `--rack-key-bg`'s radial gives it. The glyph takes an emboss
+        // of its own for `--cap-glyph-emboss`'s reason: a `drop-shadow`, so the
+        // highlight follows the four rounded squares rather than the box round
+        // them. Both revert at `md`, where the key is 2.5px larger in a housing
+        // 10px taller and the flat face has room to read.
+        className={`inline-flex shrink-0 items-center rounded-full bg-[image:var(--rack-key-bg)] p-2 shadow-[var(--rack-key-shadow)] transition-[transform,box-shadow,color] duration-150 active:translate-y-0.5 active:shadow-[var(--key-shadow-pressed)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-active/60 [&_svg]:[filter:var(--rack-key-emboss)] md:bg-[image:var(--key-bg)] md:p-2.5 md:shadow-[var(--key-shadow)] md:[&_svg]:[filter:none] ${
           open
             ? "text-readout [text-shadow:var(--readout-text-glow)]"
             : "text-foreground/80 hover:text-readout"

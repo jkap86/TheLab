@@ -51,7 +51,7 @@ export type RackControls = {
    * **Hand over a stable array**, per the note on
    * {@link usePublishRackControls}: a literal rebuilt each render republishes
    * each render. A module-level constant is what both pages use, since the
-   * legends are fixed.
+   * legends and the glyphs are fixed.
    */
   keys: readonly RackDrawerKey[];
   /** Which of them is open, or null. */
@@ -59,11 +59,33 @@ export type RackControls = {
   onOpenDrawer: (kind: SubjectKind) => void;
 };
 
-/** One key: which drawer it opens, and what it says. */
+/** One key: which drawer it opens, what it says, and what it looks like. */
 export type RackDrawerKey = {
   kind: SubjectKind;
   /** The legend, in the page's own words — "Players", "Opponents". */
   label: string;
+  /**
+   * The glyph the cap carries below `md`, where there is no room for the
+   * legend and the key is 32px of accent with a picture cut into it.
+   *
+   * **A page owns its glyph for the same reason it owns its legend.** The rack
+   * is mounted above `{children}` and cannot `switch` on the route, so a
+   * drawing held in `features/tools` would be every page's vocabulary in one
+   * folder — which is the argument that made `keys` data in the first place,
+   * one grain further in. The four are hand-drawn geometry rather than an icon
+   * set, so they live beside the components that publish them.
+   *
+   * The legend does not go with it: at `md` it is still the key's whole face,
+   * and below `md` it is the `aria-label`, which is the only name a picture
+   * has.
+   *
+   * **An element, not a component**, and that is a requirement rather than a
+   * taste: the published array is module-level per {@link
+   * usePublishRackControls}, so the elements in it are built once at module
+   * scope and the effect's identity check holds. A `() => <Mark />` rebuilt in
+   * the render would republish on every render.
+   */
+  icon: ReactNode;
 };
 
 /**

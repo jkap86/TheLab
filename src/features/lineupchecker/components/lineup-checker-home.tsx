@@ -35,6 +35,7 @@ import {
 } from "../helpers/lineup-check-metrics";
 import type { WeekLineupEntry } from "../helpers/starter-shares";
 import { weekSummary } from "../helpers/week-summary";
+import { OpponentsMark, StartersMark } from "./browse-marks";
 import { LineupCheckCard, LineupMarkDefs } from "./lineup-check-card";
 import { OpponentSharesDrawer } from "./opponent-shares-drawer";
 import { StarterSharesDrawer } from "./starter-shares-drawer";
@@ -42,16 +43,22 @@ import { WeekSummary } from "./week-summary";
 import { WeekStepper } from "./week-stepper";
 
 /**
- * The two Browse keys this page puts in the rack, and their legends.
+ * The two Browse keys this page puts in the rack: their legends, and the
+ * glyphs the rack draws them as below `md`.
  *
  * **Module scope, not a literal in the render**, which is the requirement
  * `usePublishRackControls` states rather than a habit: the publish effect
  * depends on this array, so one rebuilt each render would publish each render,
  * set an ancestor's state and re-render — a loop rather than a stale value.
+ * The two `icon` elements are built once here for the same reason.
+ *
+ * The glyphs are this folder's — see `browse-marks.tsx` — because the rack
+ * cannot `switch` on the route, which is exactly why the legends became data
+ * when this page became the second publisher of a pair.
  */
 const BROWSE_KEYS: readonly RackDrawerKey[] = [
-  { kind: "starter", label: "Starters" },
-  { kind: "opponent", label: "Opponents" },
+  { kind: "starter", label: "Starters", icon: <StartersMark /> },
+  { kind: "opponent", label: "Opponents", icon: <OpponentsMark /> },
 ];
 
 /** Stable empty answer, so a render before the check lands hands the memos below

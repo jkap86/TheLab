@@ -39,19 +39,12 @@ import {
   useManagerPlayers,
 } from "../hooks/use-manager-shares";
 import { modeRolls, leaguematePlayerRolls } from "../helpers/leaguemate-rosters";
+import { LeaguematesMark, PlayersMark } from "./browse-marks";
 import { LeagueCard } from "./league-card";
 import { LeaguemateSharesDrawer } from "./leaguemate-shares-drawer";
 import { PlayerSharesDrawer } from "./player-shares-drawer";
 import { SeasonSummary } from "./season-summary";
 
-/**
- * The two Browse keys this page puts in the rack, and their legends.
- *
- * **Module scope, not a literal in the render**, and that is the requirement
- * `usePublishRackControls` states rather than a habit: the publish effect
- * depends on this array, so one rebuilt each render would publish each render,
- * set an ancestor's state and re-render — a loop rather than a stale value.
- */
 /** How a moded player pick reads in the token tray — see `subjectName`. */
 const MODE_WORDS: Record<SubjectMode, string> = {
   owned: "Owned",
@@ -59,9 +52,23 @@ const MODE_WORDS: Record<SubjectMode, string> = {
   available: "Available",
 };
 
+/**
+ * The two Browse keys this page puts in the rack: their legends, and the
+ * glyphs the rack draws them as below `md`.
+ *
+ * **Module scope, not a literal in the render**, and that is the requirement
+ * `usePublishRackControls` states rather than a habit: the publish effect
+ * depends on this array, so one rebuilt each render would publish each render,
+ * set an ancestor's state and re-render — a loop rather than a stale value.
+ * The two `icon` elements are built once here for the same reason.
+ *
+ * The glyphs are this folder's — see `browse-marks.tsx` — because the rack
+ * cannot `switch` on the route, which is the argument that made the legends
+ * data one grain earlier.
+ */
 const BROWSE_KEYS: readonly RackDrawerKey[] = [
-  { kind: "player", label: "Players" },
-  { kind: "leaguemate", label: "Leaguemates" },
+  { kind: "player", label: "Players", icon: <PlayersMark /> },
+  { kind: "leaguemate", label: "Leaguemates", icon: <LeaguematesMark /> },
 ];
 
 /**
