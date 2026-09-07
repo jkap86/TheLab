@@ -1,6 +1,6 @@
 "use client";
 
-import { type ReactNode, useMemo, useState } from "react";
+import { type ReactNode, useMemo, useRef, useState } from "react";
 
 import {
   CONSOLE_KEY,
@@ -9,6 +9,7 @@ import {
   activeFilterCount,
   filterSummary,
   storeTradeValueBasis,
+  useActiveCard,
   useKtcBoard,
   useStoredAccount,
   useTradeDataStamp,
@@ -149,6 +150,26 @@ export function TradesHome({
   const selection = tradeFilterSummary(filters, names);
   const searchCount = activeTradeFilterCount(filters);
 
+  /**
+   * **An open card is the screen, and it is a link** — `?trade=<id>` here,
+   * where the two league tools name a league. The park, the lock and the param
+   * are `useActiveCard`'s; this page owns which rows may be opened and standing
+   * its own header down while one is.
+   *
+   * `ids` is every trade the walk has loaded, which on this board is the only
+   * list there is: a narrowing restarts the keyset walk from page one, so a
+   * card whose trade is no longer among them closes rather than parking a shell
+   * around a row that is gone. It costs a `map` per appended page, which is the
+   * one place this board's own memoisation argument does not reach — and it is
+   * an array of ids the page already holds rather than anything rebuilt.
+   */
+  const listRef = useRef<HTMLUListElement | null>(null);
+  const ids = useMemo(
+    () => (data ? data.entries.map((e) => e.trade.transaction_id) : []),
+    [data],
+  );
+  const card = useActiveCard({ param: "trade", ids, listRef });
+
   return (
     // The page sits on the ground the route renders rather than on a panel of
     // its own — see `ConsoleGround`, and the lineup checker, which took the
@@ -158,112 +179,119 @@ export function TradesHome({
     // both pages already set to `console`. With the panel gone the two agree by
     // construction rather than by two spellings of a width.
     <div className="relative">
-      <header className="relative flex flex-wrap items-center gap-4">
-        <div className="min-w-0">
-          {heading}
-          <p className="mt-1 font-mono text-[length:var(--fs-11)] uppercase tracking-[0.16em] text-foreground/60">
-            {season}
-          </p>
+      {/* **Everything above the board stands down while a card is parked.**
+          One wrapper rather than a class on each of the six, and
+          `display: contents` off it — so the page's own layout is byte for byte
+          what it was when nothing is open, and none of these is unmounted: the
+          two dialogs keep their drafts and the search panel its query. */}
+      <div className={card.parked ? "hidden" : "contents"}>
+        <header className="relative flex flex-wrap items-center gap-4">
+          <div className="min-w-0">
+            {heading}
+            <p className="mt-1 font-mono text-[length:var(--fs-11)] uppercase tracking-[0.16em] text-foreground/60">
+              {season}
+            </p>
+          </div>
+          <div className="ml-auto">
+            <CircleStepper
+              circle={filters.circle}
+              onChange={(circle) => setFilters({ ...filters, circle })}
+              hasAccount={account !== null}
+            />
+          </div>
+        </header>
+
+        <div className="relative mt-3">
+          <CircleNote circle={filters.circle} hasAccount={account !== null} />
         </div>
-        <div className="ml-auto">
-          <CircleStepper
-            circle={filters.circle}
-            onChange={(circle) => setFilters({ ...filters, circle })}
-            hasAccount={account !== null}
+
+        {/* The controls rail. The rule fills what the keys leave, so they read as
+            mounted on the console's trim rather than floating above the list.
+
+            **The rail is the value panel's positioning context, and it is raised
+            above the cards.** Anchored to its own key the panel would be a 23rem
+            box hanging off a control two thirds of the way along the row, and at
+            a phone's width it would leave the viewport; anchored here its right
+            edge is the shell's own gutter. The `z-30` is what lets it overlap the
+            first card rather than being painted under it. */}
+        <div className="relative z-30 my-7 flex flex-wrap items-center gap-3">
+          <div
+            aria-hidden
+            className="h-px flex-1 bg-gradient-to-r from-active/35 via-foreground/5 to-transparent"
           />
+          <p
+            role="status"
+            className="font-mono text-[length:var(--fs-11)] uppercase tracking-[0.16em] tabular-nums text-foreground/70"
+          >
+            <TradeCount data={data} loading={loading} hasMore={hasMore} />
+          </p>
+          <SeekKey seek={seek} onChange={setSeek} today={today} />
+          {/* The dialog takes the **unfiltered** list: every count in it is over
+              the whole population, which is what makes them counts rather than a
+              description of what is already selected. */}
+          <LeagueFiltersDialog
+            filters={leagueFilters}
+            onChange={setLeagueFilters}
+            leagues={leagues}
+          />
+          {/* What every figure on the board is, and — inside it — which
+              KeepTradeCut market answers when that is the basis. The board keys
+              used to stand out here on the rail, where they read as a control
+              over every number on the page rather than over one basis of three;
+              moving them in is the same call that put them at the foot of the
+              manager page's Columns dialog. */}
+          <ValuePanel
+            basis={basis}
+            onBasis={storeTradeValueBasis}
+            board={ktcBoard}
+            sources={data?.values ?? null}
+          />
+          <button
+            type="button"
+            onClick={() => setSearchOpen((v) => !v)}
+            aria-expanded={searchOpen}
+            className={CONSOLE_KEY}
+          >
+            Search
+            {searchCount > 0 && (
+              <span className="ml-2 rounded-full bg-active/15 px-1.5 py-0.5 text-active">
+                {searchCount}
+              </span>
+            )}
+          </button>
         </div>
-      </header>
 
-      <div className="relative mt-3">
-        <CircleNote circle={filters.circle} hasAccount={account !== null} />
+        {/* What the two hidden filter sets have narrowed to. Both dialogs hide
+            their own state, so this line is the only thing on the page saying
+            so — and it says the *relation* ("X gave Y"), which is the one part of
+            a bay selection that has nowhere else to surface. */}
+        {(narrowingLeagues || selection) && (
+          <p className="relative -mt-3 mb-6 truncate font-mono text-[length:var(--fs-11)] uppercase tracking-[0.16em] text-active">
+            {[narrowingLeagues ? filterSummary(leagueFilters) : null, selection]
+              .filter(Boolean)
+              .join(" · ")}
+          </p>
+        )}
+
+        {searchOpen && (
+          <TradeSearch
+            filters={filters}
+            onChange={setFilters}
+            names={names}
+            request={facetsRequest}
+            requestKey={facetsKey}
+          />
+        )}
+
+        {leaguesError && (
+          // The leagues request failing costs the cards their league *names* and
+          // the dialog its options; the trades are a different request and are
+          // unaffected, so this is a note rather than the page.
+          <p className="relative mb-5 font-mono text-[length:var(--fs-11)] uppercase tracking-[0.16em] text-foreground/60">
+            League names unavailable — {leaguesError}
+          </p>
+        )}
       </div>
-
-      {/* The controls rail. The rule fills what the keys leave, so they read as
-          mounted on the console's trim rather than floating above the list.
-
-          **The rail is the value panel's positioning context, and it is raised
-          above the cards.** Anchored to its own key the panel would be a 23rem
-          box hanging off a control two thirds of the way along the row, and at
-          a phone's width it would leave the viewport; anchored here its right
-          edge is the shell's own gutter. The `z-30` is what lets it overlap the
-          first card rather than being painted under it. */}
-      <div className="relative z-30 my-7 flex flex-wrap items-center gap-3">
-        <div
-          aria-hidden
-          className="h-px flex-1 bg-gradient-to-r from-active/35 via-foreground/5 to-transparent"
-        />
-        <p
-          role="status"
-          className="font-mono text-[length:var(--fs-11)] uppercase tracking-[0.16em] tabular-nums text-foreground/70"
-        >
-          <TradeCount data={data} loading={loading} hasMore={hasMore} />
-        </p>
-        <SeekKey seek={seek} onChange={setSeek} today={today} />
-        {/* The dialog takes the **unfiltered** list: every count in it is over
-            the whole population, which is what makes them counts rather than a
-            description of what is already selected. */}
-        <LeagueFiltersDialog
-          filters={leagueFilters}
-          onChange={setLeagueFilters}
-          leagues={leagues}
-        />
-        {/* What every figure on the board is, and — inside it — which
-            KeepTradeCut market answers when that is the basis. The board keys
-            used to stand out here on the rail, where they read as a control
-            over every number on the page rather than over one basis of three;
-            moving them in is the same call that put them at the foot of the
-            manager page's Columns dialog. */}
-        <ValuePanel
-          basis={basis}
-          onBasis={storeTradeValueBasis}
-          board={ktcBoard}
-          sources={data?.values ?? null}
-        />
-        <button
-          type="button"
-          onClick={() => setSearchOpen((v) => !v)}
-          aria-expanded={searchOpen}
-          className={CONSOLE_KEY}
-        >
-          Search
-          {searchCount > 0 && (
-            <span className="ml-2 rounded-full bg-active/15 px-1.5 py-0.5 text-active">
-              {searchCount}
-            </span>
-          )}
-        </button>
-      </div>
-
-      {/* What the two hidden filter sets have narrowed to. Both dialogs hide
-          their own state, so this line is the only thing on the page saying
-          so — and it says the *relation* ("X gave Y"), which is the one part of
-          a bay selection that has nowhere else to surface. */}
-      {(narrowingLeagues || selection) && (
-        <p className="relative -mt-3 mb-6 truncate font-mono text-[length:var(--fs-11)] uppercase tracking-[0.16em] text-active">
-          {[narrowingLeagues ? filterSummary(leagueFilters) : null, selection]
-            .filter(Boolean)
-            .join(" · ")}
-        </p>
-      )}
-
-      {searchOpen && (
-        <TradeSearch
-          filters={filters}
-          onChange={setFilters}
-          names={names}
-          request={facetsRequest}
-          requestKey={facetsKey}
-        />
-      )}
-
-      {leaguesError && (
-        // The leagues request failing costs the cards their league *names* and
-        // the dialog its options; the trades are a different request and are
-        // unaffected, so this is a note rather than the page.
-        <p className="relative mb-5 font-mono text-[length:var(--fs-11)] uppercase tracking-[0.16em] text-foreground/60">
-          League names unavailable — {leaguesError}
-        </p>
-      )}
 
       {/* **The first page's failure only.** A later page failing leaves the
           board exactly as the reader left it and says so under the last card —
@@ -309,6 +337,8 @@ export function TradesHome({
       ) : (
         <TradesList
           data={data}
+          card={card}
+          listRef={listRef}
           leaguesById={byId}
           basis={basis}
           board={ktcBoard}

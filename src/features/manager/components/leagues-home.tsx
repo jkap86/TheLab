@@ -1,6 +1,6 @@
 "use client";
 
-import { type ReactNode, useCallback, useMemo, useState } from "react";
+import { type ReactNode, useCallback, useMemo, useRef, useState } from "react";
 
 import {
   activeFilterCount,
@@ -26,6 +26,7 @@ import {
   type RackDrawerKey,
   type SubjectMode,
   type SubjectRolls,
+  useActiveCard,
   usePublishRackControls,
   useKtcBoard,
   useLineupColumns,
@@ -334,9 +335,30 @@ export function LeaguesHome({
   // next reader of either file.
   usePublishRackControls({ keys: BROWSE_KEYS, drawer, onOpenDrawer: openDrawer });
 
+  /**
+   * **An open card is the screen, and it is a link** — `?league=<id>`. The
+   * park, the lock and the param are all `useActiveCard`'s; what this page owns
+   * is which rows it is allowed to open (`ids`) and standing its own header
+   * down while one is.
+   *
+   * `ids` is the **narrowed** list, deliberately, and it is the one place the
+   * two populations this file keeps apart come together: a filter or a subject
+   * that takes the open league off the page closes the card rather than parking
+   * a shell around a league nobody can see. It is also what re-validates a
+   * deeplink as the stream fills in — an id that matches nothing on mount can
+   * match a minute later, which on a route fed by NDJSON is the ordinary case
+   * rather than an edge.
+   */
+  const listRef = useRef<HTMLUListElement | null>(null);
+  const ids = useMemo(() => visible.map((l) => l.league_id), [visible]);
+  const card = useActiveCard({ param: "league", ids, listRef });
+
   return (
     <div className="relative">
-      <header className="relative">
+      {/* The page's own header stands down while a card is parked: it is
+          `display: none` rather than unmounted, so the two dialogs it holds
+          keep their draft state and neither is rebuilt when the card closes. */}
+      <header className={`relative ${card.parked ? "hidden" : ""}`}>
         <ManagerBillet
           name={name}
           avatarUrl={user?.avatar_url ?? null}
@@ -467,18 +489,20 @@ export function LeaguesHome({
           controls; it is only a boundary now. */}
       <div
         aria-hidden
-        className="relative my-9 h-px bg-gradient-to-r from-active/35 via-foreground/5 to-transparent"
+        className={`relative my-9 h-px bg-gradient-to-r from-active/35 via-foreground/5 to-transparent ${card.parked ? "hidden" : ""}`}
       />
 
       {/* The drawers hide their own state once closed, so the narrowing they
           applied has to be named somewhere the reader can see and undo it. */}
-      <SubjectTokens
-        subjects={subjects}
-        names={subjectName}
-        onRemove={(s) => setSubjects((prev) => removeSubject(prev, s))}
-        onMatch={(match) => setSubjects((prev) => ({ ...prev, match }))}
-        onClear={() => setSubjects(NO_SUBJECTS)}
-      />
+      <div className={card.parked ? "hidden" : "contents"}>
+        <SubjectTokens
+          subjects={subjects}
+          names={subjectName}
+          onRemove={(s) => setSubjects((prev) => removeSubject(prev, s))}
+          onMatch={(match) => setSubjects((prev) => ({ ...prev, match }))}
+          onClear={() => setSubjects(NO_SUBJECTS)}
+        />
+      </div>
 
       {error ? (
         <p
@@ -494,7 +518,7 @@ export function LeaguesHome({
         <>
           {refreshing && (
             <p
-              className="relative mb-6 inline-flex items-center gap-3 rounded-full border border-foreground/8 bg-[image:var(--key-bg)] py-2 pl-2.5 pr-5 shadow-[var(--plate-shadow)]"
+              className={`relative mb-6 inline-flex items-center gap-3 rounded-full border border-foreground/8 bg-[image:var(--key-bg)] py-2 pl-2.5 pr-5 shadow-[var(--plate-shadow)] ${card.parked ? "hidden" : ""}`}
               aria-live="polite"
             >
               <span className="relative inline-flex items-center gap-2.5 overflow-hidden rounded-full border border-black/85 bg-[image:var(--readout-bg)] px-3.5 py-1.5 shadow-[var(--readout-shadow)]">
@@ -524,7 +548,7 @@ export function LeaguesHome({
           {refreshError && (
             <p
               role="alert"
-              className="relative mb-6 inline-flex items-center gap-3 rounded-full border border-error/28 bg-[image:var(--alert-bg)] px-5 py-2.5 font-mono text-[length:var(--fs-13)] text-error shadow-[inset_0_1px_0_rgba(255,255,255,0.12),0_3px_0_rgba(0,0,0,0.7)]"
+              className={`relative mb-6 inline-flex items-center gap-3 rounded-full border border-error/28 bg-[image:var(--alert-bg)] px-5 py-2.5 font-mono text-[length:var(--fs-13)] text-error shadow-[inset_0_1px_0_rgba(255,255,255,0.12),0_3px_0_rgba(0,0,0,0.7)] ${card.parked ? "hidden" : ""}`}
             >
               <span aria-hidden className="size-[0.4375rem] rounded-full bg-error shadow-[0_0_10px_var(--error)]" />
               {refreshError}
@@ -585,7 +609,18 @@ export function LeaguesHome({
             // arbitrary and looks like the park having missed. Excluding this
             // subtree is what leaves the park the only thing moving the page.
             // See `ExpandedPanel`.
-            <ul className="relative m-0 mt-2 grid list-none grid-cols-1 gap-[1.125rem] p-0 [overflow-anchor:none]">
+            // **The list is the parked shell.** `shellProps` is a measured
+            // height, the plate's overhang as padding and a scroller that only
+            // ever engages where the panel hit its floor; off it is `{}` and
+            // this is the grid it always was. Which cards stand down is CSS
+            // reading the open disclosure — see `globals.css` — rather than a
+            // prop, so a hundred cards are not re-rendered to hide
+            // ninety-nine of them.
+            <ul
+              ref={listRef}
+              {...card.shellProps}
+              className="relative m-0 mt-2 grid list-none grid-cols-1 gap-[1.125rem] p-0 [overflow-anchor:none]"
+            >
               {visible.map((league) => (
                 <LeagueCard
                   key={league.league_id}
@@ -609,6 +644,9 @@ export function LeaguesHome({
                   // is the one thing the timeline's three narrowing parameters
                   // exist to prevent.
                   board="auto"
+                  open={card.isOpen(league.league_id)}
+                  lit={card.isLit(league.league_id)}
+                  onToggle={card.toggle}
                 />
               ))}
             </ul>

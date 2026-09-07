@@ -410,7 +410,7 @@ export function CardRule() {
   return (
     <span
       aria-hidden
-      className="relative block h-px w-9 bg-gradient-to-r from-active/50 to-transparent transition-[width] duration-[450ms] group-hover/card:w-[5.75rem] group-hover/card:from-active/90 group-open/card:w-[5.75rem] group-open/card:from-active/90 pointer-fine:[transform:translateZ(36px)]"
+      className="relative block h-px w-9 bg-gradient-to-r from-active/50 to-transparent transition-[width] duration-[450ms] group-hover/card:w-[5.75rem] group-hover/card:from-active/90 group-data-[lit]/card:w-[5.75rem] group-data-[lit]/card:from-active/90 pointer-fine:[transform:translateZ(36px)]"
     />
   );
 }

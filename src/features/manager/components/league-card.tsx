@@ -1,3 +1,5 @@
+import { memo, type MouseEvent } from "react";
+
 import type {
   KtcBoardChoice,
   LeagueLineupEntry,
@@ -122,31 +124,46 @@ import {
  * 2. The card must be `flex-1` inside a `flex` `<li>`, never `h-full`. A
  *    percentage height cannot resolve against an auto-sized grid row.
  *
- * **An open card's housing pins under the rack while the browser scrolls past
- * it.** A twelve-team table is taller than the viewport, so a reader three
- * scrolls into one had nothing on screen saying which league they were reading
- * — the name is on a plate at the card's top edge and the top edge was gone.
- * Three variants and one token do it: `group-open/card:sticky` at
- * `--card-freeze-top`, which is the rack's own height, the plate's overhang
- * and a little breath — **the plate is what has to clear the rack**, not the
- * housing, since it is the plate the name is on. See that token, which moved
- * back down with the ledge: a plate hangs 13px above the card's edge where the
- * ledge hung 20
+ * **An open card is the screen, and nothing here is sticky any more.** A
+ * twelve-team table is taller than the viewport, so a reader three scrolls into
+ * one had nothing on screen saying which league they were reading — the name is
+ * on a plate at the card's top edge and the top edge was gone. That was patched
+ * by freezing this `<summary>` under the rack while the rest of the list stayed
+ * in flow behind it, which fixed the name and left the reader scrolling a
+ * hundred-league document to read one league.
  *
- * It has to be the **`<summary>`**, and the two obvious alternatives both fail
- * silently. The `<li>` is the whole card, expanded half included, and is taller
- * than the viewport — sticky on a box that never fits has nothing to stick
- * within. The `<details>` is the same box. The summary's sticky containing
- * block is the `<details>`, which is exactly the range the housing should stay
- * over: it parks when the card's top reaches the offset and releases when the
- * card's own bottom edge catches up with it, so it never outlives its league.
+ * The list stands down around an open card instead — see `useActiveCard`, which
+ * owns the park, the lock and the `?league` param. There is nothing to stick
+ * within once the list is one card tall, so the three sticky variants and the
+ * token they read are gone from here.
  *
- * The `z-20` is against the card's own expanded half rather than against the
- * rack, which is `z-50` and stays above it; the `<li>`'s existing
- * `has-[details[open]]:z-10` still orders the open card above its neighbours.
- * And the freeze depends on no ancestor gaining `overflow: hidden` — the
- * decorative clip is already scoped to its own absolutely-positioned span, for
- * the `preserve-3d` reason above, and that is now load-bearing twice.
+ * **The disclosure is driven rather than native**, and that is the one thing
+ * this card gave up to it: `open` says whether the panel is in the flow and
+ * `onToggle` is the press, because the *page* has to change with the toggle and
+ * a `<details>` that toggled itself would be open for a frame before anything
+ * else knew. The `<li>`'s existing `has-[details[open]]:z-10` still orders the
+ * open card above its neighbours, and the parked shell reads the same
+ * `[open]` to decide which card survives — see `globals.css`.
+ *
+ * **`lit` is a second question from `open`, and the collapse is why.** The
+ * disclosure stays open for as long as the panel takes to close, so chrome hung
+ * off `[open]` would hold its border, halo and edge light through the whole
+ * collapse and let go afterwards. `data-lit` is what every one of those
+ * variants reads instead, so the card lets go *as* the panel closes — its own
+ * 450ms transitions running out under the 260ms collapse.
+ *
+ * **`memo`'d, and that is what the driven disclosure costs.** Opening a card
+ * used to be a native `<details>` toggle: zero renders, whatever the list's
+ * length. It is a state change on the page now, so without this a press
+ * re-renders every league on the account to move two of them — measured at
+ * 264ms for a page of six fixture cards in a dev build, and this page is one
+ * card per league on a 113-league account. Every prop is stable by
+ * construction: `league` and `entry` are references out of the payload,
+ * `columns` is memoised on the stored string, the three narrowing props are
+ * the page's own values, `onToggle` is a `useCallback` that takes the id, and
+ * `open`/`lit` are the two booleans that are *meant* to change — for the card
+ * that opened and the one that closed, and no others. Which cards stand down
+ * is CSS reading the open disclosure rather than a prop, for the same reason.
  *
  * The card stays hook-free, as before: the one interaction it owns is the
  * disclosure, and the state a card does need lives below it — which team and
@@ -194,13 +211,16 @@ const GRID_COLS: Record<number, string> = {
   4: "grid-cols-4",
 };
 
-export function LeagueCard({
+export const LeagueCard = memo(function LeagueCard({
   league,
   columns,
   entry,
   season,
   username,
   board,
+  open,
+  lit,
+  onToggle,
 }: {
   league: ManagerLeague;
   /** The chosen rank columns, in canonical order — see `useLineupColumns`. */
@@ -215,6 +235,12 @@ export function LeagueCard({
   season: string | null;
   username: string;
   board: KtcBoardChoice;
+  /** Whether the disclosure is open — the page's, not the element's own. */
+  open: boolean;
+  /** Whether the chrome is lit: open, and not yet collapsing. See the note. */
+  lit: boolean;
+  /** The press. `useActiveCard` drives the disclosure and the list together. */
+  onToggle: (id: string, event: MouseEvent<HTMLElement>) => void;
 }) {
   return (
     // The `perspective` makes each `<li>` its own stacking context, so a card
@@ -222,15 +248,26 @@ export function LeagueCard({
     // has to be ordered here, on the grid item, rather than on the summary
     // inside it. Without this an open card sits *under* the card to its right,
     // which is the one moment the raise is most visible.
-    <li className="relative flex pointer-fine:[perspective:2400px] hover:z-10 has-[details[open]]:z-10">
+    // `data-card` is how the close finds this row again once the list has come
+    // back around it — see `useActiveCard`, which reads its line to put the
+    // reader back where they pressed rather than at the document's top.
+    <li
+      data-card={league.league_id}
+      className="relative flex pointer-fine:[perspective:2400px] hover:z-10 has-[details[open]]:z-10"
+    >
       {/* `min-w-0` is what lets the card shrink to a phone. The `<li>` is a
           row flex container, so its item takes `min-width: auto` and refuses
           to go below its own min-content — and the expanded half's two panes
           sit side by side at every width by design, which puts that
           min-content above 390. Without this the card is wider than the
           viewport and the whole page scrolls sideways. */}
-      <details className={`group/card ${CONSOLE_METAL} flex min-w-0 flex-1 flex-col`}>
+      <details
+        open={open}
+        data-lit={lit ? "" : undefined}
+        className={`group/card ${CONSOLE_METAL} flex min-w-0 flex-1 flex-col`}
+      >
         <summary
+          onClick={(event) => onToggle(league.league_id, event)}
           className={
             `lab-card-3d ${CONSOLE_CARD_SHELL} flex flex-1 cursor-pointer list-none flex-col font-mono ` +
             // **The gutter is 14px below `sm`**, where the card takes 18px from
@@ -260,17 +297,14 @@ export function LeagueCard({
             // the top padding is *for* rather than a rhythm it happens to sit
             // on.
             "px-3.5 pb-3.5 pt-[1.625rem] sm:px-[1.125rem] sm:pb-[1.125rem] sm:pt-[1.875rem] " +
-            // **The open card's housing freezes under the rack.** See the note
-            // below the component on why it is the `summary` and nothing else.
-            "group-open/card:sticky group-open/card:top-[var(--card-freeze-top)] group-open/card:z-20 " +
             "pointer-fine:[transform-style:preserve-3d] [transform-origin:center_bottom] " +
             "pointer-fine:[transform:translateZ(0)_rotateX(3deg)] " +
             "pointer-fine:hover:[transform:translateZ(30px)_rotateX(0deg)] " +
-            "pointer-fine:group-open/card:[transform:translateZ(20px)_rotateX(0deg)] " +
+            "pointer-fine:group-data-[lit]/card:[transform:translateZ(20px)_rotateX(0deg)] " +
             "transition-[transform,box-shadow,border-color] duration-[450ms] ease-[cubic-bezier(0.2,0.8,0.2,1)] " +
-            "hover:border-active/45 group-open/card:border-active/45 " +
+            "hover:border-active/45 group-data-[lit]/card:border-active/45 " +
             "pointer-fine:hover:shadow-[var(--housing-shadow),var(--card-lift-hover),var(--card-halo-hover)] " +
-            "pointer-fine:group-open/card:shadow-[var(--housing-shadow),var(--card-lift-hover),var(--card-halo-hover)] " +
+            "pointer-fine:group-data-[lit]/card:shadow-[var(--housing-shadow),var(--card-lift-hover),var(--card-halo-hover)] " +
             "focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-active/60"
           }
         >
@@ -291,9 +325,9 @@ export function LeagueCard({
                 stay out of the tree entirely on a coarse pointer rather than
                 sitting there as gradients nobody sees. */}
             <span className="lab-anim absolute inset-y-0 left-0 hidden w-[55%] -translate-x-[180%] -skew-x-12 bg-[image:var(--card-sheen)] transition-transform duration-[900ms] ease-out group-hover/card:translate-x-[450%] pointer-fine:block" />
-            <span className="absolute -inset-x-1/4 -bottom-[8%] hidden h-[62%] origin-bottom bg-[image:var(--card-floor)] opacity-40 transition-opacity duration-[450ms] [mask-image:linear-gradient(to_top,#000,transparent_72%)] [transform:perspective(320px)_rotateX(66deg)] group-hover/card:opacity-100 group-open/card:opacity-100 pointer-fine:block" />
-            <span className="absolute -bottom-[45%] left-1/2 h-[85%] w-[120%] -translate-x-1/2 bg-[radial-gradient(closest-side,var(--accent-glow),transparent_75%)] opacity-30 transition-opacity duration-[450ms] group-hover/card:opacity-80 group-open/card:opacity-80" />
-            <span className="absolute inset-x-[18%] top-0 h-px bg-[image:var(--card-edge-light)] opacity-0 transition-opacity duration-[450ms] group-hover/card:opacity-100 group-open/card:opacity-100" />
+            <span className="absolute -inset-x-1/4 -bottom-[8%] hidden h-[62%] origin-bottom bg-[image:var(--card-floor)] opacity-40 transition-opacity duration-[450ms] [mask-image:linear-gradient(to_top,#000,transparent_72%)] [transform:perspective(320px)_rotateX(66deg)] group-hover/card:opacity-100 group-data-[lit]/card:opacity-100 pointer-fine:block" />
+            <span className="absolute -bottom-[45%] left-1/2 h-[85%] w-[120%] -translate-x-1/2 bg-[radial-gradient(closest-side,var(--accent-glow),transparent_75%)] opacity-30 transition-opacity duration-[450ms] group-hover/card:opacity-80 group-data-[lit]/card:opacity-80" />
+            <span className="absolute inset-x-[18%] top-0 h-px bg-[image:var(--card-edge-light)] opacity-0 transition-opacity duration-[450ms] group-hover/card:opacity-100 group-data-[lit]/card:opacity-100" />
           </span>
 
           {/* Outside the clipping layer: the plates straddle the top edge, and
@@ -411,7 +445,7 @@ export function LeagueCard({
             what is left of the viewport, which is two numbers no stylesheet
             can hold. That is `ExpandedPanel`, and it is a component of its own
             so this card stays hook-free. */}
-        <ExpandedPanel>
+        <ExpandedPanel open={open} closing={open && !lit}>
           {/* **No wrapper between the housing and its parts**, and this is
               the half of the perspective that is silent when it is missing: a
               `perspective` projects an element's *direct children only*, and an
@@ -447,7 +481,7 @@ export function LeagueCard({
       </details>
     </li>
   );
-}
+});
 
 /** No answer for a field, in the app's own grammar: never a zero. */
 const NO_FIGURE = "—";

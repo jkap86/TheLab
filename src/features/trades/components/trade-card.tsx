@@ -1,6 +1,6 @@
 "use client";
 
-import { memo, useEffect, useRef, useState } from "react";
+import { memo, useEffect, useRef, useState, type MouseEvent } from "react";
 
 import type {
   KtcBoardChoice,
@@ -97,25 +97,30 @@ import type { TradeCardView } from "../trades-data";
  * **Four things depart from that card, and each is a measurement rather than a
  * preference.**
  *
- * 1. **No freeze.** A manager card pins its housing under the rack because the
- *    frozen part is ~210px — plates, settings strip, four rank windows — and a
- *    twelve-team table scrolling past needs the league's name to stay on
- *    screen. This summary carries both hauls in full, measured 413px, and
- *    freezing that covers the top half of the viewport with the history bay the
- *    first thing underneath it. So no `group-open/card:sticky`, and
- *    `--card-freeze-top` is not read here.
- * 2. **The panel does not park either**, and its cap is a share of the viewport
- *    rather than what is left under a header — see `panelCap`, where both arms
- *    live and are tested. Run through the parked arm this card's ~428px panel
- *    offset would take 515px off the screen for two things that are not there,
- *    which at an 800px viewport hits the floor and leaves the starters scroller
- *    nothing at all.
- * 3. **The summary is `shrink-0`, never `flex-1`.** On the manager card
+ * 1. **This card parks like the other two, and its header is what that costs
+ *    it.** It used to do neither — no freeze and no park — because a manager
+ *    card's frozen part is ~210px where this summary carries both hauls in
+ *    full, measured 413px, and pinning that under the rack covers the top half
+ *    of the viewport. What made it park anyway is that the *list* stands down
+ *    now: there is no longer a page scrolling behind an open card for a tall
+ *    header to be a poor trade against, and a board where one card behaved
+ *    differently from the other two would be a drift with nothing on screen
+ *    saying which tool a reader was in.
+ *
+ *    The cost is real and is the one open decision in this pass. At a 900px
+ *    viewport the panel gets ~376px against a league card's ~565; at 800 the
+ *    room falls under `MIN_PARKED` and the **shell** scrolls rather than a pane
+ *    being clipped away — which is the documented fallback rather than a
+ *    failure, but it is the only card that reaches it on an ordinary laptop.
+ *    The alternative the handoff names is to condense the hauls to a line each
+ *    while parked; that is a change to what the card *says* rather than to how
+ *    it is sized, so it is flagged rather than taken here.
+ * 2. **The summary is `shrink-0`, never `flex-1`.** On the manager card
  *    `flex-1` is what makes a card fill its grid row; here the `<details>` is a
  *    column flex container, so `flex: 1 1 0%` shrinks the summary *below its
  *    own content height* and its content paints over the expanded half — which
  *    is what hid the history rail during design.
- * 4. **The settings strip moved up**, from under the hauls to directly under
+ * 3. **The settings strip moved up**, from under the hauls to directly under
  *    the rule, on the plane between the plates and the windows. It is a
  *    property of the league and it now sits with the plate that names it.
  *
@@ -140,6 +145,9 @@ export const TradeCard = memo(function TradeCard({
   board,
   season,
   username,
+  open,
+  lit,
+  onToggle,
 }: {
   trade: Trade;
   /** Null before the leagues request lands, or if it failed. */
@@ -162,6 +170,20 @@ export const TradeCard = memo(function TradeCard({
    * than a hook, on the rule above.
    */
   username: string | null;
+  /**
+   * Whether the disclosure is open, whether its chrome is lit, and the press.
+   *
+   * **All three are stable for every card but the two that moved**, which is
+   * what keeps the `memo` below worth having on a board that appends a hundred
+   * rows at a time: `onToggle` is the page's own `useCallback` and takes the id,
+   * and `lit` is a second boolean rather than a `closing` flag precisely so a
+   * collapse changes a prop on the closing card alone. Which cards stand down
+   * while one is parked is CSS reading `[open]`, for the same reason — a prop
+   * for it would drop the memo for every row on the board.
+   */
+  open: boolean;
+  lit: boolean;
+  onToggle: (id: string, event: MouseEvent<HTMLElement>) => void;
 }) {
   // Resolved here rather than on the server, because the payload carries every
   // basis and both markets and only this card knows which league it is — see
@@ -179,15 +201,25 @@ export const TradeCard = memo(function TradeCard({
     // that rises cannot paint over the one after it in DOM order — the raise
     // has to be ordered here, on the list item, rather than on the summary
     // inside it. `league-card.tsx` carries the finding.
-    <li className="relative flex pointer-fine:[perspective:2400px] hover:z-10 has-[details[open]]:z-10">
+    // `data-card` is how the close finds this row again once the list is back
+    // around it — see `useActiveCard`.
+    <li
+      data-card={trade.transaction_id}
+      className="relative flex pointer-fine:[perspective:2400px] hover:z-10 has-[details[open]]:z-10"
+    >
       {/* `min-w-0` is what lets the card shrink to a phone: the `<li>` is a row
           flex container, so its item takes `min-width: auto` and refuses to go
           below its own min-content — and the expanded half's two panes sit side
           by side at every width by design, which puts that min-content above
           390. Without it the card is wider than the viewport and the whole page
           scrolls sideways. */}
-      <details className={`group/card ${CONSOLE_METAL} flex min-w-0 flex-1 flex-col`}>
+      <details
+        open={open}
+        data-lit={lit ? "" : undefined}
+        className={`group/card ${CONSOLE_METAL} flex min-w-0 flex-1 flex-col`}
+      >
         <summary
+          onClick={(event) => onToggle(trade.transaction_id, event)}
           className={
             `lab-card-3d ${CONSOLE_CARD_SHELL} flex shrink-0 cursor-pointer list-none flex-col font-mono ` +
             // The manager card's gutter, composed onto the *shell* rather than
@@ -202,19 +234,14 @@ export const TradeCard = memo(function TradeCard({
             // half — which is exactly what hid the history rail during design.
             // The manager card can say `flex-1` because there the flex it fills
             // is the grid row's, not a column of its own.
-            //
-            // **And no `group-open/card:sticky` here**, which is the other
-            // departure: this summary is both hauls in full, and freezing 413px
-            // under the rack covers the top half of the viewport. See the
-            // component note.
             "pointer-fine:[transform-style:preserve-3d] [transform-origin:center_bottom] " +
             "pointer-fine:[transform:translateZ(0)_rotateX(3deg)] " +
             "pointer-fine:hover:[transform:translateZ(30px)_rotateX(0deg)] " +
-            "pointer-fine:group-open/card:[transform:translateZ(20px)_rotateX(0deg)] " +
+            "pointer-fine:group-data-[lit]/card:[transform:translateZ(20px)_rotateX(0deg)] " +
             "transition-[transform,box-shadow,border-color] duration-[450ms] ease-[cubic-bezier(0.2,0.8,0.2,1)] " +
-            "hover:border-active/45 group-open/card:border-active/45 " +
+            "hover:border-active/45 group-data-[lit]/card:border-active/45 " +
             "pointer-fine:hover:shadow-[var(--housing-shadow),var(--card-lift-hover),var(--card-halo-hover)] " +
-            "pointer-fine:group-open/card:shadow-[var(--housing-shadow),var(--card-lift-hover),var(--card-halo-hover)] " +
+            "pointer-fine:group-data-[lit]/card:shadow-[var(--housing-shadow),var(--card-lift-hover),var(--card-halo-hover)] " +
             "focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-active/60"
           }
         >
@@ -228,9 +255,9 @@ export const TradeCard = memo(function TradeCard({
             className="pointer-events-none absolute inset-0 overflow-hidden rounded-[inherit]"
           >
             <span className="lab-anim absolute inset-y-0 left-0 hidden w-[55%] -translate-x-[180%] -skew-x-12 bg-[image:var(--card-sheen)] transition-transform duration-[900ms] ease-out group-hover/card:translate-x-[450%] pointer-fine:block" />
-            <span className="absolute -inset-x-1/4 -bottom-[8%] hidden h-[62%] origin-bottom bg-[image:var(--card-floor)] opacity-40 transition-opacity duration-[450ms] [mask-image:linear-gradient(to_top,#000,transparent_72%)] [transform:perspective(320px)_rotateX(66deg)] group-hover/card:opacity-100 group-open/card:opacity-100 pointer-fine:block" />
-            <span className="absolute -bottom-[45%] left-1/2 h-[85%] w-[120%] -translate-x-1/2 bg-[radial-gradient(closest-side,var(--accent-glow),transparent_75%)] opacity-30 transition-opacity duration-[450ms] group-hover/card:opacity-80 group-open/card:opacity-80" />
-            <span className="absolute inset-x-[18%] top-0 h-px bg-[image:var(--card-edge-light)] opacity-0 transition-opacity duration-[450ms] group-hover/card:opacity-100 group-open/card:opacity-100" />
+            <span className="absolute -inset-x-1/4 -bottom-[8%] hidden h-[62%] origin-bottom bg-[image:var(--card-floor)] opacity-40 transition-opacity duration-[450ms] [mask-image:linear-gradient(to_top,#000,transparent_72%)] [transform:perspective(320px)_rotateX(66deg)] group-hover/card:opacity-100 group-data-[lit]/card:opacity-100 pointer-fine:block" />
+            <span className="absolute -bottom-[45%] left-1/2 h-[85%] w-[120%] -translate-x-1/2 bg-[radial-gradient(closest-side,var(--accent-glow),transparent_75%)] opacity-30 transition-opacity duration-[450ms] group-hover/card:opacity-80 group-data-[lit]/card:opacity-80" />
+            <span className="absolute inset-x-[18%] top-0 h-px bg-[image:var(--card-edge-light)] opacity-0 transition-opacity duration-[450ms] group-hover/card:opacity-100 group-data-[lit]/card:opacity-100" />
           </span>
 
           {/* Outside the clipping layer: the plates straddle the top edge, and
@@ -307,9 +334,10 @@ export const TradeCard = memo(function TradeCard({
 
         {/* The league itself, on the manager card's own arrangement: a capped
             inner housing holding the history bay, the two panes and the
-            roster's drawer. `parked={false}` is the one thing this card tells
-            it — see the component note above and `panelCap`. */}
-        <ExpandedPanel parked={false}>
+            roster's drawer — and now on the manager card's own sizing too. It
+            used to be the one caller passing `parked={false}`; there is no
+            such thing as an un-parked card any more. See `panelFit`. */}
+        <ExpandedPanel open={open} closing={open && !lit}>
           <TradeLeague
             leagueId={trade.league_id}
             season={season}
@@ -342,7 +370,7 @@ export const TradeCard = memo(function TradeCard({
 function DisclosureHint() {
   return (
     <div className="relative mt-3.5 flex items-center gap-2 pointer-fine:[transform:translateZ(10px)]">
-      <span className="font-mono text-[length:var(--fs-9)] uppercase tracking-[0.18em] text-readout-label transition-colors duration-300 group-open/card:text-readout">
+      <span className="font-mono text-[length:var(--fs-9)] uppercase tracking-[0.18em] text-readout-label transition-colors duration-300 group-data-[lit]/card:text-readout">
         The league
       </span>
       <span
@@ -351,7 +379,7 @@ function DisclosureHint() {
       />
       <span
         aria-hidden
-        className="inline-flex text-readout-label transition-transform duration-300 group-open/card:rotate-180"
+        className="inline-flex text-readout-label transition-transform duration-300 group-data-[lit]/card:rotate-180"
       >
         <svg
           width="11"

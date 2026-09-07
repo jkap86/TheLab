@@ -178,6 +178,18 @@ export { ConsoleGround } from "./ui/console-ground";
 // line `LeagueTeams` and `LeagueConfigWindow` moved on, and the same folder
 // rule, since `features/trades` may not import from `features/manager`.
 export { ExpandedPanel } from "./ui/expanded-panel";
+// Exported beside it because the lineup checker's expanded half is not an
+// `ExpandedPanel` — it keeps its own inset and takes only the arithmetic.
+export { usePanelCap } from "./use-panel-cap";
+// The park is the *list*'s, not the card's — see `useActiveCard`, which is
+// what three pages mount to make an open card the screen and a link.
+export {
+  readQueryParam,
+  useActiveCard,
+  useUrlParam,
+  writeQueryParam,
+  type ActiveCard,
+} from "./use-active-card";
 // The league table an expanded card draws. It came here from
 // `features/manager` when the history rail became a second reader — it draws
 // the same table over a rewound roster set.
