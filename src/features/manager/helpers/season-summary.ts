@@ -80,6 +80,32 @@ export function formatWinPct(summary: SeasonSummary): string {
 }
 
 /**
+ * The same rate as a three-decimal **share**, leading zero omitted: `.583`.
+ *
+ * A second spelling beside {@link formatWinPct} rather than a replacement for
+ * it, because two readers want two units. The identity billet's dial reads a
+ * share — the reading a season's record is quoted in — and the shares drawers'
+ * record column still reads a percentage. Both take `summary.winPct`, which is
+ * what keeps the dial's arc and the figure in its own window from disagreeing.
+ *
+ * **The leading zero comes off the formatted string, never off the number**,
+ * and that is the one line here that is silent when it is wrong. A record a
+ * hair under perfect rounds to `1.000` at three decimals, so a `share >= 1`
+ * guard testing the *unrounded* value would let it through to be sliced into
+ * `.000` — the widest reading the page can produce rendered as the narrowest,
+ * and as its own opposite.
+ *
+ * Null is an em dash, never `.000`: no league has a record yet, which is a
+ * different statement from having lost every game played. A real `.000` — games
+ * played, none won — is a reading and is drawn as one.
+ */
+export function formatWinShare(summary: SeasonSummary): string {
+  if (summary.winPct === null) return "—";
+  const share = (summary.winPct / 100).toFixed(3);
+  return share.startsWith("0") ? share.slice(1) : share;
+}
+
+/**
  * One shares row's record column, folded and already spelled.
  *
  * **It moved out of the drawer with the drawer**, which is the whole reason it

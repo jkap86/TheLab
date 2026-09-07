@@ -1,51 +1,66 @@
+import { MilledHairline, Scanlines } from "@/features/shared";
 import type { ManagerLeague } from "@/shared/contract";
 
 import {
   formatCombinedRecord,
-  formatWinPct,
+  formatWinShare,
   seasonSummary,
 } from "../helpers/season-summary";
 
 /**
- * The season's figures, mounted on the identity plate: two engraved counts and
- * a gauge.
+ * The season's figures, milled into the identity billet: two stamped counts in
+ * one well, and a mounted gauge.
  *
  * **It used to be a housing of its own** — a two-row ledger beside a 112px dial,
  * standing next to the plate on the header row. The merge is the header pass:
  * the manager's name and how their season is going are one statement about one
  * person, and four instruments on one row were four boxes saying it. So this is
- * no longer a surface; it is the right-hand half of `ManagerPlate`'s engraving,
+ * no longer a surface; it is the right-hand half of `ManagerBillet`'s face,
  * mounted through that component's `children` seam.
  *
- * The split inside it survives the merge, because it was never about the boxes.
- * Leagues and the combined record are *counts* — they are engraved figures under
- * etched labels, and the eye compares them to nothing. The win rate is a
- * *proportion*, so it keeps the instrument: a dial whose arc is the number, with
- * the figure repeated in a lit window at the centre because an arc alone cannot
- * be read to a decimal.
+ * The split inside it survives every pass, because it was never about the
+ * boxes. Leagues and the combined record are *counts* — they are stamped
+ * figures under etched labels, and the eye compares them to nothing, so they
+ * share one well and a cut between them. The win rate is a *proportion*, so it
+ * keeps the instrument: a dial whose arc is the number, with the figure
+ * repeated in a lit window at the centre because an arc alone cannot be read to
+ * three decimals.
  *
- * **What went with the housing.** The Games line — `182 games · no ties` — came
- * off the plate: it is the win rate's denominator rather than a reading of its
- * own, and `summary.games` is still what the rate is taken over. And the dial
- * stepped down from 112px to 88px, because it now shares a plate with a 2rem
- * engraved name rather than standing beside one.
+ * **The dial is the hero now, and the two decisions that makes are both
+ * content.** It is 108px on its own bezel rather than 88px on the plate's
+ * face — a mounted gauge, with the cast under it that says bolted-on rather
+ * than printed — and it reads a three-decimal *share*: `.583`, the unit a
+ * season's record is quoted in, where the plate read `58.0%`. See
+ * {@link formatWinShare}, which takes the same `summary.winPct` the arc does,
+ * so the two cannot disagree.
+ *
+ * **The `WIN` caption inside the window is gone with it.** It was a second copy
+ * of the label beside the dial, and with the dial this size the label outside
+ * it is legible on its own. What that costs is the figure's accessible name, so
+ * the pair is a `<dl>`: the caption is the `<dt>` and the mount holding the
+ * figure is the `<dd>`, which is the reading — a name and its value — rather
+ * than an `aria-label` on a `<span>` that has no role to carry one.
  *
  * Everything here is taken over the **filtered** list — see {@link seasonSummary},
  * which reverses what it used to say, and {@link SeasonSummary.total} for the
  * one figure that is not.
  *
- * **Below `sm` this block has no box.** It is `display: contents`, and its four
- * readings become items of the plate's own compact strip so the Filters key can
- * be ordered in beside `Leagues` — see `ManagerPlate`'s `compactStrip` for why
- * that is one row rather than two, and for why the key is one element ordered
- * rather than two elements with one hidden. What that costs here is an
- * `order-*` on each reading and a `sm:order-none` beside it; what it buys is a
- * plate half its former height on a phone.
+ * **Below `lg` this block is the billet's second row; from `lg` up it has no
+ * box at all.** That is the reverse of what it used to be, and it is the
+ * design's compact arm rather than a refactor: narrow, the win well and the
+ * counts well sit side by side under a milled cut; wide, the counts, a hairline
+ * and the bare gauge are three items of the billet's own single row.
+ * `lg:contents` is what dissolves the wrapper at the breakpoint, so every
+ * `order-*` here is the compact arrangement and every `lg:order-none` hands the
+ * row back to DOM order — which is the wide order, read left to right. See
+ * `ManagerBillet` for why the turn is `lg` and not the `sm` the design names.
  *
- * The dial steps 88px → 72px with it and every inset steps with the dial, which
+ * The dial steps 84px → 108px at `lg` and **every inset steps with it**, which
  * is a chain rather than a set of independent numbers: the arc, the pointer and
  * the lit window are all measured from the bezel's own edge, and the innermost
- * of them is what the percentage has to fit inside.
+ * of them is what the figure has to fit inside. So the figure's own size is on
+ * the same breakpoint as the mount, and moving one without the others is how a
+ * reading ends up clipped by a circle that still looks big enough for it.
  */
 export function SeasonSummary({
   leagues,
@@ -60,66 +75,81 @@ export function SeasonSummary({
   narrowing: boolean;
 }) {
   const summary = seasonSummary(leagues);
-  const pct = formatWinPct(summary);
+  const share = formatWinShare(summary);
   // The dial's arc. Null (no league has a record yet) draws an empty track
-  // rather than a zero-length arc at the top, which would read as 0%.
+  // rather than a zero-length arc at the top, which would read as .000.
   const degrees = summary.winPct === null ? 0 : (summary.winPct / 100) * 360;
 
   return (
-    // `ml-auto` above `sm` puts the season at the plate's far end, against the
-    // name at its near one.
+    // Below `sm`: the billet's second row, carrying its own milled cut above it
+    // — a dark hairline with the light catching its upper lip, which is the
+    // horizontal reading of the vertical cuts between the desktop row's items.
     //
-    // **Below `sm` this block has no box at all.** It is `display: contents`, so
-    // the four readings below become items of the plate's own compact strip and
-    // can be ordered among the controls that share it — see `ManagerPlate`'s
-    // `compactStrip`, which is what draws the milled cut this used to sit under.
-    // Every `order-*` here is the phone arrangement, and every `sm:order-none`
-    // hands the row back to DOM order at the breakpoint.
-    <div className="contents sm:ml-auto sm:flex sm:w-auto sm:items-stretch sm:gap-4">
-      {/* The groove that separates the name from the season. It is drawn here
-          rather than by the plate because it belongs to this block: on a
-          wrapped line it would be a stub hanging off the left edge, so below
-          `sm` there is nothing to separate and it does not exist. */}
-      <Groove className="hidden sm:block" />
-
+    // From `sm`: `display: contents`, so the three items below become items of
+    // the billet's row and can be ordered among the name and the keys that
+    // share it. An element with `display: contents` generates no box, so the
+    // border, the padding and the width above it need no reset — they simply
+    // stop applying.
+    <div className="relative order-4 flex w-full items-stretch gap-2 border-t border-[color:var(--milled-hairline)] pt-2 shadow-[0_-1px_0_rgba(255,255,255,0.06)] lg:order-none lg:contents">
       {/*
         **The denominator appears exactly when it means something.** Unfiltered,
         the figure is one number and reads as the account. Narrowed, `9 / 14` is
         what stops "Leagues 9" from claiming to be the whole account to anyone
         who did not set the filter — which is the readout the View housing used
-        to carry and the reason the plate had to take it over when that housing
+        to carry and the reason the header had to take it over when that housing
         moved into the rack.
+
+        The well stretches on the phone's row, where it is one of two parts
+        sharing a line, and hugs its content on the desktop's, where the name
+        column beside it is what takes the slack. It is `order-2` because the
+        gauge leads on a phone: the hero is the first thing on the row it is the
+        subject of, and on the desktop row DOM order puts the counts first
+        because the gauge is what the row builds up to.
       */}
-      <Figure label="Leagues" className="order-1 sm:order-none">
-        {narrowing ? `${summary.leagues} / ${total}` : String(total)}
-      </Figure>
+      <div className="relative order-2 flex min-w-0 flex-1 flex-col justify-center gap-1.5 rounded-[0.4375rem] bg-[image:var(--billet-well-bg)] px-3 py-2 shadow-[var(--standing-well-shadow)] lg:order-none lg:flex-none lg:gap-1 lg:px-3.5 lg:py-[0.4375rem]">
+        <Count label="Leagues">
+          {narrowing ? `${summary.leagues} / ${total}` : String(total)}
+        </Count>
+        {/* The cut between the two counts: the same milled line the row's
+            vertical hairlines are, turned on its side. It is drawn here rather
+            than by {@link Count} because it belongs between two of them. */}
+        <span
+          aria-hidden
+          className="h-px bg-[color:var(--milled-hairline)] shadow-[0_1px_0_rgba(255,255,255,0.07)]"
+        />
+        <Count label="Record">{formatCombinedRecord(summary)}</Count>
+      </div>
 
-      {/* Below `sm` the Filters key sits between these two, at `order-2`, with
-          **no groove before it**: the count and the key that narrows it are one
-          reading, and a milled channel between them would say they are two.
-          The groove that separates the pair from the record is this one. */}
-      <Groove className="order-3 sm:order-none" />
+      {/* Gone below `sm`, where the two wells are on their own row with a gap
+          between them: a vertical cut is what separates two things standing
+          side by side on one part's face, and the gap is the separation there. */}
+      <MilledHairline className="relative hidden lg:block" />
 
-      <Figure label="Record" className="order-4 sm:order-none">
-        {formatCombinedRecord(summary)}
-      </Figure>
+      {/*
+        The gauge. A `<dl>` because it is one name and one value — see the
+        module note on what the dropped `WIN` caption cost.
 
-      {/* Gone below `sm`, where the dial is pushed to the strip's far end by
-          `ml-auto` instead — a groove is a cut between two things standing
-          side by side, and there is nothing beside it once the gap is the
-          separation. */}
-      <Groove className="hidden sm:block" />
-
-      <div className="order-5 ml-auto flex items-center gap-3 sm:order-none sm:ml-0">
-        {/* 72px below `sm` against 88px above it. The inner window is the
-            constraint the rest of the dial is measured from — see the readout
-            at the bottom of this block. */}
-        <div className="relative size-18 shrink-0 rounded-full border border-foreground/10 bg-[image:var(--bezel-bg)] shadow-[var(--bezel-shadow)] sm:size-22">
+        `flex-col-reverse` below `sm` is what puts the caption *under* the dial
+        while leaving the `<dt>` first in the DOM, so the label still reads as
+        the figure's name. From `sm` the caption is beside it, the well is
+        dissolved and the mount sits directly on the billet's own face — four
+        overrides for one element rather than a second copy of the dial.
+      */}
+      <dl className="relative order-1 m-0 flex shrink-0 flex-col-reverse items-center gap-1 rounded-[0.4375rem] bg-[image:var(--billet-well-bg)] px-[0.4375rem] py-1.5 shadow-[var(--standing-well-shadow)] lg:order-none lg:flex-row lg:gap-3.5 lg:rounded-none lg:bg-none lg:p-0 lg:shadow-none">
+        <dt className="whitespace-nowrap font-mono text-[length:var(--fs-9)] uppercase tracking-[0.12em] text-[color:var(--billet-label)] [text-shadow:var(--standing-label-shadow)] sm:text-[length:var(--fs-10)] sm:tracking-[0.14em]">
+          Win rate
+        </dt>
+        {/* The mount. Its second cast is what makes a gauge this size read as
+            bolted onto the face rather than printed on it, and its colour is
+            `--surface-shadow` rather than a literal black: a black cast smears
+            on the light scheme's pale ground, which is the rule every other
+            cast in `globals.css` is written by. */}
+        <dd className="relative m-0 size-21 shrink-0 rounded-full border border-foreground/12 bg-[image:var(--bezel-bg)] shadow-[var(--bezel-shadow),0_10px_18px_-10px_var(--surface-shadow)] lg:size-27 lg:shadow-[var(--bezel-shadow),0_12px_22px_-12px_var(--surface-shadow)]">
           {/* The arc itself. A conic gradient rather than an SVG ring: the
               angle is the only thing that varies, and it varies per render. */}
           <span
             aria-hidden
-            className="absolute inset-[0.3125rem] rounded-full shadow-[inset_0_0_12px_rgba(0,0,0,0.95)] sm:inset-[0.4375rem]"
+            className="absolute inset-1.5 rounded-full shadow-[inset_0_0_14px_rgba(0,0,0,0.95)] lg:inset-2"
             style={{
               background: `conic-gradient(var(--accent) 0deg ${degrees}deg, var(--dial-track) ${degrees}deg 360deg)`,
             }}
@@ -129,101 +159,58 @@ export function SeasonSummary({
           {summary.winPct !== null && (
             <span
               aria-hidden
-              className="absolute inset-[0.3125rem] rounded-full sm:inset-[0.4375rem]"
+              className="absolute inset-1.5 rounded-full lg:inset-2"
               style={{ transform: `rotate(${degrees}deg)` }}
             >
-              <span className="absolute -top-[0.21875rem] left-1/2 -ml-[0.21875rem] size-[0.4375rem] rounded-full bg-readout shadow-[0_0_12px_var(--accent-glow)] sm:-top-1 sm:-ml-1 sm:size-[0.5625rem]" />
+              <span className="absolute -top-1 left-1/2 -ml-1 size-2 rounded-full bg-readout shadow-[0_0_12px_var(--accent-glow)] lg:-top-[0.28125rem] lg:-ml-[0.28125rem] lg:size-2.5 lg:shadow-[0_0_14px_var(--accent-glow)]" />
             </span>
           )}
           {/* The lit window at the centre, so the arc can be read exactly. */}
-          <div className="absolute inset-[0.75rem] flex flex-col items-center justify-center overflow-hidden rounded-full border border-black/85 bg-[image:var(--readout-bg)] shadow-[var(--readout-shadow)] sm:inset-[0.9375rem]">
-            <span
-              aria-hidden
-              className="pointer-events-none absolute inset-0 bg-[image:var(--readout-scanlines)]"
-            />
-            <span className="relative font-mono text-[length:var(--fs-8)] uppercase leading-none tracking-[0.14em] text-readout/60 sm:text-[length:var(--fs-9)] sm:tracking-[0.16em]">
-              Win
-            </span>
+          <div className="absolute inset-[0.6875rem] flex items-center justify-center overflow-hidden rounded-full border border-black/85 bg-[image:var(--readout-bg)] shadow-[var(--readout-shadow)] lg:inset-3.5">
+            <Scanlines />
             {/*
-              **The inner circle is what sizes this figure**, not the dial, and
-              it is a different circle at each width: 46px on the phone dial and
-              56px on the desktop one. `100.0%` is the widest reading the page
-              can produce — a small account that has won every game — and it is
-              what both sizes have to clear.
-
-              On the phone dial `--fs-10` puts it at ~41px inside 46 and needs
-              no help at all. The desktop one is the tight case and both of its
-              sizes are **measured against the circle rather than against the
-              window's width**, which is the trap: a 56px circle is only 56px
-              wide across its centre, and a line of digits sitting below the
-              `Win` label crosses it on a shorter chord. `--fs-17` clips `53.7%`
-              there — an ordinary reading, not the worst one — so five
-              characters take `--fs-15` and six take `--fs-12`, which is the
-              rule `WeekSummary`'s dial already lives by one tool over, one step
-              tighter because this window is 56px against its 62.
+              **The circle is what sizes this figure, not the window's width.**
+              The window is round, so a line of digits crossing it below its
+              centre sits on a chord of `2·√(r² − offset²)` — which is why the
+              plate's own dial needed two step-downs for a `50.0%` that looked
+              like it fitted. Here the figure is the only thing in the window
+              and therefore centred, where the chord is longest, and the reading
+              is at most five characters: `1.000`, a small account that has won
+              every game, is what both sizes have to clear. Measured, they do —
+              but if the type or the inset moves, re-measure against the chord
+              rather than nudging pixels.
             */}
-            <span
-              className={`relative mt-0.5 font-mono text-[length:var(--fs-10)] leading-none text-readout [text-shadow:var(--readout-text-glow)] ${
-                pct.length > 5
-                  ? "sm:text-[length:var(--fs-12)]"
-                  : "sm:text-[length:var(--fs-15)]"
-              }`}
-            >
-              {pct}
+            <span className="relative font-display text-[length:var(--fs-17)] font-semibold leading-none tracking-[-0.02em] tabular-nums text-readout [text-shadow:var(--figure-engrave),0_0_20px_var(--accent-glow)] lg:text-[length:var(--fs-21)] lg:[text-shadow:var(--figure-engrave),0_0_22px_var(--accent-glow)]">
+              {share}
             </span>
           </div>
-        </div>
-        {/* Dropped below `sm`, where the whole season block has to fit a 332px
-            plate: the caption is ~46px of it and the lit window inside the dial
-            already reads "WIN 50.0%", so it is the one thing here that says
-            something twice. Without it the block measured 311px against 332. */}
-        <span className="hidden max-w-16 font-mono text-[length:var(--fs-11)] uppercase tracking-[0.16em] text-foreground/72 sm:inline">
-          Win rate
-        </span>
-      </div>
+        </dd>
+      </dl>
     </div>
   );
 }
 
 /**
- * One engraved figure under its etched label.
+ * One count: a stamped label and its figure, on one baseline in the well they
+ * share.
  *
- * A `<dl>` per field rather than one list holding both, because the grooves
- * between them are not list content: a definition list may hold only `dt`, `dd`
- * and the `div`s grouping them. One name and one value is exactly what a `<dl>`
- * is for, so two of them is the reading that keeps the semantics without
- * wrapping a milled hairline in a group it does not belong to.
+ * A `<dl>` per count rather than one list holding both, because the cut between
+ * them is not list content: a definition list may hold only `dt`, `dd` and the
+ * `div`s grouping them. One name and one value is exactly what a `<dl>` is for,
+ * so two of them is the reading that keeps the semantics without wrapping a
+ * milled hairline in a group it does not belong to.
  */
-function Figure({
-  label,
-  children,
-  className = "",
-}: {
-  label: string;
-  children: string;
-  /** Where it sits in the plate's compact strip — see the block above. */
-  className?: string;
-}) {
+function Count({ label, children }: { label: string; children: string }) {
   return (
-    <dl className={`m-0 flex flex-col justify-center gap-1 px-0 sm:gap-2 sm:px-4 ${className}`}>
-      <dt className="font-mono text-[length:var(--fs-9)] uppercase tracking-[0.16em] text-foreground/72 sm:text-[length:var(--fs-11)]">
+    <dl className="m-0 flex items-baseline justify-between gap-3 lg:gap-4">
+      <dt className="whitespace-nowrap font-mono text-[length:var(--fs-10)] uppercase tracking-[0.12em] text-[color:var(--billet-label)] [text-shadow:var(--standing-label-shadow)]">
         {label}
       </dt>
       {/* `nowrap`: the en dash in `8–5` is a line-break opportunity, and a
           record split across two lines reads as two numbers. */}
-      <dd className="m-0 whitespace-nowrap font-display text-[length:var(--fs-17)] font-semibold leading-none tracking-[-0.02em] tabular-nums sm:text-[length:var(--fs-26)] sm:tracking-[-0.03em]">
+      <dd className="m-0 whitespace-nowrap font-display text-[length:var(--fs-21)] font-semibold leading-[1.1] tracking-[-0.015em] tabular-nums text-[color:var(--billet-figure)] [text-shadow:var(--standing-engrave)]">
         {children}
       </dd>
     </dl>
-  );
-}
-
-/** The milled channel between two figures — the plate's own cut, not a rule. */
-function Groove({ className = "" }: { className?: string }) {
-  return (
-    <span
-      aria-hidden
-      className={`my-0.5 w-px self-stretch bg-[image:var(--groove)] shadow-[var(--groove-highlight)] ${className}`}
-    />
   );
 }

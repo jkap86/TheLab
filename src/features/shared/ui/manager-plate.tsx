@@ -1,6 +1,8 @@
 import type { ReactNode } from "react";
 
+import { CONSOLE_BILLET_FACE } from "../console-chrome";
 import { Avatar } from "../avatar";
+import { BilletFinish, MilledHairline } from "./card-plate";
 
 /**
  * The manager's identity, engraved into a recessed plate: avatar on a raised
@@ -11,6 +13,12 @@ import { Avatar } from "../avatar";
  * lineup checker draws the same plate — the line `CONSOLE_KEY` moved on, and
  * for the same reason: two hand-copied identity plates are two chances for one
  * of them to stop matching the console around it.
+ *
+ * **`/manager` no longer draws this.** It draws {@link ManagerBillet} below,
+ * which is the same content milled out of the stock its league cards are made
+ * of; the lineup checker still draws the plate, which is why both are here and
+ * why the billet is a sibling rather than an edit to this box. See that
+ * component for the argument.
  *
  * The same plate as the tools page's `LabWordmark`, with two differences that
  * follow from the content rather than from taste. The bezel holds the
@@ -35,42 +43,33 @@ import { Avatar } from "../avatar";
  * only smears it on a light one.
  *
  * **`children` is the seam the merged header is built on, and it is optional
- * for a reason.** On `/manager` the plate absorbed what used to be a separate
- * summary housing beside it, so the name and the season's two figures are one
- * object; the lineup checker draws the same plate with no season at all, and
- * that page stands an attention housing to the right of it. So the *presence*
- * of children is what switches the box between the two: a plate carrying a
- * season runs the shell's width, and a plate carrying only a name stays
- * `inline-flex` and lets whatever sits beside it have the rest of the row.
- * Editing the box in place would have moved the checker's header without
- * anyone asking.
+ * for a reason.** A page drawing this with a season's figures wants a
+ * full-width box; the lineup checker draws the plate with no season at all on
+ * an account with no leagues, and stands an attention housing to the right of
+ * it. So the *presence* of children is what switches the box between the two: a
+ * plate carrying a season runs the shell's width, and a plate carrying only a
+ * name stays `inline-flex` and lets whatever sits beside it have the rest of
+ * the row.
  *
  * **`controls` is the second seam, and it is a strip rather than a fourth
- * column.** The manager page's Filters key came back down off the app rack and
- * onto this plate, because up there it was a second answer to a question the
- * plate already had the figure for — the rack's key and the plate's
- * `Leagues 9 / 14` were the same news in two places, and only one of them says
- * what was narrowed. It renders after `children` as a full-width flex item, so
- * the plate's own `flex-wrap` gives it a line of its own, and it is separated
- * by a milled *cut* read horizontally — a dark hairline with a light one under
- * it — rather than by `--groove`, which is the vertical channel beside the
- * avatar and would read as a rule turned on its side.
+ * column.** The page's own keys came back down off the app rack and onto the
+ * plate, because up there a lit key was a second answer to a question the plate
+ * already had the figure for — and only one of the two says *what* was
+ * narrowed. It renders after `children` as a full-width flex item, so the
+ * plate's own `flex-wrap` gives it a line of its own, and it is separated by a
+ * milled *cut* read horizontally — a dark hairline with a light one under it —
+ * rather than by `--groove`, which is the vertical channel beside the avatar
+ * and would read as a rule turned on its side.
  *
- * **`compactStrip` is the phone pass, and it is the third seam.** On a 402px
- * screen the plate was ~270px tall — a third of the viewport spent before a
- * single league card — because it stacked a name row, a season row and a
- * controls row, each at desktop padding. Below `sm` the padding and the gaps
- * step down, the avatar and the engraved name step down with them, and the
- * season and the controls become **one** strip: `Leagues · Filters │ Record │
- * dial`. That is ~135px, and the key ends up beside the figure it narrows
- * rather than a row below it.
- *
- * It is opt-in because the merge is not something the plate can do to a caller
- * that has not been written for it — see the prop, and see `SeasonSummary` for
- * the `display: contents` and the `order` it costs the caller's own blocks. The
- * lineup checker deliberately does not take it: its week figures and its
- * attention window are a phone row on their own, and merging a key into them
- * would be a redesign of a page rather than a compaction of this one.
+ * **`compactStrip` is gone**, and it is worth saying where. It was the phone
+ * pass: below `sm` the season and the controls became one strip, so the manager
+ * page's Filters key landed beside the figure it narrows rather than a row
+ * under it. `/manager` was its only caller and the billet arranges its own two
+ * rows, so the seam went with the caller — along with the `display: contents`
+ * and the `order-*` interleave it cost `SeasonSummary`. The lineup checker
+ * never took it: its week figures and its attention window are a phone row on
+ * their own, and merging a key into them would be a redesign of that page
+ * rather than a compaction of this plate.
  */
 export function ManagerPlate({
   name,
@@ -78,7 +77,6 @@ export function ManagerPlate({
   eyebrow,
   children,
   controls,
-  compactStrip = false,
 }: {
   /** Display name, or the username where Sleeper has no display name. */
   name: string;
@@ -98,14 +96,6 @@ export function ManagerPlate({
    * plate's full-width box, which only a plate carrying a season has.
    */
   controls?: ReactNode;
-  /**
-   * Below `sm`, put the figures and the controls on **one** strip rather than
-   * two — see the module note. Opt-in rather than the default because it is a
-   * claim about the caller's own two blocks: they have to be written for it
-   * (`display: contents` and an `order` each), and a caller that has not been
-   * gets two strips, which is what every plate did before this existed.
-   */
-  compactStrip?: boolean;
 }) {
   return (
     // The padding and the gaps step up at `sm`, which is the whole of the phone
@@ -153,49 +143,162 @@ export function ManagerPlate({
         </div>
       </div>
 
-      {/*
-        The two lower blocks, and `compactStrip` is which shape they take.
+      {children}
 
-        Two strips (the default): the season is a full-width item, the controls
-        are a second one under it, and the controls carry the milled cut. That
-        is what the plate has always drawn and what the lineup checker still
-        wants — its week figures and its attention window fill a phone's row on
-        their own.
-
-        One strip (`compactStrip`, below `sm`): a wrapper takes the cut and both
-        blocks go `display: contents` inside it, so the figures and the keys are
-        items of the *same* flex row and an `order` each can interleave them —
-        which is how `/manager` gets `Leagues · Filters │ Record │ dial` on one
-        line. Rendering the key twice and hiding one would be the other way to
-        do it, and it would mount two `<dialog>`s: the rack settled that
-        argument the same way, with `display: contents` rather than a copy.
-
-        `sm:contents` is what makes the wrapper vanish above the breakpoint, so
-        at every width from `sm` up the two blocks are plate items again and
-        nothing about the desktop plate moved.
-      */}
-      {compactStrip ? (
-        <div className="flex w-full flex-wrap items-stretch gap-x-1.5 gap-y-2 border-t border-black/55 pt-2.5 shadow-[0_-1px_0_rgba(255,255,255,0.05)] sm:contents">
-          {children}
-          {controls && (
-            <div className="contents sm:flex sm:w-full sm:flex-wrap sm:items-center sm:gap-3 sm:border-t sm:border-black/55 sm:pt-3.5 sm:shadow-[0_-1px_0_rgba(255,255,255,0.05)]">
-              {controls}
-            </div>
-          )}
+      {/* `w-full` is what makes this a strip and not a fourth column: the plate
+          is `flex w-full flex-wrap` whenever it has children, so a full-width
+          item takes its own line under them. The border pair is the plate's
+          milled cut read horizontally — see the module note. */}
+      {controls && (
+        <div className="flex w-full flex-wrap items-center gap-3 border-t border-black/55 pt-3.5 shadow-[0_-1px_0_rgba(255,255,255,0.05)]">
+          {controls}
         </div>
-      ) : (
-        <>
-          {children}
+      )}
+    </div>
+  );
+}
 
-          {/* `w-full` is what makes this a strip and not a fourth column: the
-              plate is `flex w-full flex-wrap` whenever it has children, so a
-              full-width item takes its own line under them. The border pair is
-              the plate's milled cut read horizontally — see the module note. */}
-          {controls && (
-            <div className="flex w-full flex-wrap items-center gap-3 border-t border-black/55 pt-3.5 shadow-[0_-1px_0_rgba(255,255,255,0.05)]">
-              {controls}
-            </div>
-          )}
+/**
+ * The same identity, milled out of **billet** rather than engraved into a
+ * recessed plate — `/manager`'s header.
+ *
+ * **It is a sibling of {@link ManagerPlate} rather than a variant of it**, and
+ * the reason is the checker: that page draws the plate and is not part of this
+ * design, so editing the box in place would have moved its header without
+ * anybody asking. What the two share is the content and the two seams; what
+ * they do not share is a single surface, a padding, a gap or a type size, which
+ * is what makes a `variant` prop a `?:` on every line rather than a switch at
+ * the top.
+ *
+ * **The page's first object had been the one thing on it not made of metal.**
+ * Every league card below is a machined housing with milled parts bolted to it,
+ * and the plate above them was a recess with type sunk into it — so the header
+ * read as a different class of thing from the hundred objects it introduced,
+ * and its figures were the only readings on the page neither lit nor stamped
+ * into a face. This is the same stock as a card's own settings and standing
+ * strips: `--billet-bg` under {@link BilletFinish}'s grain and raking specular,
+ * chamfered by `--standing-strip-shadow`.
+ *
+ * **The chrome engraving is deliberately dropped.** The plate draws the name as
+ * two stacked copies — an extrusion under a gradient clipped to the glyphs —
+ * which is a treatment for type sunk into a *recess*. On a billet's face the
+ * name is `--billet-name` over `--billet-name-shadow`, which is what a league
+ * card's own ledge already uses, so the header and the cards name a thing the
+ * same way. The `<h1>` stays an `<h1>`.
+ *
+ * **The win rate is the hero, and it is the only reading here that earns an
+ * instrument.** Leagues and the combined record are counts — they compare to
+ * nothing and are engraved figures in one milled well. A rate is a proportion,
+ * so it keeps the dial, mounted on its own bezel at 108px with the figure in a
+ * lit window at its centre. See `SeasonSummary`, which draws all three.
+ *
+ * **One row at `lg` and two below it, and both arrangements are this one DOM.**
+ * The billet is `flex-wrap`, every `order-*` on a child is the compact
+ * arrangement and every `lg:order-none` hands the row back to DOM order — which
+ * is the wide order, read left to right. So the compact `Filters` key beside
+ * the name and the wide one at the row's far end are the *same* key, and there
+ * is exactly one `<dialog>` mounted at any width. Rendering it twice and hiding
+ * one is the other way to do it, and it is the way the app rack already
+ * declined for this reason.
+ *
+ * **The turn is `lg`, where the design says `sm`, and a render is what refused
+ * it.** The wide row's fixed costs are an avatar, a counts well, a 108px gauge
+ * and its label, the keys, two cuts and six gutters — about 634px before the
+ * name has anything at all. At `sm` the billet's content box is 580px, so the
+ * keys wrapped to a second line *and* the name was left 74px: `SLIMJIM` read
+ * `SLI…` at both 640 and 768, with the eyebrow broken over two lines under it.
+ * That is the failure this repo has recorded at three other grains, and `lg` is
+ * the breakpoint `LeagueTeams` and the app rack both moved to after measuring
+ * exactly it. Below `lg` the two-row arm carries the name at full width, which
+ * it does better at 768 than the columns would.
+ *
+ * **What does *not* move with it is the type and the avatar**, which step at
+ * `sm` as they do everywhere: `--type-scale` turns there and `Avatar size="lg"`
+ * steps 38px → 44px there, so the mount has to step with it or the face laps
+ * the ring. Those are the app's own scale rather than this part's arrangement,
+ * and the two-row arm at 768 has room for the larger name — more of it, in
+ * fact, than the one-row arm would.
+ *
+ * **The avatar mount is `size-12` / `size-14`, where the design draws 44px**,
+ * and the difference is `Avatar`'s and not this component's. That size is fixed
+ * at 38px below `sm` and 44px above it, so a 44px mount is a 44px face in a
+ * 42px ring — the lapping this repo has already recorded once, at the other
+ * width. The mock's own drawing is a ~5px ring, and 5px of ring around *this*
+ * avatar is 48px and 56px. So the ring is the design's and the diameter is the
+ * component's; against a 108px dial the mount still reads as subordinate,
+ * which is the proportion the design is actually making.
+ */
+export function ManagerBillet({
+  name,
+  avatarUrl,
+  eyebrow,
+  children,
+  controls,
+}: {
+  /** Display name, or the username where Sleeper has no display name. */
+  name: string;
+  avatarUrl: string | null | undefined;
+  /** The page's static copy, rendered on the server — see the page. */
+  eyebrow: ReactNode;
+  /**
+   * The season's figures. Below `sm` they are the second row and carry the cut
+   * above themselves; from `sm` up they are `display: contents` and their parts
+   * become items of this row — see `SeasonSummary`, which owns both shapes.
+   */
+  children?: ReactNode;
+  /**
+   * The page's own controls: the keys, and the sentence saying what they did.
+   * The keys are an item of this row (the phone puts them beside the name, the
+   * desktop at its far end) and the sentence is a `w-full` item, so it takes a
+   * line of its own under everything at either width.
+   */
+  controls?: ReactNode;
+}) {
+  return (
+    // `gap-y` is what spaces the phone's two rows and, above `sm`, whatever
+    // wraps off the end of the one row — the `filterSummary` sentence always,
+    // and the rest only on a window narrow enough to need it.
+    <div
+      className={`${CONSOLE_BILLET_FACE} relative flex w-full flex-wrap items-center gap-x-2.5 gap-y-2 rounded-[0.875rem] p-2 shadow-[var(--standing-strip-shadow)] lg:gap-x-[1.125rem] lg:gap-y-3 lg:px-3.5 lg:py-3`}
+    >
+      <BilletFinish />
+
+      {/* Every child from here down is `relative`: the two finish overlays above
+          are absolutely positioned, and an absolutely-positioned box paints
+          over in-flow content that is not itself positioned. */}
+      <span
+        aria-hidden
+        className="relative order-1 inline-flex size-12 shrink-0 items-center justify-center rounded-full border border-foreground/10 bg-[image:var(--bezel-bg)] shadow-[var(--bezel-shadow)] sm:size-14 lg:order-none"
+      >
+        <Avatar url={avatarUrl} name={name} size="lg" />
+      </span>
+
+      {/* A div, not a span, for `LabWordmark`'s reason: the `<h1>` below is flow
+          content, which a span cannot legally hold. */}
+      <div className="relative order-2 flex min-w-0 flex-1 flex-col gap-0.5 sm:gap-[0.1875rem] lg:order-none">
+        {/* The eyebrow's *treatment* is the part's, where its copy is the
+            page's — the page hands over `Manager` as an unstyled node and this
+            says what ink a caption stamped on metal is. Written on the row
+            rather than on the node, so the season beside it cannot come to be
+            inked differently from the word it qualifies. */}
+        <span className="flex items-baseline gap-1.5 font-mono text-[length:var(--fs-9)] uppercase tracking-[0.14em] text-[color:var(--billet-label)] [text-shadow:var(--standing-label-shadow)] sm:gap-2 sm:text-[length:var(--fs-10)]">
+          {eyebrow}
+        </span>
+        <h1 className="m-0 truncate font-display text-[length:var(--fs-21)] font-semibold uppercase leading-none tracking-[0.05em] text-[color:var(--billet-name)] [text-shadow:var(--billet-name-shadow)] sm:text-[length:var(--fs-24)] sm:tracking-[0.06em]">
+          {name}
+        </h1>
+      </div>
+
+      {children}
+
+      {controls && (
+        <>
+          {/* The cut between the season and the keys. Below `sm` they are on
+              different rows with the season's own horizontal cut between them,
+              and a vertical hairline across a wrap is a stub hanging off the
+              line above. */}
+          <MilledHairline className="relative hidden lg:block" />
+          {controls}
         </>
       )}
     </div>

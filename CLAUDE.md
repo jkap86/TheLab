@@ -8358,6 +8358,182 @@ portfolio looks like in a drawer bounded to ~245px, since the fixture holds six
 picks; and whether the mint thumb reads against a real pane's rows, since
 headless Chrome draws overlay scrollbars and reserves no gutter for one.
 
+## The identity plate became a billet, and the win rate the hero
+
+`/manager`'s header was the one object on the page not made of metal. Every
+league card under it is a machined housing with milled parts bolted on, and
+`ManagerPlate` was a *recess* with type sunk into it — so the page's first
+object read as a different class of thing from the hundred it introduces, and
+its figures were the only readings on the page neither lit nor stamped into a
+face. It is a milled billet now: the same stock as a card's own settings and
+standing strips, with the win rate as a 108px mounted gauge. Applied from a
+design handoff, its `2b` and that option's `3a` compact arm. Nothing on the wire
+moved — no route, no query, no contract type, no payload field, no migration —
+and no token was added.
+
+**It is a sibling of `ManagerPlate`, not a variant of it**, and the reason is
+`/lineupchecker`: that page draws the same plate and is not part of this design,
+so editing the box in place would have moved its header without anybody asking.
+What the two share is the content and the two seams (`children`, `controls`);
+what they do not share is a single surface, padding, gap or type size, which is
+what makes a `variant` prop a `?:` on every line rather than a switch at the
+top. Both live in `manager-plate.tsx` for the reason the plate lives in
+`features/shared` at all — the day the checker takes the billet, it takes this
+one.
+
+**The chrome engraving is deliberately dropped.** The plate draws the name as
+two stacked copies — an extrusion under a gradient clipped to the glyphs — which
+is a treatment for type sunk into a recess. On a billet's face it is
+`--billet-name` over `--billet-name-shadow`, which is what a league card's own
+ledge already uses, so the header and the cards name a thing the same way. The
+`<h1>` stays an `<h1>`.
+
+**The win rate reads `.583`, not `58.0%`, and that is the one content change.**
+`formatWinShare` sits beside `formatWinPct` rather than replacing it: the dial
+reads the unit a season's record is quoted in, and the shares drawers' record
+column still reads a percentage. Both take `summary.winPct`, so the arc and the
+figure in its window cannot disagree. **The leading zero comes off the formatted
+string, never off the number**, which is the line that is silent when wrong — a
+record a hair under perfect rounds to `1.000` at three decimals, so a `>= 1`
+guard on the *unrounded* share would let it through to be sliced into `.000`,
+the widest reading the page can produce rendered as its own opposite. Null is an
+em dash; a played-and-lost season is a real `.000`.
+
+**The `WIN` caption inside the window went with it**, being a second copy of the
+label beside the dial. What that costs is the figure's accessible name, so the
+gauge is a `<dl>`: the caption is the `<dt>` and the mount holding the figure is
+the `<dd>` — a name and its value, rather than an `aria-label` on a `<span>`
+that has no role to carry one. `flex-col-reverse` is what puts the caption
+*under* the dial on the compact arm while leaving the `<dt>` first in the DOM.
+
+**The circle is what sizes the figure, not the window's width**, and
+`season-summary.tsx` already carried the rule: a line of digits crossing a round
+window sits on a chord of `2·√(r² − offset²)`. Centred — the figure is now the
+only thing in the window — the chord is longest, and `1.000` measures 63.9px
+against 74.1 at 108px and 50.8 against 56.8 at 84px. Both clear; if the type or
+the inset moves, re-measure against the chord rather than nudging pixels.
+
+**The avatar mount is `size-12` / `size-14`, where the design draws 44px**, and
+the difference is `Avatar`'s rather than this part's. That size is fixed at 38px
+below `sm` and 44px above it, so a 44px mount is a 44px face in a 42px ring —
+the lapping this repo already recorded once, at the other width. The mock's own
+drawing is a ~5px ring, and 5px of ring around *this* avatar is 48px and 56px.
+So the ring is the design's and the diameter is the component's; against a 108px
+dial the mount still reads as subordinate, which is the proportion the design is
+actually making.
+
+**Two constants and one prop, and each earns its place.** `BILLET_KEY_CHROME` is
+`PLATE_KEY_CHROME` for metal — `--recess-bg` etched, `--key-metal` raised —
+because a `--foreground` alpha reads as a cut in *plate* stock and `--key-bg` is
+the face a key on a *panel* wears, and both are the surfaces of the thing a
+billet is not. `CONSOLE_METAL_TRACK_SM` is `CONSOLE_PANE_TRACK` from `sm` up,
+spelled by hand for `CONSOLE_TRACK_SM`'s reason: Tailwind scans class strings
+statically, so a computed `sm:` prefix produces no CSS at all. And
+`MilledHairline` took an optional `className`, because which cuts exist is the
+caller's arrangement while the cut itself stays one spelling.
+
+**The eyebrow's copy is the page's and its treatment is the billet's.**
+`page.tsx` hands over a bare `<span>Manager</span>` now — the seam is still
+there for the reason it always was, to keep the page's one piece of static copy
+on the server side of the client boundary — and the billet inks the whole
+eyebrow row, so the season rendered beside that word cannot come to be drawn
+differently from it.
+
+**`compactStrip` is gone.** It was the plate's phone pass, merging the season and
+the controls into one strip; `/manager` was its only caller and the billet
+arranges its own two rows, so the seam went with the caller — along with the
+`display: contents` and the `order-*` interleave it cost `SeasonSummary`. The
+checker never took it. `PLATE_KEY_CHROME` is kept with no caller, on
+`peekActiveSeason`'s terms: it is the half of `PLATE_KEY` that says what a
+*plate*-mounted key looks like, and `BILLET_KEY_CHROME`'s doc is written against
+it.
+
+### The arrangement turns at `lg`, where the design says `sm`
+
+One DOM, two arrangements: the billet is `flex-wrap`, every `order-*` is the
+compact arm and every `lg:order-none` hands the row back to DOM order — which is
+the wide order, read left to right. So the compact `Filters` key beside the name
+and the wide one at the row's far end are the *same* key, and there is exactly
+one `<dialog>` mounted at any width; rendering it twice and hiding one is the
+way the app rack already declined, for this reason.
+
+**A render is what refused `sm`.** The wide row's fixed costs are an avatar, a
+counts well, a 108px gauge and its label, the keys, two cuts and six gutters —
+about 634px before the name has anything at all. At `sm` the billet's content
+box is 580px, so the keys wrapped to a second line **and** the name was left
+74px: `SLIMJIM` read `SLI…` at both 640 and 768, with the eyebrow broken over two
+lines under it. That is the failure this file records at three other grains, and
+`lg` is the breakpoint `LeagueTeams` and the app rack both moved to after
+measuring exactly it. Below `lg` the two-row arm carries the name at full width,
+which it does better at 768 than the columns would.
+
+**What does not move with it is the type and the avatar.** `--type-scale` turns
+at `sm` and `Avatar size="lg"` steps 38px → 44px there, so the mount steps with
+it or the face laps the ring — those are the app's own scale rather than this
+part's arrangement, and the two-row arm at 768 has room for the larger name.
+**The dial's own chain does move**, all of it together: the mount, the arc, the
+pointer, the window and the figure are each measured from the bezel's edge, and
+moving one without the others is how a reading ends up clipped by a circle that
+still looks big enough for it.
+
+### Verified
+
+Rendered through a temporary `/preview` route against the real components,
+tokens and Tailwind build — the method the console-card, shares, rack and
+timeline passes established, since no database is reachable from where this was
+built — then driven over CDP at **390, 640, 768, 900, 1023, 1024, 1280 and 1440
+in both schemes** and deleted. The mechanics are unchanged: `--no-proxy-server`,
+`localhost` rather than `127.0.0.1`, a phone viewport from
+`Emulation.setDeviceMetricsOverride`, and `data-theme` rather than
+`prefers-color-scheme`. The fixtures are three billets — a 14-league account
+narrowing to 9, a perfect record, and an account whose one league has no record
+at all.
+
+The wide arm is **132px**, the design's own figure, and its items land in the
+mock's order to the pixel: at 1280, avatar@94 → name@168 → counts@644 →
+hairline@830 → gauge@849 → hairline@1057 → keys@1076. The compact arm is 196px
+at 390 and 206px from 640, two rows with the milled cut between them and the
+gauge leading row 2. **The name is unclipped at every one of the eight widths**
+(205px at 390 rising to 789px at 1023, then 330px at 1024) and the eyebrow is
+one line throughout. The dial is 84/60 compact and 108/78 wide, with `.527`,
+`1.000` and `—` all inside their chord at both sizes and the pointer absent on
+the null arm.
+
+Driven: pressing `Filters` opened a `:modal` dialog named `League filters`;
+applying `Superflex` lit the key `border-active/40` + `text-readout` with its
+badge reading `1`, raised `Clear` beside it in the same track, moved
+`Leagues 14 → 9 / 14`, `Record 87–78 → 71–46` and the dial `.527 → .607`, and
+put `qb+sf ≥ 2` on its own full-width line in `--billet-accent`. At 390 the
+track's recess computes away (`background-color: rgba(0,0,0,0)`, no shadow, no
+padding) and the key is etched (`background-image: none` over `--recess-bg`);
+from `sm` up both come back.
+
+All three light-mode checks the handoff asks for pass, measured rather than
+assumed: `.583` in the window is **5.61 / 5.20** against `--readout-bg`'s two
+stops; `--billet-label` on `--billet-well-bg` is **4.98 / 7.04**; and the key's
+unlit ink over `--recess-bg` on the billet's own face is **6.40–8.35** in light
+and **5.97–9.17** in dark, across every band of the gradient. Every other ink
+introduced clears too, the lowest being `--billet-accent` at 5.03 on the dark
+face's brightest band.
+
+At every width and in both schemes: `document.documentElement.scrollWidth` equal
+to the viewport, **zero** elements past it, **nothing clipped inside the part**,
+exactly one `<h1>` per billet, and no console output but the dev server's own
+React-DevTools and HMR lines. 1,732 unit tests pass (four more, all the
+formatter's — the share, the tie, the perfect record, the rounds-to-one trap and
+the played-and-lost/never-played split); `lint`, `typecheck` and `build` are
+clean, and `/manager` and `/lineupchecker` both answer 200 with the checker's
+plate untouched.
+
+**Not verified against real data**, which is the gap to close first: every
+number above is a fixture. Three things a render cannot check — whether a real
+account's display names sit acceptably in the compact arm's row 1, which shrinks
+to ~116px once `Clear` joins `Filters` beside the name at 390; whether the
+hero-sized gauge still reads as one instrument above a hundred league cards
+rather than competing with the rank meters on them; and whether `.583` is the
+reading a manager expects where the page said `58.0%` for as long as it has
+existed.
+
 ## The console card
 
 One card carries a league across three tools — `/trades`, `/manager` and

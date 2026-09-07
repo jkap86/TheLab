@@ -6,17 +6,17 @@ import {
   activeFilterCount,
   DEFAULT_LEAGUE_FILTERS,
   filterSummary,
+  BILLET_KEY_CHROME,
   CONSOLE_KEY,
-  CONSOLE_TRACK_SM,
+  CONSOLE_METAL_TRACK_SM,
   LeagueFiltersDialog,
   LineupColumnsDialog,
-  ManagerPlate,
+  ManagerBillet,
   matchesFilters,
   matchesSubjects,
   NO_SUBJECTS,
   parseLeaguematePlayerId,
   PLATE_KEY,
-  PLATE_KEY_CHROME,
   removeSubject,
   setSubjectMode,
   SubjectTokens,
@@ -337,48 +337,45 @@ export function LeaguesHome({
   return (
     <div className="relative">
       <header className="relative">
-        <ManagerPlate
+        <ManagerBillet
           name={name}
           avatarUrl={user?.avatar_url ?? null}
           /*
-            **The Filters key sits on the plate, not in the rack**, and the
-            summary sentence sits beside it. Up in the rack the key was a second
-            answer to a question the plate already carried the figure for: the
-            rack's lit key said "a filter is on" and the plate's `Leagues 9 / 14`
-            said the same thing with a number, while neither said *what* was
-            narrowed. Here the key, the count and the sentence are one object,
-            and pressing the key is a press away from the figure it moves.
+            **The Filters key sits on the header, not in the rack**, and the
+            summary sentence sits under it. Up in the rack the key was a second
+            answer to a question the header already carried the figure for: the
+            rack's lit key said "a filter is on" and `Leagues 9 / 14` said the
+            same thing with a number, while neither said *what* was narrowed.
+            Here the key, the count and the sentence are one object, and
+            pressing the key is a press away from the figure it moves.
 
             `leagues` is the **unfiltered** list deliberately — it is the
             population every count inside the dialog is taken over, and handing
             it the filtered one would collapse each of the dialog's own menus to
             the selection already made.
           */
-          /*
-            **Below `sm` this strip is not a strip.** `compactStrip` merges it
-            into the season's own row, so the pieces here carry an `order` each
-            and the housing they sit in is `display: contents` there — the key
-            lands between `Leagues` and the groove before `Record`, which is the
-            figure it moves. Above `sm` every one of them is a no-op and the
-            strip is exactly what it was.
-          */
-          compactStrip
           controls={
             leagues.length > 0 ? (
               <>
-                {/* The track is the recess a raised key travels in, and below
+                {/* The keys are an item of the billet's own row: `order-3` puts
+                    them beside the name on a phone, where `ml-auto` pins them
+                    to the row's far end, and DOM order puts them at the end of
+                    the desktop row after the gauge.
+
+                    The track is the recess a raised key travels in, and below
                     `sm` there is no raised key to recess — the keys are etched
-                    into the plate there, so the housing goes and this is a bare
-                    pair of items in the strip's own flow. */}
+                    into the billet's face there, so the recess goes with them.
+                    It is the *metal* track: a hole cut in a machined part
+                    rather than a channel of key stock. */}
                 <span
-                  className={`order-2 flex items-center gap-1.5 self-center sm:order-none sm:self-auto sm:p-1 ${CONSOLE_TRACK_SM}`}
+                  className={`relative order-3 ml-auto flex items-center gap-1.5 self-center sm:self-auto sm:p-1 lg:order-none lg:ml-0 ${CONSOLE_METAL_TRACK_SM}`}
                 >
                   <LeagueFiltersDialog
                     filters={filters}
                     onChange={setFilters}
                     leagues={leagues}
                     triggerClassName={PLATE_KEY}
-                    triggerChrome={PLATE_KEY_CHROME}
+                    triggerChrome={BILLET_KEY_CHROME}
                   />
                   {/* Only while there is something to clear: a key that is a
                       no-op three quarters of the time is a key a reader stops
@@ -387,7 +384,7 @@ export function LeaguesHome({
                     <button
                       type="button"
                       onClick={() => setFilters(DEFAULT_LEAGUE_FILTERS)}
-                      className={`${PLATE_KEY} ${PLATE_KEY_CHROME} border-foreground/10 text-foreground/80 hover:text-readout`}
+                      className={`${PLATE_KEY} ${BILLET_KEY_CHROME} border-foreground/10 text-foreground/80 hover:text-readout`}
                     >
                       Clear
                     </button>
@@ -395,28 +392,33 @@ export function LeaguesHome({
                 </span>
                 {/* The filter summary in words, which the View housing's
                     readout used to carry under its count and which then stood
-                    alone under the plate. It says the *filters* only: the
+                    alone under the header. It says the *filters* only: the
                     subject selection has the token tray below, where it can be
-                    undone. `flex-[1_1_12rem]` is what lets it take the rest of
-                    the strip and then drop to its own line rather than
-                    truncating the moment the keys grow. */}
+                    undone.
+
+                    `w-full` at every width, where on the plate it took the row's
+                    slack from `sm` up: the billet's row is a name column, two
+                    wells, a 108px gauge and the keys, and there is no slack for
+                    a sentence to take. Its ink is `--billet-accent` rather than
+                    `text-active` for the reason every ink on this part is —
+                    it is stamped on metal, and the page's accent is drawn for
+                    the ground behind it. */}
                 {leagueNarrowing && (
-                  <p className="order-6 m-0 w-full min-w-0 truncate font-mono text-[length:var(--fs-9)] uppercase tracking-[0.16em] text-active sm:order-none sm:w-auto sm:flex-[1_1_12rem] sm:text-[length:var(--fs-11)]">
+                  <p className="relative order-5 m-0 w-full min-w-0 truncate font-mono text-[length:var(--fs-10)] uppercase tracking-[0.16em] text-[color:var(--billet-accent)] lg:order-none">
                     {leagueNarrowing}
                   </p>
                 )}
               </>
             ) : undefined
           }
+          /* The copy is the page's and the *treatment* is the billet's — see
+             `ManagerBillet`, which inks the whole eyebrow row so the season
+             cannot come to be drawn differently from the word it qualifies. */
           eyebrow={
-            <span className="flex items-baseline gap-1.5 sm:gap-2">
+            <>
               {heading}
-              {state.season && (
-                <span className="font-mono text-[length:var(--fs-9)] uppercase tracking-[0.16em] text-foreground/60 sm:text-[length:var(--fs-11)]">
-                  · {state.season}
-                </span>
-              )}
-            </span>
+              {state.season && <span>· {state.season}</span>}
+            </>
           }
         >
           {/* The season is engraved on the plate rather than standing beside it
@@ -430,7 +432,7 @@ export function LeaguesHome({
               narrowing={narrowing}
             />
           ) : undefined}
-        </ManagerPlate>
+        </ManagerBillet>
 
         {/*
           **The picker's key, and no tray around it.** This was `ColumnsStrip`:

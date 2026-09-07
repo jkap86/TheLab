@@ -25,6 +25,7 @@ export {
   CONSOLE_KEY_PILL,
   CONSOLE_KEY_PILL_SHELL,
   CONSOLE_METAL,
+  CONSOLE_METAL_TRACK_SM,
   CONSOLE_MILLED_WELL,
   CONSOLE_PLATE,
   CONSOLE_READOUT,
@@ -34,6 +35,7 @@ export {
   CONSOLE_WINDOW,
   CONSOLE_WINDOW_KEY,
   CONSOLE_WINDOW_LEDGE,
+  BILLET_KEY_CHROME,
   PLATE_KEY,
   PLATE_KEY_CHROME,
 } from "./console-chrome";
@@ -139,7 +141,9 @@ export { THEME_BOOT_SCRIPT } from "./theme";
 export { useManagerLeagues } from "./use-manager-leagues";
 export type { ManagerLeaguesState } from "./use-manager-leagues";
 export { ThemeToggle } from "./theme-toggle";
-export { ManagerPlate } from "./ui/manager-plate";
+// Two identity headers, one content: the plate the lineup checker draws and
+// the billet `/manager` does. Siblings rather than a variant — see the module.
+export { ManagerBillet, ManagerPlate } from "./ui/manager-plate";
 // The console card's header, shared by all four league cards — see the module.
 // `CardLedge` and the bays under it are the manager card's own arrangement of
 // the same header, and live beside the plates for the same reason the plates

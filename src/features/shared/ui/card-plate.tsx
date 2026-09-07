@@ -594,12 +594,17 @@ export function LedgeFigure({ children }: { children: ReactNode }) {
  * is a dark line with the light catching its far lip, and `self-stretch` is
  * what makes it a cut rather than a dash: it runs the bay's own height, inset a
  * few pixels top and bottom so it never touches the part's chamfer.
+ *
+ * `className` is a width gate and nothing else: the identity billet is one row
+ * at `sm` and two below it, and a vertical cut between two things that are no
+ * longer side by side is a stub hanging off the wrap. Which cuts exist is the
+ * caller's arrangement, so the caller says so — the cut itself is one spelling.
  */
-export function MilledHairline() {
+export function MilledHairline({ className = "" }: { className?: string } = {}) {
   return (
     <span
       aria-hidden
-      className="my-[0.1875rem] w-px shrink-0 self-stretch bg-[color:var(--milled-hairline)] shadow-[var(--milled-hairline-highlight)]"
+      className={`my-[0.1875rem] w-px shrink-0 self-stretch bg-[color:var(--milled-hairline)] shadow-[var(--milled-hairline-highlight)] ${className}`}
     />
   );
 }
