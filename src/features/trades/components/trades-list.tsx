@@ -49,6 +49,8 @@ export function TradesList({
   leaguesById,
   basis,
   board,
+  season,
+  username,
   hasMore,
   loadingMore,
   loadMoreError,
@@ -65,6 +67,14 @@ export function TradesList({
    */
   basis: TradeValueBasis;
   board: KtcBoardChoice;
+  /**
+   * The season and the reader's own account, passed straight through to every
+   * card: an opened card solves and rewinds the league it names, and both of
+   * those decide which boards answer. Props rather than hooks inside the card,
+   * on `basis` and `board`'s own rule one line up — see `TradeCard`.
+   */
+  season: string;
+  username: string | null;
   hasMore: boolean;
   loadingMore: boolean;
   /** A later page failed. The cards above it stay exactly as they are. */
@@ -102,6 +112,8 @@ export function TradesList({
             view={view}
             basis={basis}
             board={board}
+            season={season}
+            username={username}
           />
         ))}
       </ul>
