@@ -1,6 +1,6 @@
 "use client";
 
-import { memo } from "react";
+import { memo, useEffect, useRef, useState } from "react";
 
 import type {
   KtcBoardChoice,
@@ -14,8 +14,11 @@ import { resolveKtcFormat } from "@/shared/ktc/board-choice";
 import { pickSlotKey } from "@/shared/trades/pick-slots";
 import {
   CardPlateRow,
-  CONSOLE_CARD,
+  CardRule,
+  CONSOLE_CARD_SHELL,
+  CONSOLE_METAL,
   CONSOLE_WINDOW,
+  ExpandedPanel,
   formatInstantDate,
   formatInstantTime,
   LeagueConfigWindow,
@@ -25,7 +28,15 @@ import {
   rankPercentile,
   ReadingPlate,
   Scanlines,
+  useLeagueLineup,
 } from "@/features/shared";
+
+// Named by module path rather than through `@/features/shared`, and that is the
+// whole reason the timeline sits outside that barrel: a component file is one
+// module to the bundler, so a `TimelineView` reached through the barrel would
+// ship the rail, the rewind and the fetch hook to every page importing anything
+// shared. Named here, the chunk belongs to this route.
+import { TimelineView } from "@/features/shared/ui/timeline";
 
 import {
   assetPrice,
@@ -68,14 +79,58 @@ import type { TradeCardView } from "../trades-data";
  * removed: the values are shown and the comparison is left to the reader. Do
  * not reintroduce one.
  *
+ * **The card opens onto the league itself**, which is the whole of what this
+ * disclosure is for: a trade is two hauls and the question every one of them
+ * raises is *what did that do to these teams*. So the expanded half is the
+ * manager card's own expanded half — the same capped housing, the same history
+ * bay, the same two panes, the same drawer of bench and picks — over the league
+ * this trade happened in. It is two component calls (`ExpandedPanel` and
+ * `TimelineView`) rather than anything drawn here, and that is deliberate: a
+ * league described one way on `/manager` and another here would be the drift the
+ * console-card language exists to remove.
+ *
+ * **Everything structural in the summary is `league-card.tsx`'s, to the
+ * value**: the `<li>`'s perspective and its two z-orderings, the metal finish,
+ * the four decorative layers in the one span that clips, the gutter, the tilt
+ * and its flattening, and the focus ring. What differs is what the card holds.
+ *
+ * **Four things depart from that card, and each is a measurement rather than a
+ * preference.**
+ *
+ * 1. **No freeze.** A manager card pins its housing under the rack because the
+ *    frozen part is ~210px — plates, settings strip, four rank windows — and a
+ *    twelve-team table scrolling past needs the league's name to stay on
+ *    screen. This summary carries both hauls in full, measured 413px, and
+ *    freezing that covers the top half of the viewport with the history bay the
+ *    first thing underneath it. So no `group-open/card:sticky`, and
+ *    `--card-freeze-top` is not read here.
+ * 2. **The panel does not park either**, and its cap is a share of the viewport
+ *    rather than what is left under a header — see `panelCap`, where both arms
+ *    live and are tested. Run through the parked arm this card's ~428px panel
+ *    offset would take 515px off the screen for two things that are not there,
+ *    which at an 800px viewport hits the floor and leaves the starters scroller
+ *    nothing at all.
+ * 3. **The summary is `shrink-0`, never `flex-1`.** On the manager card
+ *    `flex-1` is what makes a card fill its grid row; here the `<details>` is a
+ *    column flex container, so `flex: 1 1 0%` shrinks the summary *below its
+ *    own content height* and its content paints over the expanded half — which
+ *    is what hid the history rail during design.
+ * 4. **The settings strip moved up**, from under the hauls to directly under
+ *    the rule, on the plane between the plates and the windows. It is a
+ *    property of the league and it now sits with the plate that names it.
+ *
  * `memo`'d because the list re-renders on every appended page — and the memo
- * only *holds* because of what `view` is. It used to be the whole folded board,
- * which is a new object every time a page lands, so `memo` compared a changed
- * prop for every card and re-rendered all of them: appending page twenty cost
- * twenty pages of re-renders, and the board got slower the further a reader
- * scrolled. A `view` is its own page's maps, built once and shared by that
- * page's trades, so a card's props are fixed from its first render. See
- * `trades-data` for why a page's own maps are the right ones to read.
+ * only *holds* because of what its props are. `view` used to be the whole
+ * folded board, which is a new object every time a page lands, so `memo`
+ * compared a changed prop for every card and re-rendered all of them: appending
+ * page twenty cost twenty pages of re-renders, and the board got slower the
+ * further a reader scrolled. A `view` is its own page's maps, built once and
+ * shared by that page's trades. **`season` and `username` follow the same rule
+ * and are props for the same reason** — `useStoredAccount()` inside the card
+ * would subscribe every one of hundreds of rows to the same value, which is why
+ * `basis` and `board` are already passed down rather than read here.
+ *
+ * See `trades-data` for why a page's own maps are the right ones to read.
  */
 export const TradeCard = memo(function TradeCard({
   trade,
@@ -83,6 +138,8 @@ export const TradeCard = memo(function TradeCard({
   view,
   basis,
   board,
+  season,
+  username,
 }: {
   trade: Trade;
   /** Null before the leagues request lands, or if it failed. */
@@ -92,6 +149,19 @@ export const TradeCard = memo(function TradeCard({
   basis: TradeValueBasis;
   /** The reader's KeepTradeCut market choice — see `useKtcBoard`. */
   board: KtcBoardChoice;
+  /**
+   * The season this board answers, which the expanded half is solved and
+   * rewound against. The page's own, so the trade a reader is looking at and
+   * the league they open under it are the same year.
+   */
+  season: string;
+  /**
+   * Whose synced drafts the ADP the expanded half prices capital against is
+   * averaged over, and whose team it marks — null for a device with no stored
+   * account, which costs those three columns and nothing else. A prop rather
+   * than a hook, on the rule above.
+   */
+  username: string | null;
 }) {
   // Resolved here rather than on the server, because the payload carries every
   // basis and both markets and only this card knows which league it is — see
@@ -103,61 +173,307 @@ export const TradeCard = memo(function TradeCard({
     basis,
     format: resolveKtcFormat(board, leagueType(league)),
   };
+
   return (
-    <li className="relative">
-      <article className={`${CONSOLE_CARD} font-mono`}>
-        {/* The league is what the trade is *in* and the date is when, so they
-            label the card from its top edge rather than sitting inside it as
-            two more lines. One row, never two absolutely-positioned spans —
-            `CardPlateRow` carries the reason. */}
-        <CardPlateRow>
-          {/* `size="md"`: the trade is the card's subject and the league is
-              where it happened, where on a manager card the league is the
-              subject outright. */}
-          <LeaguePlate
-            size="md"
-            name={league?.name ?? trade.league_id}
-            avatarUrl={league?.avatar_url}
-          />
-          <ReadingPlate>
-            <span className="font-mono text-[length:var(--fs-10)] uppercase tracking-[0.16em] tabular-nums text-foreground/60">
-              <TradeDate at={trade.completed_at} />
-            </span>
-          </ReadingPlate>
-        </CardPlateRow>
+    // The `perspective` makes each `<li>` its own stacking context, so a card
+    // that rises cannot paint over the one after it in DOM order — the raise
+    // has to be ordered here, on the list item, rather than on the summary
+    // inside it. `league-card.tsx` carries the finding.
+    <li className="relative flex pointer-fine:[perspective:2400px] hover:z-10 has-[details[open]]:z-10">
+      {/* `min-w-0` is what lets the card shrink to a phone: the `<li>` is a row
+          flex container, so its item takes `min-width: auto` and refuses to go
+          below its own min-content — and the expanded half's two panes sit side
+          by side at every width by design, which puts that min-content above
+          390. Without it the card is wider than the viewport and the whole page
+          scrolls sideways. */}
+      <details className={`group/card ${CONSOLE_METAL} flex min-w-0 flex-1 flex-col`}>
+        <summary
+          className={
+            `lab-card-3d ${CONSOLE_CARD_SHELL} flex shrink-0 cursor-pointer list-none flex-col font-mono ` +
+            // The manager card's gutter, composed onto the *shell* rather than
+            // appended to `CONSOLE_CARD`: two base `px-*` utilities of the same
+            // specificity are decided by Tailwind's emit order rather than the
+            // class attribute, and the symptom is a card silently laid out at
+            // the wrong width. See that constant's own note.
+            "px-3.5 pb-3.5 pt-[1.625rem] sm:px-[1.125rem] sm:pb-[1.125rem] sm:pt-[1.875rem] " +
+            // **`shrink-0`, never `flex-1`.** The `<details>` is a column flex
+            // container, so `flex: 1 1 0%` would shrink this below its own
+            // content height and its content would paint over the expanded
+            // half — which is exactly what hid the history rail during design.
+            // The manager card can say `flex-1` because there the flex it fills
+            // is the grid row's, not a column of its own.
+            //
+            // **And no `group-open/card:sticky` here**, which is the other
+            // departure: this summary is both hauls in full, and freezing 413px
+            // under the rack covers the top half of the viewport. See the
+            // component note.
+            "pointer-fine:[transform-style:preserve-3d] [transform-origin:center_bottom] " +
+            "pointer-fine:[transform:translateZ(0)_rotateX(3deg)] " +
+            "pointer-fine:hover:[transform:translateZ(30px)_rotateX(0deg)] " +
+            "pointer-fine:group-open/card:[transform:translateZ(20px)_rotateX(0deg)] " +
+            "transition-[transform,box-shadow,border-color] duration-[450ms] ease-[cubic-bezier(0.2,0.8,0.2,1)] " +
+            "hover:border-active/45 group-open/card:border-active/45 " +
+            "pointer-fine:hover:shadow-[var(--housing-shadow),var(--card-lift-hover),var(--card-halo-hover)] " +
+            "pointer-fine:group-open/card:shadow-[var(--housing-shadow),var(--card-lift-hover),var(--card-halo-hover)] " +
+            "focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-active/60"
+          }
+        >
+          {/* Everything decorative, in the one layer that clips —
+              `preserve-3d` cannot coexist with `overflow: hidden`, and a clip
+              on the card itself silently flattens every `translateZ` under it.
+              The sheen and the floor only ever move under a hover, so they stay
+              out of the tree entirely on a coarse pointer. */}
+          <span
+            aria-hidden
+            className="pointer-events-none absolute inset-0 overflow-hidden rounded-[inherit]"
+          >
+            <span className="lab-anim absolute inset-y-0 left-0 hidden w-[55%] -translate-x-[180%] -skew-x-12 bg-[image:var(--card-sheen)] transition-transform duration-[900ms] ease-out group-hover/card:translate-x-[450%] pointer-fine:block" />
+            <span className="absolute -inset-x-1/4 -bottom-[8%] hidden h-[62%] origin-bottom bg-[image:var(--card-floor)] opacity-40 transition-opacity duration-[450ms] [mask-image:linear-gradient(to_top,#000,transparent_72%)] [transform:perspective(320px)_rotateX(66deg)] group-hover/card:opacity-100 group-open/card:opacity-100 pointer-fine:block" />
+            <span className="absolute -bottom-[45%] left-1/2 h-[85%] w-[120%] -translate-x-1/2 bg-[radial-gradient(closest-side,var(--accent-glow),transparent_75%)] opacity-30 transition-opacity duration-[450ms] group-hover/card:opacity-80 group-open/card:opacity-80" />
+            <span className="absolute inset-x-[18%] top-0 h-px bg-[image:var(--card-edge-light)] opacity-0 transition-opacity duration-[450ms] group-hover/card:opacity-100 group-open/card:opacity-100" />
+          </span>
 
-        {/* What game this league is playing, between the plate that names it
-            and the hauls it prices. It is the manager card's own window, read
-            from the same rules rather than re-derived — see
-            `LeagueConfigWindow` — and it is what a value on this board could
-            not say on its own: the same two players are a different trade in a
-            dynasty superflex league than in a redraft one.
+          {/* Outside the clipping layer: the plates straddle the top edge, and
+              a clip is exactly what would cut them off.
 
-            **Drawn only once the league row has arrived.** Every rule it reads
-            treats an absent blob as its own default — an absent `type` is
-            redraft, an absent `best_ball` is managed — which is right for a
-            league that answered and said nothing, and a claim for one that has
-            not answered yet. The card would state "Redraft · Managed" over a
-            dynasty league for as long as `/api/trades/leagues` took, then
-            silently correct itself. Nothing is the honest reading, and it is
-            the same beat the league's name spends showing its id. */}
-        {league && <LeagueConfigWindow league={league} className="mb-4" />}
-
-        <div className="grid gap-4 sm:grid-cols-2">
-          {trade.sides.map((side) => (
-            <SideColumn
-              lens={lens}
-              key={side.roster_id}
-              trade={trade}
-              side={side}
-              view={view}
+              The league is what the trade is *in* and the date is when, so they
+              label the card from its top edge rather than sitting inside it as
+              two more lines. One row, never two absolutely-positioned spans —
+              `CardPlateRow` carries the reason. */}
+          <CardPlateRow>
+            {/* `size="md"`: the trade is the card's subject and the league is
+                where it happened, where on a manager card the league is the
+                subject outright. */}
+            <LeaguePlate
+              size="md"
+              name={league?.name ?? trade.league_id}
+              avatarUrl={league?.avatar_url}
             />
-          ))}
-        </div>
-      </article>
+            <ReadingPlate>
+              <span className="font-mono text-[length:var(--fs-10)] uppercase tracking-[0.16em] tabular-nums text-foreground/60">
+                <TradeDate at={trade.completed_at} />
+              </span>
+            </ReadingPlate>
+          </CardPlateRow>
+
+          <CardRule />
+
+          {/* What game this league is playing, directly under the plate that
+              names it — where it used to sit under the hauls. It is a property
+              of the league, so it belongs with the league's own name rather
+              than beneath the two hauls it qualifies; that is the order the
+              manager card settled on for the same reason. It is that card's own
+              strip, read from the same rules rather than re-derived — see
+              `LeagueConfigWindow` — and it is what a value on this board could
+              not say on its own: the same two players are a different trade in
+              a dynasty superflex league than in a redraft one.
+
+              `18px` is the plane between the plates and the windows, so they
+              read front to back. That is new here — this card used to be flat
+              and the strip took no transform — and it is affordable now for the
+              reason the whole card is: the depth rides `pointer-fine:`, so a
+              board with no virtualizer spends composited layers only where
+              there is a hover to spend them on.
+
+              **Drawn only once the league row has arrived.** Every rule it
+              reads treats an absent blob as its own default — an absent `type`
+              is redraft, an absent `best_ball` is managed — which is right for
+              a league that answered and said nothing, and a claim for one that
+              has not answered yet. The card would state "Redraft · Managed"
+              over a dynasty league for as long as `/api/trades/leagues` took,
+              then silently correct itself. Nothing is the honest reading, and
+              it is the same beat the league's name spends showing its id. */}
+          {league && (
+            <LeagueConfigWindow
+              league={league}
+              className="mt-3 sm:mt-3.5 pointer-fine:[transform:translateZ(18px)]"
+            />
+          )}
+
+          <div className="relative mt-3.5 grid gap-4 sm:grid-cols-2 pointer-fine:[transform:translateZ(22px)]">
+            {trade.sides.map((side) => (
+              <SideColumn
+                lens={lens}
+                key={side.roster_id}
+                trade={trade}
+                side={side}
+                view={view}
+              />
+            ))}
+          </div>
+
+          <DisclosureHint />
+        </summary>
+
+        {/* The league itself, on the manager card's own arrangement: a capped
+            inner housing holding the history bay, the two panes and the
+            roster's drawer. `parked={false}` is the one thing this card tells
+            it — see the component note above and `panelCap`. */}
+        <ExpandedPanel parked={false}>
+          <TradeLeague
+            leagueId={trade.league_id}
+            season={season}
+            username={username}
+            board={board}
+          />
+        </ExpandedPanel>
+      </details>
     </li>
   );
 });
+
+/**
+ * The row under the hauls that says the card opens, and onto what.
+ *
+ * **A word rather than a bare chevron**, because what is behind this
+ * disclosure is not more of the trade — it is the league, solved. A chevron
+ * alone promises "more detail" and a reader who pressed it expecting the rest
+ * of a haul would find a standings table instead; three words are what make the
+ * press worth making.
+ *
+ * The word lights on open, so the row reads as a state rather than as a label
+ * that happens to sit above an open panel. It is not a `<button>`: the
+ * `<summary>` it sits inside *is* the control, and a nested one would be
+ * unreliably reachable — the constraint `shares-drawer.tsx` records.
+ *
+ * `translateZ(10px)`, the shallowest plane on the card: it is the last thing
+ * above the housing, under the hauls at 22 and the strip at 18.
+ */
+function DisclosureHint() {
+  return (
+    <div className="relative mt-3.5 flex items-center gap-2 pointer-fine:[transform:translateZ(10px)]">
+      <span className="font-mono text-[length:var(--fs-9)] uppercase tracking-[0.18em] text-readout-label transition-colors duration-300 group-open/card:text-readout">
+        The league
+      </span>
+      <span
+        aria-hidden
+        className="h-px flex-1 bg-gradient-to-r from-active/22 to-transparent"
+      />
+      <span
+        aria-hidden
+        className="inline-flex text-readout-label transition-transform duration-300 group-open/card:rotate-180"
+      >
+        <svg
+          width="11"
+          height="11"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="2.6"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        >
+          <path d="M6 9l6 6 6-6" />
+        </svg>
+      </span>
+    </div>
+  );
+}
+
+/**
+ * The league this trade happened in, as the manager card opens it.
+ *
+ * **The read is behind the disclosure, and that is a bound rather than a
+ * nicety.** A `<details>` hides its body rather than unmounting it, so every
+ * card on a hundred-row board mounts this — and solving a league is the
+ * heaviest read anything on this page makes. So `useLeagueLineup` is disabled
+ * until the card is open, exactly as `useTimeline` is disabled until `History`
+ * is pressed one level further in. A closed card costs nothing; an opened one
+ * costs one request and keeps its answer for as long as it is on screen.
+ *
+ * **Two reads, one subject.** The entry and the log are asked the same
+ * question — the same season, the same manager, the same market — because a
+ * card's present priced on a different board from the past its own rail scrubs
+ * to is not a comparison, it is two numbers on two rulers.
+ *
+ * **The three states under the housing are three different sentences**, and
+ * collapsing them is what would make an ordinary answer look like a fault. A
+ * read in flight says so, because a panel that opened onto "no rosters" for a
+ * second and then filled in reads as a glitch. A failed read says so, because
+ * this is the only thing behind the disclosure and a silent empty is
+ * indistinguishable from a league this database has never crawled. And a league
+ * that genuinely has no stored rosters gets `TimelineView`'s own empty child,
+ * which is that third sentence — the rail is still drawn above it, because a
+ * league with no rosters can still have a log worth reading.
+ */
+function TradeLeague({
+  leagueId,
+  season,
+  username,
+  board,
+}: {
+  leagueId: string;
+  season: string;
+  username: string | null;
+  board: KtcBoardChoice;
+}) {
+  // **Whether the card has been opened, held here rather than in `TradeCard`**,
+  // which is what keeps that component hook-free — its own stated design, and
+  // `league-card.tsx`'s: the one interaction a card owns is the disclosure, and
+  // the state anything *inside* it needs lives below it.
+  //
+  // **One-way, like `TimelineView`'s own history gate.** Once a card has been
+  // opened the answer stands for as long as it is mounted, so closing it must
+  // not throw the read away and re-opening must not pay for it again — which is
+  // the whole reason a `<details>` hiding its body rather than unmounting it is
+  // an advantage here rather than the cost it is one paragraph up.
+  const [opened, setOpened] = useState(false);
+  const ref = useRef<HTMLSpanElement | null>(null);
+
+  useEffect(() => {
+    const card = ref.current?.closest("details");
+    if (!card) return;
+    const onToggle = () => {
+      if (card.open) setOpened(true);
+    };
+    card.addEventListener("toggle", onToggle);
+    // A card already open on mount — a re-render that remounts this subtree
+    // rather than a press — has no `toggle` coming to tell us so.
+    if (card.open) setOpened(true);
+    return () => card.removeEventListener("toggle", onToggle);
+  }, []);
+
+  const subject = { leagueId, season, username, board };
+  const { payload, loading, error } = useLeagueLineup(subject, opened);
+
+  return (
+    <>
+      {/* **`display: contents`, so the panel keeps laying out `TimelineView`'s
+          three parts directly.** The bay, the browser and the caveat are the
+          panel's own flex items — the rail holds its height, the browser takes
+          the rest, and the two panes scroll their own lists — and a box here
+          would make them one item and the panel a box with a scrollbar in it.
+          This is `md:contents`' trick, spent on a seat for the ref rather than
+          on a layout: the element is still in the DOM tree, so `closest` finds
+          the `<details>` above it; only its box is absent. */}
+      <span ref={ref} aria-hidden className="contents" />
+      <TimelineView
+        subject={subject}
+        entry={payload?.entry ?? null}
+        // Whichever roster the reader holds here, if any — read off the answer
+        // the table is drawn from, so a past stop marks the same team the
+        // present one does. On this board that is usually nobody: the trades
+        // are every league's, not one account's, and `solveLeagueEntry` marks
+        // none of them rather than refusing to solve the league.
+        managerRosterId={
+          payload?.entry?.teams.find((t) => t.is_manager)?.roster_id ?? null
+        }
+      >
+        {loading ? (
+          <p className="m-0 font-mono text-[length:var(--fs-11)] uppercase tracking-[0.16em] text-readout-label">
+            Reading the league…
+          </p>
+        ) : error !== null ? (
+          <p className="m-0 text-[length:var(--fs-12)] text-error">{error}</p>
+        ) : (
+          <p className="m-0 font-mono text-[length:var(--fs-11)] uppercase tracking-[0.16em] text-readout-label">
+            No rosters read for this league yet
+          </p>
+        )}
+      </TimelineView>
+    </>
+  );
+}
 
 /**
  * When the trade went through, to the minute.
@@ -249,7 +565,21 @@ function SideColumn({
             colour on this card is a statement about one asset's standing among
             its league's; a coloured total would be a statement about who won
             the trade, which this card rules out by name above. */}
-        <span className="shrink-0 font-mono text-[length:var(--fs-18)] tabular-nums text-readout [text-shadow:var(--readout-text-glow)]">
+        <span
+          className="shrink-0 font-mono text-[length:var(--fs-18)] tabular-nums text-readout"
+          // **Struck into the glass rather than printed on it**, which is the
+          // one thing about this figure the console-card pass left flat: every
+          // other headline reading in the app is engraved (`--figure-engrave`)
+          // and this was a glow alone. The halo stays beside it, so the figure
+          // still reads as lit — a cut with no light in it is a label.
+          //
+          // A `style` rather than a class because the two are one `text-shadow`
+          // list: a second declaration would replace the first rather than
+          // composing with it, and which one won would be emit order.
+          style={{
+            textShadow: "var(--figure-engrave), 0 0 22px var(--accent-glow)",
+          }}
+        >
           {formatAssetValue(
             bundleValue(trade.league_id, received, view.assetValues, lens),
           )}

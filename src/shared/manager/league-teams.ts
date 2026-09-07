@@ -62,16 +62,41 @@ export function leagueTeamName(
 }
 
 /**
+ * A stand-in for "no manager", used where the reader holds no roster in this
+ * league — or where the question has no manager in it at all.
+ *
+ * A space, because no Sleeper user id is one and **an orphaned roster's owner
+ * is `null`**: a bare `null` sentinel would mark every ownerless team as the
+ * reader's own and rank the page against it. The one spelling, so the
+ * league-scoped route and the browser's own rewind cannot disagree about what
+ * "nobody" is — `timeline-entry.ts` reads it from here.
+ */
+export const NO_MANAGER = " ";
+
+/**
  * Solve one league into its {@link LeagueLineupEntry}: the manager's ranks,
  * plus every team's lineup, totals and picks for the card's team picker.
  *
- * Null where the manager holds no roster — the query already filters those
- * leagues out, so hitting it means the store moved between reads, and the
- * route omits the league the way it always has.
+ * **The manager is optional, and the two absences are different absences.**
+ * A *named* manager who holds no roster answers null: the manager route's query
+ * already filters those leagues out, so hitting it means the store moved
+ * between reads, and the route omits the league the way it always has. A
+ * **null** manager is a different question — "solve this league", with nobody
+ * in it — which is what a league-scoped caller asks: the trade card lists
+ * leagues the reader may have no team in at all, and refusing to solve one
+ * because of that would empty the card over a fact about the *reader*. So a
+ * null manager solves every roster, marks none of them and ranks nothing,
+ * which is exactly what {@link rankLeagueLineups} already does with an owner it
+ * cannot find.
+ *
+ * That is the same split the queries behind it draw: `getManagerLeagueRosters`
+ * gates on `HOLDS_A_ROSTER_SQL` and `getLeagueLineupRow` deliberately does not,
+ * because there is no manager in *that* question either.
  */
 export function solveLeagueEntry(
   league: LineupLeagueRow,
-  managerUserId: string,
+  /** Null for a league-scoped read — see the note above. */
+  managerUserId: string | null,
   season: string,
   projections: RosProjections,
   adp: ReadonlyMap<string, AdpEntry>,
@@ -125,7 +150,7 @@ export function solveLeagueEntry(
 
   const { lineup, ranks, rosters } = rankLeagueLineups(
     league,
-    managerUserId,
+    managerUserId ?? NO_MANAGER,
     projections,
     adp,
     ktc.values,
@@ -138,11 +163,16 @@ export function solveLeagueEntry(
     positionSets,
     adpVariants,
   );
-  if (!lineup) return null;
+  // Only where a manager was *named*: a league-scoped read has no lineup of its
+  // own to miss, and answering null there would be refusing to draw a league
+  // over the absence of somebody the question never mentioned.
+  if (managerUserId !== null && !lineup) return null;
   const teams: LeagueTeam[] = rosters.map(({ roster, lineup, totals }) => ({
     roster_id: roster.roster_id,
     name: leagueTeamName(league.users, roster.roster_id, roster.owner_id),
-    is_manager: roster.owner_id === managerUserId,
+    // Never `roster.owner_id === managerUserId` unguarded: an orphan roster's
+    // owner is null, and a null manager would mark every one of them.
+    is_manager: managerUserId !== null && roster.owner_id === managerUserId,
     lineup,
     totals,
     picks: picks.get(roster.roster_id) ?? [],

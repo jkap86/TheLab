@@ -401,9 +401,10 @@ export function PlateDivider({ stretch = false }: { stretch?: boolean } = {}) {
  * thing about them worth keeping: the handoff draws it static at its full
  * 92px and says the growth may stay.
  *
- * Both readers are a `<details class="group/card">`, which is what the open and
- * hover states here are written against — the trade card has no disclosure and
- * draws no rule.
+ * Every reader is a `<details class="group/card">`, which is what the open and
+ * hover states here are written against. The trade card was the exception that
+ * "drew no rule" — it had no disclosure to open — and it has one now: it opens
+ * onto the league the trade happened in.
  */
 export function CardRule() {
   return (

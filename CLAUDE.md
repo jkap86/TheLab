@@ -4337,6 +4337,285 @@ projections read costs on a page spanning a hundred leagues (the board is shared
 and cached, but it is scored per league), and whether the pick grid a league
 enumerates matches the one its own card draws.
 
+### The trade card became a league card, and opens onto the league
+
+The trade card read as a flat pane beside `/manager`'s league cards, even though
+both are the same league seen from two tools. It is the same object now — the
+metal finish, the real perspective rise, the four decorative layers, the plate
+row over a hairline rule, the settings strip promoted up under it — with a
+disclosure whose expanded half is **the league itself**, on the manager card's
+current design: a capped panel, the history behind a `History` key in its own
+bay, two panes scrolling their own lists, and the roster's bench and picks in one
+drawer pinned to the pane's floor. Applied from a design handoff. **The card's
+own content is unchanged**: both sides still say what they received and what they
+gave, take-first, with the gives as the dimmer half of the pair.
+
+**No migration and no new token**, and the second half is the schema's doing at
+one grain up: every surface, colour and shadow this draws already existed with a
+light counterpart, because the manager card and the lineup checker had already
+asked for them. What it needed was a *read*.
+
+**Everything structural is `league-card.tsx`'s, to the value** — the `<li>`'s
+perspective and its two z-orderings, `CONSOLE_METAL`, the decorative span and
+its four children, the gutter, the tilt and its flattening, the focus ring — and
+the expanded half is **two component calls**, `ExpandedPanel` and
+`TimelineView`. That is the point rather than a shortcut: a league described one
+way on `/manager` and another here is exactly the drift the console-card
+language exists to remove, and it is the drift a single-page render can never
+show.
+
+#### Four departures from that card, each a measurement
+
+**1. No freeze.** A manager card pins its housing under the rack because the
+frozen part is ~210px and a twelve-team table scrolling past needs the league's
+name to stay on screen. This summary carries both hauls in full — measured
+**415px** — and freezing that covers the top half of the viewport with the
+history bay the first thing underneath it. So no `group-open/card:sticky`, and
+`--card-freeze-top` is not read here. Verified: an open card's summary computes
+`position: relative`.
+
+**2. The panel does not park, and its cap is a share of the viewport.**
+`panelCap` grew a second arm rather than a second copy of the arithmetic, and
+the reason is a subtraction that stops being true: the parked arm takes the
+viewport less `--card-freeze-top` less the header, every term of which is on
+screen at once. Neither holds here — the panel offset is ~428px and the card
+never parks — so that arm takes **515px off the screen for two things that are
+not there**, which at an 800px viewport hits the floor and leaves the starters
+scroller nothing at all. The un-parked arm asks the only question still true of
+this card, which is how much of the *viewport* a panel may take:
+`max(460, min(vh × 0.7, vh − 120))`.
+
+**3. The summary is `shrink-0`, never `flex-1`.** On the manager card `flex-1`
+is what makes a card fill its grid row; here the `<details>` is a column flex
+container, so `flex: 1 1 0%` shrinks the summary *below its own content height*
+and its content paints over the expanded half — which is what hid the history
+rail during design.
+
+**4. The settings strip moved up**, from `mb-4` under the hauls to the first
+thing under `CardRule`, on `translateZ(18px)`. It is a property of the league
+and it belongs with the plate that names it, which is the order the manager card
+settled on for the same reason. `LeagueConfigWindow`'s module note said a trade
+card was flat and that a `translateZ` there would buy a composited layer per
+card on a board that appends a hundred at a time and never unmounts one; **that
+note is updated rather than contradicted**. The cost has not gone away — what
+changed is that every plane on this card, that one included, rides
+`pointer-fine:`, so the layer is spent only where there is a hover to spend it
+on and a touch device gets the same strip flat. The board still has no
+virtualizer, which is why the gate is the thing to keep rather than the flatness
+it used to enforce.
+
+#### `panelCap` came out of the component so it could be tested
+
+That function's own doc said it was "exported for the test" and there was no
+test: it lived in `expanded-panel.tsx`, a `.tsx` with JSX, which Node's
+strip-types runner cannot resolve. It is `features/shared/panel-cap.ts` now,
+pure, with `panel-cap.test.ts` beside it — the arrangement `seat-compare.ts`
+already has, and for its reason: every term is a measurement the caller takes,
+and the arithmetic between them is the thing that renders perfectly while being
+wrong. A cap 500px too small is a panel with a scroller in it and no error to
+say so.
+
+**Both arms round**, which is one rule rather than an arm that happens to be
+integral because its inputs were: `700 × 0.7` is `489.99999999999994` in binary
+floating point.
+
+**`ExpandedPanel` moved to `features/shared/ui`**, on the line `CONSOLE_KEY`,
+`ManagerPlate`, `LeagueConfigWindow` and `LeagueTeams` all moved on — a second
+reader, and `features/trades` may not import from `features/manager`. Its own
+note had said "consider moving it once a second card mounts it", and one does.
+
+**And it gained a `resize` listener beside its `ResizeObserver`**, which is a
+defect the render caught and which was **not** introduced by this pass: both
+arms of the cap are functions of `window.innerHeight`, and a window dragged
+taller — or a phone's URL bar retracting — changes that without changing the
+summary's box by a pixel, so the observer never fired. Measured before the fix:
+opening at a 900px viewport and resizing to 1200 held the panel at 630px until
+it was closed and re-opened. The observer's own argument is unchanged and it
+stays: the summary changes height for reasons the window does not, and the
+window changes for reasons the summary does not. They are two events.
+
+#### The entry is a per-league read, and that was the handoff's open question
+
+`TimelineView` takes a `LeagueLineupEntry` and the trade card had no way to get
+one. `/manager` batches one lineups read for every league on its page; this board
+is `accountless` by construction and its leagues are whatever the loaded pages
+mention, most of which the reader has no team in — so there is nothing to batch
+and no account to batch it off.
+
+**`GET /api/league/[leagueId]/lineup`** is that read: the per-league sibling of
+`/api/user/[username]/lineups`, exactly as `/api/league/[leagueId]/timeline` is.
+It is `getLeagueLineupRow` plus the same three cached board reads the lineups
+route takes plus `solveLeagueEntry`, and it needed **no migration** — `leagues`,
+`rosters`, `traded_picks` and `drafts` are what the crawler and the manager sync
+already wrote, and a league neither has reached comes back `entry: null` rather
+than being synced on demand.
+
+**Its three narrowing parameters are the timeline route's, to the name.**
+`?season=`, `?user=` and `?ktc_board=` decide which boards answer, and a card's
+present priced on a different board from the past its own rail scrubs to is not a
+comparison — it is two numbers on two rulers. So the two reads take the identical
+`TimelineSubject` and `useLeagueLineup` is `useTimeline` for the present, down to
+the subject key and the reset during render.
+
+**Two alternatives were weighed and both are worse.** Extending
+`/api/trades/leagues` costs every reader a solve nobody asked for — the handoff's
+own objection. Reusing the *timeline* read for the present entry (its payload
+already carries today's rosters and boards, and `timelineEntry(payload, 0, …)`
+would produce the entry for nothing) is the tempting one, and it loses on two
+counts: it puts the whole transaction log and a player map for every id the log
+can name on the wire for a reader who only wanted the standings, and it would
+make this card a different animal from the manager card, which solves its
+present on the server and its past in the browser. The new route is what keeps
+the two the same object.
+
+**`solveLeagueEntry` takes a null manager now**, which is the same split the
+queries behind it already draw: `getManagerLeagueRosters` gates on
+`HOLDS_A_ROSTER_SQL` and `getLeagueLineupRow` deliberately does not, because
+there is no manager in that question either. A *named* manager who holds no
+roster still answers null — the manager route's query filters those leagues out,
+so reaching it means the store moved between reads — where a **null** manager
+solves every roster, marks none and ranks nothing. Refusing to solve a league
+because the reader has no team in it would empty the card over a fact about the
+*reader*.
+
+**`is_manager` is guarded rather than compared**, and this is the arm that is
+silent when wrong: an orphan roster's `owner_id` is null, so a bare
+`roster.owner_id === managerUserId` would mark **every ownerless team** as the
+reader's own the moment the manager is null. `NO_MANAGER` is the sentinel — a
+space, because no Sleeper user id is one — and it moved to
+`shared/manager/league-teams.ts` so the route and the browser's own rewind read
+one spelling of "nobody" rather than two.
+
+**The read is behind the disclosure, and that is a bound.** A `<details>` hides
+its body rather than unmounting it, so every card on a hundred-row board mounts
+this; `useLeagueLineup` is disabled until the card is open, exactly as
+`useTimeline` is disabled until `History` is pressed one level further in. The
+gate is **one-way**: closing a card must not throw the answer away and
+re-opening must not pay for it again — which is the same `<details>` behaviour
+being an advantage here that is a cost one paragraph up. Verified: one request
+on open, still one after a close and re-open.
+
+**The state lives in a `TradeLeague` child rather than in `TradeCard`**, which
+is what keeps that component hook-free — its own stated design and
+`league-card.tsx`'s. It seats its ref on a `display: contents` span, so the
+panel keeps laying out `TimelineView`'s three parts as its own flex items: the
+bay holds its height, the browser takes the rest, and a box there would make
+them one item and the panel a box with a scrollbar in it.
+
+**And the three states under the housing are three different sentences.** A read
+in flight says `Reading the league…`, because a panel that opened onto "no
+rosters" for a second and then filled in reads as a glitch. A failed read says
+so, because this is the only thing behind the disclosure and a silent empty is
+indistinguishable from a league this database has never crawled. A league that
+genuinely has no stored rosters gets `TimelineView`'s own empty child — and the
+rail is still drawn above it, because a league with no rosters can still have a
+log worth reading.
+
+**`season` and `username` are props, not hooks.** `TradeCard` is `memo`'d over
+hundreds of rows and `useStoredAccount()` inside it would subscribe every one of
+them to the same value — the rule `basis` and `board` already follow.
+`TradesHome` reads both once and `TradesList` threads them through.
+
+#### The hint, and the one figure that was not engraved
+
+**The disclosure hint is a word, a hairline and a chevron**, and the word is why
+it is not a bare chevron: what is behind this disclosure is not more of the trade
+but the league, solved. A chevron alone promises "more detail", and a reader who
+pressed it expecting the rest of a haul would find a standings table. It is not
+a `<button>` — the `<summary>` it sits inside *is* the control, and a nested one
+is unreliably reachable.
+
+**The side header's total is struck into the glass** rather than printed on it,
+which is the one headline reading on this card the console-card pass left flat:
+every other figure in the app is engraved and this had a glow alone. It is a
+`style` rather than a class because the two are one `text-shadow` list — a
+second declaration would replace the first rather than compose with it, and
+which won would be emit order. It is still **never coloured**: the card's own
+rule that there is no fairness or who-won indicator stands.
+
+#### Verified
+
+Rendered through a temporary `/preview` route against the real components,
+tokens and Tailwind build — the method the console-card, shares, rack and
+timeline passes established, since no database is reachable from where this was
+built — then driven over CDP at 390, 640, 768 and 1280 in both schemes and
+deleted. Two mechanics are unchanged (`--no-proxy-server`, and the
+`--blink-settings=availablePointerTypes=4,…` flags, without which headless
+Chrome reports `pointer: none` and every `pointer-fine:` rule on this card is
+inert) and **two are this pass's own**. The harness must not gate its render on
+`typeof window` — that is a hydration mismatch by construction, and it shows up
+as the dev overlay's issue count rather than as anything in the console. And
+`Emulation.setDeviceMetricsOverride` clears emulated media, so a
+`prefers-reduced-motion` check set before the viewport is silently testing
+nothing: the first run reported the tilt and the sheen alive under `reduce` and
+both were fine.
+
+The fixtures are three trades — a dynasty superflex with two players, a
+third-party 2027 1st and a FAAB leg; a 14-team best-ball redraft, undated, with
+an orphan side; and one whose league row never arrived.
+
+Every arm landed. The summary computes `rotateX(3deg)` at rest and the four
+decorative layers are in the one span that clips. The settings strip sits under
+the rule at `translateZ(18px)` and **fits without clipping at every width** —
+330px of content in 330 at 390, 1080 in 1080 at 1280 — with the narrow arm
+dropping to `DYN MGD │ TM 12 ST 9 │ QB 1 SF 1 TE 1+0.5`. The league whose row
+never arrived draws **no strip at all** and its id for a name.
+
+The cap is **490 / 560 / 630 / 756px at viewport 700 / 800 / 900 / 1080** — the
+formula to the pixel — leaving the roster pane's glass 182 / 252 / 322 / 448px
+against its 88px of pinned bars, which is the handoff's own 189 / 259 / 330 /
+456 to within 8px. An open card's summary is `position: relative` and opening
+the third card from a scroll of 255px left the page at **255**: no freeze, no
+park. The cap follows a window resize (900 → 630px, 1200 → 840px) and is
+released while shut. Exactly **one** `/api/league/L1/lineup?ktc_board=auto&season=2026&user=jkap86`
+on open, and still one after a close and re-open.
+
+The panel drew the history bay, the standings pane sorted by `ROS starters` over
+twelve ranked teams, the roster pane with its Points/Capital/KTC lens, and
+`Bench · 6` and `Picks · 3` pinned to its floor. The hint went
+`--readout-label` → `--readout-text` with the chevron `rotate: none` → `180deg`
+on `transition-property: transform, translate, scale, rotate`. The side total
+computes `--figure-engrave` plus the accent halo. The loading arm read
+`Reading the league…` at 40ms and the table at 940ms; the entry-less league drew
+`No rosters read for this league yet`; the failed read drew its error.
+
+Under `prefers-reduced-motion: reduce` the summary's `transform` computes to
+`none` and the sheen's `transition-property` and `animation-name` both to
+`none` — the existing `.lab-card-3d` and `.lab-anim` rules covering the new card
+without an edit.
+
+At every width and in both schemes: `document.documentElement.scrollWidth` equal
+to the viewport, **zero unclipped elements past it**, exactly one `<h1>`, and no
+console output but the dev server's own React-DevTools and HMR lines. 1,736 unit
+tests pass (13 more, all of them the cap's); `lint`, `typecheck` and `build` are
+clean.
+
+**One check the handoff sets cannot be met at 390, and it is pre-existing.** It
+asks that the league name not truncate on the plate row, on the grounds that the
+date plate already drops its year below `sm`. Measured: at 390 the row is 320px,
+the league plate takes 145 and the date plate 165, so the name gets **88px
+against the 268 it wants** and reads `DYNASTY…`; at 640 it is short by 2px, and
+it fits from 768 up. **Nothing in this pass moved it** — `CardPlateRow` is
+`absolute left-5 right-5`, so the row's width comes off the card's box rather
+than the summary's padding, and the row's contents are byte-identical to the
+shipped card's. It is `card-plate.tsx`'s own recorded decision: "in a row the
+right plate keeps its width and the name truncates, which is the right way round
+— a clipped league name is still readable, a clipped date is not." The two ways
+out are a designer's call between two written-down decisions rather than a silent
+edit — drop the *time* below `sm` (which contradicts `TradeDate`'s own "the
+minute is the point of it") or give the date its own line there (which is a
+redesign of a row the handoff says is unchanged).
+
+**Not verified against real data**, which is the gap to close first: every number
+above is a fixture. Four things a render cannot check — what the per-league read
+actually costs against a real corpus, and therefore how long the panel sits on
+`Reading the league…`; whether `?user=` resolves to a roster often enough on this
+board for `is_manager` to mark anything; how the two panes read over a real
+twelve-team solve rather than an invented one; and whether opening several cards
+on a board with no virtualizer stays inside iOS Safari's per-tab GPU budget, which
+is the one thing the `pointer-fine:` gate is there for and the one thing no
+desktop render can exercise.
+
 ## Comping a player
 
 `/comps` was the one tool the rack named and the app did not have. It is a

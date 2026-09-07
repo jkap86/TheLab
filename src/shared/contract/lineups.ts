@@ -313,3 +313,32 @@ export type ManagerLineupsPayload = {
 
 /** One market that answered, and when it was last scraped. */
 export type KtcBoardStamp = { format: KtcFormat; updated_at: string | null };
+
+/**
+ * `GET /api/league/[leagueId]/lineup` — **one** league solved, by league id.
+ *
+ * The per-league sibling of {@link ManagerLineupsPayload}, and the reason it
+ * exists is the reason `/api/league/[leagueId]/timeline` exists beside
+ * `/api/user/[username]/lineups`: the trades board's leagues are whatever its
+ * loaded pages happen to mention, so there is no manager whose account they can
+ * be batched off. A trade card asks for the one league it names, when a reader
+ * opens it.
+ *
+ * **`entry` is nullable and that is an answer rather than a failure.** A league
+ * this database has no stored rosters for — never crawled, or tombstoned — has
+ * nothing to solve, and the card draws its own empty state. A read that
+ * genuinely could not be made is a 500, which is a different sentence.
+ *
+ * `from_week` and `ktc` carry the same two provenance facts the batched payload
+ * does, for the same reason: a card printing somebody else's numbers should be
+ * able to say which lens answered and how old the market is.
+ */
+export type LeagueLineupPayload = {
+  season: string;
+  /** As {@link ManagerLineupsPayload.from_week} — null orders on capital alone. */
+  from_week: number | null;
+  /** As {@link ManagerLineupsPayload.ktc}; at most one market, this league's. */
+  ktc: readonly KtcBoardStamp[];
+  /** Null where the league has no stored rosters to solve — see above. */
+  entry: LeagueLineupEntry | null;
+};

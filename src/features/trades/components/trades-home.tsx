@@ -312,6 +312,12 @@ export function TradesHome({
           leaguesById={byId}
           basis={basis}
           board={ktcBoard}
+          // The page's own season, and the stored account read once here rather
+          // than by each of hundreds of memo'd cards — `TradeCard` carries the
+          // rule. An opened card solves and rewinds the league it names, and
+          // both of those are priced against these two.
+          season={season}
+          username={account?.username ?? null}
           hasMore={hasMore}
           loadingMore={loadingMore}
           loadMoreError={loadMoreError}

@@ -1,6 +1,7 @@
 import type { AdpEntry } from "../../shared/manager/adp-value.ts";
 import { pickCellKey } from "../../shared/manager/draft-picks.ts";
 import { rankLeagueLineups } from "../../shared/manager/league-ranks.ts";
+import { NO_MANAGER } from "../../shared/manager/league-teams.ts";
 import type { RosProjections } from "../../shared/projections/ros.ts";
 import type {
   LeagueLineupEntry,
@@ -113,17 +114,6 @@ export function timelineEntry(
 
   return { teams, ranks: solved.ranks };
 }
-
-/**
- * A stand-in for "no manager", used where the reader's own roster is unknown.
- *
- * A space, because no Sleeper user id is one and an orphaned roster's owner is
- * `null` rather than empty — so this matches nothing on either side.
- * `rankLeagueLineups` answers a manager it cannot find with every rank null and
- * every roster still solved, which is exactly right here: the pane is a table
- * of teams, and the ranks are not drawn in it.
- */
-const NO_MANAGER = " ";
 
 /**
  * One rewound portfolio, in the shape the card's own `PickRows` draws.

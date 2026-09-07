@@ -14,6 +14,7 @@ import {
   CONSOLE_CARD_SHELL,
   CONSOLE_METAL,
   CONSOLE_WINDOW,
+  ExpandedPanel,
   ktcBoardLabel,
   LeagueConfigWindow,
   LeaguePlate,
@@ -35,8 +36,6 @@ import {
 // shared — the trades board and the lineup checker among them, neither of which
 // draws one. Named here, the chunk belongs to this route.
 import { TimelineView } from "@/features/shared/ui/timeline";
-
-import { ExpandedPanel } from "./expanded-panel";
 
 import {
   rankColor,

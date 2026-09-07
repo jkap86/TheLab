@@ -136,6 +136,11 @@ export {
 } from "./ui/rack-controls";
 export type { RackControls, RackDrawerKey } from "./ui/rack-controls";
 export { THEME_BOOT_SCRIPT } from "./theme";
+// One league's rosters solved, for a card with no batched answer to draw on —
+// the trades board's, whose leagues belong to no one account. See the module for
+// why it takes the timeline's own subject.
+export { useLeagueLineup } from "./use-league-lineup";
+export type { LeagueLineupState } from "./use-league-lineup";
 export { useManagerLeagues } from "./use-manager-leagues";
 export type { ManagerLeaguesState } from "./use-manager-leagues";
 export { ThemeToggle } from "./theme-toggle";
@@ -164,6 +169,11 @@ export {
   StandingStrip,
 } from "./ui/card-plate";
 export { ConsoleGround } from "./ui/console-ground";
+// The capped inner housing an open card's expanded half is drawn in. It came
+// here from `features/manager` when the trade card became a second reader — the
+// line `LeagueTeams` and `LeagueConfigWindow` moved on, and the same folder
+// rule, since `features/trades` may not import from `features/manager`.
+export { ExpandedPanel } from "./ui/expanded-panel";
 // The league table an expanded card draws. It came here from
 // `features/manager` when the history rail became a second reader — it draws
 // the same table over a rewound roster set.

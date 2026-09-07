@@ -2,11 +2,13 @@
 
 import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 
-import { CONSOLE_HOUSING_INSET_SHELL } from "@/features/shared";
+import { CONSOLE_HOUSING_INSET_SHELL } from "../console-chrome";
+import { panelCap } from "../panel-cap";
 
 /**
- * The expanded half of a league card: an inner housing that parks its card
- * under the rack and caps itself to whatever viewport is left.
+ * The expanded half of a card: an inner housing that caps itself to what the
+ * viewport can show, and — where the card is one that parks — scrolls its card
+ * under the rack first.
  *
  * **The problem it solves is a page, not a card.** A twelve-team browser is
  * most of a screen tall and the rack lists a hundred of them, so opening a card
@@ -22,6 +24,22 @@ import { CONSOLE_HOUSING_INSET_SHELL } from "@/features/shared";
  * over. The card renders a housing; this is the housing, with the two
  * measurements it cannot take for itself.
  *
+ * **It lives in `features/shared/ui` because a trade card mounts it too**, on
+ * the line `CONSOLE_KEY`, `ManagerPlate`, `LeagueConfigWindow` and
+ * `LeagueTeams` all moved on: a second reader, and a sibling feature may not
+ * import from `features/manager`. Its own note used to say "consider moving it
+ * once a second card mounts it", and one does.
+ *
+ * **Not every card parks, and `parked` is the whole of that difference.** A
+ * manager card's frozen header is ~210px and pinning it under the rack is what
+ * keeps the league's name on screen while a twelve-team table scrolls past; a
+ * trade card's summary carries both hauls in full — measured 413px — and
+ * freezing that covers the top half of the viewport with the history bay the
+ * first thing underneath it. So a trade card neither scrolls itself into place
+ * nor freezes, and its cap is a share of the viewport rather than what is left
+ * under a header that is not there. See {@link panelCap}, which is where the
+ * arithmetic for both lives and is tested.
+ *
  * **The `<details>` is found by walking up rather than passed in**, and that is
  * what keeps the card declarative: there is no ref to thread through the
  * summary, no state to lift, and the disclosure stays exactly the native
@@ -29,54 +47,18 @@ import { CONSOLE_HOUSING_INSET_SHELL } from "@/features/shared";
  * the listener is on the ancestor we walked to, which is the element it fires
  * on.
  *
- * **Both numbers are measured after layout, never guessed.** The header's
+ * **The measurements are taken after layout, never guessed.** The header's
  * height changes with the settings strip's wrap, the league's name, and the
  * width; and a `100dvh` estimate is wrong on a phone the moment the URL bar
  * moves. So the cap is read from the summary's own box on the frame after the
  * open, and again whenever that box changes size — a `ResizeObserver` rather
  * than a resize listener, because the summary changes height for reasons the
  * window does not (the settings strip re-wrapping when a lens re-renders it).
- */
-
-/**
- * How much of the viewport is left for the panel, given a header of this
- * height parked at `--card-freeze-top`.
  *
- * Pure, and exported for the test: every term is a measurement the caller
- * takes, and the arithmetic between them is the thing that renders perfectly
- * while being wrong.
- *
- * The floor is what stops a short viewport — a phone in landscape, a desktop
- * window dragged small — from producing a panel too shallow to hold the rail
- * and a row of either list. Below it the panel is simply taller than the space
- * and the page scrolls to it, which is the behaviour this replaces and is the
- * right fallback: a capped panel that cannot show anything is worse than an
- * uncapped one.
+ * An un-parked card measures nothing but the viewport, and it still observes
+ * the summary — a card whose header reflows has not changed its cap, but the
+ * observer costs nothing and keeps one code path for both arms.
  */
-export function panelCap(
-  viewport: number,
-  /**
-   * How far the panel's own top edge sits below the card's — the header's
-   * height *and* the panel's margin above it, measured as one distance rather
-   * than summed from two. A margin read separately is a second number to keep
-   * in step with a stylesheet, and the symptom of getting it wrong is a panel
-   * that overhangs the fold by exactly that margin.
-   */
-  panelOffset: number,
-  freezeTop: number,
-): number {
-  // Breath under the panel, so the housing does not sit flush against the fold.
-  const BREATH = 16;
-  // **The floor is what the panel's own parts need, not a round number.** The
-  // rail is ~72px with its margin, a pane's ledge ~62, and the roster pane's
-  // two pinned bars 88 — so under about 320px the glass is shorter than the
-  // bars standing on it and the drawer has nowhere to open. Below the floor the
-  // panel is simply taller than the space and the page scrolls to it, which is
-  // the behaviour this replaces and is the right thing to fall back to: a
-  // capped panel that cannot show a row is worse than an uncapped one.
-  const MIN = 320;
-  return Math.max(MIN, viewport - freezeTop - panelOffset - BREATH);
-}
 
 /** `--card-freeze-top` in px, or the token's own value where it cannot be read. */
 function freezeTopOf(el: Element): number {
@@ -87,7 +69,18 @@ function freezeTopOf(el: Element): number {
   return Number.isFinite(px) ? px : 87;
 }
 
-export function ExpandedPanel({ children }: { children: ReactNode }) {
+export function ExpandedPanel({
+  children,
+  parked = true,
+}: {
+  children: ReactNode;
+  /**
+   * Whether the card scrolls itself under the rack and freezes its header
+   * there. True for the two league cards, false for the trade card — see the
+   * module note and {@link panelCap}, which is where the two shapes differ.
+   */
+  parked?: boolean;
+}) {
   const ref = useRef<HTMLDivElement | null>(null);
   const [cap, setCap] = useState<number | null>(null);
   // One tick per open, so the park below fires again on the next open even
@@ -100,15 +93,29 @@ export function ExpandedPanel({ children }: { children: ReactNode }) {
    * Called on the frame after an open and from the observer, so it must be
    * cheap and idempotent — it is two `getBoundingClientRect`s and a `setState`
    * React drops when the number has not moved.
+   *
+   * **The un-parked arm reads neither rect**, and taking them anyway would be
+   * two forced layouts per resize for two numbers `panelCap` is about to
+   * ignore.
    */
   const measure = useCallback(() => {
     const panel = ref.current;
     const card = panel?.parentElement;
     if (!panel || !card) return;
+    if (!parked) {
+      setCap(panelCap(window.innerHeight, { parked: false }));
+      return;
+    }
     const offset =
       panel.getBoundingClientRect().top - card.getBoundingClientRect().top;
-    setCap(panelCap(window.innerHeight, offset, freezeTopOf(card)));
-  }, []);
+    setCap(
+      panelCap(window.innerHeight, {
+        parked: true,
+        panelOffset: offset,
+        freezeTop: freezeTopOf(card),
+      }),
+    );
+  }, [parked]);
 
   /**
    * **The park runs after the cap is committed, never in the same frame.**
@@ -120,10 +127,10 @@ export function ExpandedPanel({ children }: { children: ReactNode }) {
    * park reads is the one the reader ends up with.
    */
   useEffect(() => {
-    if (park === 0) return;
+    if (park === 0 || !parked) return;
     const card = ref.current?.parentElement;
     if (card instanceof HTMLDetailsElement && card.open) parkCard(card);
-  }, [park]);
+  }, [park, parked]);
 
   useEffect(() => {
     const panel = ref.current;
@@ -138,6 +145,24 @@ export function ExpandedPanel({ children }: { children: ReactNode }) {
       // because a strip reflowed is the one thing the park must never do.
       if (card.open) measure();
     });
+
+    /**
+     * **A window resize is the other half, and the observer cannot see it.**
+     * Both arms of {@link panelCap} are functions of `window.innerHeight`, and
+     * a window dragged *taller* — or a phone's URL bar retracting — changes
+     * that without changing the summary's box by a pixel, so the observer never
+     * fires and the panel keeps a cap measured against a viewport that is gone.
+     * Measured: opening at 900 and resizing to 1200 held the panel at 630px
+     * until it was closed and re-opened.
+     *
+     * The observer is still what this module's note argues for, and this does
+     * not replace it: the summary changes height for reasons the window does
+     * not (the settings strip re-wrapping when a lens re-renders it), and the
+     * window changes for reasons the summary does not. They are two events.
+     */
+    const onResize = () => {
+      if (card.open) measure();
+    };
 
     const onToggle = () => {
       if (!card.open) {
@@ -159,9 +184,11 @@ export function ExpandedPanel({ children }: { children: ReactNode }) {
     };
 
     card.addEventListener("toggle", onToggle);
+    window.addEventListener("resize", onResize);
     if (card.open) onToggle();
     return () => {
       card.removeEventListener("toggle", onToggle);
+      window.removeEventListener("resize", onResize);
       observer.disconnect();
     };
   }, [measure]);

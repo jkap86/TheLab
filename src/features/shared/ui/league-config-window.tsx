@@ -73,11 +73,19 @@ import {
  * they arrive as a `className` rather than being written in here — the same
  * arrangement `LeagueFiltersDialog` takes its `triggerClassName` by, and for
  * the same reason: three cards mount this and only the card knows its own
- * surroundings. A manager card is a 3D context and gives the strip
+ * surroundings. All three are 3D contexts now and all three give the strip
  * `translateZ(18px)`, between the windows' 22px and the plates, so its planes
- * read front-to-back; a trade card is flat, and a `translateZ` there would buy
- * a composited layer per card on a board that appends a hundred at a time and
- * never unmounts one.
+ * read front-to-back.
+ *
+ * **The trade card used to be the exception and no longer is.** This note said
+ * that card was flat and that a `translateZ` there would buy a composited layer
+ * per card on a board that appends a hundred at a time and never unmounts one.
+ * That was true of a flat card and the cost has not gone away — what changed is
+ * that the whole card is a 3D context now, and every plane on it, this one
+ * included, rides `pointer-fine:`. So the layer is spent only where there is a
+ * hover to spend it on, and a touch device gets the same strip flat. The board
+ * still has no virtualizer, which is why that gate is the thing to keep rather
+ * than the flatness it used to enforce.
  *
  * **One line that never wraps, at every width.** The readings used to sit loose
  * in a wrapping row and break wherever the width ran out — a label stranded on

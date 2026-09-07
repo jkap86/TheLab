@@ -31,6 +31,7 @@ export {
   type RosterPick,
   type LeagueTeam,
   type LeagueLineupEntry,
+  type LeagueLineupPayload,
   type ManagerLineupsPayload,
 } from "./lineups";
 export {
