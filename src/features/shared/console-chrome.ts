@@ -141,15 +141,41 @@ export const CONSOLE_TRACK_SM =
   "sm:rounded-full sm:bg-[image:var(--key-bg)] sm:shadow-[var(--track-shadow)]";
 
 /**
+ * {@link CONSOLE_PANE_TRACK} on the same terms — a recess cut in **metal**,
+ * from `sm` up only.
+ *
+ * The pair {@link CONSOLE_TRACK} / {@link CONSOLE_TRACK_SM} makes one width
+ * decision and this makes the same one for the other floor: a recess exists to
+ * hold a key that stands proud of it, so a key drawn *etched* on a phone (see
+ * {@link BILLET_KEY_CHROME}) has nothing to be recessed from and the track goes
+ * with it. Which of the two tracks a caller wants is the material it is cut
+ * into, not where it sits — key stock inside a panel, `--recess-bg` inside a
+ * billet or a ledge.
+ *
+ * Spelled out by hand rather than derived from {@link CONSOLE_PANE_TRACK},
+ * for `CONSOLE_TRACK_SM`'s reason: Tailwind scans class strings statically, so
+ * a computed `sm:` prefix produces no CSS at all. The two have to be kept in
+ * step, which is why the note says so rather than a helper doing it.
+ */
+export const CONSOLE_METAL_TRACK_SM =
+  "sm:rounded-full sm:bg-[color:var(--recess-bg)] sm:shadow-[var(--track-shadow)]";
+
+/**
  * A key **etched into a plate** rather than raised on one, below `sm`, and an
  * ordinary {@link CONSOLE_KEY_PILL} from `sm` up.
  *
- * The manager plate's phone strip is what asks for it: `Leagues · Filters │
- * Record` is one engraved reading with a control in the middle of it, and a key
- * standing 3px proud among engraved figures reads as an object dropped onto the
- * plate rather than as part of it. So on a phone it is a hairline and a
- * hint of inset light — cut in, not sat on — and the geometry steps down with
- * the figures beside it.
+ * The manager header's phone row is what asks for it: it is one stamped
+ * reading with a control at the end of it, and a key standing 3px proud among
+ * stamped figures reads as an object dropped onto the part rather than as
+ * something cut into it. So on a phone it is a hairline and a hint of inset
+ * light, and the geometry steps down with the figures beside it.
+ *
+ * The **geometry** is what that header still takes; its surface is
+ * {@link BILLET_KEY_CHROME}, because the part is milled metal now rather than a
+ * recessed plate. {@link PLATE_KEY_CHROME} is the surface for a key on a
+ * *plate*, which is what makes it the pair to this one — it has no caller
+ * today, and it is the half of this constant that says what a plate-mounted key
+ * looks like.
  *
  * Geometry and chrome are two constants for {@link CONSOLE_KEY_PILL}'s reason:
  * a key with states composes as `shape + state`, and a shape that names a
@@ -165,6 +191,31 @@ export const PLATE_KEY =
 export const PLATE_KEY_CHROME =
   "bg-foreground/[0.03] shadow-[inset_0_1px_0_rgba(255,255,255,0.05)] " +
   "sm:bg-[image:var(--key-bg)] sm:shadow-[var(--key-shadow)]";
+
+/**
+ * The same key on a **billet** rather than on a recessed plate.
+ *
+ * {@link PLATE_KEY_CHROME}'s two surfaces are both drawn for a plate — a
+ * `--foreground` alpha reads as a shallow cut in *plate* stock, and `--key-bg`
+ * is the face a key on a panel wears. Neither is right on milled metal, and
+ * both fail in the same direction: they are the surfaces of the thing the
+ * billet is not.
+ *
+ * So the etched half is `--recess-bg`, which is the token for a hole cut in
+ * metal whose label is ink on metal — a black alpha would be a hole punched
+ * through a pale part in light mode, which is the case that token exists for.
+ * And the raised half is `--key-metal` rather than `--key-bg`: a key standing
+ * on a machined face is machined, and the brushed grain in that token is what
+ * says so beside the billet's own.
+ *
+ * It carries neither a border nor an ink, and that is not an omission —
+ * `LeagueFiltersDialog` owns both, because what "something is filtering"
+ * changes is the key's border and its legend rather than its surface. See that
+ * component's `triggerChrome`, which this is passed as.
+ */
+export const BILLET_KEY_CHROME =
+  "bg-[color:var(--recess-bg)] shadow-[inset_0_1px_0_rgba(255,255,255,0.07)] " +
+  "sm:bg-[image:var(--key-metal)] sm:shadow-[var(--key-shadow)]";
 
 /** The shallow tray a panel of controls sits in — a filter rail, a rule bay. */
 export const CONSOLE_WELL =

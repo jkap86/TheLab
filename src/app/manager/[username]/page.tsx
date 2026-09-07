@@ -34,11 +34,15 @@ export default async function ManagerPage({
           // case is treated as absent.
           season={typeof season === "string" ? season : undefined}
           heading={
-            // A `span`, not a heading: the page's one `<h1>` is the engraved
-            // name inside the plate, and this sits above it as an eyebrow.
-            <span className="font-mono text-[length:var(--fs-9)] uppercase tracking-[0.16em] text-foreground/60 sm:text-[length:var(--fs-11)]">
-              Manager
-            </span>
+            // A `span`, not a heading: the page's one `<h1>` is the manager's
+            // name on the billet, and this sits above it as an eyebrow.
+            //
+            // It carries no styling of its own. The header owns the eyebrow's
+            // ink and size — it is a caption stamped on metal there, and the
+            // season rendered beside this word has to be inked with it rather
+            // than to match it. What crosses this seam is the copy, which is
+            // the one thing that has to stay on the server side of it.
+            <span>Manager</span>
           }
         />
       </PageShell>

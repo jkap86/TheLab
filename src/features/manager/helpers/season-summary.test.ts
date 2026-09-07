@@ -6,6 +6,7 @@ import type { ManagerLeague } from "@/shared/contract";
 import {
   formatCombinedRecord,
   formatWinPct,
+  formatWinShare,
   seasonSummary,
 } from "./season-summary.ts";
 
@@ -73,5 +74,47 @@ describe("the formatters", () => {
       "33.3%",
     );
     assert.equal(formatWinPct(seasonSummary([])), "—");
+  });
+
+  test("the same rate as a share drops its leading zero", () => {
+    assert.equal(
+      formatWinShare(seasonSummary([league({ wins: 7, losses: 5, ties: 0 })])),
+      ".583",
+    );
+    // A tie is half a win, which is the one place the two formatters could
+    // have come to disagree about what they are dividing.
+    assert.equal(
+      formatWinShare(seasonSummary([league({ wins: 7, losses: 4, ties: 1 })])),
+      ".625",
+    );
+  });
+
+  test("a perfect record is 1.000 and keeps its leading digit", () => {
+    assert.equal(
+      formatWinShare(seasonSummary([league({ wins: 13, losses: 0, ties: 0 })])),
+      "1.000",
+    );
+  });
+
+  test("a share that *rounds* to one keeps it too", () => {
+    // The trap the formatter is written around: 9,999 of 10,000 is 0.9999,
+    // which is not >= 1 and is `1.000` at three decimals. Sliced off the
+    // number rather than off the string it would read `.000` — the widest
+    // reading on the page rendered as its own opposite.
+    assert.equal(
+      formatWinShare(seasonSummary([league({ wins: 9999, losses: 1, ties: 0 })])),
+      "1.000",
+    );
+  });
+
+  test("a played-and-lost season is .000; an unplayed one is an em dash", () => {
+    assert.equal(
+      formatWinShare(seasonSummary([league({ wins: 0, losses: 6, ties: 0 })])),
+      ".000",
+    );
+    assert.equal(formatWinShare(seasonSummary([])), "—");
+    // A league whose rosters have never been read has no record at all, which
+    // is not the same statement as having lost every game.
+    assert.equal(formatWinShare(seasonSummary([league(null)])), "—");
   });
 });
