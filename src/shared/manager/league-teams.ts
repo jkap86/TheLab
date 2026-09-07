@@ -23,6 +23,7 @@ import type {
   LeagueLineupEntry,
   LeagueTeam,
   LineupPosition,
+  LineupSlot,
 } from "@/shared/contract";
 
 import { ktcPickPrice, pickTier } from "../ktc/picks.ts";
@@ -134,6 +135,22 @@ export function solveLeagueEntry(
    * pool the curve is anchored to, and that is `rankLeagueLineups`' to compute.
    */
   adpVariants: readonly AdpVariant[] = [],
+  /**
+   * The distinct seat narrowings this page's columns carry, already parsed off
+   * the request. Empty for a page whose columns all count the whole lineup,
+   * which is every page until a reader narrows a starters bay to a seat.
+   *
+   * **They ride through to the ranks and stop there**, exactly as the position
+   * sets above do and for that field's argument verbatim: a narrowing decides
+   * what a *rank* counts, and a {@link LeagueTeam} still carries the ten
+   * whole-roster totals it always did. A per-seat total beside them is the one
+   * seam of the four this axis deliberately does not land, because nothing
+   * would read it — the expanded browser sorts and prints by a bare
+   * {@link LineupMetricId} and the timeline re-solves for the same ten, so it
+   * would be a field on every team of every league that no reader could name.
+   * It arrives with a browser that can ask the question.
+   */
+  slotSets: readonly (readonly LineupSlot[])[] = [],
 ): LeagueLineupEntry | null {
   const board = leaguePickBoard(league, season, (pick) =>
     pickValue(ktc, league.total_rosters, pick),
@@ -162,6 +179,7 @@ export function solveLeagueEntry(
     })),
     positionSets,
     adpVariants,
+    slotSets,
   );
   // Only where a manager was *named*: a league-scoped read has no lineup of its
   // own to miss, and answering null there would be refusing to draw a league

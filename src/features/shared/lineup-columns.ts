@@ -9,6 +9,7 @@ import type {
   LineupColumn,
   LineupMetricId,
   LineupPosition,
+  LineupSlot,
 } from "@/shared/contract";
 // Relative with an explicit extension, the way `shares-columns.ts` beside it
 // reaches the same store: the rules below are read by Node's own test runner,
@@ -19,9 +20,14 @@ import {
   isKtcMetric,
   lineupColumnKey,
   normalizeLineupPositions,
+  normalizeLineupSlots,
   readsQbBoard,
 } from "../../shared/ktc/columns.ts";
 import { FANTASY_POSITIONS } from "../../shared/projections/positions.ts";
+import {
+  STARTING_SLOTS,
+  startingSlotsOf,
+} from "../../shared/projections/starting-slots.ts";
 
 import { useLocalValue, writeLocal } from "./local-store.ts";
 
@@ -29,8 +35,9 @@ import { useLocalValue, writeLocal } from "./local-store.ts";
 // storage mechanics live in `local-store.ts`; what is here is only what this
 // key holds and the rules that keep it honest.
 //
-// **A column is a metric and three axes now, not a metric id** — which market
-// and which QB board it is priced on, and which positions it counts. That is
+// **A column is a metric and four axes now, not a metric id** — which market
+// and which QB board it is priced on, and which seats and which positions it
+// counts. That is
 // what lets one metric occupy two bays: a reader comparing their roster's
 // dynasty superflex worth against its 1QB worth is asking two questions, and
 // until the axes moved into the column there was one global board and no way to
@@ -42,13 +49,20 @@ import { useLocalValue, writeLocal } from "./local-store.ts";
 // roster's draft capital on the superflex board while sitting in a 1QB league is
 // the same comparison the KeepTradeCut bays make one market over.
 //
-// **The third axis narrows what is counted rather than how it is priced**, and
-// it is in the key for the same reason the first two are: two bays narrowed to
-// different positions are two readings of one roster, and without it they would
-// dedupe into one with the rank shown under one narrowing being the other's.
-// The empty set is the absence of a narrowing rather than a tenth value, which
-// is what keeps every un-narrowed column keyed exactly as it always was — and
-// therefore what keeps the ten base ranks the route always ships readable.
+// **The last two axes narrow what is counted rather than how it is priced**,
+// and both are in the key for the same reason the first two are: two bays
+// narrowed differently are two readings of one roster, and without it they
+// would dedupe into one with the rank shown under one narrowing being the
+// other's. An empty set is the absence of a narrowing rather than an extra
+// value, which is what keeps every un-narrowed column keyed exactly as it
+// always was — and therefore what keeps the ten base ranks the route always
+// ships readable.
+//
+// **The two narrowings are a seat and a player, and they compose.** A slot set
+// picks which starting seats are counted and a position set picks who, in them,
+// is counted — so `FLEX` with `WR` is the wide receivers occupying flex seats,
+// which is a question neither axis can ask alone. Only a `starters` column can
+// carry a slot set, because a seat is a thing only a starting lineup has.
 //
 // The selection is still a *set*, not an arrangement: columns render in
 // canonical order, so `normalize` sorts on write and read alike and a
@@ -337,6 +351,201 @@ export function positionsClause(
 }
 
 /**
+ * The fourth axis: which starting seats a column counts.
+ *
+ * **A seat, where the position axis picks a player — and the two compose.** A
+ * column narrowed to `FLEX` and to `WR` counts the wide receivers *occupying
+ * flex seats*, which is what a reader asking "how does my flex seat rank across
+ * my leagues" is after and which neither axis answers alone. Multi-select with
+ * an `All` key on {@link LINEUP_POSITIONS}' exact terms: `All` is the absence
+ * of a narrowing rather than a fifteenth value, so pressing it empties the set
+ * and turning the last lit slot off returns there by arithmetic.
+ *
+ * **The whole vocabulary lives here and the *offered* one does not** — see
+ * {@link slotsInHand}, which is the leagues' own union. The two are different
+ * questions: this is every seat a lineup can have, which is what a stored value
+ * is validated against, and that is every seat the reader's leagues actually
+ * start, which is what the picker draws. Offering a key for a seat nobody
+ * starts would be a narrowing that could never seat anybody; validating against
+ * the leagues in hand would silently widen a column the day an IDP league left
+ * the account.
+ */
+export const LINEUP_SLOTS = STARTING_SLOTS as readonly LineupSlot[];
+
+/**
+ * Which of the three runs a slot belongs to, and therefore where the picker's
+ * milled hairlines fall: the bare skill seats, the flexes that recombine them,
+ * then the special units and the individual defenders.
+ *
+ * A group per slot rather than two constants naming the first of each run,
+ * which is where this parts company with `IDP_LINEUP_POSITIONS` beside it and
+ * the reason is that **the track offers a subset**. A cut spelled as "before
+ * `FLEX`" falls nowhere at all in an account whose only flex is a superflex,
+ * and the two runs read as one. Asked per key, the cut lands before the first
+ * *offered* slot of each run whatever the account holds.
+ *
+ * Exhaustive by construction, so a slot the solver learns has to be placed in a
+ * run before this compiles.
+ */
+export type SlotGroup = "bare" | "flex" | "unit";
+
+export const LINEUP_SLOT_GROUPS: Record<LineupSlot, SlotGroup> = {
+  QB: "bare",
+  RB: "bare",
+  WR: "bare",
+  TE: "bare",
+  FLEX: "flex",
+  WRRB_FLEX: "flex",
+  REC_FLEX: "flex",
+  SUPER_FLEX: "flex",
+  K: "unit",
+  DEF: "unit",
+  DL: "unit",
+  LB: "unit",
+  DB: "unit",
+  IDP_FLEX: "unit",
+};
+
+/**
+ * Each slot as a key spells it — the track's own words, and the card's.
+ *
+ * **`SUPER_FLEX` cannot be spelled**, which is what the two abbreviations are
+ * for: the track is 412px at the panel's desktop width across as many as
+ * fifteen keys, and the tile's second line is ten and a half characters at a
+ * phone's. `SF` is the app's own word for that board already ({@link
+ * qbBoardWord}, `LINEUP_WORDS`), so it is not new vocabulary a reader has to
+ * learn; `IDP` is the name the league filters give that slot group.
+ */
+export const LINEUP_SLOT_LABELS: Record<LineupSlot, string> = {
+  QB: "QB",
+  RB: "RB",
+  WR: "WR",
+  TE: "TE",
+  FLEX: "FLEX",
+  WRRB_FLEX: "W/R",
+  REC_FLEX: "W/T",
+  SUPER_FLEX: "SF",
+  K: "K",
+  DEF: "DEF",
+  DL: "DL",
+  LB: "LB",
+  DB: "DB",
+  IDP_FLEX: "IDP",
+};
+
+/**
+ * The same fourteen as a sentence says them.
+ *
+ * A second Record rather than the labels reused, because a label is a key cap
+ * and a word is prose: `SF` is right on a 27px key and wrong in "in the SF
+ * seat", where the sentence has room to name the thing. The two flexes that
+ * abbreviate to a slash on a key are spelled out here for the same reason.
+ */
+export const LINEUP_SLOT_WORDS: Record<LineupSlot, string> = {
+  QB: "QB",
+  RB: "RB",
+  WR: "WR",
+  TE: "TE",
+  FLEX: "FLEX",
+  WRRB_FLEX: "RB/WR flex",
+  REC_FLEX: "WR/TE flex",
+  SUPER_FLEX: "superflex",
+  K: "K",
+  DEF: "DEF",
+  DL: "DL",
+  LB: "LB",
+  DB: "DB",
+  IDP_FLEX: "IDP flex",
+};
+
+/**
+ * The startable slots this account's leagues actually run, in canonical order.
+ *
+ * The picker's own vocabulary, and it is the leagues' rather than the table's
+ * for the rule the position axis already lives by: a key for a seat no league
+ * starts is a narrowing that could never seat anybody, so a slot absent from
+ * every league in hand is *absent* rather than greyed.
+ *
+ * **The unfiltered league list, never the narrowed one.** A column is a device
+ * preference that outlives any filter — the same four bays answer every card on
+ * the page — so a vocabulary that moved with the Filters dialog would take keys
+ * off a track for reasons the panel cannot state, and a reader who had narrowed
+ * to redraft would find the superflex seat they were comparing had vanished.
+ *
+ * A thin wrapper on {@link startingSlotsOf}, which is where the three
+ * exclusions live; what this adds is the cast to the union the contract
+ * declares, tied to that derivation by `starting-slots.test.ts`.
+ */
+export function slotsInHand(
+  rosterPositions: readonly (readonly string[] | null)[],
+): readonly LineupSlot[] {
+  return startingSlotsOf(rosterPositions) as LineupSlot[];
+}
+
+/**
+ * The slot clause a bay's second line and the card's tile both print —
+ * `FLEX/SF` — or nothing at all where the column counts every seat.
+ *
+ * Slash-joined and tight, {@link positionsLabel}'s spelling one axis over,
+ * because the two share a 59px line.
+ */
+export function slotsLabel(slots: readonly LineupSlot[]): string {
+  return slots.map((one) => LINEUP_SLOT_LABELS[one]).join("/");
+}
+
+/**
+ * The two narrowings as one sentence's tail — ` In the FLEX and superflex
+ * seats, WR only.` — or nothing at all.
+ *
+ * **One clause rather than two, because they are one intersection.** A slot
+ * picks the seats and a position picks who is sitting in them, so two sentences
+ * would read as two independent filters a reader has to multiply out for
+ * themselves. Singular where one seat is lit, since "in the superflex seats" is
+ * wrong about a lineup that has one.
+ *
+ * It supersedes {@link positionsClause} rather than joining it: that function
+ * is still the positions-only arm and is unchanged, and this is what the
+ * `Reads` window calls. Leading space and trailing stop included, so the caller
+ * appends rather than punctuating — the contract `positionsClause` already has.
+ */
+export function narrowingClause(
+  slots: readonly LineupSlot[],
+  positions: readonly LineupPosition[],
+): string {
+  if (slots.length === 0) return positionsClause(positions);
+  const seats = wordList(slots.map((one) => LINEUP_SLOT_WORDS[one]));
+  const noun = slots.length === 1 ? "seat" : "seats";
+  if (positions.length === 0) return ` In the ${seats} ${noun} only.`;
+  const who = wordList(positions.map((one) => LINEUP_POSITION_LABELS[one]));
+  return ` In the ${seats} ${noun}, ${who} only.`;
+}
+
+/** A comma list with `and` before the last — both clauses' one spelling. */
+function wordList(words: readonly string[]): string {
+  if (words.length === 1) return words[0];
+  return `${words.slice(0, -1).join(", ")} and ${words[words.length - 1]}`;
+}
+
+/**
+ * Why the slot axis is off for a column, or null where it can be pressed.
+ *
+ * **A seat is a thing only a starting lineup has**, which is the whole of the
+ * rule: a bench player occupies none, a whole-roster total spans both halves of
+ * a partition only one of which has seats, and a draft pick is not a player at
+ * all. So the axis is in force on the `starters` scope and out of force on the
+ * other three — and out of force *in place*, keeping its row, because
+ * `Starters` unlit one track above is what explains the dim and a track that
+ * appeared under a press would resize the panel mid-sitting.
+ *
+ * Whole-axis rather than per-key, which is the distinction `SwitchTrack`
+ * documents: this is a fact about the column being edited, not about any one
+ * seat.
+ */
+export function slotGapReason(scope: ColumnScope): string | null {
+  return scope === "starters" ? null : "Only a starters column counts slots";
+}
+
+/**
  * Why the position axis is off for a column, or null where it can be pressed.
  *
  * One reason and one column it applies to: `ktc_picks` is the single metric on
@@ -493,6 +702,7 @@ export function column(
   format: KtcBoardChoice = "auto",
   lineup: KtcLineupChoice = "auto",
   positions: readonly LineupPosition[] = [],
+  slots: readonly LineupSlot[] = [],
 ): LineupColumn {
   // A draft pick is not a player and has no position to narrow to — the same
   // fact the scope axis states by having `Picks` live under KeepTradeCut alone.
@@ -500,6 +710,15 @@ export function column(
   // carrying one cannot become a key nothing ranks.
   const narrowed =
     metric === "ktc_picks" ? [] : normalizeLineupPositions(positions);
+  // **A seat is a thing only a starting lineup has**, so the slot set is forced
+  // empty off the `starters` scope — the third forcing this constructor makes
+  // and the same argument as the two below: one constructor, so a press and a
+  // stored value cannot come to disagree, and `lineupColumnKey` can fold the
+  // axis out of the key of every column that cannot read it. Without it a
+  // stored `ros_bench` carrying `@flex` would key as a second, un-removable
+  // copy of the bench column, ranked on a narrowing that counts nobody.
+  const seats =
+    metricAxes(metric).scope === "starters" ? normalizeLineupSlots(slots) : [];
   // **Each axis is forced to `auto` on a metric that cannot read it**, which is
   // what makes `lineupColumnKey` able to fold it out of the key — so a stored
   // value carrying a stray board on a projections column cannot become a
@@ -511,6 +730,7 @@ export function column(
     format: isKtcMetric(metric) ? format : "auto",
     lineup: readsQbBoard(metric) ? lineup : "auto",
     positions: narrowed,
+    slots: seats,
   };
 }
 
@@ -664,7 +884,10 @@ function readColumn(entry: unknown): LineupColumn | null {
     return entry in METRIC_ORDER ? column(entry as LineupMetricId) : null;
   }
   if (!entry || typeof entry !== "object") return null;
-  const { metric, format, lineup, positions } = entry as Record<string, unknown>;
+  const { metric, format, lineup, positions, slots } = entry as Record<
+    string,
+    unknown
+  >;
   if (typeof metric !== "string" || !(metric in METRIC_ORDER)) return null;
   return column(
     metric as LineupMetricId,
@@ -673,6 +896,10 @@ function readColumn(entry: unknown): LineupColumn | null {
     // Unknown entries drop, duplicates collapse and the set sorts into the
     // axis's own order — `normalizeLineupPositions`, reached through `column`.
     normalizeLineupPositions(positions),
+    // The same rule one axis over, and the same legacy read: an entry with no
+    // `slots` field is the absence of a narrowing, which is what the page was
+    // doing before the axis existed.
+    normalizeLineupSlots(slots),
   );
 }
 

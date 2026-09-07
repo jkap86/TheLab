@@ -7662,6 +7662,261 @@ from the card's tile order between opens reads as wrong on a real account — th
 one cost this takes, and the thing to watch if the re-seed wants to be more
 frequent than once per open.
 
+### Starters, broken out by seat
+
+A fifth axis on a rank column — which starting **seats** it counts — plus three
+changes to how the picker behaves that the axis made unavoidable: no track
+appears or disappears any more, the `Reads` window reserves its lines, and an
+edit is a draft the reader **saves**. Applied from a design handoff, its `2a`.
+Nothing on the schema moved and there is no migration; the diff is the contract,
+the two `shared/` seams, the route, the picker and the card.
+
+**A slot is a seat and a position is a player, and the two compose.** That is the
+whole reason this is a second narrowing rather than more values on the first: a
+column narrowed to `FLEX` and to `WR` counts the wide receivers *occupying flex
+seats*, which is what a reader asking "how does my flex seat rank across my
+leagues" is after and which neither axis answers alone. The `Reads` window states
+them as **one clause** for the same reason — two sentences read as two
+independent filters somebody has to multiply out.
+
+**Only a starters column can carry one**, and `column()` forces it empty
+everywhere else — the third forcing that constructor makes, beside a market on a
+projection and a position on a pick. A bench player occupies no seat, a
+whole-roster total spans both halves of a partition only one of which has seats,
+and a draft pick is not a player at all. One constructor, so a press and a stored
+value cannot disagree, and `lineupColumnKey` can fold the axis out of the key of
+every column that cannot read it.
+
+**The vocabulary is the leagues in hand, not the whole table.** `slotsInHand`
+walks `roster_positions` over the manager's leagues and keeps what
+`STARTING_SLOTS` names — which drops `BN`/`IR`/`TAXI`, drops a slot the solver
+cannot fill (the same ones `recognisedSlots` puts in `unknown_slots`), and drops
+Sleeper's own `""`/`"0"` padding, all through one membership test. It is the rule
+the position axis already derives its list by: a key for a seat no league starts
+is a narrowing that could never seat anybody, so such a slot is **absent** rather
+than greyed. The **unfiltered** league list, deliberately — a column is a device
+preference that outlives any narrowing, so a vocabulary that moved with the
+Filters dialog would take keys off a track for a reason the panel cannot state.
+
+**`normalizeLineupSlots` is deliberately wider than the track that writes it.**
+It validates against the whole table, so a stored `@dl` outlives the IDP league
+leaving the account: that is still a good question about the leagues it was asked
+of, and dropping it would silently widen the column to the whole lineup. The
+picker closes the gap from the other end — the track offers the union of the
+leagues' seats **and whatever the column being edited already names**, without
+which a narrowing would sit on screen in the bay's own second line with no key
+the control could light.
+
+**`STARTING_SLOTS` is written out and pinned rather than derived**, which is
+where it parts company with `FANTASY_POSITIONS` beside it, and the difference is
+the order. That file's note says at length that the solver table's declaration
+order "looks like a coincidence" and happens to give the reading order it wants;
+here it does not — the table opens with its nine single-position slots before the
+flexes, so a derivation puts `K` and `DEF` between `TE` and `FLEX` and the track
+reads as three unrelated runs. So the order is the three runs a league is
+actually built from — the bare skill seats, the flexes that recombine them, then
+the units and the individual defenders — and `starting-slots.test.ts` asserts the
+list is a permutation of the table's own keys and of the contract's union. A slot
+the solver learns breaks a test rather than being silently unofferable.
+
+**`@` is what keeps the two clauses apart in one key.** Both are `+`-joined
+lower-cased sets after a `:`, so `ros_starters:wr` would otherwise name the seats
+and the players alike — a rank filed under one question and read back as the
+other. `ros_starters:@flex+super_flex:wr` is the spelling, seats before players
+and the pricing before both (`capital_starters:sf:@flex`), and it is written at
+both ends through `slotKeySuffix` so not even the separator is repeated. An
+un-narrowed column keys exactly as it always did, which is why this is a suffix
+rather than a segment: append an `@all` token to every key and every card on the
+page looks up a rank the server filed under another name.
+
+#### The seams, and the one that is deliberately absent
+
+The position axis needed four seams before its track was a control over
+something, and three of them are what this landed.
+
+**The totals.** `countedRoster` narrows the **seats before the players**, which
+is the order that makes the two axes an intersection rather than a union.
+**A slot narrowing empties the bench** rather than leaving it whole: a bench
+player occupies no seat, so there is no share of a bench a `FLEX` column could
+honestly claim, and left whole it would put every unseated player into
+`ros_total:@flex` — which a reader adding the tiles up would find exceeds its own
+two halves. That is `countedPicks`' argument one part over, and the picks go the
+same way for the same reason: a pick is not sitting anywhere. Zero on every
+roster in the league then reads through the all-zero rule as an em dash, which is
+the honest state for a question the bench cannot answer.
+
+**The ranks.** `rankLeagueLineups` takes `slotSets` and **crosses them with the
+position sets** rather than pairing them, which is the rule that function already
+follows for the pricings and the same argument: what crosses the wire is the
+*axes* rather than the columns, so a reader with `@flex` in one bay and `wr` in
+another gets `@flex:wr` free when they narrow one of them further. `narrowingsOf`
+builds that cross once, un-narrowed pair first, and all three pricing paths walk
+the one list — so the base ranks, a forced market and a forced draft board cannot
+come to cross the two axes differently. A rack holds four bays, so the cross is
+bounded by four sets against four however a reader arranges them.
+
+**The request.** `?slots=flex+super_flex,qb` — sets and not columns, on
+`?positions=`' terms, and with no `@` on the wire: the prefix exists to keep two
+clauses apart inside one key, and a parameter named `slots` has nothing to be
+told apart from. It joins `useManagerLineups`' subject key beside the other
+three.
+
+**The fourth seam is deliberately not landed**, and the handoff's list is what is
+slightly off rather than the code: a per-seat figure on `LeagueTeam` so the tile
+can print it. The position axis did not land it either, and `solveLeagueEntry`
+argues why at length — the expanded browser sorts and prints by a bare
+`LineupMetricId` and the timeline re-solves for the same ten, so a narrowed total
+would be a field on every team of every league that no reader could name. The
+card's tile prints a **rank**, which is what the three seams above produce. It
+arrives with a browser that can ask the question.
+
+#### Nothing on the panel appears or disappears under a press
+
+`Market`, `QB board` and the new `Slot` track used to mount only on the columns
+that read them, so pressing `Capital` on a KeepTradeCut bay took a row out from
+under the reader's cursor and resized the case mid-sitting — the one thing a
+panel a reader is pressing into must not do. All three keep their places and go
+**out of force** instead: dimmed keys, the reason in every key's title *and* on
+the group's wrapper (a `disabled` button does not fire mouse events in every
+browser), and — the addition — **the legend dims with them**, which is what makes
+an out-of-force axis read as one part rather than as a live label over dead keys.
+The row that explains each dim is the unlit key one or two tracks above it.
+
+`SwitchTrack.offReason` is that state, and it is a **whole-axis** reason rather
+than `unavailable` answering the same string for every key, which is the
+distinction that component already documents. The position track stays per-key
+for a real reason: `All` is still live on a picks bay, because the absence of a
+narrowing is a state that column genuinely holds, and an axis is out of force
+when *nothing* in it can be pressed.
+
+**`Save` is a key on the same terms** — dark and unpressable with nothing to seat
+rather than absent — and it stands where `Clear`, and then the `Editing` caption,
+used to: the housing is what a press edits, so the press that seats it belongs on
+the same part. It takes `CONSOLE_KEY_PILL_BARE`, which is new and is the pill
+split one property further: this key is `--fs-9` where the shell is `--fs-11`,
+and both are arbitrary values, so appending one to the other is decided by
+Tailwind's emit order rather than by the class attribute. Every existing caller
+of `CONSOLE_KEY_PILL_SHELL` is byte-identical.
+
+#### Editing is deferred, and a duplicate is a save to resolve
+
+A press used to write straight through to the store, so crossing the grid —
+`Proj · Starters` to `KTC · Picks` — moved the tile under the reader's finger on
+every step of the way, and each intermediate column was a real selection the
+cards behind the dialog re-ranked for. A press edits a **draft** of the selected
+bay now; the tracks and the housing header read it, the four tiles hold still,
+and `Save` seats it. `storeLineupColumns` and the socket order are unchanged —
+they just run once per save instead of once per press.
+
+**The collision rule is gone, and that is what the deferral bought.** A press was
+refused where the column it would write was already in another bay; that is the
+right rule for a panel that writes on every press and the wrong one for a panel
+that saves. A duplicate resolves by **exchange** — the bay that already held the
+column takes what this one held, so nothing is lost and the rack still holds four
+distinct readings. `takenElsewhere` survives only to word the Save key's title,
+which is the one place the exchange can be stated: a reader can guess what
+seating a column does, and nobody can guess that a second tile will change with
+it. What is still greyed is the grid's own hole (`cellGapReason`), because that
+is a reading which cannot exist rather than one a sibling bay is sitting on.
+
+**A draft belongs to the bay it was made in**, so selecting another abandons it —
+the handoff's own open question, answered the way it proposes. The two
+alternatives, a pending mark on the tile or refusing to move, both make the rack
+carry state about an edit nobody has committed, which is exactly what the
+deferral exists to take *off* it. Esc and the backdrop discard for the same
+reason: nothing was written, and the panel's own history argues against a confirm.
+
+`aria-disabled` rather than the attribute on `Save`, because it toggles under the
+reader's own focus: a key that is the target of a press and then goes `disabled`
+blurs to `<body>`, which on a modal is the one place a keyboard reader cannot
+afford to be sent. The guard is `save`'s own `dirty` check.
+
+#### On the card, and on the bay
+
+**A slot narrowing replaces the scope word rather than following it.** `FLEX/SF`
+already says these are starting seats, where `Starters · FLEX/SF` spends a third
+of a 65px line saying it twice. A KeepTradeCut tile has no scope word to replace
+— its line is the board pair — so the seats join it spaced; a forced capital
+board joins tight, which is the distinction that line already draws between a
+reading and a narrowing about it. `ros_starters` + FLEX/SF + WR reads
+`FLEX/SF · WR`, and below `sm` the tile keeps the **narrowing** alone, which is
+the rule it already had one clause shallower. A column narrowed both ways can
+still outrun a phone and truncates there, which is the same trade one clause
+deeper rather than a new one.
+
+#### Verified
+
+Rendered through a temporary `/preview` route against the real
+`LineupColumnsDialog`, the real `useLineupColumns` store, the real tokens and the
+real Tailwind build — the method the console-card, shares, rack and timeline
+passes established, since no database is reachable from where this was built —
+then driven over CDP at 1280 and 390 in both schemes and deleted. The mechanics
+are unchanged: `--no-proxy-server`, `localhost` rather than `127.0.0.1`,
+`data-theme` rather than `prefers-color-scheme`, `localStorage.clear()` between
+drives since the browser profile persists, the
+`--blink-settings=availablePointerTypes=4,…` flags, and a **client-component**
+harness. One is this pass's own and cost a run: the app rack is `fixed` at
+`top-0`, so a harness with no `--rack-clear` padding has its own trigger
+intercepted by the rack and every click times out.
+
+Every arm landed. **Six tracks mount at both widths** — Value, Scope, Slot,
+Market, QB board, Position — with Market and QB board out of force on a
+projection bay, the reason on the group *and* on each of their three keys, and
+their legends at `0.3` against `--billet-label`'s `0.76`. The Slot track goes out
+of force on a bench bay with `Only a starters column counts slots`, every key
+disabled and **nothing lit — not even `All`**, which would read as a narrowing
+the column is in force on.
+
+The deferral was driven end to end. Two slot presses left the rack
+byte-identical and `localStorage` **null**, with `Save` lit and titled `Seat this
+column in bay 01`; adding `WR` gave the one clause, `In the FLEX and superflex
+seats, WR only.`; `Save` then moved bay 01 to `FLEX/SF · WR` and wrote the store.
+The **exchange** was driven for real: composing bay 02 into what bay 01 held
+titled `Save` `Seat this column — bay 01 takes what this one held`, held the rack
+still, and on the press swapped the two — `ros_starters|WR|FLEX+SUPER_FLEX` and
+`ros_bench` trading sockets with nothing lost. Pressing `KTC` on bay 01 and then
+selecting bay 04 left `Save` resting at `No change to save` with the store
+untouched, which is the abandon rule. The housing header follows the draft
+(`ROS starters → KTC starters`) while the rack does not.
+
+**The case does not move.** Eight presses at each width — seats, a position, each
+of the three values, a forced QB board, a forced market, a scope change — left
+the dialog at **738px at 1280 and 898px at 390**, identical at every step.
+
+**Two renders changed the code.** The `Reads` window's `4.35em` is the handoff's
+desktop measure, and below `sm` the label stacks *above* the paragraph rather
+than beside it, so the window is the panel's own ~320px and the capital sentence
+takes a fourth line: measured, the case moved 18px on `Proj ↔ Capital` at 390
+while holding still at 1280. It is `5.8em` below `sm` and `4.35em` above, and a
+rule that held at one width and not the other was half a rule. And the slot
+track's vocabulary is the reader's own leagues, so it is the only track that can
+outgrow a *desktop*: at fifteen keys — an account holding every flex and both IDP
+families — `flex-1` gave 23px of content each and **every label truncated to a
+letter** at 1280 as well as 390. Past `KEYS_PER_TRACK` (10, the position track's
+own measured, shipped count) it wraps and sizes each key to its label; at or
+under it the equal shares the row arm is drawn with are unchanged, which is the
+ordinary nine-key account. Measured after: nothing clipped at either width on
+either vocabulary, `Done` reachable, and zero elements past the panel's own box.
+
+At every width and in both schemes: `document.documentElement.scrollWidth` equal
+to the viewport, zero elements past it, `:modal` true with the accessible name
+`Card columns`, exactly one `<h1>`, and **no console output of any kind** beyond
+the dev server's own HMR line. 1,785 unit tests pass (45 more — the vocabulary
+tie, the key's two clauses, the forcing, the clauses, the seat totals and the
+crossed ranks); `lint`, `typecheck` and `build` are clean.
+
+**Not verified against real data**, which is the gap to close first: every number
+above is a fixture, and four things a render cannot check. Whether any league in
+this corpus runs `WRRB_FLEX` or `REC_FLEX` at all — the wrap arm never fires
+without them, and the three-run order is drawn for a board nobody may hold. What
+the cross product actually costs on the 113-league page, which is up to
+twenty-five narrowings per pricing and each of them a re-total over every stored
+roster. Whether a narrowed seat is *interesting* on a real account — a `FLEX`
+column over a league with one flex ranks the same twelve rosters the whole
+lineup does, differently, and how often that differs is a question about this
+data. And whether the exchange reads as intended when the two bays are far apart
+on the rack, which a fixture with four adjacent tiles cannot show.
+
 ## The league card's machined billet, and what survived it
 
 **Superseded on the manager card — see The two league cards converged,

@@ -7,6 +7,7 @@ import type {
   KtcLineupChoice,
   LineupColumn,
   LineupPosition,
+  LineupSlot,
   ManagerLineupsPayload,
 } from "@/shared/contract";
 import {
@@ -23,6 +24,7 @@ import {
   CONSOLE_GLASS,
   CONSOLE_PART_TRAY,
   CONSOLE_KEY_PILL,
+  CONSOLE_KEY_PILL_BARE,
   CONSOLE_WINDOW_LEDGE,
 } from "../console-chrome";
 import {
@@ -39,16 +41,22 @@ import {
   LINEUP_METRIC_LABELS,
   LINEUP_POSITION_LABELS,
   LINEUP_POSITIONS,
+  LINEUP_SLOT_GROUPS,
+  LINEUP_SLOT_LABELS,
+  LINEUP_SLOTS,
   MAX_LINEUP_COLUMNS,
   metricAt,
   metricAxes,
+  narrowingClause,
   normalizeLineupColumns,
   positionGapReason,
-  positionsClause,
   positionsLabel,
+  slotGapReason,
+  slotsLabel,
   storeLineupColumns,
   type ColumnScope,
   type ColumnValue,
+  type SlotGroup,
 } from "../lineup-columns";
 import { KtcBoardKeys, KtcLineupKeys, SwitchTrack } from "./ktc-board-keys";
 import { Scanlines } from "./card-plate";
@@ -98,13 +106,17 @@ import { Scanlines } from "./card-plate";
  *   — a reader clearing their last column would watch all four defaults come
  *   back with nobody having chosen them.
  *
- * **The one bound that survives is the collision rule, and it does more work
- * than it used to.** Every slot being occupied means every press is checked
- * against three siblings rather than against however many happened to be set.
- * It runs against the **whole column** a press would write — metric, market, QB
- * board and position set — never against the metric alone, because two bays
- * holding one metric on two boards is the comparison a dynasty reader opens this
- * panel to make.
+ * **And the collision rule is gone, which is what deferring the edit bought.**
+ * A press used to be refused where the column it would write was already in
+ * another bay — checked against the whole column rather than the metric, since
+ * two bays holding one metric on two boards is the comparison a dynasty reader
+ * opens this panel to make. That was the right rule for a panel that wrote on
+ * every press and it is the wrong one for a panel that saves: a duplicate is no
+ * longer a press to refuse but a save to resolve, and it resolves by
+ * **exchange** — the bay that already held the column takes what this one held,
+ * so nothing is lost and the rack still holds four distinct readings. What is
+ * still greyed is the grid's own hole (`cellGapReason`), because that is a
+ * reading which cannot exist rather than one a sibling bay is sitting on.
  *
  * **The bay is the preview.** An earlier direction drew a preview tile under the
  * composer; here the selected bay updates on every press and is already drawn as
@@ -126,9 +138,30 @@ import { Scanlines } from "./card-plate";
  * open is the card's order again and no arrangement outlives the sitting that
  * made it.
  *
- * A press writes immediately rather than staging an "apply": the cards update
- * live behind the dialog, and there is no draft state to reconcile with a change
- * from another tab.
+ * **Editing is deferred, and the rack is what that is for.** A press used to
+ * write straight through to the store, which meant crossing the grid — `Proj ·
+ * Starters` to `KTC · Picks` — moved the tile under the reader's finger on
+ * every step of the way, and each intermediate column was a real selection the
+ * cards behind the dialog re-ranked for. A press edits a **draft** of the
+ * selected bay now; the tracks and the housing header read it, and the four
+ * tiles hold still until `Save` seats it. The store is still written on Save
+ * alone, so `storeLineupColumns` and the socket order below are unchanged —
+ * they just run once per save instead of once per press.
+ *
+ * **A draft belongs to the bay it was made in**, so selecting another abandons
+ * it. The two alternatives — a pending mark on the tile, or refusing to move —
+ * both make the rack carry state about an edit nobody has committed, which is
+ * the thing the deferral exists to take *off* it.
+ *
+ * **Nothing on this panel appears or disappears under a press**, which is the
+ * rule the three narrowing and pricing tracks now live by: `Market`, `QB board`
+ * and `Slot` used to mount only on the columns that read them, so pressing
+ * `Capital` on a KeepTradeCut bay took a row out from under the reader's cursor
+ * and resized the case mid-sitting. They keep their places and go **out of
+ * force** instead — dimmed keys, a dimmed legend and the reason in every key's
+ * title — and the row that explains each dim is the unlit key one or two tracks
+ * above it. `Save` is a key on the same terms: dark and unpressable with
+ * nothing to seat rather than absent.
  *
  * **The KeepTradeCut board lives in the bay, not in this panel's foot.** A global
  * board key is contradicted by a column that names its own: the market is not a
@@ -142,6 +175,22 @@ import { Scanlines } from "./card-plate";
  * different call site with a different argument (see that route on why one page
  * sends the choice and the other does not), and only the manager page's columns
  * stop reading a page-wide board.
+ *
+ * **The `Slot` axis breaks the starters scope out by seat**, and it is the
+ * position axis's argument one grain in: that one narrows a column to the
+ * *players* it counts and this one to the *seats*, so `FLEX` with `WR` counts
+ * the wide receivers occupying flex seats and a reader can ask how their flex
+ * seat ranks across their leagues rather than only how their starters do. The
+ * two are one intersection and the `Reads` window states them as one clause for
+ * that reason — two sentences would read as two independent filters somebody has
+ * to multiply out.
+ *
+ * Its vocabulary is the **leagues in hand** rather than the whole table (see
+ * `slotsInHand`), which is the same rule the position axis derives its list by
+ * pointed at a different source: a key for a seat no league starts is a
+ * narrowing that could never seat anybody, so such a slot is absent rather than
+ * greyed. What *is* greyed is the whole track off the `starters` scope, a seat
+ * being a thing only a starting lineup has.
  *
  * **The `Position` axis is here now, and this file used to argue it could not
  * be.** The argument was right at the time and is worth keeping: a track built
@@ -161,12 +210,26 @@ import { Scanlines } from "./card-plate";
 export function LineupColumnsDialog({
   columns,
   ktc,
+  slots = [],
   triggerClassName = `${CONSOLE_KEY_PILL} inline-flex items-center border-foreground/10 bg-[image:var(--key-bg)] text-foreground/80 shadow-[var(--key-shadow)] hover:text-readout`,
 }: {
   /** The chosen columns, already in canonical order — see `useLineupColumns`. */
   columns: readonly LineupColumn[];
   /** Which markets answered and when each was scraped; empty when none could. */
   ktc: ManagerLineupsPayload["ktc"];
+  /**
+   * The starting seats this account's leagues actually run — `slotsInHand` over
+   * the caller's own league list, in canonical order.
+   *
+   * **The offered vocabulary, not the whole one**: a key for a seat no league
+   * starts is a narrowing that could never seat anybody, which is the rule the
+   * position axis's list already lives by. Empty is a real state — an account
+   * whose leagues have no `roster_positions` stored yet — and the track is
+   * omitted entirely there rather than drawn as a lone `All`, which is a switch
+   * with one detent. That is not the fluctuation the always-mounted rule
+   * forbids: the vocabulary is a prop and cannot move under a press.
+   */
+  slots?: readonly LineupSlot[];
   /** The trigger's shape — see `LeagueFiltersDialog`, which is shaped the same way. */
   triggerClassName?: string;
 }) {
@@ -206,6 +269,23 @@ export function LineupColumnsDialog({
   const [sockets, setSockets] = useState<readonly string[] | null>(null);
 
   /**
+   * The edit in progress on the selected bay, or null where there is none.
+   *
+   * **A press writes this and `Save` writes the store**, which is what keeps the
+   * rack still while a reader crosses the grid: every intermediate column on the
+   * way from `Proj · Starters` to `KTC · Picks` used to be a real selection, so
+   * the tile under their finger moved on each step and the cards behind the
+   * dialog re-ranked for a column nobody wanted. Held here, the four tiles are
+   * the seated columns until there is something to seat.
+   *
+   * Null rather than seeded from the bay, so `dirty` is a comparison against the
+   * seated column rather than a flag something has to remember to clear — and so
+   * that abandoning is one `setDraft(null)` rather than a re-seed that could
+   * land on the wrong bay.
+   */
+  const [draft, setDraft] = useState<LineupColumn | null>(null);
+
+  /**
    * The rack's four bays, in socket order.
    *
    * Folded again here rather than trusted, and it is one idempotent call: every
@@ -218,18 +298,33 @@ export function LineupColumnsDialog({
   const canonical = normalizeLineupColumns(columns);
   const bays = arrangeLineupColumns(canonical, sockets);
   const bay = Math.min(Math.max(active, 0), bays.length - 1);
-  const col = bays[bay];
+  /** What the selected bay currently holds — what the rack draws, and what
+   * `Save` compares against. */
+  const seated = bays[bay];
+  /** What the tracks and the housing read: the edit in progress, else the seated
+   * column. Every axis below is a fact about *this*, never about the rack. */
+  const col = draft ?? seated;
   const axes = metricAxes(col.metric);
   const words = LINEUP_METRIC_LABELS[col.metric];
+  const dirty = lineupColumnKey(col) !== lineupColumnKey(seated);
 
-  /** Every other bay's key, so this bay's tracks can grey what they hold. */
-  const takenElsewhere = new Set(
-    bays.filter((_, i) => i !== bay).map(lineupColumnKey),
+  /**
+   * Which other bay already holds the column being composed, or -1.
+   *
+   * **It words the Save key's title and disables nothing**, which is the whole
+   * of what the collision rule became: a duplicate is resolved by exchange on
+   * save rather than refused on press, so the only thing left to do about one is
+   * to say what pressing `Save` will do — that the other bay takes what this one
+   * held. A reader who could not be told that would watch two tiles change for
+   * one press.
+   */
+  const duplicate = bays.findIndex(
+    (one, i) => i !== bay && lineupColumnKey(one) === lineupColumnKey(col),
   );
 
   /**
-   * Persist a selection and leave the rack exactly as the reader is looking at
-   * it.
+   * Seat the draft in the selected bay, and leave the rack exactly as the reader
+   * is looking at it.
    *
    * Two writes, and they are two different orders on purpose:
    * `storeLineupColumns` normalizes, so what is *stored* is the canonical set
@@ -242,10 +337,37 @@ export function LineupColumnsDialog({
    * `all` *is* the arrangement: reading them back would be reading the canonical
    * order, which is the re-sort this exists to keep off the rack.
    */
-  const write = (next: LineupColumn) => {
-    const all = bays.map((c, i) => (i === bay ? next : c));
+  const save = () => {
+    if (!dirty) return;
+    const all = bays.map((c, i) => (i === bay ? col : c));
+    // **The exchange.** A duplicate is not a press to refuse but a save to
+    // resolve: the bay that already held this column takes what this one held,
+    // so nothing is lost and the rack still holds four distinct readings. It is
+    // a swap rather than a shuffle because both ends are known — this bay's old
+    // value goes exactly where this bay's new value came from, and no third bay
+    // moves.
+    if (duplicate >= 0) all[duplicate] = seated;
     storeLineupColumns(all);
     setSockets(all.map(lineupColumnKey));
+    // Seated, so there is nothing left in hand. `col` falls back to the bay,
+    // which is now this column, and `dirty` goes false by arithmetic.
+    setDraft(null);
+  };
+
+  /**
+   * Move to another bay, abandoning whatever was in hand.
+   *
+   * **An edit belongs to the bay it was made in.** Carrying a draft across would
+   * put a composed column into a socket the reader never opened it in; keeping
+   * one per bay would make the rack carry state about four edits nobody has
+   * committed, which is exactly what the deferral exists to take off it. The
+   * cost is that a half-composed column is lost to a stray press on a
+   * neighbouring tile, and the panel's own history is what argues for taking it:
+   * nothing here has ever asked a reader to confirm.
+   */
+  const select = (index: number) => {
+    setActive(index);
+    setDraft(null);
   };
 
   /**
@@ -260,9 +382,13 @@ export function LineupColumnsDialog({
    * re-order, so it is the one moment an index has to chase what it points at.
    */
   const open = () => {
-    const key = lineupColumnKey(col);
+    // The *seated* column, not the draft: an unsaved edit does not outlive the
+    // sitting it was made in, so what the re-opened panel follows is the column
+    // the bay actually holds.
+    const key = lineupColumnKey(seated);
     const landed = canonical.findIndex((c) => lineupColumnKey(c) === key);
     setSockets(null);
+    setDraft(null);
     if (landed >= 0) setActive(landed);
     ref.current?.showModal();
   };
@@ -293,6 +419,7 @@ export function LineupColumnsDialog({
           patch.format ?? col.format,
           patch.lineup ?? col.lineup,
           patch.positions ?? col.positions,
+          patch.slots ?? col.slots,
         )
       : null;
   };
@@ -300,24 +427,25 @@ export function LineupColumnsDialog({
   /**
    * Why a press is off, or null where it can be made.
    *
-   * Two claims, and a key that is off says which: the pairing has no metric
-   * behind it at all (`cellGapReason` — the grid's two holes), or the column it
-   * would write is already in another bay. A grey with no title is a key a
-   * reader cannot find out anything about, which is the one thing this panel's
-   * disable-rather-than-correct rule cannot afford.
+   * **One claim now, where it used to be two.** The pairing has no metric behind
+   * it at all — `cellGapReason`, the grid's one remaining hole — and that is a
+   * reading which cannot exist. The other claim, that a sibling bay already
+   * holds the column a press would write, is gone with the collision rule: a
+   * duplicate is resolved by exchange on `Save` rather than refused here, so
+   * greying it would be refusing a press that has an answer. A grey with no
+   * title is still a key a reader cannot find out anything about, which is what
+   * this panel's disable-rather-than-correct rule cannot afford.
    */
-  const why = (patch: Patch): string | null => {
-    const next = candidate(patch);
-    if (!next) {
-      return cellGapReason(patch.value ?? axes.value, patch.scope ?? axes.scope);
-    }
-    return takenElsewhere.has(lineupColumnKey(next)) ? BAY_HOLDS : null;
-  };
+  const why = (patch: Patch): string | null =>
+    candidate(patch)
+      ? null
+      : cellGapReason(patch.value ?? axes.value, patch.scope ?? axes.scope);
 
-  /** Write a press, or refuse it — which the key that made it is already grey for. */
+  /** Compose a press into the draft, or refuse it — which the key that made it
+   * is already grey for. Nothing on the rack moves; `Save` is what seats it. */
   const press = (patch: Patch) => {
     const next = candidate(patch);
-    if (next && !why(patch)) write(next);
+    if (next && !why(patch)) setDraft(next);
   };
 
   /**
@@ -338,22 +466,66 @@ export function LineupColumnsDialog({
         ? col.positions.filter((one) => one !== key)
         : [...col.positions, key];
 
+  /** The same, one axis over — `column` sorts either set into canonical order. */
+  const toggledSlot = (key: SlotKey): LineupSlot[] =>
+    key === "all"
+      ? []
+      : col.slots.includes(key)
+        ? col.slots.filter((one) => one !== key)
+        : [...col.slots, key];
+
   /**
    * Why a position key is off.
    *
    * `All` is never off — it is the absence of a narrowing rather than a
    * narrowing to everything, so there is no column it could fail to write. The
    * nine are off wholesale on a `KTC · Picks` bay (`positionGapReason`), and
-   * otherwise on the same collision rule as every other axis. **Including the
-   * lit ones**, which is where the position track parts company with the four
-   * single-select ones above it: pressing a lit key there rewrites the same
-   * column, where pressing a lit key here *removes* a position and is therefore
-   * a different column that a sibling bay may already hold.
+   * that is the only reason left: the collision rule this also used to ask is
+   * gone, a duplicate being a save to resolve rather than a press to refuse.
+   *
+   * It stays **per key** rather than becoming the whole-axis `offReason` the
+   * three tracks above it take, and the difference is `All`: it is still live on
+   * a picks bay, because the absence of a narrowing is a state that column
+   * genuinely holds. An axis is out of force when *nothing* in it can be
+   * pressed.
    */
   const positionOff = (key: PositionKey): string | null =>
-    key === "all"
-      ? null
-      : (positionGapReason(axes.scope) ?? why({ positions: toggled(key) }));
+    key === "all" ? null : positionGapReason(axes.scope);
+
+  /**
+   * The seats this track offers: the leagues' own union, plus anything the
+   * column being edited already names.
+   *
+   * The second half is a guard rather than a nicety and it is silent without:
+   * a stored column narrowed to `SUPER_FLEX` outlives the superflex league
+   * leaving the account, and drawn against the union alone its track would show
+   * `All` unlit with no key lit either — a narrowing on screen in the bay's own
+   * second line that the control cannot name. `normalizeLineupSlots` keeps such
+   * a column valid deliberately (see its note), so the picker has to be able to
+   * show it.
+   */
+  const offeredSlots = LINEUP_SLOTS.filter(
+    (one) => slots.includes(one) || col.slots.includes(one),
+  );
+  const slotKeys: readonly SlotKey[] = ["all", ...offeredSlots];
+  /**
+   * Where the milled cuts fall: before the first *offered* slot of each run
+   * after the first.
+   *
+   * Computed against what is on screen rather than spelled as "before `FLEX`",
+   * because the track offers a subset — an account whose only flex is a
+   * superflex would get no cut at all from a fixed key, and the bare seats and
+   * the flexes would read as one run.
+   */
+  const slotCuts = new Set<SlotKey>();
+  let lastGroup: SlotGroup | null = null;
+  for (const one of offeredSlots) {
+    const group = LINEUP_SLOT_GROUPS[one];
+    if (lastGroup !== null && group !== lastGroup) slotCuts.add(one);
+    lastGroup = group;
+  }
+  /** Why the slot axis is out of force, or undefined where it is in force. */
+  const slotsOff = slotGapReason(axes.scope) ?? undefined;
 
   return (
     <>
@@ -485,7 +657,7 @@ export function LineupColumnsDialog({
               Pick a bay to set what it reads.
               <span className="hidden sm:inline">
                 {" "}
-                The card updates as you press.
+                Save seats it — a column another bay holds trades places.
               </span>
             </p>
 
@@ -510,7 +682,7 @@ export function LineupColumnsDialog({
                     index={i}
                     column={entry}
                     active={i === bay}
-                    onSelect={() => setActive(i)}
+                    onSelect={() => select(i)}
                   />
                 </li>
               ))}
@@ -549,14 +721,55 @@ export function LineupColumnsDialog({
                 <span className="min-w-0 flex-1 truncate font-display text-[length:var(--fs-15)] font-semibold tracking-[-0.005em] text-[color:var(--billet-name)] [text-shadow:var(--billet-name-shadow)]">
                   {words.column}
                 </span>
-                {/* **This is where `Clear` used to be.** A stamped caption
-                    rather than a key: with every bay always set there is nothing
-                    to clear to, and the word says what the housing is for
-                    instead of offering a press that would have nowhere to
-                    land. */}
-                <span className="shrink-0 font-mono text-[length:var(--fs-9)] uppercase tracking-[0.14em] text-[color:var(--billet-label)]">
-                  Editing
-                </span>
+                {/* **`Save` stands where `Clear`, and then the `Editing`
+                    caption, used to.** The housing is what a press edits, so the
+                    press that seats it belongs on the same part — and it is
+                    always a key, never appearing, on the same no-fluctuation
+                    rule as the three tracks below: dark and unpressable with
+                    nothing to seat rather than absent, so the ledge does not
+                    change width the moment a reader touches an axis.
+
+                    Its title is the only place the exchange can be stated. A
+                    reader can guess what seating a column does; nobody can guess
+                    that the bay already holding it will take what this one held,
+                    and watching two tiles change for one press without having
+                    been told is the panel doing something behind them.
+
+                    `aria-disabled` rather than the attribute, because this
+                    toggles under a reader's own focus: a key that is the target
+                    of a press and then goes `disabled` blurs to `<body>`, which
+                    on a modal is the one place a keyboard reader cannot afford
+                    to be sent. The guard is `save`'s own `dirty` check. */}
+                <button
+                  type="button"
+                  onClick={save}
+                  aria-disabled={!dirty}
+                  title={
+                    !dirty
+                      ? "No change to save"
+                      : duplicate >= 0
+                        ? `Seat this column — bay ${bayNumber(duplicate)} takes what this one held`
+                        : `Seat this column in bay ${bayNumber(bay)}`
+                  }
+                  className={
+                    // The bare pill, because this key is `--fs-9` where the
+                    // shell is `--fs-11` — both arbitrary values, so appending
+                    // one to the other is decided by Tailwind's emit order
+                    // rather than by the class attribute. See
+                    // `CONSOLE_KEY_PILL_BARE`.
+                    `${CONSOLE_KEY_PILL_BARE} px-[0.6875rem] py-1 text-[length:var(--fs-9)] tracking-[0.14em] ` +
+                    (dirty
+                      ? // Composed whole rather than layered: a shadow list is
+                        // atomic, so a riser written beside a resting inset
+                        // would replace it rather than add to it.
+                        "border-active/60 bg-[image:var(--key-metal)] text-readout [text-shadow:var(--readout-text-glow)] " +
+                        "shadow-[inset_0_1px_0_rgba(255,255,255,0.45),0_2px_0_rgba(0,0,0,0.7),0_7px_12px_-6px_rgba(0,0,0,0.95),0_0_22px_-6px_var(--accent-glow)]"
+                      : "cursor-not-allowed border-transparent bg-[color:var(--recess-bg)] text-foreground/34 " +
+                        "shadow-[inset_0_1px_2px_rgba(0,0,0,0.6)]")
+                  }
+                >
+                  Save
+                </button>
               </div>
 
               <div className="relative flex flex-col gap-[0.5625rem] bg-[image:var(--key-bg)] px-3 py-[0.8125rem]">
@@ -583,37 +796,85 @@ export function LineupColumnsDialog({
                   unavailable={(scope) => why({ scope })}
                 />
 
-                {/* **A track a column cannot answer is absent, never greyed**,
-                    which is why these two are drawn apart rather than as a pair:
-                    nothing here is dimmed for being inapplicable to the column
-                    the reader is editing, and the two axes are read by different
-                    metrics. A *market* is KeepTradeCut's own, so only its four
-                    bays draw the first. A *QB board* is a fact about how the
+                {/* **The Scope axis's own second line.** A seat is a thing only
+                    a starting lineup has, so off the `starters` scope the whole
+                    track goes out of force — and it keeps its place, because
+                    `Starters` unlit one row above is what says *why* it is dim
+                    and a row that vanished under a press would take the answer
+                    with it.
+
+                    Omitted only where the account offers no seats at all, which
+                    is not that fluctuation: the vocabulary is a prop, so it
+                    cannot move under a press, and a track holding `All` alone is
+                    a switch with one detent. */}
+                {offeredSlots.length > 0 && (
+                  <SwitchTrack
+                    label="Slot"
+                    legend
+                    options={slotKeys}
+                    // Out of force lights nothing — not even `All`, which would
+                    // read as a narrowing this column is in force on.
+                    value={
+                      slotsOff
+                        ? NOTHING_LIT
+                        : col.slots.length === 0
+                          ? ALL_ONLY_SLOT
+                          : col.slots
+                    }
+                    onChange={(key) => press({ slots: toggledSlot(key) })}
+                    labels={SLOT_KEY_LABELS}
+                    className=""
+                    size="row"
+                    offReason={slotsOff}
+                    divider={(key) => slotCuts.has(key)}
+                    // The one track whose vocabulary is the reader's own
+                    // leagues, and therefore the one that can outgrow its row.
+                    // See {@link KEYS_PER_TRACK} for the bound and
+                    // {@link SwitchTrack.wrap} for what crossing it buys.
+                    wrap={slotKeys.length > KEYS_PER_TRACK}
+                  />
+                )}
+
+                {/* **These two used to mount only on the columns that read
+                    them, and that was the fluctuation.** Pressing `Capital` on a
+                    KeepTradeCut bay took the Market row out from under the
+                    cursor and resized the case mid-sitting, which is the one
+                    thing a panel a reader is pressing into must not do. They
+                    keep their places and go out of force instead, with the
+                    reason in every key's title and the legend dimmed with them —
+                    and the unlit key one or two rows above is what explains each
+                    dim.
+
+                    They are still two tracks rather than a pair, because the two
+                    axes are read by different metrics. A *market* is
+                    KeepTradeCut's own. A *QB board* is a fact about how the
                     league starts quarterbacks and both priced valuations split
-                    on it, so the three capital bays draw the second as well —
-                    which is the whole of what a reader gets from this: their
-                    roster's draft capital priced on the superflex board while
-                    they sit in a 1QB league. A projection reads neither. */}
-                {isKtcMetric(col.metric) && (
-                  <KtcBoardKeys
-                    board={col.format}
-                    onChange={(format) => press({ format })}
-                    size="row"
-                    legend
-                    className=""
-                    unavailable={(format) => why({ format })}
-                  />
-                )}
-                {readsQbBoard(col.metric) && (
-                  <KtcLineupKeys
-                    lineup={col.lineup}
-                    onChange={(lineup) => press({ lineup })}
-                    size="row"
-                    legend
-                    className=""
-                    unavailable={(lineup) => why({ lineup })}
-                  />
-                )}
+                    on it, so the three capital bays read it too — which is the
+                    whole of what a reader gets from that axis: their roster's
+                    draft capital priced on the superflex board while they sit in
+                    a 1QB league. A projection reads neither. */}
+                <KtcBoardKeys
+                  board={col.format}
+                  onChange={(format) => press({ format })}
+                  size="row"
+                  legend
+                  className=""
+                  offReason={
+                    isKtcMetric(col.metric) ? undefined : MARKET_OFF
+                  }
+                  unavailable={(format) => why({ format })}
+                />
+                <KtcLineupKeys
+                  lineup={col.lineup}
+                  onChange={(lineup) => press({ lineup })}
+                  size="row"
+                  legend
+                  className=""
+                  offReason={
+                    readsQbBoard(col.metric) ? undefined : QB_BOARD_OFF
+                  }
+                  unavailable={(lineup) => why({ lineup })}
+                />
 
                 {/* **The milled cut is copy, not rhythm.** Position *narrows*
                     the two axes above it rather than being a third of them, and
@@ -665,7 +926,27 @@ export function LineupColumnsDialog({
                   >
                     Reads
                   </span>
-                  <p className="relative m-0 min-w-0 flex-1 font-mono text-[length:var(--fs-10-5)] leading-[1.45] text-readout-line text-pretty">
+                  {/* **Three lines reserved, not two.** A priced column
+                      appends a board clause *on top of* a narrowing — "Draft
+                      capital off ADP — the starters only. Off each league's own
+                      draft board. In the FLEX and superflex seats only." — which
+                      is three lines in this window's ~386px measure, so
+                      `Proj ↔ Capital` moved the case 17.7px under the reader's
+                      finger. Three is the longest a *toggle* can produce; a
+                      reader who lights eight seats and three positions still
+                      grows it, which is a sentence they built rather than one a
+                      press handed them.
+
+                      **Four below `sm`, and that is a measurement rather than a
+                      margin.** The label stacks above the paragraph there
+                      instead of standing beside it, so the window is the
+                      panel's own ~320px rather than ~386, and the same sentence
+                      takes a fourth line — measured, the case moved 18px on the
+                      `Proj ↔ Capital` press at 390 while holding still at 1280.
+                      A rule that holds at one width and not the other is half a
+                      rule, and a phone is where a case shifting under a thumb
+                      matters most. */}
+                  <p className="relative m-0 min-h-[5.8em] min-w-0 flex-1 font-mono text-[length:var(--fs-10-5)] leading-[1.45] text-readout-line text-pretty sm:min-h-[4.35em]">
                     {reads(col)}
                   </p>
                 </div>
@@ -717,6 +998,7 @@ type Patch = {
   format?: KtcBoardChoice;
   lineup?: KtcLineupChoice;
   positions?: readonly LineupPosition[];
+  slots?: readonly LineupSlot[];
 };
 
 /** The position track's own vocabulary: the absence of a narrowing, then the nine. */
@@ -732,8 +1014,51 @@ const POSITION_KEY_LABELS: Record<PositionKey, string> = {
 /** What an un-narrowed column hands the track: `All` lit and nothing else. */
 const ALL_ONLY: readonly PositionKey[] = ["all"];
 
-/** Why an axis key is off: a sibling bay already holds the column it would make. */
-const BAY_HOLDS = "Another bay is on this column";
+/** The slot track's own vocabulary: the absence of a narrowing, then the seats
+ * this account's leagues actually run. */
+type SlotKey = "all" | LineupSlot;
+
+const SLOT_KEY_LABELS: Record<SlotKey, string> = {
+  all: "All",
+  ...LINEUP_SLOT_LABELS,
+};
+
+const ALL_ONLY_SLOT: readonly SlotKey[] = ["all"];
+
+/**
+ * How many keys an equal-share row carries before its labels start to clip.
+ *
+ * **Measured, not chosen**: the position track is ten keys in the panel's 402px
+ * track at desktop and 282px at a phone's, and that is the shipped, rendered
+ * state — `All` and `DEF` both clear at both widths. A track longer than that is
+ * the slot axis's alone, since it is the only one whose vocabulary is the
+ * reader's own leagues, and at fifteen keys `flex-1` gives 23px of content each
+ * and every label truncates to a letter. Past this the track wraps and sizes
+ * each key to its own label instead — see {@link SwitchTrack.wrap}.
+ */
+const KEYS_PER_TRACK = 10;
+
+/**
+ * What a track out of force is handed: an array, so it stays in multi-select,
+ * holding nothing.
+ *
+ * A shared empty rather than a literal at the call site, so the array identity
+ * is stable across renders — a new `[]` each time is a new prop on a component
+ * that has no reason to re-render for it.
+ */
+const NOTHING_LIT: readonly SlotKey[] = [];
+
+/**
+ * Why the two pricing axes are out of force, where they are.
+ *
+ * Spelled here rather than in `lineup-columns.ts` beside `slotGapReason`,
+ * because these two are facts about *this panel's* grid — which value key is
+ * unlit two rows above — where the slot rule is a fact about the column that
+ * `column()` itself enforces. A reader following the dim looks up at `Proj` or
+ * at `Capital`, and the wording names what they will find.
+ */
+const MARKET_OFF = "Only a KeepTradeCut column reads a market";
+const QB_BOARD_OFF = "A projection is not priced on a draft board";
 
 /**
  * One socket on the rack: a milled part carrying what its bay reads.
@@ -860,7 +1185,9 @@ function BayKey({
 }
 
 /**
- * A bay's second line: what the column is *set* to, then what it narrows to.
+ * A bay's second line: what the column is *set* to, then what it narrows to —
+ * the seats first and the players in them second, which is the order the
+ * `Reads` sentence puts them in and the order they compose in.
  *
  * One spelling, because it is both the visible line and the button's accessible
  * name — two would be a rack that says one thing and announces another.
@@ -881,9 +1208,24 @@ function baySetting(col: LineupColumn): string {
       board
       ? `${scope}·${board}`
       : scope;
+  // **A slot narrowing replaces the scope word rather than following it.**
+  // `FLEX/SF` already says these are starting seats, where `Starters · FLEX/SF`
+  // spends a third of a 58px line saying it twice. On a KeepTradeCut bay there
+  // is no scope word to replace — its line is the board pair — so the seats join
+  // it spaced, the way the positions do. A forced capital board joins tight for
+  // the reason above: the seats and the board they were priced on are one
+  // reading.
+  const seats = slotsLabel(col.slots);
+  const head = !seats
+    ? setting
+    : isKtcMetric(col.metric)
+      ? `${setting} · ${seats}`
+      : board
+        ? `${seats}·${board}`
+        : seats;
   const narrowed = positionsLabel(col.positions);
-  if (!narrowed) return setting;
-  return setting ? `${setting} · ${narrowed}` : narrowed;
+  if (!narrowed) return head;
+  return head ? `${head} · ${narrowed}` : narrowed;
 }
 
 /** `01`–`04`. Two digits because a bay is a socket on a rack, not a list item. */
@@ -896,13 +1238,18 @@ function bayNumber(index: number): string {
  * position list.
  *
  * Three clauses composed rather than one string per column, which is what keeps
- * nine metrics × nine pricings × every position set expressible without a table
- * nobody could keep true.
+ * ten metrics × nine pricings × every seat and position set expressible without
+ * a table nobody could keep true.
  */
 function reads(col: LineupColumn): string {
   const words = LINEUP_METRIC_LABELS[col.metric];
   const board = readsQbBoard(col.metric) ? ` ${boardClause(col)}` : "";
-  return `${words.option}${board}${positionsClause(col.positions)}`;
+  // **The two narrowings are one clause, because they are one intersection.** A
+  // slot picks the seats and a position picks who is sitting in them; two
+  // sentences would read as two independent filters a reader has to multiply
+  // out for themselves. `narrowingClause` is the one spelling, and it falls
+  // back to `positionsClause` where no seat is named.
+  return `${words.option}${board}${narrowingClause(col.slots, col.positions)}`;
 }
 
 /**

@@ -32,9 +32,11 @@ import type {
   LineupColumn,
   LineupMetricId,
   LineupPosition,
+  LineupSlot,
 } from "@/shared/contract";
 
 import { FANTASY_POSITIONS } from "../projections/positions.ts";
+import { STARTING_SLOTS } from "../projections/starting-slots.ts";
 import { parseKtcBoardChoice, parseKtcLineupChoice } from "./board-choice.ts";
 
 /**
@@ -139,7 +141,11 @@ export function ktcVariantKey(variant: KtcVariant): string {
  * name a second key — which is also why they can never occupy two bays.
  */
 export function lineupColumnKey(column: LineupColumn): string {
-  return `${pricedKey(column)}${positionKeySuffix(column.positions)}`;
+  return (
+    pricedKey(column) +
+    slotKeySuffix(column.slots) +
+    positionKeySuffix(column.positions)
+  );
 }
 
 /**
@@ -312,6 +318,118 @@ export function serializePositionSets(
 }
 
 /**
+ * The slot clause a narrowed column's key carries, or nothing at all.
+ *
+ * **An `@` prefix, and it is the one thing here that is not
+ * {@link positionKeySuffix}'s rule verbatim.** Both clauses are `+`-joined
+ * lower-cased sets after a `:`, so `ros_starters:wr` and a slot set spelled the
+ * same way would be one string for two different questions — a rank filed under
+ * the seats a column counts, read back as the positions it counts. The prefix
+ * is what keeps them apart, and it costs nothing: the key is written here and
+ * read as an opaque lookup, never parsed back, and no slot and no position is
+ * spelled with an `@`.
+ *
+ * Everything else is that function's argument unchanged. An un-narrowed column
+ * keys exactly as it always did, which is why this is a suffix rather than a
+ * segment — append an `@all` token to every key and every card on the page looks
+ * up a rank the server filed under another name. The order is
+ * {@link normalizeLineupSlots}', so two bays narrowed to the same seats in
+ * different press orders are one column and dedupe as one.
+ *
+ * **Exported, because the route composes the same suffix from the other end.**
+ * A rank is a base metric key plus the pricing plus this plus the position
+ * clause, where a column is {@link lineupColumnKey} whole — two entry points to
+ * one spelling, not even the separator repeated.
+ */
+export function slotKeySuffix(slots: readonly LineupSlot[]): string {
+  return slots.length === 0 ? "" : `:@${slotSetKey(slots)}`;
+}
+
+/** `flex+super_flex` — one slot set, as one token. */
+export function slotSetKey(slots: readonly LineupSlot[]): string {
+  return slots.map((one) => one.toLowerCase()).join("+");
+}
+
+/**
+ * The distinct non-empty slot sets a selection needs ranked, which is the
+ * fourth thing the request carries.
+ *
+ * **The sets and not the columns**, on {@link positionSetsOf}' exact terms: a
+ * slot set is a fourth way to *total* the same solved lineups, so what the
+ * server needs is the list of narrowings and every metric of every one of them
+ * falls out of the solves it already ran. The empty set is dropped because the
+ * base ranks are its answer, which is what keeps a reader who never touches
+ * this axis on exactly the request they had.
+ */
+export function slotSetsOf(
+  columns: readonly LineupColumn[],
+): LineupSlot[][] {
+  const seen = new Map<string, LineupSlot[]>();
+  for (const column of columns) {
+    if (column.slots.length === 0) continue;
+    seen.set(slotSetKey(column.slots), [...column.slots]);
+  }
+  return [...seen.values()];
+}
+
+/**
+ * Fold anything into a valid slot set: startable slots only, deduped, in the
+ * vocabulary's own canonical order.
+ *
+ * {@link normalizeLineupPositions}' rule one axis over, and the sort is what
+ * makes a set an identity: a reader who pressed `SUPER_FLEX` then `FLEX` and
+ * one who pressed them the other way are asking one question, and two keys for
+ * it would be two columns of the same numbers a rack could hold at once.
+ *
+ * The vocabulary is the whole of {@link STARTING_SLOTS} and **not the slots the
+ * reader's leagues happen to start**, which is the one place this is
+ * deliberately wider than the track that writes it. The picker offers the
+ * leagues' own union — a key for a seat nobody starts could never seat anybody —
+ * but an account whose IDP league has since gone is a stored `@dl` that is
+ * still a perfectly good question about the leagues it was asked of, and
+ * dropping it here would silently widen that column to the whole lineup.
+ */
+export function normalizeLineupSlots(value: unknown): LineupSlot[] {
+  if (!Array.isArray(value)) return [];
+  const chosen = new Set<string>();
+  for (const entry of value) {
+    if (typeof entry !== "string") continue;
+    const upper = entry.toUpperCase();
+    if (STARTING_SLOTS.includes(upper)) chosen.add(upper);
+  }
+  return STARTING_SLOTS.filter((one) => chosen.has(one)) as LineupSlot[];
+}
+
+/**
+ * Read the request's slot-set list back — `flex+super_flex,qb`.
+ *
+ * **No `@` here, and that is not an inconsistency.** The prefix exists to keep
+ * two clauses apart inside one key string; a parameter named `slots` has
+ * nothing to be told apart from. Every token folds on
+ * {@link parsePositionSets}' terms and a set that folds to empty is dropped
+ * rather than ranked: the base ranks already answer the un-narrowed column, so
+ * a garbled parameter costs the columns that named it their narrowing and
+ * nothing else.
+ */
+export function parseSlotSets(value: string | null): LineupSlot[][] {
+  if (!value) return [];
+  const seen = new Map<string, LineupSlot[]>();
+  for (const token of value.split(",")) {
+    const slots = normalizeLineupSlots(token.split("+"));
+    if (slots.length === 0) continue;
+    seen.set(slotSetKey(slots), slots);
+  }
+  return [...seen.values()];
+}
+
+/** The request's spelling of a slot-set list — `flex+super_flex,qb`. */
+export function serializeSlotSets(
+  sets: readonly (readonly LineupSlot[])[],
+): string {
+  return sets.map(slotSetKey).join(",");
+}
+
+/**
  * The distinct non-`auto` variants a set of columns needs ranked, which is what
  * the request carries.
  *
@@ -358,10 +476,12 @@ export function parseKtcVariants(value: string | null): KtcVariant[] {
           metric: "ktc_total" as LineupMetricId,
           format: parseKtcBoardChoice(format),
           lineup: parseKtcLineupChoice(lineup),
-          // Un-narrowed, because a variant is a *pricing* and the position axis
-          // travels on its own parameter — see `parsePositionSets`. A set here
-          // would make one narrowing's ranks the only ones a forced board got.
+          // Un-narrowed on both axes, because a variant is a *pricing* and the
+          // two narrowings travel on their own parameters — see
+          // `parsePositionSets` and `parseSlotSets`. A set here would make one
+          // narrowing's ranks the only ones a forced board got.
           positions: [],
+          slots: [],
         };
       }),
   );

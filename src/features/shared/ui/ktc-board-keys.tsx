@@ -84,6 +84,7 @@ export function KtcBoardKeys({
   size = "md",
   legend = false,
   unavailable,
+  offReason,
 }: {
   board: KtcBoardChoice;
   onChange: (board: KtcBoardChoice) => void;
@@ -115,19 +116,23 @@ export function KtcBoardKeys({
    * second wording of one rule, on one of the five tracks in that panel.
    */
   unavailable?: (board: KtcBoardChoice) => string | null;
+  /** Why the whole axis is out of force — see {@link SwitchTrack.offReason}. */
+  offReason?: string;
 }) {
   return (
     <SwitchTrack
       label="Market"
       legend={legend}
       options={KTC_BOARD_CHOICES}
-      value={board}
+      // As {@link KtcLineupKeys}: an axis out of force lights nothing.
+      value={offReason === undefined ? board : null}
       onChange={onChange}
       labels={size === "md" ? MARKET_LABELS : MARKET_LABELS_SM}
       className={className}
       size={size}
       disabled={disabled}
       unavailable={unavailable}
+      offReason={offReason}
     />
   );
 }
@@ -139,6 +144,7 @@ export function KtcLineupKeys({
   size = "sm",
   legend = false,
   unavailable,
+  offReason,
 }: {
   lineup: KtcLineupChoice;
   onChange: (lineup: KtcLineupChoice) => void;
@@ -147,18 +153,24 @@ export function KtcLineupKeys({
   legend?: boolean;
   /** Why a QB board cannot be pressed — see {@link KtcBoardKeys.unavailable}. */
   unavailable?: (lineup: KtcLineupChoice) => string | null;
+  /** Why the whole axis is out of force — see {@link SwitchTrack.offReason}. */
+  offReason?: string;
 }) {
   return (
     <SwitchTrack
       label={legend ? "QB board" : "Lineup"}
       legend={legend}
+      // A track out of force lights nothing: the value it would light belongs
+      // to an axis this column does not read, and a lit key under a dimmed
+      // legend says the setting is in force.
+      value={offReason === undefined ? lineup : null}
       options={KTC_LINEUP_CHOICES}
-      value={lineup}
       onChange={onChange}
       labels={LINEUP_LABELS}
       className={className}
       size={size}
       unavailable={unavailable}
+      offReason={offReason}
     />
   );
 }
@@ -209,8 +221,10 @@ export function SwitchTrack<T extends string>({
   className,
   size,
   disabled = false,
+  offReason,
   unavailable,
   divider,
+  wrap = false,
 }: {
   label: string;
   /** Draw the label beside the track. Otherwise it is the group's name alone. */
@@ -227,6 +241,28 @@ export function SwitchTrack<T extends string>({
   size: Size;
   /** Whether the axis is in force at all — see {@link KtcBoardKeys.disabled}. */
   disabled?: boolean;
+  /**
+   * Why the whole axis is out of force — which also puts it out of force, so a
+   * caller never has to set both.
+   *
+   * **A whole-axis reason rather than {@link unavailable} answering the same
+   * string for every key**, which is the distinction this component draws and
+   * the columns picker needs three of: `Only a starters column counts slots`,
+   * `Only a KeepTradeCut column reads a market` and `A projection is not priced
+   * on a draft board` are all facts about the *column* being edited, not about
+   * any one key in the track.
+   *
+   * It carries three things `disabled` alone cannot. The **legend dims with
+   * it**, which is what makes an out-of-force axis read as one part rather than
+   * as a live label over dead keys. The reason goes on the group's wrapper *and*
+   * on every key, because a `disabled` button does not fire mouse events in
+   * every browser and a title only the wrapper carries would be unreachable
+   * wherever the keys do swallow them. And the track keeps its place: these
+   * three axes used to mount only on the columns that read them, which resized
+   * the case under a press — the one thing a panel a reader is pressing into
+   * must not do.
+   */
+  offReason?: string;
   /**
    * Why an option cannot be pressed, or null where it can.
    *
@@ -254,9 +290,31 @@ export function SwitchTrack<T extends string>({
    * and three tracks would say they were choosing three times.
    */
   divider?: (option: T) => boolean;
+  /**
+   * Let the keys wrap onto a second line, sizing each to its own label.
+   *
+   * **A board of keys rather than a switch**, which is what a multi-select track
+   * long enough to need this already is. The slot axis is the one that asks: its
+   * vocabulary is the reader's own leagues, so a nine-key account (the ordinary
+   * one) fits the row and an account holding every flex and both IDP families
+   * offers fifteen — measured, `flex-1` hands those 23px of content each at the
+   * panel's 560px and every label from `FLEX` to `DEF` truncates to a letter,
+   * on the one axis whose entire point is naming a seat.
+   *
+   * `flex-auto` at every width rather than below `sm` alone, which is the
+   * position track's own fix (see the key's class below) extended to the only
+   * track that can outgrow a desktop. **It cannot fluctuate under a press**: the
+   * vocabulary is a prop, so where the line breaks is fixed for the sitting —
+   * which is the rule the three out-of-force tracks are kept in place for.
+   */
+  wrap?: boolean;
 }) {
   const row = size === "row";
   const small = size === "sm" || row;
+  // One flag from the two ways an axis goes out of force, so nothing below has
+  // to ask twice. `offReason` implies it: a caller with a reason to give has
+  // already decided the axis is off.
+  const off = disabled || offReason !== undefined;
   // The array is the mode. `chosen` is null on a single-select track, which is
   // what keeps `value === option` the test there rather than a one-element
   // array a caller would have to remember to build.
@@ -265,6 +323,7 @@ export function SwitchTrack<T extends string>({
     <div
       role="group"
       aria-label={label}
+      title={offReason}
       className={`${
         // **The row arm is a deeper recess than the other two**, and it has to
         // be: its lit key is a raised face carrying a riser and a cast, where
@@ -279,7 +338,8 @@ export function SwitchTrack<T extends string>({
           ? // The gap tightens below `sm` with the key's own gutter — see the
             // measurement on the key's padding, which is one arithmetic and
             // has to move in step with this.
-            "min-w-0 flex-1 items-stretch gap-0.5 sm:gap-[0.1875rem]"
+            "min-w-0 flex-1 items-stretch gap-0.5 sm:gap-[0.1875rem]" +
+            (wrap ? " flex-wrap" : "")
           : small
             ? "gap-0.5"
             : ""
@@ -294,8 +354,14 @@ export function SwitchTrack<T extends string>({
         // pressing a lit key *removes* that option, which is a different column
         // and one a sibling may hold. Asking every key in multi-select is what
         // stops a reader pressing a lit position and watching nothing happen.
-        const why =
-          !chosen && lit ? null : (unavailable?.(option) ?? null);
+        // The axis's own reason wins over the key's: a track that is out of
+        // force is out of force for one reason, and asking `unavailable` under
+        // it would title a key with a collision that cannot arise.
+        const why = offReason
+          ? offReason
+          : !chosen && lit
+            ? null
+            : (unavailable?.(option) ?? null);
         return (
           <Fragment key={option}>
             {divider?.(option) && <MilledHairline />}
@@ -309,10 +375,12 @@ export function SwitchTrack<T extends string>({
               // Two different reasons a key can be off, and only one of them is
               // about this key: `why` is about this option — another bay holds
               // the pricing, or the pairing has no metric behind it — where
-              // `disabled` means the whole axis is out of force. The first
-              // explains itself in a title; the second is explained by whatever
-              // turned the track off, so a title here would be a second answer.
-              disabled={disabled || why !== null}
+              // `disabled`/`offReason` mean the whole axis is out of force. A
+              // bare `disabled` is explained by whatever turned the track off
+              // and carries no title; an `offReason` is the axis explaining
+              // itself, and it is repeated on every key because a `disabled`
+              // button does not fire mouse events in every browser.
+              disabled={off || why !== null}
               title={why ?? undefined}
               className={
                 "lab-anim min-w-0 truncate rounded-full border font-mono uppercase " +
@@ -345,7 +413,12 @@ export function SwitchTrack<T extends string>({
                     // desktop keeps `flex-1` and the keys read as one switch.
                     // The gutter and the tracking step with it for the same
                     // measurement.
-                    "flex-auto px-0.5 py-1.5 text-[length:var(--fs-10)] tracking-normal sm:flex-1 sm:px-1 sm:tracking-[0.04em] "
+                    "px-0.5 py-1.5 text-[length:var(--fs-10)] tracking-normal sm:px-1 sm:tracking-[0.04em] " +
+                    // A wrapping track keeps `flex-auto` at every width: an
+                    // equal share is what clips a fifteen-key axis on a
+                    // desktop, and a line break is what an equal share cannot
+                    // give it. See {@link SwitchTrack.wrap}.
+                    (wrap ? "flex-auto " : "flex-auto sm:flex-1 ")
                   : small
                     ? "flex-1 px-1 py-[0.1875rem] text-[length:var(--fs-8-5)] tracking-[0.1em] "
                     : "px-3 py-1.5 text-[length:var(--fs-10)] tracking-[0.16em] ") +
@@ -391,9 +464,18 @@ export function SwitchTrack<T extends string>({
   // and drawing it in mint would say the housing was a window.
   return (
     <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:gap-2.5">
+      {/* **The legend dims with the axis**, which is the one thing an
+          out-of-force track needs that the keys cannot say for it: a live label
+          over nine dead keys reads as a broken control, where a dimmed pair
+          reads as a part that is not in force — and the row above, whose unlit
+          key is *why*, is what a reader looks to next. `--billet-label` is ink
+          stamped on the key stock this row stands on; the dim is that ink
+          faded, not the readout's mint. */}
       <span
         aria-hidden
-        className="font-mono text-[length:var(--fs-10)] uppercase tracking-[0.14em] text-[color:var(--billet-label)] sm:w-[4.875rem] sm:shrink-0"
+        className={`font-mono text-[length:var(--fs-10)] uppercase tracking-[0.14em] sm:w-[4.875rem] sm:shrink-0 ${
+          off ? "text-foreground/30" : "text-[color:var(--billet-label)]"
+        }`}
       >
         {label}
       </span>
