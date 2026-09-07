@@ -1,7 +1,12 @@
 import assert from "node:assert/strict";
 import { describe, test } from "node:test";
 
-import type { LeagueLineup, LineupMetricId, LineupPosition } from "@/shared/contract";
+import type {
+  LeagueLineup,
+  LineupMetricId,
+  LineupPosition,
+  LineupSlot,
+} from "@/shared/contract";
 
 import { lineupColumnKey } from "../ktc/columns.ts";
 import {
@@ -550,12 +555,14 @@ function key(
   metric: LineupMetricId,
   positions: readonly LineupPosition[] = [],
   forced: { format: "dynasty" | "redraft"; lineup: "sf" | "oneqb" } | null = null,
+  slots: readonly LineupSlot[] = [],
 ): string {
   return lineupColumnKey({
     metric,
     format: forced?.format ?? "auto",
     lineup: forced?.lineup ?? "auto",
     positions,
+    slots,
   });
 }
 
@@ -714,6 +721,7 @@ describe("rankLeagueLineups — a forced ADP board", () => {
         format: "auto",
         lineup: "sf",
         positions: ["QB"],
+        slots: [],
       }),
       "capital_total:sf:qb",
     );
@@ -897,5 +905,226 @@ describe("rankLeagueLineups — a position narrowing", () => {
       narrowed.rosters.map((one) => one.totals),
       plain.rosters.map((one) => one.totals),
     );
+  });
+});
+
+describe("lineupMetricTotals — a slot narrowing", () => {
+  test("counts the seats asked for and nothing else", () => {
+    // The seats are the narrowing here, not the players in them: the flex seat's
+    // receiver counts and the quarterback beside him does not, whichever
+    // positions either is filed at.
+    const totals = lineupMetricTotals(narrowableFixture(), 9000, [], ["FLEX"]);
+    assert.equal(totals.ros_starters, 12);
+    assert.equal(totals.capital_starters, 150);
+    assert.equal(totals.ktc_starters, 3000);
+  });
+
+  test("an empty seat contributes nothing and is not an error", () => {
+    // `K` is a real seat of this lineup that the solver could not fill.
+    const totals = lineupMetricTotals(narrowableFixture(), 9000, [], ["K"]);
+    assert.equal(totals.ros_starters, 0);
+    assert.equal(totals.ktc_starters, 0);
+  });
+
+  test("a seat the league does not run counts nobody", () => {
+    // Which is the honest answer and needs no rule of its own — the picker never
+    // offers such a seat, having built its keys from these very leagues.
+    assert.equal(
+      lineupMetricTotals(narrowableFixture(), 9000, [], ["SUPER_FLEX"])
+        .ros_starters,
+      0,
+    );
+  });
+
+  test("the bench is empty under a seat narrowing, never left whole", () => {
+    // A bench player occupies no seat, so there is no share of a bench a `FLEX`
+    // column could honestly claim. Left whole it would put every unseated player
+    // into `ros_total:@flex`, which a reader adding the tiles up would find
+    // exceeds its own two halves.
+    const totals = lineupMetricTotals(narrowableFixture(), 9000, [], ["FLEX"]);
+    assert.equal(totals.ros_bench, 0);
+    assert.equal(totals.capital_bench, 0);
+    assert.equal(totals.ktc_bench, 0);
+  });
+
+  test("a pick is not sitting anywhere, so a narrowed portfolio is zero", () => {
+    // `countedPicks`' rule said of seats. The quartet still reconciles, which is
+    // the reading it is arranged to make possible.
+    const totals = lineupMetricTotals(narrowableFixture(), 9000, [], ["FLEX"]);
+    assert.equal(totals.ktc_picks, 0);
+    assert.equal(
+      totals.ktc_total,
+      totals.ktc_starters + totals.ktc_bench + totals.ktc_picks,
+    );
+  });
+
+  test("the three families still reconcile under a narrowing", () => {
+    const totals = lineupMetricTotals(narrowableFixture(), 9000, [], ["QB"]);
+    assert.equal(totals.ros_total, totals.ros_starters + totals.ros_bench);
+    assert.equal(
+      totals.capital_total,
+      totals.capital_starters + totals.capital_bench,
+    );
+  });
+
+  test("the seats are picked first and the players in them second", () => {
+    // The intersection, which is what makes the two axes worth having as two: a
+    // receiver in the flex seat counts, the same receiver on the bench does not,
+    // and a quarterback in a flex seat would not either.
+    const lineup = narrowableFixture();
+    assert.equal(
+      lineupMetricTotals(lineup, 0, ["WR"], ["FLEX"]).ros_starters,
+      12,
+    );
+    assert.equal(
+      lineupMetricTotals(lineup, 0, ["QB"], ["FLEX"]).ros_starters,
+      0,
+    );
+    // The dual-eligible tight end sits in `TE` and is counted by a `WR` column
+    // narrowed to that seat — the intersection rule, unchanged by the seat.
+    assert.equal(lineupMetricTotals(lineup, 0, ["WR"], ["TE"]).ros_starters, 9);
+  });
+
+  test("no seat asked for is byte-identical to the answer before the axis", () => {
+    assert.deepEqual(
+      lineupMetricTotals(narrowableFixture(), 9000, [], []),
+      lineupMetricTotals(narrowableFixture(), 9000),
+    );
+  });
+
+  test("a narrowed starters figure is rounded the way the whole one is", () => {
+    // The un-narrowed figure is read off `projected_points`, which the solver
+    // has already rounded; a narrowed one has no such field and takes the same
+    // `round`, or the two would part company at the last decimal on a card that
+    // shows both.
+    const lineup = narrowableFixture();
+    lineup.starters[1].player!.points = 0.1 + 0.2;
+    assert.equal(lineupMetricTotals(lineup, 0, [], ["FLEX"]).ros_starters, 0.3);
+  });
+});
+
+describe("rankLeagueLineups — a slot narrowing", () => {
+  /** A QB seat and a flex, so the seat a column counts can disagree with the
+   * whole lineup. */
+  function seatedLeague(): RankLeague {
+    return league(
+      [roster(1, "me", ["q1", "w1"]), roster(2, "t2", ["q2", "w2"])],
+      { roster_positions: ["QB", "FLEX", "BN"] },
+    );
+  }
+
+  const BOARD: RosProjections = {
+    q1: projected("q1", ["QB"], { rec: 5 }),
+    w1: projected("w1", ["WR"], { rec: 20 }),
+    q2: projected("q2", ["QB"], { rec: 10 }),
+    w2: projected("w2", ["WR"], { rec: 3 }),
+  };
+
+  test("ranks the seat and files it under the column's own key", () => {
+    const { ranks } = rankLeagueLineups(
+      seatedLeague(),
+      "me",
+      BOARD,
+      NO_ADP,
+      new Map(),
+      new Map(),
+      [],
+      [],
+      [],
+      [["QB"], ["FLEX"]],
+    );
+
+    // The manager's receiver carries their lineup, so they lead the whole and
+    // trail at the quarterback seat — which is the disagreement a column has to
+    // be able to show for the axis to be worth a track.
+    assert.deepEqual(ranks.ros_starters, { rank: 1, of: 2 });
+    assert.deepEqual(ranks[key("ros_starters", [], null, ["QB"])], {
+      rank: 2,
+      of: 2,
+    });
+    assert.deepEqual(ranks[key("ros_starters", [], null, ["FLEX"])], {
+      rank: 1,
+      of: 2,
+    });
+  });
+
+  test("the ten keep their bare names when seats are asked for", () => {
+    // The regression that matters most, one axis over: every column that has not
+    // narrowed reads a bare metric id, so a set on the request must add keys and
+    // never rename one.
+    const plain = rankLeagueLineups(seatedLeague(), "me", BOARD, NO_ADP);
+    const narrowed = rankLeagueLineups(
+      seatedLeague(),
+      "me",
+      BOARD,
+      NO_ADP,
+      new Map(),
+      new Map(),
+      [],
+      [],
+      [],
+      [["FLEX"]],
+    );
+    for (const metric of TEN) {
+      assert.deepEqual(narrowed.ranks[metric], plain.ranks[metric]);
+    }
+    assert.deepEqual(
+      Object.keys(narrowed.ranks).sort(),
+      [...TEN, ...TEN.map((metric) => key(metric, [], null, ["FLEX"]))].sort(),
+    );
+  });
+
+  test("the two narrowings cross, and the key is what the card writes", () => {
+    const { ranks } = rankLeagueLineups(
+      seatedLeague(),
+      "me",
+      BOARD,
+      NO_ADP,
+      new Map(),
+      new Map(),
+      [],
+      [["WR"]],
+      [],
+      [["FLEX"]],
+    );
+
+    // Four narrowings from two axes of one each — the un-narrowed pair, each
+    // alone, and the crossed one — which is what keeps adding a tile free of a
+    // round trip.
+    assert.ok(ranks[key("ros_starters", ["WR"], null, ["FLEX"])]);
+    assert.ok(ranks[key("ros_starters", ["WR"])]);
+    assert.ok(ranks[key("ros_starters", [], null, ["FLEX"])]);
+    // Asked of the card's own function rather than spelled here, which is the
+    // claim these tests exist to make: the seats come before the players, and a
+    // second spelling anywhere is an em dash where a number should be.
+    assert.equal(
+      lineupColumnKey({
+        metric: "ros_starters",
+        format: "auto",
+        lineup: "auto",
+        positions: ["WR"],
+        slots: ["FLEX"],
+      }),
+      "ros_starters:@flex:wr",
+    );
+  });
+
+  test("the bench metrics rank null under a seat, not first of two", () => {
+    // Zero on every roster in the league, which the all-zero rule reads as
+    // nothing to rank — the honest state for a question the bench cannot answer.
+    const { ranks } = rankLeagueLineups(
+      seatedLeague(),
+      "me",
+      BOARD,
+      NO_ADP,
+      new Map(),
+      new Map(),
+      [],
+      [],
+      [],
+      [["FLEX"]],
+    );
+    assert.equal(ranks[key("ros_bench", [], null, ["FLEX"])], null);
+    assert.equal(ranks[key("ktc_picks", [], null, ["FLEX"])], null);
   });
 });
