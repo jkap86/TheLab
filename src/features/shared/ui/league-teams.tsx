@@ -16,7 +16,6 @@ import { ordinal } from "../format";
 import { LINEUP_METRIC_IDS, LINEUP_METRIC_LABELS } from "../lineup-columns";
 import { placeAmong, rankColor, sharePercentile } from "../rank-ramp";
 import { slotMedians } from "../seat-compare";
-import { DraftPicks } from "./draft-picks";
 import {
   type BenchReading,
   type Lens,
@@ -70,6 +69,17 @@ import { Pane, PaneGlass, PaneHead, PaneLedge } from "./pane";
  * list is still sorted by it, because it is the standings behind the card's
  * "2nd" and the order and the number must agree.
  *
+ * **Both panes are fixed-height columns whose glass scrolls**, which is what
+ * lets the card cap its expanded half to the viewport rather than pushing a
+ * hundred-league page: a ledge holds its height, the glass takes what is left,
+ * and a twelve-team standings and a ten-seat roster end on the same line. The
+ * roster's glass is a frame rather than a scroller — its starters scroll inside
+ * it, under two pinned drawers. See `Pane` and `LineupBreakdown`.
+ *
+ * **The portfolio is one of those drawers rather than a block under the two
+ * panes.** Standing below them it was height taken *from* them on every card,
+ * open or not, once the panel had a cap to spend — see `PickRows`.
+ *
  * **The panes never stack**, at any card width, and they take equal shares of
  * it. A stacked layout put the roster below twelve teams, which is exactly the
  * reading the pane exists for; truncation carries the narrow case instead. What
@@ -85,7 +95,7 @@ import { Pane, PaneGlass, PaneHead, PaneLedge } from "./pane";
  * made the same measurement and turn on the same breakpoint.
  *
  * **It moved here from `features/manager` when the history rail became a second
- * reader** — the line `CONSOLE_KEY`, `ManagerPlate` and `DraftPicks` all moved
+ * reader** — the line `CONSOLE_KEY`, `ManagerPlate` and `draft-picks.tsx` moved
  * on. The rail draws the same browser over a *rewound* roster set priced on
  * today's boards, which is why it is one component rather than two: the past is
  * the present's table with different rosters in it, and a second table would be
@@ -154,11 +164,18 @@ export function LeagueTeams({ entry }: { entry: LeagueLineupEntry }) {
   return (
     // `preserve-3d` is what carries the housing's perspective down to the two
     // parts below. Perspective only projects an element's *direct* children, so
-    // without it the panes' and the picks' `translateZ` would compute to an
-    // identity transform — no error, and no depth. It is safe here for the one
-    // reason it is not on the card's summary: nothing in this subtree clips.
-    <div className="pointer-fine:[transform-style:preserve-3d]">
-      <div className="flex gap-1.5 sm:gap-3 lg:gap-[1.125rem] pointer-fine:[transform:translateZ(7px)]">
+    // without it the panes' `translateZ` would compute to an identity transform
+    // — no error, and no depth. It is safe here for the one reason it is not on
+    // the card's summary: nothing in this subtree clips.
+    //
+    // **It is a column that fills whatever height it is given**, which is what
+    // lets the card cap its expanded half to the viewport: `min-h-0 flex-1`
+    // here and on the row below hands the panes the panel's remaining height,
+    // and they scroll their own lists inside it. Without the `min-h-0` a flex
+    // item refuses to go below its content, the cap has nothing to bite on, and
+    // a twelve-team table pushes the page exactly as it did before.
+    <div className="flex min-h-0 flex-1 flex-col pointer-fine:[transform-style:preserve-3d]">
+      <div className="flex min-h-0 flex-1 items-stretch gap-1.5 sm:gap-3 lg:gap-[1.125rem] pointer-fine:[transform:translateZ(7px)]">
         <Pane>
           <PaneLedge>
             {/* A labelled recess with the menu raised out of it, on the pane it
@@ -222,7 +239,11 @@ export function LeagueTeams({ entry }: { entry: LeagueLineupEntry }) {
             </div>
           </PaneLedge>
 
-          <PaneGlass className="p-0.5 lg:p-1">
+          {/* This pane's glass *is* the scroller — there is nothing pinned to
+              it, unlike the roster's. `overflow-x-hidden` is required: the
+              row's cells are fixed widths and would otherwise produce a
+              horizontal bar inside a pane that has no room for one. */}
+          <PaneGlass className="lab-scroll-glass overflow-y-auto overflow-x-hidden p-0.5 lg:p-1">
             <ul className="relative m-0 list-none p-0">
               {teams.map((team, i) => (
                 <StandingRow
@@ -272,6 +293,10 @@ export function LeagueTeams({ entry }: { entry: LeagueLineupEntry }) {
               lens={lens}
               medians={medians}
               bench={bench}
+              // The portfolio is this pane's second drawer rather than a block
+              // below both panes — see `PickRows` for why the capped panel is
+              // what moved it, and `LineupBreakdown` for the bar it sits behind.
+              picks={selected.picks}
             />
           ) : (
             // No seatable lineup (an empty or wholly unknown roster) still has
@@ -284,8 +309,6 @@ export function LeagueTeams({ entry }: { entry: LeagueLineupEntry }) {
           )}
         </Pane>
       </div>
-
-      <DraftPicks picks={selected.picks} />
     </div>
   );
 }

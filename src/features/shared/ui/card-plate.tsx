@@ -40,25 +40,39 @@ export function CardPlateRow({ children }: { children: ReactNode }) {
 }
 
 /**
- * The card's standing as a **milled strip** bolted to the housing's face —
- * three equal bays under the rule, where the plate row cannot hold them.
+ * The card's standing as a **milled strip** bolted to the housing's face,
+ * beside the settings it is a result of.
  *
  * **It exists because of a width, and the width is the card's own subject.**
- * `LeaguePlate` and `ReadingPlate` share one row inside the plate row's insets,
- * and on a 362px card that leaves the league name ~95px — truncated to
- * "Dynasty Wa…" *after* `standingFields` had already dropped its third field to
- * buy that much. Every fix inside the row is the same trade at a different
- * price. So below `sm` the row carries the league plate alone, at full width,
- * and the standing comes down here: all three fields are back, the name stops
- * truncating, and nothing is competing for a line.
+ * `LeaguePlate` and `ReadingPlate` shared the plate row, and on a 362px card
+ * that left the league name ~95px — truncated to "Dynasty Wa…" *after*
+ * `standingFields` had already dropped its third field to buy that much. Every
+ * fix inside that row is the same trade at a different price. So the row
+ * carries the league plate alone, at full width, and the standing comes down
+ * here: all three fields are back, the name stops truncating, and nothing is
+ * competing for a line.
+ *
+ * **That was the phone's arrangement and it is now every width's**, which is
+ * the pass this component's shape comes from. The desktop card had the same
+ * problem in a milder form — a plate opposite the name is a plate the name is
+ * paying for, whatever the width — and the two arrangements were also the one
+ * thing about this card a reader could see change when they resized it. One
+ * treatment, and the plate row is the league's alone at every width.
+ *
+ * **It shares its row with the settings strip from `sm` up, and takes a line of
+ * its own below it** — one arrangement spelled once here rather than a prop the
+ * caller switches, since there is exactly one row this part is ever on and
+ * which of the two it is, is a width rather than a caller's choice. Sharing, it
+ * hugs its content: three bays stretched across a desktop card read as an
+ * instrument with nothing in it, which is the design file's `1b` measured
+ * against its `1c`. On its own line there is nothing to hug and the three
+ * stretch to fill it.
  *
  * **It sits *under* the league's settings strip, not above it**, which is the
- * order a phone reads the card in: what game this is, then how the manager is
- * doing at it, then the four ranks that grade it — the standing next to the
- * figures it belongs with rather than separated from them by the settings. The
- * two parts are the same stock, so the pair reads as one machined block with a
- * groove between; that is what pays for `mt-2` here where the strip used to
- * take 18px of clearance from the rule above it.
+ * order the card reads in: what game this is, then how the manager is doing at
+ * it, then the four ranks that grade it — the standing next to the figures it
+ * belongs with rather than separated from them by the settings. The two parts
+ * are the same stock, so the pair reads as one machined block.
  *
  * **Metal, not glass, and that is the decision rather than the finish.** Drawn
  * on `--readout-bg` the strip read as one more thing the league reports about
@@ -80,7 +94,12 @@ export function CardPlateRow({ children }: { children: ReactNode }) {
 export function StandingStrip({ children }: { children: ReactNode }) {
   return (
     <div
-      className={`relative mt-2 flex items-stretch justify-between gap-2 overflow-hidden rounded-xl bg-[image:var(--billet-bg)] px-[7px] py-[5px] shadow-[var(--standing-strip-shadow)] sm:hidden`}
+      // `items-center`, not `items-stretch`: the *strip* stretches to its
+      // neighbour's height so the pair reads as one block, and the bays inside
+      // it keep theirs. Stretched too, a wrapped settings strip beside it would
+      // make three 80px wells holding a 16px figure each — a part that grew to
+      // fill a hole rather than one machined to a size.
+      className="relative flex w-full shrink-0 items-center justify-between gap-[5px] overflow-hidden rounded-[0.625rem] bg-[image:var(--billet-bg)] px-1.5 py-[5px] shadow-[var(--standing-strip-shadow)] sm:w-auto sm:justify-start"
     >
       <BilletFinish />
       {children}
@@ -107,6 +126,13 @@ export function StandingStrip({ children }: { children: ReactNode }) {
  * single ink. The caller computes the percentile, because only it knows which
  * of the two rules this field takes.
  *
+ * **It stretches on the strip's own line and hugs its content on the shared
+ * one**, at the same `sm` the strip turns on — see {@link StandingStrip} for
+ * why that is one arrangement rather than a prop. It is spelled here rather
+ * than on the strip because the bay is the box that grows, and a parent
+ * reaching in with `[&>span]:flex-1` would be one more selector for a later
+ * `flex-none` on the child to lose to on Tailwind's emit order.
+ *
  * The engraving is `--standing-engrave` plus the caller's own glow: the static
  * layers are a token because they invert for light mode, and the glow is a
  * continuous ramp colour with no utility to generate. A `text-shadow` is a
@@ -126,7 +152,7 @@ export function StandingBay({
   children: ReactNode;
 }) {
   return (
-    <span className="relative flex min-w-0 flex-1 items-baseline justify-center gap-1.5 rounded-[0.4375rem] bg-[image:var(--billet-well-bg)] px-1.5 pb-1 pt-[3px] shadow-[var(--standing-well-shadow)]">
+    <span className="relative flex min-w-0 flex-1 items-baseline justify-center gap-1.5 rounded-[0.4375rem] bg-[image:var(--billet-well-bg)] px-2 pb-1 pt-[3px] shadow-[var(--standing-well-shadow)] sm:flex-none">
       <span className="whitespace-nowrap font-mono text-[length:var(--fs-9)] uppercase tracking-[0.12em] text-[color:var(--billet-label)] [text-shadow:var(--standing-label-shadow)]">
         {label}
       </span>

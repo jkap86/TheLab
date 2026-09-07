@@ -574,7 +574,16 @@ export function LeaguesHome({
             // is 20px rather than 13; that number comes back down with the
             // ledge. The first card's plate has the filter summary's own
             // margin above it.
-            <ul className="relative m-0 mt-2 grid list-none grid-cols-1 gap-[1.125rem] p-0">
+            // **`overflow-anchor: none`**, and it is load-bearing rather than
+            // tidy: opening a card parks it under the rack with a smooth
+            // scroll, and the panel that mounts on the same frame is exactly
+            // what scroll anchoring is built to compensate for — the browser
+            // sees content grow above the viewport's anchor and adjusts
+            // `scrollTop` to keep it still, which lands the card somewhere
+            // arbitrary and looks like the park having missed. Excluding this
+            // subtree is what leaves the park the only thing moving the page.
+            // See `ExpandedPanel`.
+            <ul className="relative m-0 mt-2 grid list-none grid-cols-1 gap-[1.125rem] p-0 [overflow-anchor:none]">
               {visible.map((league) => (
                 <LeagueCard
                   key={league.league_id}

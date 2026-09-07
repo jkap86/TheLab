@@ -743,6 +743,21 @@
   --glass-meter-track: rgba(255, 255, 255, 0.09);
   --billet-name-shadow: 0 1px 0 rgba(0, 0, 0, 0.35);
 
+  /*
+   * The scrollbar thumb inside a pane's glass — `.lab-scroll-glass`.
+   *
+   * The same turning-over as the track above and for the same reason: a part
+   * sliding on near-black glass is lighter than it, and one sliding on pale
+   * glass is darker. So this is not `--foreground` at an alpha, which is what
+   * every other bar in the app is — it is the *readout's* mint here and the
+   * readout's own deep teal opposite, both measured against the glass they run
+   * on rather than against the page. The lip is the thumb's top edge catching
+   * the light, which inverts with it.
+   */
+  --glass-thumb: rgba(159, 255, 242, 0.26);
+  --glass-thumb-hover: rgba(159, 255, 242, 0.5);
+  --glass-thumb-lip: rgba(255, 255, 255, 0.25);
+
   --billet-name: #f6f8f8;
   --billet-figure: #f1f4f4;
   --billet-unit: rgba(237, 237, 237, 0.88);
@@ -1206,6 +1221,13 @@
   --glass-meter-track: rgba(15, 23, 42, 0.16);
   --billet-name-shadow: 0 1px 0 rgba(255, 255, 255, 0.85);
 
+  /* Turned over rather than dimmed — see the dark block. A mint thumb on pale
+     mint glass is invisible, so it is the readout's own teal at the alphas that
+     read as the same object. */
+  --glass-thumb: rgba(11, 109, 99, 0.34);
+  --glass-thumb-hover: rgba(11, 109, 99, 0.62);
+  --glass-thumb-lip: rgba(255, 255, 255, 0.6);
+
   --billet-name: #0e1a1d;
   --billet-figure: #152428;
   --billet-unit: #223339;
@@ -1484,6 +1506,53 @@ body {
 
 .lab-scroll::-webkit-scrollbar-thumb:hover {
   background-color: color-mix(in srgb, var(--accent) 55%, transparent);
+}
+
+/*
+ * The scrollbar inside a league card's panes — glass, not panel.
+ *
+ * A second class rather than a widening of `.lab-scroll`, because the two
+ * differ on both of the things that class exists to decide.
+ *
+ * **No reserved gutter.** `.lab-scroll` holds one open whether or not a bar is
+ * showing, because the shares tray's column headers sit *outside* its scroller
+ * and are padded by its width. Nothing here is outside the scroller: the pane's
+ * heads are on a ledge above the glass, at the glass's own inset. Reserved, the
+ * gutter would take 11px off a pane that is ~165px wide at 390 — on every card,
+ * open or shut, bar or no bar.
+ *
+ * **And the thumb is drawn against glass rather than against the panel.** The
+ * bar runs over `--readout-bg`, which is near-black in dark and pale mint in
+ * light, so an alpha over `--foreground` is the one thing that cannot serve
+ * both — it is the readout's own ink that has to invert, which is what the two
+ * tokens below are. The design's `rgba(159,255,242,…)` is the dark half of it.
+ */
+.lab-scroll-glass {
+  scrollbar-width: thin;
+  scrollbar-color: var(--glass-thumb) transparent;
+}
+.lab-scroll-glass::-webkit-scrollbar {
+  width: 11px;
+}
+.lab-scroll-glass::-webkit-scrollbar-track {
+  background: transparent;
+}
+.lab-scroll-glass::-webkit-scrollbar-thumb {
+  /*
+   * A 5px thumb inside an 11px gutter with nothing painted behind it: the
+   * border is transparent and the fill is clipped to the content box, so the
+   * track never has to draw. The inset highlight is the thumb's own top edge
+   * catching the light, which is what keeps it a machined part rather than a
+   * painted bar.
+   */
+  border: 3px solid transparent;
+  background-clip: content-box;
+  border-radius: 9999px;
+  background-color: var(--glass-thumb);
+  box-shadow: inset 0 1px 0 var(--glass-thumb-lip);
+}
+.lab-scroll-glass::-webkit-scrollbar-thumb:hover {
+  background-color: var(--glass-thumb-hover);
 }
 
 /*

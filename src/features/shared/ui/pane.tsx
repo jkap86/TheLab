@@ -3,6 +3,7 @@ import type { ReactNode } from "react";
 import {
   CONSOLE_BILLET,
   CONSOLE_GLASS,
+  CONSOLE_MILLED_WELL,
   CONSOLE_WINDOW_LEDGE,
 } from "../console-chrome";
 import { Scanlines } from "./card-plate";
@@ -23,7 +24,9 @@ import { Scanlines } from "./card-plate";
  * second is rendered *by* the first — so a `PaneGlass` exported from
  * `league-teams.tsx` and imported back by the breakdown is an import cycle. The
  * surfaces have to sit beside both rather than inside either, which is the same
- * reason `card-plate.tsx` exists one level up.
+ * reason `card-plate.tsx` exists one level up. {@link DrawerRow} is here for
+ * exactly that reason a second time: the bench rows are the breakdown's and the
+ * pick rows are `draft-picks.tsx`'s, and the breakdown imports that file.
  */
 
 /**
@@ -35,6 +38,17 @@ import { Scanlines } from "./card-plate";
  * two hold the same number of cells and the same names, and an uneven split
  * reads as one of them having been cut short.
  *
+ * **It is a fixed-height column**, which is what lets the card cap its expanded
+ * half to the viewport and scroll the two lists inside it rather than pushing a
+ * hundred-league page. The ledge is `shrink-0` and the glass takes what is left
+ * — see {@link PaneGlass} — so a twelve-team standings and a ten-seat roster
+ * end at the same line however many rows each of them holds.
+ *
+ * `min-h-0` is the half of that which is silent when it is missing: a flex item
+ * refuses to shrink below its own content by default, so without it the pane
+ * grows to its rows' full height, the cap has nothing to bite on and neither
+ * list ever scrolls.
+ *
  * `@container` is what sizes the team marks inside it: `Avatar size="sm"` grows
  * with the *panel* rather than the viewport, which is the right axis here — a
  * pane on a wide card has room for a 24px mark and the same pane on a phone
@@ -43,7 +57,7 @@ import { Scanlines } from "./card-plate";
 export function Pane({ children }: { children: ReactNode }) {
   return (
     <div
-      className={`${CONSOLE_BILLET} @container relative min-w-0 flex-1 rounded-xl p-0.5 sm:rounded-[0.875rem] lg:p-2`}
+      className={`${CONSOLE_BILLET} @container relative flex min-h-0 min-w-0 flex-1 flex-col rounded-xl p-0.5 sm:rounded-[0.875rem] lg:p-2`}
     >
       {children}
     </div>
@@ -63,7 +77,7 @@ export function Pane({ children }: { children: ReactNode }) {
 export function PaneLedge({ children }: { children: ReactNode }) {
   return (
     <div
-      className={`${CONSOLE_WINDOW_LEDGE} rounded-lg px-1.5 pb-1.5 pt-[5px] lg:px-2 lg:pb-2 lg:pt-[7px]`}
+      className={`${CONSOLE_WINDOW_LEDGE} shrink-0 rounded-lg px-1.5 pb-1.5 pt-[5px] lg:px-2 lg:pb-2 lg:pt-[7px]`}
     >
       {children}
     </div>
@@ -95,6 +109,13 @@ export function PaneHead({
  * already separates it from the part around it — a second lit edge there is a
  * third place the card would spend teal, which is the count the console-card
  * pass fixed the tile row by holding to two.
+ *
+ * **It takes the pane's remaining height** (`min-h-0 flex-1`) and is where the
+ * scroll happens — the caller says how, because the two panes scroll
+ * differently: the standings glass is itself the scroller, and the roster's is
+ * a fixed frame holding a scroller, a drawer and two pinned bars. What the
+ * caller must not do is let it grow: without `min-h-0` here the pane's cap has
+ * nothing to bite on and the whole expanded half grows with the longest list.
  */
 export function PaneGlass({
   children,
@@ -105,10 +126,69 @@ export function PaneGlass({
 }) {
   return (
     <div
-      className={`${CONSOLE_GLASS} mt-[3px] rounded-lg lg:mt-2 lg:rounded-[0.625rem] ${className}`}
+      className={`${CONSOLE_GLASS} mt-[3px] min-h-0 flex-1 rounded-lg lg:mt-2 lg:rounded-[0.625rem] ${className}`}
     >
       <Scanlines />
       {children}
     </div>
+  );
+}
+
+/**
+ * The shell every drawer row is cut from — bench and picks alike.
+ *
+ * **Billet stock, not the glass's own channel.** The drawer is a part bolted
+ * over the starters rather than more of the same list, so its rows are cut into
+ * that part; drawn in `CONSOLE_ROW_WELL` they would read as the starters
+ * continuing under a bar, which is exactly the thing the drawer exists not to
+ * be.
+ *
+ * **Two lines below `lg`, one above it**, which is not this row's own idea — it
+ * is the seat rows' arrangement, at the seat rows' breakpoint, because a drawer
+ * row is read directly over the seat row it covers and two rows of different
+ * heights would not read across. A render is what forced it: at 390 a pane is
+ * 168px, and three cells beside a name leave the bench's name **0px** and the
+ * pick's **7px** — one character, which is the failure this file records at
+ * three other grains.
+ *
+ * One node with two layouts through `lg:contents`, the trick the app rack's
+ * brand row turns: the alternative renders every row twice and reads each of
+ * them twice to anything listening.
+ *
+ * Both cells are `--recess-bg` rather than `--figure-well-bg`, which is the
+ * same turning-over the wells one surface up already make — a hole cut in
+ * *metal* is the metal's own shadow, where the glass's wells are cut in glass.
+ */
+export function DrawerRow({
+  lead,
+  /** The `lg` width of the leading cell: a position is three characters, a season is four. */
+  leadWidth,
+  figure,
+  children,
+}: {
+  lead: string;
+  leadWidth: string;
+  figure: string;
+  /** The row's subject — a face and a name, or a pick and where it came from. */
+  children: ReactNode;
+}) {
+  return (
+    <li
+      className={`${CONSOLE_MILLED_WELL} relative mb-[5px] flex h-[66px] flex-col justify-center gap-2 rounded-lg px-[7px] lg:mb-1 lg:h-[46px] lg:flex-row lg:items-center lg:gap-2.5 lg:rounded-[9px] lg:px-3`}
+    >
+      <span className="relative flex w-full min-w-0 items-center gap-[7px] lg:contents">
+        {children}
+      </span>
+      <span className="relative flex w-full items-center gap-2 lg:contents">
+        <span
+          className={`shrink-0 overflow-hidden rounded-md bg-[color:var(--recess-bg)] px-[5px] py-1 text-center font-mono text-[length:var(--fs-12)] tabular-nums text-[color:var(--billet-label)] shadow-[var(--figure-well-shadow)] lg:order-1 ${leadWidth}`}
+        >
+          {lead}
+        </span>
+        <span className="min-w-0 flex-1 overflow-hidden rounded-md bg-[color:var(--recess-bg)] px-[5px] py-1 text-right font-mono text-[length:var(--fs-13)] tabular-nums text-[color:var(--billet-name)] shadow-[var(--figure-well-shadow)] lg:order-4 lg:w-[74px] lg:flex-none">
+          {figure}
+        </span>
+      </span>
+    </li>
   );
 }

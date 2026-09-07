@@ -126,7 +126,7 @@ export function timelineEntry(
 const NO_MANAGER = " ";
 
 /**
- * One rewound portfolio, in the shape the card's own `DraftPicks` draws.
+ * One rewound portfolio, in the shape the card's own `PickRows` draws.
  *
  * **The rewind moves cells between rosters and changes nothing about a cell**,
  * so a pick's slot and its price are looked up rather than re-resolved: the
