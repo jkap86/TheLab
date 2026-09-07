@@ -1,5 +1,3 @@
-import { Fragment } from "react";
-
 import type {
   KtcBoardChoice,
   LeagueLineupEntry,
@@ -14,7 +12,6 @@ import {
   CardPlateRow,
   CardRule,
   CONSOLE_CARD_SHELL,
-  CONSOLE_HOUSING_INSET_SHELL,
   CONSOLE_METAL,
   CONSOLE_WINDOW,
   ktcBoardLabel,
@@ -24,11 +21,8 @@ import {
   LINEUP_METRIC_LABELS,
   ordinal,
   ordinalParts,
-  PlateDivider,
-  PlateField,
   positionsLabel,
   qbBoardWord,
-  ReadingPlate,
   Scanlines,
   StandingBay,
   StandingStrip,
@@ -41,6 +35,8 @@ import {
 // shared — the trades board and the lineup checker among them, neither of which
 // draws one. Named here, the chunk belongs to this route.
 import { TimelineView } from "@/features/shared/ui/timeline";
+
+import { ExpandedPanel } from "./expanded-panel";
 
 import {
   rankColor,
@@ -305,7 +301,6 @@ export function LeagueCard({
               a clip is exactly what would cut them off. */}
           <CardPlateRow>
             <LeaguePlate name={league.name} avatarUrl={league.avatar_url} />
-            <StandingPlate league={league} />
           </CardPlateRow>
 
           <CardRule />
@@ -322,22 +317,35 @@ export function LeagueCard({
               carried until now.** The two are the card's only bolted-on parts
               and they answer two different questions: what game this league is,
               and how the manager is doing at it. The first is a property of the
-              league, so it belongs directly under the rule with the league's own
-              name on the plate above it; the second is a result, and it belongs
-              beside the four ranks that grade it rather than separated from them
-              by a line of settings. Below `sm` that is a visible swap; from `sm`
-              up the standing is on the plate row and there is nothing here to
-              reorder. */}
-          <LeagueConfigWindow
-            league={league}
-            className="mt-3 sm:mt-3.5 pointer-fine:[transform:translateZ(18px)]"
-          />
+              league, so it belongs first; the second is a result, and it
+              belongs nearest the four ranks that grade it.
 
-          {/* The standing, on a phone. It is `sm:hidden` and the plate above is
-              `hidden sm:contents`, so exactly one of the two exists at any
-              width — never both in the DOM, which would read the same three
-              figures twice to anything listening. */}
-          <StandingStripFields league={league} />
+              **They share a row from `sm` up and stack below it**, which is one
+              arrangement rather than the two this card used to switch between —
+              a plate opposite the league's name on a desktop and a strip under
+              the rule on a phone. What made that a problem is what the plate
+              always cost: the name is the card's subject and a plate beside it
+              is width the name is paying for, mildly at 1280 and severely at
+              390. So the plate row is the league's alone at every width now,
+              and the standing is a part on the housing wherever it fits.
+
+              The strip takes the slack (`flex-1 min-w-0`) and the bays hug their
+              content, because three bays stretched across a desktop card read
+              as an instrument with nothing in it — the design file's `1b`
+              against its `1c`. Sharing costs the strip ~230px of the box every
+              one of its measured word-dropping thresholds was measured
+              against, which is why it is told it is `shared` rather than left
+              to clip: see that prop. */}
+          <div className="relative mt-3 flex flex-col items-stretch gap-2 sm:mt-3.5 sm:flex-row sm:gap-2 pointer-fine:[transform:translateZ(18px)]">
+            <LeagueConfigWindow league={league} shared className="min-w-0 flex-1" />
+            {/* One copy at one position, at every width — the two arrangements
+                are a `flex-direction` and a `fill`, not two elements with a
+                `display: none` between them. Three figures rendered twice is
+                three figures read twice to anything listening, which is what
+                the plate-and-strip pair had to be careful about and this has
+                nothing to be careful about at all. */}
+            <StandingStripFields league={league} />
+          </div>
 
           {/* The ranks get the row to themselves, under the rail rather than
               beside it — so the windows stay a direct child of the summary,
@@ -391,17 +399,20 @@ export function LeagueCard({
             can, so the housing can both hold its parts on their own planes and
             keep the `overflow: hidden` its radius needs. The three depths are
             small and ordered by what a reader reaches for — the panes forward,
-            the rail behind them, the picks furthest back — so the card reads as
-            three layers rather than three boxes.
+            the rail behind them — so the card reads as layers rather than boxes.
 
             All of it rides `pointer-fine:`, on the summary's own argument and
             for the same budget: a plane here is a composited layer *per league*
             on a page with no virtualization, and there is no hover to flatten
             it on a touch device. A coarse pointer gets the identical housing
-            flat. */}
-        <div
-          className={`${CONSOLE_HOUSING_INSET_SHELL} mt-3.5 rounded-[0.875rem] p-1.5 sm:p-3 pointer-fine:[perspective:1400px]`}
-        >
+            flat.
+
+            **It is a component rather than a `<div>` because it measures
+            itself**: an open card parks under the rack and the panel caps to
+            what is left of the viewport, which is two numbers no stylesheet
+            can hold. That is `ExpandedPanel`, and it is a component of its own
+            so this card stays hook-free. */}
+        <ExpandedPanel>
           {/* **No wrapper between the housing and its parts**, and this is
               the half of the perspective that is silent when it is missing: a
               `perspective` projects an element's *direct children only*, and an
@@ -433,7 +444,7 @@ export function LeagueCard({
               No rosters read for this league yet
             </p>
           </TimelineView>
-        </div>
+        </ExpandedPanel>
       </details>
     </li>
   );
@@ -523,50 +534,23 @@ function rankField(
 }
 
 /**
- * The standing on the plate row, from `sm` up.
+ * The standing as a part bolted to the housing, at every width.
  *
- * `hidden sm:contents` on the wrapper rather than a class on the plate itself:
- * `ReadingPlate` carries its own `ml-auto`, and `display: contents` is what
- * lets the plate stay a direct flex item of the row — laid out by the row,
- * pushed right by its own margin — while the wrapper's box disappears
- * entirely. Below `sm` the whole subtree is out of the flow *and* out of the
- * accessibility tree, so the strip below is the only copy of these three
- * figures at that width rather than a second one nobody can see.
- */
-function StandingPlate({ league }: { league: ManagerLeague }) {
-  const fields = standingFields(league);
-  if (fields.length === 0) return null;
-
-  return (
-    <span className="hidden sm:contents">
-      <ReadingPlate>
-        {fields.map((field, i) => (
-          // The divider is a sibling of the fields rather than a child of one, so
-          // the plate's own gap spaces all three evenly — nested, a divider would
-          // carry the gap twice and sit twice as far from the field beside it.
-          <Fragment key={field.label}>
-            {i > 0 && <PlateDivider />}
-            <PlateField label={field.label}>{field.value}</PlateField>
-          </Fragment>
-        ))}
-      </ReadingPlate>
-    </span>
-  );
-}
-
-/**
- * The same standing as a part bolted to the housing, below `sm`.
+ * **Three bays or none**, and it read as an arrangement that tolerated one or
+ * two until the ranks stopped being conditional; a strip two thirds empty is
+ * what it was tolerating, and a machined part with a bay missing out of it
+ * reads as a fault. The strip is still drawn only where there is something to
+ * put in it — see {@link standingFields} for the one case that answers nothing
+ * at all.
  *
- * Three equal bays, and `flex-1` on the bay is what keeps them equal. It read
- * as an arrangement that tolerated one or two until the ranks stopped being
- * conditional; a strip two thirds empty is what it was tolerating, and a
- * machined part with a bay missing out of it reads as a fault. The strip is
- * still drawn only where there is something to put in it — see
- * {@link standingFields} for the one case that answers nothing at all.
+ * **The bays stretch only on the row they own**, which is the strip's own rule
+ * rather than something asked for here — see {@link StandingStrip}. It turns on
+ * the same `sm` the row's `flex-direction` does, because it is the same
+ * question: is there another part on this line.
  *
  * The figures take the ramp: see `standingFields` for which rule each field's
  * percentile comes from, and {@link StandingBay} for why the colour lands here
- * and not on the plate.
+ * rather than on a plate.
  */
 function StandingStripFields({ league }: { league: ManagerLeague }) {
   const fields = standingFields(league);

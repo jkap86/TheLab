@@ -164,10 +164,15 @@ export {
   StandingStrip,
 } from "./ui/card-plate";
 export { ConsoleGround } from "./ui/console-ground";
-// A roster's future picks, grouped by season, and the league table it sits
-// under. Both came here from `features/manager` when the history rail became a
-// second reader — it draws the same table over a rewound roster set.
-export { DraftPicks } from "./ui/draft-picks";
+// The league table an expanded card draws. It came here from
+// `features/manager` when the history rail became a second reader — it draws
+// the same table over a rewound roster set.
+//
+// `draft-picks.ts` is deliberately *not* re-exported beside it any more: the
+// portfolio is a drawer of the roster pane rather than a block under the two
+// panes, so its only reader is `lineup-breakdown.tsx`, a sibling of the
+// barrel's own. That is `local-store.ts`'s rule — a module the barrel's
+// siblings build on and nothing outside does stays out of it.
 export { LeagueTeams } from "./ui/league-teams";
 // What game a league is playing, as one lit window — read by the manager card
 // and the trade card, which is what brought it here from `features/manager`.

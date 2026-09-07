@@ -110,16 +110,26 @@ import {
  * `display: none`, which is out of the accessibility tree as well as off the
  * screen: see {@link Word}.
  *
- * **The one line that cannot be made to fit is allowed to wrap**, and it is the
- * Superflex shape below — the only league that carries a *third* tag. It needs
- * 349px at 390 against 314, and 697px at 768 against 672, so no abbreviation
- * reaches it: the tag is a whole extra part, not a longer word. Every other
- * league is `flex-nowrap` and is the design as drawn; that one is `flex-wrap`,
- * which costs it a second line at narrow widths and nothing at all above ~900,
- * where the full line fits anyway. Wrapping loses no reading where clipping
- * would lose the tail of one, and the groups being `shrink-0
- * whitespace-nowrap` is what keeps the break between two of them rather than
- * through the middle of a label.
+ * **The lines that cannot be made to fit are allowed to wrap**, and there are
+ * two of them. Wrapping loses no reading where clipping loses the tail of one,
+ * and the groups being `shrink-0 whitespace-nowrap` is what keeps the break
+ * between two of them rather than through the middle of a label.
+ *
+ * - The **Superflex shape** below — the only league that carries a *third* tag.
+ *   It needs 349px at 390 against 314, and 697px at 768 against 672, so no
+ *   abbreviation reaches it: the tag is a whole extra part, not a longer word.
+ * - **A strip sharing its row**, which is `shared` and is the manager card at
+ *   every width. Every measurement above is against the card's *whole* content
+ *   box, and the standing bays beside it take ~230px of that — so the two
+ *   thresholds no longer describe the box the line is actually in, and the `md`
+ *   arm that fits 512px into 672 does not fit it into ~440. Wrapping is what
+ *   makes the shared row safe without a third set of measured words, and it
+ *   costs a second line only on the cards narrow enough to need one.
+ *
+ * The `gap` follows the arm rather than being one number, and that is the same
+ * argument one axis over: a wrapping row spends its column gap on the break
+ * too, so the 12px that reads as separation on one line reads as a hole between
+ * two. A wrapping strip takes 10px, the design's own figure for it.
  */
 
 /** The four format words, off the same table the Type rail renders. */
@@ -177,23 +187,37 @@ function isUnnamedSuperflex(config: ReturnType<typeof readLeagueConfig>): boolea
 
 export function LeagueConfigWindow({
   league,
+  shared = false,
   className = "",
 }: {
   league: ManagerLeague;
+  /**
+   * Whether the strip is sharing its row with another part — see the wrap note
+   * in the module comment. The manager card stands the standing bays beside
+   * it; the trade card and the lineup checker give it the row.
+   */
+  shared?: boolean;
   /** Placement and plane — see the module note. */
   className?: string;
 }) {
   const config = readLeagueConfig(league);
   const { format, lineup, qb, sf, te, starters, teams, tePremium } = config;
-  // The one league shape that carries a *third* tag, and the only thing on the
-  // line that cannot be made to fit — see {@link isUnnamedSuperflex} and the
-  // wrap note below.
-  const crowded = isUnnamedSuperflex(config);
+  // **Two questions, and they must not share a variable.** `unnamedSf` is a
+  // claim about the league — it draws a third tag — and `wraps` is a fact about
+  // the box the line is in. They were one `crowded` when the tag was the only
+  // thing that could overflow the line; folding `shared` into it drew a
+  // Superflex tag on every league the manager card lists, which is a false
+  // statement about the league rather than a layout fault, and one nothing on
+  // screen contradicts.
+  const unnamedSf = isUnnamedSuperflex(config);
+  const wraps = unnamedSf || shared;
 
   return (
     <div
-      className={`relative flex items-center gap-1 overflow-hidden rounded-[0.625rem] border border-foreground/13 bg-[image:var(--billet-bg)] px-2 py-[5px] shadow-[var(--standing-strip-shadow)] sm:gap-3 sm:px-3 sm:py-[7px] ${
-        crowded ? "flex-wrap" : "flex-nowrap"
+      className={`relative flex items-center overflow-hidden rounded-[0.625rem] border border-foreground/13 bg-[image:var(--billet-bg)] px-2 py-[5px] shadow-[var(--standing-strip-shadow)] sm:px-3 sm:py-[7px] ${
+        wraps
+          ? "flex-wrap gap-x-1 gap-y-1 sm:gap-x-2.5"
+          : "flex-nowrap gap-1 sm:gap-3"
       } ${className}`}
     >
       <BilletFinish />
@@ -226,10 +250,12 @@ export function LeagueConfigWindow({
 
           It abbreviates like the two beside it, and that is not enough: it is
           the only tag that can ever be a *third* one, and a third part is a
-          width no shorter word buys back. `crowded` is what that costs — see
-          the wrap note on the component above.
+          width no shorter word buys back — which is why it is one of the two
+          things that make the line wrap. See the wrap note on the component
+          above, and `wraps` for why that is a second variable rather than this
+          one reused.
         */}
-        {crowded && <Tag lit wide="Superflex" narrow="SFlx" />}
+        {unnamedSf && <Tag lit wide="Superflex" narrow="SFlx" />}
       </span>
 
       <Divider />

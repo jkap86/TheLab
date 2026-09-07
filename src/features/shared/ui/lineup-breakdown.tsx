@@ -1,6 +1,13 @@
 "use client";
 
-import type { LeagueLineup, LineupPlayer, MetricRank } from "@/shared/contract";
+import { useEffect, useId, useRef, useState, type ReactNode } from "react";
+
+import type {
+  LeagueLineup,
+  LineupPlayer,
+  MetricRank,
+  RosterPick,
+} from "@/shared/contract";
 
 // Relative, not through the barrel: this folder's own modules are what a
 // module in it reaches for — the rule the move here brought with it.
@@ -8,11 +15,22 @@ import { CONSOLE_FIGURE_WELL, CONSOLE_ROW_WELL } from "../console-chrome";
 import { ordinal } from "../format";
 import { rankColor, rankPercentile, slotPercentile } from "../rank-ramp";
 import { type Lens, lensValue } from "../seat-compare";
-import { PaneGlass } from "./pane";
+import { PickRows, pickSpan } from "./draft-picks";
+import { DrawerRow, PaneGlass } from "./pane";
 
 /**
- * A league card's rest-of-season lineup: the optimal starters in slot order,
- * each on the pane's glass, with the bench behind a disclosure.
+ * A league card's rest-of-season lineup: the optimal starters in slot order on
+ * the pane's glass, with the bench and the roster's draft picks behind two bars
+ * pinned to its floor.
+ *
+ * **The starters scroll and the two bars do not**, which is the whole shape of
+ * it: the pane is a fixed-height column inside a panel capped to the viewport,
+ * so what a reader can reach must not depend on how far they have scrolled. The
+ * bench was a disclosure at the bottom of the list — reachable only by
+ * scrolling past every starter — and the picks were a grid of season plates
+ * *below both panes*, which the cap would have taken out of the panes' own
+ * height on every card whether or not anybody opened them. Behind bars they
+ * cost 88px and are one press away. See {@link DrawerBar}.
  *
  * **Each seat is a reading against the league, not against another roster.**
  * It used to be a comparison — the reader's own player as a ghost figure beside
@@ -319,27 +337,22 @@ function SeatRow({
   );
 }
 
-/** A bench player: the same channel, with no seat to be read against. */
+/** A bench player: a face, a name, his position and what the lens says he is worth. */
 function BenchRow({ player, lens }: { player: LineupPlayer; lens: Lens }) {
   return (
-    <li
-      className={`${CONSOLE_ROW_WELL} relative mb-[5px] flex h-[66px] flex-col justify-center gap-2 rounded-lg px-[7px] lg:mb-1 lg:h-[50px] lg:flex-row lg:items-center lg:gap-2.5 lg:rounded-[9px] lg:px-3`}
+    <DrawerRow
+      lead={player.positions[0] ?? "—"}
+      leadWidth="lg:w-[42px]"
+      figure={figure(lensValue(player, lens), lens)}
     >
-      <span className="relative flex w-full min-w-0 items-center gap-[7px] lg:contents">
-        <PlayerFace player={player} />
-        <SeatName player={player} className="lg:order-3" />
-      </span>
-      <span className="relative flex w-full items-center gap-2 lg:contents">
-        <span className="shrink-0 font-mono text-[length:var(--fs-11)] tracking-[0.1em] text-readout-label lg:order-1 lg:w-[42px] lg:overflow-hidden lg:rounded-md lg:bg-[color:var(--figure-well-bg)] lg:px-[5px] lg:py-1 lg:text-center lg:text-[length:var(--fs-12)] lg:tracking-[0.12em] lg:shadow-[var(--figure-well-shadow)]">
-          {player.positions[0] ?? "—"}
+      <PlayerFace player={player} />
+      <span className="relative min-w-0 flex-1 truncate text-[length:var(--fs-14)] text-[color:var(--billet-name)] lg:order-3">
+        <span className="lg:hidden">
+          {player.name ? shortName(player.name) : player.player_id}
         </span>
-        <span
-          className={`${CONSOLE_FIGURE_WELL} min-w-0 flex-1 px-[5px] py-1 text-right font-mono text-[length:var(--fs-13)] tabular-nums text-readout lg:order-4 lg:w-[74px] lg:flex-none`}
-        >
-          {figure(lensValue(player, lens), lens)}
-        </span>
+        <span className="hidden lg:inline">{player.name ?? player.player_id}</span>
       </span>
-    </li>
+    </DrawerRow>
   );
 }
 
@@ -353,11 +366,88 @@ function BenchRow({ player, lens }: { player: LineupPlayer; lens: Lens }) {
  */
 export type BenchReading = { total: string; place: MetricRank | null };
 
+/** Which reading the drawer is showing. */
+type Tray = "bench" | "picks";
+
+/** The two bars' own heights, which are also what the drawer sits on. */
+const BAR_HEIGHT: Record<Tray, number> = { bench: 46, picks: 42 };
+
+/**
+ * How long the contents are faded out for while one drawer becomes the other.
+ * Half of the 340ms the drawer itself would spend collapsing and reopening,
+ * which is the point of not collapsing it.
+ */
+const SWAP_MS = 170;
+
+/**
+ * The stock both bars are cut from.
+ *
+ * **The tracking goes below `lg` and the gutter tightens with it**, which is
+ * the card's own rule about its tile labels one plane up and is a measurement
+ * rather than a taste: a bar is ~160px at 390 and `BENCH · 7` at
+ * `tracking-[0.12em]` needs 81 of the 80 it has, so it truncated to `BENCH ·…`
+ * and lost the one number it is read for. Letter-spacing is the first thing to
+ * spend, because the count is what the bar says and the place beside it is what
+ * it says next.
+ */
+const DRAWER_BAR =
+  "lab-anim flex w-full cursor-pointer items-center gap-1.5 bg-[image:var(--billet-bg)] px-1.5 text-left " +
+  "font-mono text-[length:var(--fs-12)] uppercase tracking-[0.02em] shadow-[var(--standing-strip-shadow)] " +
+  "transition-colors duration-200 focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-active/60 " +
+  "lg:gap-2.5 lg:px-3 lg:text-[length:var(--fs-13)] lg:tracking-[0.14em]";
+
+/**
+ * One of the two bars pinned to the bottom of the roster pane's glass.
+ *
+ * **Billet stock over the glass, not another row of it.** The bar is a part
+ * bolted across the list — that is what says the drawer behind it is a separate
+ * reading rather than the starters continuing — and it takes the standing
+ * strip's own chamfer for it.
+ *
+ * A real `<button>`, where the design prototype draws a `role="button"` div: a
+ * bar is a control and the platform already knows how to make one reachable,
+ * announce its state and fire it from a keyboard. `aria-expanded` is true only
+ * on the bar whose reading is up, which is accurate — one drawer, and at most
+ * one of the two bars has it open.
+ */
+function DrawerBar({
+  open,
+  label,
+  children,
+}: {
+  open: boolean;
+  /** What the bar is called, and what its count is: `Bench · 6`. */
+  label: string;
+  /** The readings between the label and the caret. */
+  children?: ReactNode;
+}) {
+  return (
+    <>
+      <span className="min-w-0 flex-1 truncate">{label}</span>
+      {children}
+      {/* The caret turns rather than swapping glyph, which is what says the
+          drawer rises out of this bar rather than appearing somewhere. It is
+          `aria-hidden` because `aria-expanded` on the button already carries
+          the state, and a bar whose name ended in "right-pointing triangle"
+          would be read the long way round. */}
+      <span
+        aria-hidden
+        className={`lab-anim w-[18px] shrink-0 text-right text-[length:var(--fs-13)] text-[color:var(--billet-label)] transition-transform duration-[240ms] ease-[cubic-bezier(0.2,0.8,0.2,1)] lg:w-[22px] lg:text-[length:var(--fs-14)] ${
+          open ? "rotate-90" : ""
+        }`}
+      >
+        ▸
+      </span>
+    </>
+  );
+}
+
 export function LineupBreakdown({
   lineup,
   lens,
   medians,
   bench,
+  picks,
 }: {
   lineup: LeagueLineup;
   lens: Lens;
@@ -365,75 +455,218 @@ export function LineupBreakdown({
   medians: readonly number[];
   /** The bench's total and place, or null where it has nothing to say. */
   bench: BenchReading | null;
+  /** This roster's future picks — the second drawer's rows. */
+  picks: readonly RosterPick[];
 }) {
+  const drawerId = useId();
+  const [tray, setTray] = useState<Tray | null>(null);
+  const [swapping, setSwapping] = useState(false);
+  const swapTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(
+    () => () => {
+      if (swapTimer.current) clearTimeout(swapTimer.current);
+    },
+    [],
+  );
+
+  const bars: Tray[] = [];
+  if (lineup.bench.length > 0) bars.push("bench");
+  if (picks.length > 0) bars.push("picks");
+
+  // **Resolved, not synced**, which is `LeagueTeams`' rule about its own
+  // selection one level up: picking a team whose bench is empty, or whose
+  // league has no pick market, takes that bar off the pane — and a drawer left
+  // open onto a reading nothing can produce is an empty part standing over the
+  // starters with no bar under it saying what it is. Derived, it closes itself;
+  // an effect would paint one frame of it first.
+  const open = tray && bars.includes(tray) ? tray : null;
+
+  /**
+   * **Switching drawers does not collapse the one that is up.** Two drawers
+   * over one list would cover it twice, so there is one — and a reader
+   * comparing their bench against their picks would otherwise watch it fold
+   * shut and reopen at the same height. The contents fade out, swap at the
+   * midpoint and fade back.
+   */
+  const toggle = (kind: Tray) => {
+    if (swapTimer.current) clearTimeout(swapTimer.current);
+    if (open === kind) {
+      setTray(null);
+      setSwapping(false);
+      return;
+    }
+    if (open !== null) {
+      setSwapping(true);
+      swapTimer.current = setTimeout(() => {
+        setTray(kind);
+        setSwapping(false);
+      }, SWAP_MS);
+      return;
+    }
+    setTray(kind);
+    setSwapping(false);
+  };
+
   const benchTone = rankColor(rankPercentile(bench?.place ?? null));
+  const barsHeight = bars.reduce((sum, kind) => sum + BAR_HEIGHT[kind], 0);
+  const span = pickSpan(picks);
 
   return (
-    <PaneGlass className="p-0.5 lg:p-1">
-      <ul className="relative m-0 list-none p-0">
-        {lineup.starters.map((seat, i) => (
-          <SeatRow
-            key={`${seat.slot}-${i}`}
-            slot={seat.slot}
-            player={seat.player}
-            lens={lens}
-            median={medians[i] ?? 0}
-          />
-        ))}
-      </ul>
+    // A frame rather than a scroller: the starters scroll inside it, the drawer
+    // rises inside it, and the bars are pinned to its floor. `overflow-hidden`
+    // is what keeps the drawer's own corners inside the glass's radius and what
+    // stops a mid-animation drawer painting over the pane's edge.
+    <PaneGlass className="flex flex-col overflow-hidden p-0.5 lg:p-1">
+      <div className="lab-scroll-glass relative min-h-0 flex-1 overflow-y-auto overflow-x-hidden">
+        <ul className="m-0 list-none p-0">
+          {lineup.starters.map((seat, i) => (
+            <SeatRow
+              key={`${seat.slot}-${i}`}
+              slot={seat.slot}
+              player={seat.player}
+              lens={lens}
+              median={medians[i] ?? 0}
+            />
+          ))}
+        </ul>
 
-      {lineup.unknown_slots.length > 0 && (
-        // A partial lineup must say so — see `unknown_slots` on the contract.
-        <p className="relative m-0 px-2 py-2 font-mono text-[length:var(--fs-11)] uppercase tracking-[0.14em] text-foreground/60">
-          Not shown: {lineup.unknown_slots.join(", ")}
-        </p>
-      )}
+        {lineup.unknown_slots.length > 0 && (
+          // A partial lineup must say so — see `unknown_slots` on the contract.
+          // Inside the scroller with the seats it qualifies, rather than pinned
+          // under them: it is part of the lineup's reading, and the two bars
+          // below are the only things on this glass that hold their place.
+          <p className="m-0 px-2 py-2 font-mono text-[length:var(--fs-11)] uppercase tracking-[0.14em] text-foreground/60">
+            Not shown: {lineup.unknown_slots.join(", ")}
+          </p>
+        )}
+      </div>
 
-      {lineup.bench.length > 0 && (
-        <details className="group/bench relative">
-          {/* **An inset lip rather than a border.** A rule drawn across the
-              glass is a line printed on it; a lip is the glass's own edge
-              catching the light, which is what the rows either side of it are
-              already made of. */}
-          <summary className="flex h-[50px] cursor-pointer list-none items-center gap-1.5 px-[7px] font-mono text-[length:var(--fs-11)] uppercase tracking-[0.12em] text-foreground/68 shadow-[var(--glass-lip-shadow)] transition-colors hover:text-readout lg:h-[46px] lg:gap-2.5 lg:px-3 lg:text-[length:var(--fs-12)] lg:tracking-[0.14em]">
-            <span className="min-w-0 flex-1 truncate">
-              Bench {lineup.bench.length}
-            </span>
-            {bench && (
-              <>
-                {/* **The total drops below `lg`**, where the place and the
-                    caret are what the row is for: at ~165px three figures and a
-                    word leave the word nothing. It is on the standings row
-                    opposite at every width, which is where a reader compares
-                    benches anyway. */}
-                <span className="hidden shrink-0 tabular-nums text-readout/62 lg:inline">
-                  {bench.total}
-                </span>
-                {/* The place among the league's benches, on the same ramp the
-                    card's rank tiles run — and neutral rather than red where
-                    there is no place to report. */}
-                <span
-                  className="w-[30px] shrink-0 text-right tabular-nums lg:w-10"
-                  style={{ color: benchTone }}
-                >
-                  {bench.place ? ordinal(bench.place.rank) : "—"}
-                </span>
-              </>
-            )}
-            <span
-              aria-hidden
-              className="w-3.5 shrink-0 text-right text-[length:var(--fs-12)] text-readout-label lg:w-[22px] lg:text-[length:var(--fs-13)]"
+      {bars.length > 0 && (
+        <>
+          {/*
+            **One drawer for both readings, anchored at the bottom.** Because it
+            is anchored there, growing its `max-height` *is* the upward
+            accordion — no measurement, and no transform that would blur the
+            type under it. The cap is the glass less the bars it sits on and a
+            little of the starters, so a reader can always see what the drawer
+            is rising over.
+
+            **Kept mounted while shut**, or it would have no closed state to
+            animate from, and `inert` is what keeps its rows out of the tab
+            order while it is — `pointer-events: none` stops a mouse and
+            nothing else, which is `CollapseTray`'s own finding one component
+            over. The transition list is spelled identically in both states for
+            that file's other reason: rewriting `transition` in the same frame
+            as the animated property cancels it.
+          */}
+          <div
+            id={drawerId}
+            inert={open === null}
+            className="lab-anim absolute inset-x-1 z-[2] overflow-hidden rounded-[0.625rem] bg-[image:var(--billet-bg)] shadow-[var(--billet-shadow),0_-22px_34px_-14px_rgba(0,0,0,0.9)] [transition:max-height_340ms_cubic-bezier(0.2,0.8,0.2,1),opacity_200ms_ease,padding_340ms_cubic-bezier(0.2,0.8,0.2,1)]"
+            style={{
+              bottom: barsHeight,
+              // The bars it stands on, plus a sliver of the starters so the
+              // drawer reads as *over* the list rather than as having replaced
+              // it. **`max()` and not the bare `calc`**, which is what the
+              // design specifies and what goes silently wrong on a short
+              // viewport: the panel's cap can leave a glass shorter than the
+              // bars themselves, and a negative `max-height` clamps to zero —
+              // a lit bar with a rotated caret that opens nothing. Floored, a
+              // cramped drawer overflows upward instead and is clipped by the
+              // glass, which shows less than it wants and never nothing.
+              maxHeight: open
+                ? `max(5.75rem, calc(100% - ${barsHeight + 14}px))`
+                : 0,
+              padding: open ? 4 : 0,
+              opacity: open ? 1 : 0,
+              pointerEvents: open ? "auto" : "none",
+            }}
+          >
+            <div
+              className={`lab-anim lab-scroll-glass max-h-full overflow-y-auto overflow-x-hidden [transition:opacity_160ms_ease,transform_220ms_cubic-bezier(0.2,0.8,0.2,1)] ${
+                swapping ? "translate-y-2 opacity-0" : "translate-y-0 opacity-100"
+              }`}
             >
-              <span className="group-open/bench:hidden">▸</span>
-              <span className="hidden group-open/bench:inline">▾</span>
-            </span>
-          </summary>
-          <ul className="m-0 list-none p-0 pt-1">
-            {lineup.bench.map((player) => (
-              <BenchRow key={player.player_id} player={player} lens={lens} />
-            ))}
-          </ul>
-        </details>
+              {open === "picks" ? (
+                <PickRows picks={picks} />
+              ) : (
+                <ul className="m-0 list-none p-0">
+                  {lineup.bench.map((player) => (
+                    <BenchRow key={player.player_id} player={player} lens={lens} />
+                  ))}
+                </ul>
+              )}
+            </div>
+          </div>
+
+          {/* Above the drawer, so a drawer at full height stops at the bars
+              rather than under them. */}
+          <div className="relative z-[3] shrink-0">
+            {bars.includes("bench") && (
+              <button
+                type="button"
+                onClick={() => toggle("bench")}
+                aria-expanded={open === "bench"}
+                aria-controls={drawerId}
+                className={`${DRAWER_BAR} h-[46px] ${
+                  open === "bench"
+                    ? "text-[color:var(--billet-accent)]"
+                    : "text-[color:var(--billet-name)]"
+                }`}
+              >
+                <DrawerBar open={open === "bench"} label={`Bench · ${lineup.bench.length}`}>
+                  {bench && (
+                    <>
+                      {/* **The total drops below `lg`**, where the place and
+                          the caret are what the bar is for: at ~165px three
+                          figures and a word leave the word nothing. It is on
+                          the standings row opposite at every width, which is
+                          where a reader compares benches anyway. */}
+                      <span className="hidden shrink-0 tabular-nums text-[color:var(--billet-label)] lg:inline">
+                        {bench.total}
+                      </span>
+                      {/* The place among the league's benches, on the same ramp
+                          the card's rank windows run — and neutral rather than
+                          red where there is no place to report. */}
+                      <span
+                        className="w-7 shrink-0 text-right tabular-nums lg:w-10"
+                        style={{ color: benchTone }}
+                      >
+                        {bench.place ? ordinal(bench.place.rank) : "—"}
+                      </span>
+                    </>
+                  )}
+                </DrawerBar>
+              </button>
+            )}
+
+            {bars.includes("picks") && (
+              <button
+                type="button"
+                onClick={() => toggle("picks")}
+                aria-expanded={open === "picks"}
+                aria-controls={drawerId}
+                className={`${DRAWER_BAR} h-[42px] ${
+                  open === "picks"
+                    ? "text-[color:var(--billet-accent)]"
+                    : "text-[color:var(--billet-name)]"
+                }`}
+              >
+                <DrawerBar open={open === "picks"} label={`Picks · ${picks.length}`}>
+                  {/* The span is what the bar can say that the count cannot —
+                      how far out the portfolio runs. Dropped below `lg` on the
+                      bench bar's own argument. */}
+                  {span && (
+                    <span className="hidden shrink-0 font-mono text-[length:var(--fs-12)] tracking-[0.08em] tabular-nums text-[color:var(--billet-label)] lg:inline">
+                      {span}
+                    </span>
+                  )}
+                </DrawerBar>
+              </button>
+            )}
+          </div>
+        </>
       )}
     </PaneGlass>
   );

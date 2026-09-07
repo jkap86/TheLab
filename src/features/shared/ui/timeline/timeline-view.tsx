@@ -28,7 +28,7 @@ import { TimelineRail } from "./timeline-rail";
  *
  * **Stepping back changes the rosters and nothing else.** The past is drawn by
  * the same `LeagueTeams` — the same metric column, the same lens, the same
- * breakdown and the same pick pills — over the roster set the rewind produces,
+ * breakdown and the same picks — over the roster set the rewind produces,
  * priced on **today's** boards. See `timelineEntry` for why that is the honest
  * question rather than a compromise: nothing here stores a past projection or a
  * past market, so "what was it worth then" cannot be answered, while "what
@@ -123,7 +123,7 @@ export function TimelineView({
           the bay holds, and it is still a floor for the same reason it always
           was, so pressing `History` moves nothing under it. */}
       <div
-        className={`${CONSOLE_WELL} mb-3 flex min-h-[3.5rem] flex-wrap items-center gap-2.5 px-2.5 py-[9px] sm:mb-4 sm:gap-3.5 sm:px-3 pointer-fine:[transform:translateZ(4px)]`}
+        className={`${CONSOLE_WELL} mb-3 flex min-h-[3.5rem] shrink-0 flex-wrap items-center gap-2.5 px-2.5 py-[9px] sm:mb-4 sm:gap-3.5 sm:px-3 pointer-fine:[transform:translateZ(4px)]`}
       >
         {!opened && (
           <>
@@ -171,14 +171,24 @@ export function TimelineView({
         )}
       </div>
 
-      {shown && shown.teams.length > 0 ? <LeagueTeams entry={shown} /> : children}
+      {/* **The three parts are the panel's own flex items**, which is what makes
+          the capped panel a fixed-height column rather than a box with a
+          scrollbar: this returns a fragment, so the rail, the browser and the
+          caveat are laid out by the panel directly. The rail and the caveat
+          hold their heights and the browser takes what is left — see `Pane` for
+          the `min-h-0` that has to run all the way down or nothing scrolls. */}
+      {shown && shown.teams.length > 0 ? (
+        <LeagueTeams entry={shown} />
+      ) : (
+        <div className="shrink-0">{children}</div>
+      )}
 
       {/* Under the table, where the card keeps everything that says how the
           numbers above it are known. It has to stay on screen with them, which
           is why it is not on the rail a scroll away — and it is drawn only in
           the past, because at "now" there is nothing to caveat. */}
       {past && (
-        <p className="m-0 mt-4 text-[length:var(--fs-11-2)] leading-relaxed text-foreground/45">
+        <p className="m-0 mt-4 shrink-0 text-[length:var(--fs-11-2)] leading-relaxed text-foreground/45">
           {/* `this point` rather than the formatter's own `date unknown`, which
               reads as a broken sentence in the one place the two spellings
               differ — a caveat has to stay a sentence. Unreachable in practice,

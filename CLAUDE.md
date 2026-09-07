@@ -7908,6 +7908,237 @@ scoring rather than one hand-made spread; whether `slotPercentile`'s ±20% is,
 against real per-slot spreads; and how the headshots read at all, since
 `sleepercdn.com` is unreachable from where this was built and every face
 rendered as its letter mount.
+## The card parks, and its drawers come to the reader
+
+Four changes to the `/manager` league card, from a design handoff: the standing
+moves off the plate row onto the settings row at every width; opening a card
+parks it under the rack and caps its expanded half to what is left of the
+viewport; the bench and the roster's draft picks become drawers pinned to the
+roster pane's floor; and the panes become fixed-height columns whose glass
+scrolls. **Nothing on the wire moved** — no route, no query, no contract type,
+no payload field, no migration.
+
+**The four are one change.** Capping the panel is what makes the panes scroll,
+scrolling panes are what make anything standing *below* them height stolen from
+them, and that is what moves the picks into a drawer — so the pass is not four
+independent edits but one arrangement with four visible consequences.
+
+### The standing left the plate row
+
+`ReadingPlate` is gone from this card. The plate row carries the league alone at
+every width, the settings strip takes the slack, and the three standing bays
+stand beside it hugging their content — the design file's `1c`, measured against
+its `1b` (three stretched bays across a desktop card, which read as an
+instrument with nothing in it).
+
+**It was already the phone's arrangement**, and what this settles is that the
+desktop had the same problem in a milder form: a plate opposite the league's
+name is width the *name* is paying for, ~95px at 362 and merely tight at 1280.
+It was also the one thing about this card a reader could watch change by
+resizing. One treatment now, and `standingFields`' phone rule — which dropped
+`Pts` to buy the name back — is gone with the plate it was buying from.
+Measured at 1280 the name has 353px unclipped; at 390 it has 263 against the
+~95 it had.
+
+**The bays stretch only on the row they own**, which is `StandingStrip`'s rule
+rather than the card's: `w-full justify-between` below `sm` and content-width
+above, with the bay carrying `flex-1 sm:flex-none`. It is spelled on the bay
+because the bay is the box that grows, and a parent reaching in with
+`[&>span]:flex-1` is one more selector for a later `flex-none` to lose to on
+Tailwind's emit order — the trap `CONSOLE_KEY_PILL` and `CONSOLE_CARD_SHELL`
+already record. It is one arrangement rather than a `fill` prop for the same
+reason there is one card: which of the two a strip is, is a width.
+
+**The strip stretches and the bays do not.** `items-center` inside a strip that
+is itself `items-stretch`'d by the row — so the two parts read as one machined
+block, and a wrapped settings strip beside it does not turn three bays into
+80px wells holding a 16px figure each.
+
+**`LeagueConfigWindow` gained `shared`, and it wraps when it is set.** Every
+threshold in that file's two-stage word-dropping is measured against the card's
+*whole* content box, and the bays take ~230px of it — so the `md` arm that fits
+512px into 672 does not fit it into ~440, and a line that does not wrap is a
+line that *clips*, silently, inside the strip's own `overflow-hidden`. Wrapping
+is what makes the shared row safe without a third set of measured words. Its
+gap follows the arm, because a wrapping row spends its column gap on the break
+too.
+
+**One bug this found, and it is the kind this codebase is written against.**
+`crowded` gated both the wrap *and* the Superflex tag, so folding `|| shared`
+into it drew a lit `Superflex` tag on every league the manager card lists — a
+false claim about the league rather than a layout fault, with nothing on screen
+to contradict it. They are two variables now: `unnamedSf` is a statement about
+the league and `wraps` is a fact about the box. Verified: the tag renders on the
+two-bare-`QB` fixture and on none of the other three.
+
+### The card parks and the panel caps
+
+Opening a card scrolls its top edge to `--card-freeze-top` and caps the
+expanded half to `viewport − freezeTop − panelOffset − 16`.
+
+**The problem is a page, not a card.** A twelve-team browser is most of a screen
+tall and the rack lists a hundred of them, so opening one three quarters down
+left the reader scrolling *through* the thing they had just asked for. Parked
+and capped, an open card is one screen.
+
+**The target is `--card-freeze-top` and not a number of its own**, which is what
+makes the park land exactly on the offset the sticky summary is about to take;
+park anywhere else and the housing visibly slides the difference as the first
+scroll engages the freeze. A card too near the top of the page to reach the
+offset clamps at `scrollY: 0` and its summary sticks at 87 anyway — measured, and
+the reason the park never scrolls *down* to something already on screen.
+
+**Both numbers are measured after layout, never guessed**, and the offset
+measured is the **panel's own top against the card's** rather than the summary's
+height — so the housing's margin is inside the number rather than beside it.
+A `ResizeObserver` re-reads it, because the header changes height for reasons
+the window does not (the settings strip re-wrapping).
+
+**The park runs after the cap is committed, never in the same frame**, which is
+the ordering that is silent when wrong: capping shortens the document, a page
+scrolled near its bottom is re-clamped when that happens, and a park measured
+against the uncapped layout lands short by whatever the clamp took.
+
+**The floor is 320px, and it is what the panel's parts need.** The rail is ~72
+with its margin, a ledge ~62, the two pinned bars 88 — under about 320 the glass
+is shorter than the bars standing on it and the drawer has nowhere to open.
+Below the floor the panel is simply taller than the space and the page scrolls
+to it, which is the behaviour this replaces and the right thing to fall back to.
+
+**`ExpandedPanel` is a component of its own so `league-card.tsx` stays
+hook-free**, that file's own stated design and `LeagueSyncKey`'s precedent. It
+finds the `<details>` by walking up rather than taking a ref, so the disclosure
+stays the native element it was and the card stays declarative. The scroller is
+resolved on every open and never cached — a ref captured once goes stale and
+writing `scrollTop` on a detached node silently no-ops. On this page the walk
+finds nothing and falls through to the document, which *is* the rack here; it is
+kept for the case it is written for, since a scrolling ancestor is one layout
+change away.
+
+**`overflow-anchor: none` on the list is load-bearing**, not tidiness: the panel
+mounts on the same frame the park scrolls, which is exactly what scroll
+anchoring compensates for, and the compensation lands the card somewhere
+arbitrary and reads as the park having missed.
+
+### The bench and the picks are drawers
+
+Two bars on billet stock pinned to the roster pane's floor — `Bench · N` with
+its total and league place, `Picks · N` with the seasons it spans — over one
+drawer that rises as an accordion.
+
+**One drawer for both readings, anchored at the bottom**, so growing its
+`max-height` *is* the upward accordion: no measurement, and no transform to blur
+the type under it. Switching between them does not collapse it — the contents
+fade, swap at 170ms and fade back, because a reader comparing their bench
+against their picks should not watch it fold shut and reopen at the same height.
+
+**`max()` and not the bare `calc`**, which is what the design specifies and what
+goes silently wrong on a short viewport: the cap can leave a glass shorter than
+the bars themselves, and a negative `max-height` clamps to zero — a lit bar with
+a rotated caret that opens nothing. Floored, a cramped drawer overflows upward
+and is clipped by the glass, which shows less than it wants and never nothing.
+
+**Kept mounted while shut, and `inert` is what keeps its rows out of the tab
+order** — `pointer-events: none` stops a mouse and nothing else, which is
+`CollapseTray`'s finding one component over. The transition list is spelled
+identically in both states for that file's other reason.
+
+**Real `<button>`s, where the prototype draws `role="button"` divs.** A bar is a
+control and the platform already knows how to make one reachable and announce
+its state; `aria-expanded` is true only on the bar whose reading is up.
+
+**A bar is drawn only where there is something behind it**, and which reading is
+open is **resolved, not synced**: picking a team with no bench, or a league with
+no pick market, takes that bar off the pane, and a drawer left open onto a
+reading nothing can produce is an empty part standing over the starters. Derived
+from the bars in hand it closes itself; an effect would paint one frame of it.
+
+**`DrawerRow` lives in `pane.tsx`**, which is the module that exists so both
+halves of this pane can share a surface without a cycle — the bench rows are the
+breakdown's and the pick rows are `draft-picks.tsx`'s, and the breakdown imports
+that file.
+
+**Two lines below `lg`, one above**, which is not the drawer's own idea: it is
+the seat rows' arrangement at the seat rows' breakpoint, because a drawer row is
+read directly over the seat row it covers. A render forced it — at 390 a pane is
+168px and three cells beside a name left the bench's name **0px** and the pick's
+**7px**, one character, which is the failure this file records at three other
+grains. Measured after: nothing clipped at 390, 640, 1024 or 1280.
+
+**`DraftPicks`' season-plate grid is gone rather than kept**, and its naming rule
+came with it as `pickName` — one spelling, since the rows re-state it. What
+changed with the move is the em dash: the pills showed *nothing* for an unpriced
+pick on a density argument, and a row has a figure column that is either filled
+or not, so the app's ordinary three-way grammar comes back. It left the
+`features/shared` barrel with the grid, on `local-store.ts`'s rule.
+
+### Scrollbars, and the token that had to invert
+
+`.lab-scroll-glass` is a second class beside `.lab-scroll`, and the two differ on
+both things that class exists to decide. **No reserved gutter** — nothing here
+sits outside the scroller the way the shares tray's headers do, and a stable
+gutter would take 11px off a ~165px pane on every card. **And the thumb runs on
+glass rather than on the panel**, which is the one case an alpha over
+`--foreground` cannot serve: `--readout-bg` is near-black in dark and pale mint
+in light, so `--glass-thumb` and its two companions are the readout's own ink
+turning over rather than dimming, the rule `--glass-meter-track` beside them
+already keeps.
+
+### Verified
+
+Rendered through a temporary `/preview` route against the real components,
+tokens and Tailwind build — the method the console-card, shares, rack and
+timeline passes established, since no database is reachable from where this was
+built — then driven over CDP at 1280, 768 and 390 in both schemes and deleted.
+The mechanics are unchanged: `--no-proxy-server`, `localhost` rather than
+`127.0.0.1`, a phone viewport from `Emulation.setDeviceMetricsOverride`,
+`data-theme` rather than `prefers-color-scheme`, `localStorage.clear()` between
+drives, the `--blink-settings=availablePointerTypes=4,…` flags without which
+every `pointer-fine:` rule is inert, and a **client-component** harness. The
+fixtures are four leagues: a dynasty superflex over twelve rosters with a
+missing seat, an unpriced starter and an unknown slot; an all-zero 14-team best
+ball with no picks; the two-bare-`QB` shape; and one whose `roster_positions`,
+`settings` and rosters were never stored.
+
+Every arm landed. The plate row carries **one** child on all four cards at every
+width; the settings row carries two, and one on the never-synced league, which
+draws no standing at all. At 1280 the strip is 815px on one line with the bays
+259px content-width beside it (85/78/74); at 768 the strip wraps to two lines and
+the bays hold their height; at 390 the row is a column, the strip is 332px and
+the three bays are 103px each.
+
+Open: `cardTop` **87** at 1280 and 768 — the token to the pixel — and 84 at 390,
+where the first card cannot reach the offset and clamps at `scrollY: 0` with its
+summary sticky at 87. The cap read 557px against a 900 viewport with the panel
+bottom at 884, and 506 against 844 with it at 825. Both panes' glass scrolls.
+The drawer opened at 244px with `inert` gone, `padding: 4px` and
+`bottom: 88px`; the bench→picks swap took the rows 7 → 6 with the first reading
+`2027 · 1.05 · 5,592`, moved `aria-expanded` and turned the open bar's ink to
+`--billet-accent` with its caret at `rotate: 90deg`; pressing again closed it
+back to `inert`, `max-height: 0`. `.lab-scroll-glass` computes
+`scrollbar-width: thin` and the mint thumb.
+
+At every width and in both schemes: `document.documentElement.scrollWidth` equal
+to the viewport, **zero unclipped elements past it**, exactly one `<h1>`, and no
+console output but the dev server's own React-DevTools and HMR lines plus the
+CDN's refusals for headshots the sandbox has no route to. 1,728 unit tests pass;
+`lint`, `typecheck` and `build` are clean.
+
+**Two renders changed the code.** The bench bar truncated to `BENCH ·…` at 390 —
+`BENCH · 7` needs 81px of the 80 it has at `tracking-[0.12em]` — so both bars
+drop their tracking and tighten their gutter below `lg`, which is the card's own
+rule about its tile labels one plane up. And the drawer rows went two-line, per
+the note above.
+
+**Not verified against real data**, which is the gap to close first: every number
+above is a fixture. Four things a render cannot check — whether a real account's
+league names read acceptably in the 263px the plate row now gives them at 390;
+how the park and the cap behave on a 113-league page, where the document is tens
+of thousands of pixels tall and the scroll is long; what a real dynasty
+portfolio looks like in a drawer bounded to ~245px, since the fixture holds six
+picks; and whether the mint thumb reads against a real pane's rows, since
+headless Chrome draws overlay scrollbars and reserves no gutter for one.
+
 ## The console card
 
 One card carries a league across three tools — `/trades`, `/manager` and
