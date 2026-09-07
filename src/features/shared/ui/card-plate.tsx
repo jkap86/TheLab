@@ -49,9 +49,16 @@ export function CardPlateRow({ children }: { children: ReactNode }) {
  * "Dynasty Wa…" *after* `standingFields` had already dropped its third field to
  * buy that much. Every fix inside the row is the same trade at a different
  * price. So below `sm` the row carries the league plate alone, at full width,
- * and the standing comes down here as the card's first in-flow child: all three
- * fields are back, the name stops truncating, and nothing is competing for a
- * line.
+ * and the standing comes down here: all three fields are back, the name stops
+ * truncating, and nothing is competing for a line.
+ *
+ * **It sits *under* the league's settings strip, not above it**, which is the
+ * order a phone reads the card in: what game this is, then how the manager is
+ * doing at it, then the four ranks that grade it — the standing next to the
+ * figures it belongs with rather than separated from them by the settings. The
+ * two parts are the same stock, so the pair reads as one machined block with a
+ * groove between; that is what pays for `mt-2` here where the strip used to
+ * take 18px of clearance from the rule above it.
  *
  * **Metal, not glass, and that is the decision rather than the finish.** Drawn
  * on `--readout-bg` the strip read as one more thing the league reports about
@@ -73,7 +80,7 @@ export function CardPlateRow({ children }: { children: ReactNode }) {
 export function StandingStrip({ children }: { children: ReactNode }) {
   return (
     <div
-      className={`relative mt-[1.125rem] flex items-stretch justify-between gap-2.5 overflow-hidden rounded-xl bg-[image:var(--billet-bg)] px-[11px] py-[9px] shadow-[var(--standing-strip-shadow)] sm:hidden`}
+      className={`relative mt-2 flex items-stretch justify-between gap-2 overflow-hidden rounded-xl bg-[image:var(--billet-bg)] px-[7px] py-[5px] shadow-[var(--standing-strip-shadow)] sm:hidden`}
     >
       <BilletFinish />
       {children}
@@ -82,7 +89,15 @@ export function StandingStrip({ children }: { children: ReactNode }) {
 }
 
 /**
- * One bay of the strip: a stamped label over a figure in a milled well.
+ * One bay of the strip: a stamped label beside its figure, in a milled well.
+ *
+ * **The bay *is* the well, and the label sits in it on the figure's own
+ * baseline.** It was a label stamped on the face with the figure in a well cut
+ * under it, which is where most of the strip's height went — a stacked pair is
+ * two lines of type plus the gap between them, and the strip is three of them
+ * across a card that has four rank windows still to draw. Side by side the part
+ * is one line tall and the reading is unchanged: a label and the number it
+ * names, which is what every field on this card already is.
  *
  * **The figure is coloured by what it says**, which is the strip's second job
  * and the reason it is not simply the plate moved down the card. A place is its
@@ -111,20 +126,18 @@ export function StandingBay({
   children: ReactNode;
 }) {
   return (
-    <span className="relative flex min-w-0 flex-1 flex-col items-center gap-1">
-      <span className="whitespace-nowrap font-mono text-[length:var(--fs-9)] uppercase tracking-[0.14em] text-[color:var(--billet-label)] [text-shadow:var(--standing-label-shadow)]">
+    <span className="relative flex min-w-0 flex-1 items-baseline justify-center gap-1.5 rounded-[0.4375rem] bg-[image:var(--billet-well-bg)] px-1.5 pb-1 pt-[3px] shadow-[var(--standing-well-shadow)]">
+      <span className="whitespace-nowrap font-mono text-[length:var(--fs-9)] uppercase tracking-[0.12em] text-[color:var(--billet-label)] [text-shadow:var(--standing-label-shadow)]">
         {label}
       </span>
-      <span className="flex w-full justify-center rounded-[0.4375rem] bg-[image:var(--billet-well-bg)] px-2 pb-[5px] pt-1 shadow-[var(--standing-well-shadow)]">
-        <span
-          className="whitespace-nowrap font-display text-[length:var(--fs-18)] font-semibold leading-[1.1] tracking-[-0.015em] tabular-nums"
-          style={{
-            color: tone,
-            textShadow: `var(--standing-engrave), 0 0 18px ${glow}`,
-          }}
-        >
-          {children}
-        </span>
+      <span
+        className="whitespace-nowrap font-display text-[length:var(--fs-16)] font-semibold leading-[1.1] tracking-[-0.015em] tabular-nums"
+        style={{
+          color: tone,
+          textShadow: `var(--standing-engrave), 0 0 18px ${glow}`,
+        }}
+      >
+        {children}
       </span>
     </span>
   );

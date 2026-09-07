@@ -7534,6 +7534,155 @@ twelve-team browser; and whether the two cards still read as one object on a
 corpus where the manager plate is often three fields wide and the checker's is
 often absent.
 
+### The settings became a milled strip, and the card reads top-down again
+
+Three changes to the manager league card, from a design handoff: the phone
+standing strip and the league-info window **swap**, the info window is
+**redesigned** from lit glass into a milled billet plate on one non-wrapping
+line, and the card gets **denser on a phone**. Measured card height at 390:
+**358px → 221px**; desktop 230 → 226. Nothing on the wire moved — no route, no
+query, no contract type, no payload field, no migration.
+
+**The swap is an order rather than a rearrangement.** The card's two bolted-on
+parts answer two different questions: what game this league is, and how the
+manager is doing at it. The first is a property of the league, so it belongs
+directly under the rule with the league's own name on the plate above it; the
+second is a *result*, and it belongs against the four rank windows that grade it
+rather than separated from them by a line of settings. Above `sm` there is
+nothing to order — the standing is on the plate row — so this is visibly a phone
+change and structurally a card one.
+
+**The redesign is the material, and the material is the argument.** The
+settings were `--readout-bg` under scanlines and the standing was billet, so the
+card carried a window and a plate that had nothing to do with each other. They
+are one piece of stock now: `--billet-bg` under the same grain and specular,
+the same `--standing-strip-shadow` chamfer, the same `--billet-well-bg` recesses
+for the tags, the same `--standing-engrave` on every figure, and `--groove`
+between the groups where a `color-mix` line on glass used to be. That reuse is
+what lets the gap between the two parts close to 8px: they read as one machined
+block with a cut through it rather than as two readouts that happen to be
+adjacent.
+
+**It needed one token, and the token is a measurement.** The handoff spells the
+lit format tag `var(--readout-text)` and that is right in dark, where the two
+are one colour and the tag measures 8.6–11:1 in its well. It is a fault in
+light: `--readout-text` is a deep teal drawn for near-black glass, and the well
+it now lands on is **pale metal** — 3.5 / 4.2 / 4.9:1 against that well's three
+stops, under the floor across most of the face at 11px. So `--billet-accent`
+joins the billet's own ink family as its **lit** level: `#9ffff2` in dark, the
+handoff's value to the digit, and `#08554d` in light, which is the same teal
+taken down until it clears at **4.9 / 5.8 / 6.9:1**. It is `--billet-label`'s
+own note one ink over — a level whose value the measurement decided. Everything
+else the redesign needs already existed, including the pip pair
+(`--pip-lit-bg` / `--pip-unlit-bg`), which is the same pip on the same stock one
+component over and already carries its measured light counterpart.
+
+**The strip is shared, so all three cards took it**, which is a decision rather
+than a spill. `LeagueConfigWindow` is `/manager`'s, `/lineupchecker`'s and
+`/trades`', and the handoff scopes only the first — but two *arrangements* of one
+read is what `LeagueChipRail` is, and two *spellings of one arrangement* is
+exactly the drift The two league cards converged removed. Restricting the
+redesign to one page would have put it straight back. Checked on both housings:
+the billet reads as a bolted-on part on the trade card's non-metal `--housing-bg`
+as readily as on the two metal ones.
+
+#### The line does not wrap, so the widths are measurements
+
+`flex-nowrap` inside `overflow-hidden` is a line that *clips*, silently, and the
+handoff's single `<768px` phone arm does not survive contact with the real type
+scale. Every figure below is content-needed against the card's own content box.
+
+- **The full line needs 611–619px** and the card gives it **544px at 640** and
+  **672px at 768**. So it clips through the whole `sm` band, and `sm` — the
+  card's own density breakpoint, and where this pass started — is wrong for it.
+- **Below `md` the pips and the TE-premium bay go**, which is ~107px, and the
+  line needs ~512px: clear at 640 by 33–43px. Those two are the right things to
+  spend, and neither is a lost reading — a pip row is a second spelling of the
+  figure beside it, and the premium is a fact about the TE slot, so it rides
+  that slot's own figure as `1+0.5` (`narrowTeFigure`). It is a pair only where
+  both halves are real: a null slot count keeps its dash, and an unknown premium
+  leaves the figure alone, since what the wide line states there is `TE prem —`,
+  which is the absence of a reading anyway.
+- **Below `sm` the words shorten** — `Dynasty` → `Dyn`, `Teams` → `Tm` — which is
+  278–293px against a **314px** box at 390, where the full words would need ~380.
+
+So the card's *density* still turns at `sm` and the line's *wording* at `md`,
+and they are two thresholds because they answer two questions: how much room a
+card has, and how much room one line of instrument reading needs.
+
+**The one line that cannot be made to fit is allowed to wrap**, and it is the
+Superflex shape — the only league that carries a *third* tag. It needs 349px at
+390 against 314 and 697px at 768 against 672, so no abbreviation reaches it: a
+tag is a whole extra part, not a longer word. That league alone is `flex-wrap`,
+which costs it a second line below ~900 and nothing above it; every other league
+is the design as drawn. Wrapping loses no reading where clipping loses the tail
+of one, and the groups being `shrink-0 whitespace-nowrap` keeps the break
+between two of them rather than through the middle of a label. Whether the shape
+exists in this corpus is still the open question `isUnnamedSuperflex` records.
+
+**The standing bay is one row, and that is where the height went.** It was a
+label stamped on the face over a figure in a well cut under it; the bay *is* the
+well now, with the label on the figure's own baseline. A stacked pair is two
+lines of type plus the gap, three times across a card with four rank windows
+still to draw — 37.3px against ~48. The figure steps `--fs-18` → `--fs-16` with
+it and keeps the rank ramp, so the standing still agrees with the figures under
+it.
+
+**The phone's depth was already off and needed no edit.** The handoff's phone
+column turns off the perspective, the tilt, the graticule floor and all three
+`translateZ` layers; every one of those already rides `pointer-fine:`, which is
+a *pointer* query rather than a width and is the stronger rule — the prototype
+expresses it as a width only because it has no pointer to ask about. What did
+change is the inset (`26 / 14 / 14` against the desktop `30 / 18 / 18`), the
+rank row's `mt`, gap and padding, the figure's `--fs-26` → `--fs-24` with its
+suffix, and the two 5px offsets under the figure and above the meter.
+
+#### Verified
+
+Rendered through a temporary `/preview` route against the real components,
+tokens and Tailwind build — the method the console-card, shares, rack and
+timeline passes established, since no database is reachable from where this was
+built — then driven over CDP and deleted. Two mechanics of that method are
+unchanged (`--no-proxy-server`, and the
+`--blink-settings=availablePointerTypes=4,…` flags, without which headless
+Chrome reports `pointer: none` and every `pointer-fine:` rule on this card is
+inert) and **two are this pass's own**. `next start` refuses to boot without
+`DATABASE_URL`, so what was driven is the production build's own prerendered
+HTML served with its `.next/static` by a twenty-line file server. And the
+emulated viewport must be **tall enough not to scroll** (2600px here): a
+classic 15px scrollbar takes a 390 viewport to a 375 client, which is a
+different measurement from the one the bar is set at — it is what made
+`Draft cap` read as clipped by 1px in the first run.
+
+The fixtures are four leagues: a dynasty superflex solved on four columns, a
+14-team best-ball redraft, one whose `roster_positions`, `settings` and
+`scoring_settings` were never synced, and the two-bare-`QB` Superflex shape.
+
+Every arm landed. Card order is `rule > info > standing > ranks` at every width,
+and `rule > info > ranks` on the league with no standing. Heights are **221px at
+390** and **225.6 at 640 and up**, against 358 and 230 before. **Nothing clips
+anywhere**: at 390/640/768/1280 in both schemes every strip reports
+`scrollWidth === clientWidth` with 22–521px of slack, `documentElement.scrollWidth`
+equals the viewport, and there are **zero unclipped elements past it**. The
+Superflex card is the only `flex-wrap` one and it takes two lines at 390, 640 and
+768 and one at 1280 — the wrap firing only where it is needed. Pips compute
+`display: none` at 390 and 640 and `flex` at 768 and up, at 4×13px; the dividers
+are 16×1px; the standing strip is three 100.7px bays of 27.4px, label and figure
+on one baseline at `--fs-16`. `--billet-accent` resolves `rgb(159,255,242)` in
+dark and `rgb(8,85,77)` in light — the token turning over rather than dimming.
+Exactly one `<h1>`, and **no console output of any kind** but the harness's own
+404s for icons the file server does not carry.
+
+1,728 unit tests pass; `lint`, `typecheck` and `build` are clean.
+
+**Not verified against real data**, which is the gap to close first: every number
+above is a fixture. Three things a render cannot check — how the line reads on a
+real 113-league page, where most leagues are dynasty superflex and the strip is
+much the same width on every card; whether the corpus holds any league with the
+two-bare-`QB` shape, which is what decides whether the wrap arm ever fires; and
+whether the lit tag's new light-mode teal reads as *the same* teal as the rest of
+the console's accent, which a contrast figure cannot answer.
+
 ## The league card's expanded half
 
 The manager card's expanded half — the history rail, the standings pane, the
