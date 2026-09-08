@@ -57,7 +57,7 @@ import { Scanlines } from "./card-plate";
 export function Pane({ children }: { children: ReactNode }) {
   return (
     <div
-      className={`${CONSOLE_BILLET} @container relative flex min-h-0 min-w-0 flex-1 flex-col rounded-xl p-0.5 sm:rounded-[0.875rem] lg:p-2`}
+      className={`${CONSOLE_BILLET} @container relative flex min-h-0 min-w-0 flex-1 flex-col rounded-xl p-0.5 lg:p-1.5`}
     >
       {children}
     </div>
@@ -77,7 +77,7 @@ export function Pane({ children }: { children: ReactNode }) {
 export function PaneLedge({ children }: { children: ReactNode }) {
   return (
     <div
-      className={`${CONSOLE_WINDOW_LEDGE} shrink-0 rounded-lg px-1.5 pb-1.5 pt-[5px] lg:px-2 lg:pb-2 lg:pt-[7px]`}
+      className={`${CONSOLE_WINDOW_LEDGE} shrink-0 rounded-lg px-1.5 pb-[5px] pt-1 lg:px-[7px] lg:pb-1.5 lg:pt-[5px]`}
     >
       {children}
     </div>
@@ -126,7 +126,7 @@ export function PaneGlass({
 }) {
   return (
     <div
-      className={`${CONSOLE_GLASS} mt-[3px] min-h-0 flex-1 rounded-lg lg:mt-2 lg:rounded-[0.625rem] ${className}`}
+      className={`${CONSOLE_GLASS} mt-[3px] min-h-0 flex-1 rounded-lg lg:mt-1.5 lg:rounded-[0.625rem] ${className}`}
     >
       <Scanlines />
       {children}
@@ -158,34 +158,52 @@ export function PaneGlass({
  * Both cells are `--recess-bg` rather than `--figure-well-bg`, which is the
  * same turning-over the wells one surface up already make — a hole cut in
  * *metal* is the metal's own shadow, where the glass's wells are cut in glass.
+ *
+ * **The `lg` order is the seat row's, cell for cell**: lead (1), the mark (2),
+ * the name (3), the note (4), the figure (5). The children carry their own
+ * `lg:order-*` for the two in the middle, because they are the caller's
+ * elements; the note is the slot between the name and the figure — a bench
+ * player's NFL team — and is drawn in the billet's label ink rather than the
+ * glass's mint, since a drawer row is a part rather than glass.
+ *
+ * 38px at `lg` and 52 below it, the seat row's own heights since the rows were
+ * slimmed — a drawer row is read directly over the seat row it covers.
  */
 export function DrawerRow({
   lead,
   /** The `lg` width of the leading cell: a position is three characters, a season is four. */
   leadWidth,
   figure,
+  note = null,
   children,
 }: {
   lead: string;
   leadWidth: string;
   figure: string;
+  /** A fact one level below the name, between it and the figure — or nothing. */
+  note?: string | null;
   /** The row's subject — a face and a name, or a pick and where it came from. */
   children: ReactNode;
 }) {
   return (
     <li
-      className={`${CONSOLE_MILLED_WELL} relative mb-[5px] flex h-[66px] flex-col justify-center gap-2 rounded-lg px-[7px] lg:mb-1 lg:h-[46px] lg:flex-row lg:items-center lg:gap-2.5 lg:rounded-[9px] lg:px-3`}
+      className={`${CONSOLE_MILLED_WELL} relative mb-[3px] flex h-[52px] flex-col justify-center gap-[5px] rounded-[7px] px-1.5 lg:h-[38px] lg:flex-row lg:items-center lg:gap-[9px] lg:px-2.5`}
     >
-      <span className="relative flex w-full min-w-0 items-center gap-[7px] lg:contents">
+      <span className="relative flex w-full min-w-0 items-center gap-1.5 lg:contents">
         {children}
       </span>
-      <span className="relative flex w-full items-center gap-2 lg:contents">
+      <span className="relative flex w-full items-center gap-1.5 lg:contents">
         <span
-          className={`shrink-0 overflow-hidden rounded-md bg-[color:var(--recess-bg)] px-[5px] py-1 text-center font-mono text-[length:var(--fs-12)] tabular-nums text-[color:var(--billet-label)] shadow-[var(--figure-well-shadow)] lg:order-1 ${leadWidth}`}
+          className={`shrink-0 overflow-hidden rounded-[5px] bg-[color:var(--recess-bg)] px-1 py-0.5 text-center font-mono text-[length:var(--fs-11)] tabular-nums text-[color:var(--billet-label)] shadow-[var(--figure-well-shadow)] lg:order-1 ${leadWidth}`}
         >
           {lead}
         </span>
-        <span className="min-w-0 flex-1 overflow-hidden rounded-md bg-[color:var(--recess-bg)] px-[5px] py-1 text-right font-mono text-[length:var(--fs-13)] tabular-nums text-[color:var(--billet-name)] shadow-[var(--figure-well-shadow)] lg:order-4 lg:w-[74px] lg:flex-none">
+        {note && (
+          <span className="shrink-0 font-mono text-[length:var(--fs-10)] tracking-[0.1em] text-[color:var(--billet-label)] lg:order-4 lg:w-8 lg:text-right lg:text-[length:var(--fs-11)]">
+            {note}
+          </span>
+        )}
+        <span className="min-w-0 flex-1 overflow-hidden rounded-[5px] bg-[color:var(--recess-bg)] px-[5px] py-0.5 text-right font-mono text-[length:var(--fs-12-5)] tabular-nums text-[color:var(--billet-name)] shadow-[var(--figure-well-shadow)] lg:order-5 lg:w-[70px] lg:flex-none">
           {figure}
         </span>
       </span>

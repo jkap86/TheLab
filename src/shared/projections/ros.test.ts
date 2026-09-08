@@ -92,6 +92,31 @@ describe("assembleRosProjections", () => {
     assert.deepEqual(board.p1.weeks, [1, 2]);
   });
 
+  test("the team is the latest real projection's, and a no-game row leaves it null", () => {
+    // A player traded mid-span is on his new team by the last week that
+    // projects him — and it is the *week number* that decides, not the order
+    // the weeks arrived in, so the fold stays a fact about the response.
+    const weeks: RosWeek[] = [
+      { week: 5, rows: [row("p1", 5, { team: "KC" })] },
+      { week: 3, rows: [row("p1", 3, { team: "SF" })] },
+      // Week 6 is a no-game row: it carries no team and must not clear KC.
+      { week: 6, rows: [row("p1", 6, { game_id: null, stats: { adp_dd_ppr: 4 }, team: null })] },
+    ];
+    const board = assembleRosProjections(weeks);
+    assert.equal(board.p1.team, "KC");
+  });
+
+  test("a player with no real projection has no team", () => {
+    // Identity is read from any row, the team is not: a no-game row's `team`
+    // is null on the feed anyway, and a team read off one would be a claim.
+    const weeks: RosWeek[] = [
+      { week: 3, rows: [row("p1", 3, { game_id: null, stats: { adp_dd_ppr: 4 }, team: "SF" })] },
+    ];
+    const board = assembleRosProjections(weeks);
+    assert.equal(board.p1.team, null);
+    assert.equal(board.p1.name, "Test Player");
+  });
+
   test("rows without a player id are dropped whole", () => {
     const weeks: RosWeek[] = [
       {

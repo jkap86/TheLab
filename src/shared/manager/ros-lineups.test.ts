@@ -23,11 +23,11 @@ function projected(
   positions: string[],
   stats: Record<string, number>,
 ): RosProjections[string] {
-  return { player_id: id, stats, weeks: [1, 2], name: `Name ${id}`, positions };
+  return { player_id: id, stats, weeks: [1, 2], name: `Name ${id}`, positions, team: null };
 }
 
 function unprojected(id: string, positions: string[]): RosProjections[string] {
-  return { player_id: id, stats: {}, weeks: [], name: `Name ${id}`, positions };
+  return { player_id: id, stats: {}, weeks: [], name: `Name ${id}`, positions, team: null };
 }
 
 const NO_ADP = new Map<string, AdpEntry>();

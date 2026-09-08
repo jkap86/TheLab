@@ -168,11 +168,35 @@ export function usePanelCap<T extends HTMLElement>(
     const card = panel?.parentElement;
     if (!panel || !card) return null;
 
-    // The header's height *and* the panel's margin above it, as one distance:
-    // read separately, the margin is a second number to keep in step with a
-    // stylesheet, and getting it wrong overhangs the fold by exactly it.
+    // Everything of the card's height that is not the panel — the header, any
+    // margin above the panel, and the housing's own top and bottom borders —
+    // as one distance. Read separately, each is a second number to keep in
+    // step with a stylesheet, and getting one wrong overhangs the fold by
+    // exactly it.
+    //
+    // **Layout metrics, never rects.** This was a subtraction of two
+    // `getBoundingClientRect` tops, and that was right for as long as the card
+    // element here (the `<details>`) carried no transform. It carries the
+    // housing's tilt and lift now — the expanded-card pass moved the shell
+    // onto it so the panel could sit inside the housing — and a rect is the
+    // *projected* box: at `translateZ(20px)` under the list's 2400px
+    // perspective every distance reads 0.84% long. Fed back through the flex
+    // slack the summary absorbs, that was a cap shrinking by ~1px every frame
+    // the `ResizeObserver` fired, and a header growing under the reader for
+    // as long as the card stayed open. `offsetTop` and `clientTop` are
+    // transform-free.
+    //
+    // `offsetTop` is relative to the panel's `offsetParent`, which is the
+    // housing where the housing is positioned or transformed and the `<li>`
+    // where it is neither (the lineup checker's card); the two share a top
+    // edge, so the distance is the same either way, and `clientTop` adds the
+    // housing's own top border in the first case and 0 in the second. The
+    // bottom border is the rest of `offsetHeight` that `clientHeight` and the
+    // top border do not account for.
     const offset =
-      panel.getBoundingClientRect().top - card.getBoundingClientRect().top;
+      card.clientTop +
+      panel.offsetTop +
+      (card.offsetHeight - card.clientHeight - card.clientTop);
 
     let next: PanelFit;
     // **Parked is read off the stage, not off the list.** The list is marked

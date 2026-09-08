@@ -162,8 +162,10 @@ export { StampedCount } from "./ui/stamped-count";
 export {
   BilletFinish,
   CardLedge,
+  CardBilletRow,
   CardPlateRow,
   CardRule,
+  LeagueBillet,
   LeaguePlate,
   LedgeBay,
   LedgeFigure,

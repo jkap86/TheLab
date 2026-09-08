@@ -16,6 +16,16 @@ export type LineupPlayer = {
   /** Sleeper `fantasy_positions`; empty when unknown, which seats the player nowhere. */
   positions: string[];
   /**
+   * Sleeper's `team` — his NFL team's code. Null for a free agent, and for an
+   * id the feed doesn't know. Read off the projections feed, the same rows
+   * `name` and `positions` come from, and only off a row that is a real
+   * projection: a no-game row leaves it null. **Null is null, not `"FA"`** —
+   * the app's three-way grammar, a figure or a dash and never a stand-in — and
+   * the card renders nothing for it rather than an em dash, since it sits
+   * between a name and a figure where a dash reads as a missing number.
+   */
+  team: string | null;
+  /**
    * Rest-of-season projected points under the league's own scoring. **Null is
    * "no projection", not zero** — a bye-shortened total is a number, an
    * unprojected stash is not, and the fallback below exists for the second.

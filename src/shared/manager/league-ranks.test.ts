@@ -46,11 +46,11 @@ function projected(
   positions: string[],
   stats: Record<string, number>,
 ): RosProjections[string] {
-  return { player_id: id, stats, weeks: [1, 2], name: `Name ${id}`, positions };
+  return { player_id: id, stats, weeks: [1, 2], name: `Name ${id}`, positions, team: null };
 }
 
 function unprojected(id: string, positions: string[]): RosProjections[string] {
-  return { player_id: id, stats: {}, weeks: [], name: `Name ${id}`, positions };
+  return { player_id: id, stats: {}, weeks: [], name: `Name ${id}`, positions, team: null };
 }
 
 const NO_ADP = new Map<string, AdpEntry>();
@@ -70,6 +70,7 @@ function lineupFixture(): LeagueLineup {
           player_id: "a",
           name: null,
           positions: ["WR"],
+          team: null,
           points: 7.5,
           adp_value: 100,
           ktc_value: 6000,
@@ -82,6 +83,7 @@ function lineupFixture(): LeagueLineup {
         player_id: "b",
         name: null,
         positions: [],
+        team: null,
         points: 2.25,
         adp_value: null,
         ktc_value: 1500,
@@ -90,6 +92,7 @@ function lineupFixture(): LeagueLineup {
         player_id: "c",
         name: null,
         positions: [],
+        team: null,
         points: null,
         adp_value: 40,
         ktc_value: null,
@@ -115,7 +118,15 @@ function narrowableFixture(): LeagueLineup {
     points: number | null,
     adp: number | null,
     ktc: number | null,
-  ) => ({ player_id: id, name: null, positions, points, adp_value: adp, ktc_value: ktc });
+  ) => ({
+    player_id: id,
+    name: null,
+    positions,
+    team: null,
+    points,
+    adp_value: adp,
+    ktc_value: ktc,
+  });
 
   return {
     league_id: "L1",

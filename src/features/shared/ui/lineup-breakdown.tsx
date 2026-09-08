@@ -230,13 +230,17 @@ export function LineupLensKeys({
  * letter, where a headshot wants the letter **behind** it.
  *
  * `background-position: center top` because a headshot is framed head and
- * shoulders, and a centred crop of one in a 26px disc is a chin.
+ * shoulders, and a centred crop of one in a 22px disc is a chin.
+ *
+ * `lg:order-2` is the seat row's own cell order — slot, face, name, team,
+ * figure — spelled on every cell rather than left to DOM order for the reason
+ * `StandingRow` gives about its mark.
  */
 function PlayerFace({ player }: { player: LineupPlayer | null }) {
   return (
     <span
       aria-hidden
-      className="relative flex size-5 shrink-0 items-center justify-center overflow-hidden rounded-full border border-foreground/10 bg-foreground/5 font-display text-[length:var(--fs-9-6)] font-semibold text-foreground/40 lg:size-[26px] lg:text-[length:var(--fs-12)]"
+      className="relative flex size-[18px] shrink-0 items-center justify-center overflow-hidden rounded-full border border-foreground/10 bg-foreground/5 font-display text-[length:var(--fs-9)] font-semibold text-foreground/40 lg:order-2 lg:size-[22px] lg:text-[length:var(--fs-9-6)]"
     >
       {player?.name?.charAt(0).toUpperCase() ?? null}
       {player && (
@@ -278,7 +282,7 @@ function SeatName({
 
   return (
     <span
-      className={`relative min-w-0 flex-1 truncate text-[length:var(--fs-14)] text-foreground/85 ${className}`}
+      className={`relative min-w-0 flex-1 truncate text-[length:var(--fs-13)] text-foreground/85 ${className}`}
     >
       <span className="lg:hidden">{short}</span>
       <span className="hidden lg:inline">{name}</span>
@@ -294,6 +298,19 @@ function SeatName({
  * about draws an em dash and no colour at all: an absent figure has no standing
  * against a median, and painting it red would claim the worst answer in the
  * league for a player nobody has an answer about.
+ *
+ * **The NFL team sits between the name and the figure**, in a 32px right-aligned
+ * column at `lg` so the codes form a column against ragged names, and on the
+ * row's second line after the slot below it. Mono, dimmed mint — a fact about
+ * the player one level below his name and well below the figure. **An absent
+ * team renders nothing at all** rather than an em dash: it sits between a name
+ * and a figure, and a dash there reads as a missing *number*. That is the one
+ * place this row parts company with the app's three-way grammar, and it is
+ * the grammar's own reason — the dash exists to keep an absence from reading
+ * as a zero, and there is no zero for a team to be mistaken for.
+ *
+ * 38px at `lg` and 52 below it, since the expanded-card pass; the standings
+ * row opposite takes the same two heights because the lists are read across.
  */
 function SeatRow({
   player,
@@ -312,21 +329,26 @@ function SeatRow({
 
   return (
     <li
-      className={`${CONSOLE_ROW_WELL} relative mb-[5px] flex h-[66px] flex-col justify-center gap-2 rounded-lg px-[7px] lg:mb-1 lg:h-[50px] lg:flex-row lg:items-center lg:gap-2.5 lg:rounded-[9px] lg:px-3`}
+      className={`${CONSOLE_ROW_WELL} relative mb-[3px] flex h-[52px] flex-col justify-center gap-[5px] rounded-[7px] px-1.5 lg:h-[38px] lg:flex-row lg:items-center lg:gap-[9px] lg:px-2.5`}
     >
       {/* One node, two layouts: the face and the name share the first line
           below `lg` and take the row's second and third cells above it. */}
-      <span className="relative flex w-full min-w-0 items-center gap-[7px] lg:contents">
+      <span className="relative flex w-full min-w-0 items-center gap-1.5 lg:contents">
         <PlayerFace player={player} />
         <SeatName player={player} className="lg:order-3" />
       </span>
 
-      <span className="relative flex w-full items-center gap-2 lg:contents">
-        <span className="shrink-0 font-mono text-[length:var(--fs-11)] tracking-[0.1em] text-readout/62 lg:order-1 lg:w-[42px] lg:overflow-hidden lg:rounded-md lg:bg-[color:var(--figure-well-bg)] lg:px-[5px] lg:py-1 lg:text-center lg:text-[length:var(--fs-12)] lg:tracking-[0.12em] lg:shadow-[var(--figure-well-shadow)]">
+      <span className="relative flex w-full items-center gap-1.5 lg:contents">
+        <span className="shrink-0 font-mono text-[length:var(--fs-11)] tracking-[0.1em] text-readout/62 lg:order-1 lg:w-[38px] lg:overflow-hidden lg:rounded-[5px] lg:bg-[color:var(--figure-well-bg)] lg:px-1 lg:py-0.5 lg:text-center lg:tracking-[0.12em] lg:shadow-[var(--figure-well-shadow)]">
           {SLOT_LABELS[slot] ?? slot}
         </span>
+        {player?.team && (
+          <span className="shrink-0 font-mono text-[length:var(--fs-10)] tracking-[0.1em] text-readout/45 lg:order-4 lg:w-8 lg:text-right lg:text-[length:var(--fs-11)] lg:text-readout/50">
+            {player.team}
+          </span>
+        )}
         <span
-          className={`${CONSOLE_FIGURE_WELL} min-w-0 flex-1 px-[5px] py-1 text-right font-mono text-[length:var(--fs-13)] tabular-nums lg:order-4 lg:w-[74px] lg:flex-none`}
+          className={`${CONSOLE_FIGURE_WELL} min-w-0 flex-1 px-[5px] py-0.5 text-right font-mono text-[length:var(--fs-12-5)] tabular-nums lg:order-5 lg:w-[70px] lg:flex-none`}
         >
           <span style={tone ? { color: tone } : undefined}>
             {figure(value, lens)}
@@ -337,16 +359,23 @@ function SeatRow({
   );
 }
 
-/** A bench player: a face, a name, his position and what the lens says he is worth. */
+/**
+ * A bench player: a face, a name, his position, his NFL team and what the lens
+ * says he is worth. The team takes the seat row's treatment through the drawer
+ * row's `note` slot — it is the same reading about the same kind of object —
+ * in the billet's label ink rather than the mint, since a drawer row is a part
+ * rather than glass.
+ */
 function BenchRow({ player, lens }: { player: LineupPlayer; lens: Lens }) {
   return (
     <DrawerRow
       lead={player.positions[0] ?? "—"}
-      leadWidth="lg:w-[42px]"
+      leadWidth="lg:w-[38px]"
       figure={figure(lensValue(player, lens), lens)}
+      note={player.team}
     >
       <PlayerFace player={player} />
-      <span className="relative min-w-0 flex-1 truncate text-[length:var(--fs-14)] text-[color:var(--billet-name)] lg:order-3">
+      <span className="relative min-w-0 flex-1 truncate text-[length:var(--fs-13)] text-[color:var(--billet-name)] lg:order-3">
         <span className="lg:hidden">
           {player.name ? shortName(player.name) : player.player_id}
         </span>
@@ -369,8 +398,35 @@ export type BenchReading = { total: string; place: MetricRank | null };
 /** Which reading the drawer is showing. */
 type Tray = "bench" | "picks";
 
-/** The two bars' own heights, which are also what the drawer sits on. */
-const BAR_HEIGHT: Record<Tray, number> = { bench: 46, picks: 42 };
+/**
+ * The two bars' own heights — **34px at `lg` and 30 below it for the bench
+ * bar, 30 at both for the picks bar** — which are also what the drawer sits on.
+ *
+ * The drawer's `bottom` and its `max-height` are functions of the bars' sum,
+ * and the sum follows the breakpoint, so it is written as a CSS custom property
+ * on the drawer (`--bars`, in {@link BARS_VAR}) by a class per arm and the two
+ * inline values read it back: the drawer sits on its bars at every width with
+ * no measurement, and a `ResizeObserver` for two constants is the wrong tool.
+ *
+ * **Both records are spelled literally rather than templated off a number.**
+ * Tailwind finds classes by scanning source text, and a class assembled from a
+ * template literal is generated for nothing — driven, the bench bar rendered
+ * 30px at `lg` because `lg:h-[34px]` did not exist in the stylesheet. So the
+ * arithmetic is in this comment and the spelling is below, side by side: an
+ * edit to a bar's height is an edit to its class *and* to every `--bars` arm
+ * that sums it, or the drawer sits off its bars by the difference.
+ */
+const BAR_CLASS: Record<Tray, string> = {
+  bench: "h-[30px] lg:h-[34px]",
+  picks: "h-[30px] lg:h-[30px]",
+};
+
+/** The `--bars` sum per combination of bars present, in the order drawn. */
+const BARS_VAR: Record<string, string> = {
+  bench: "[--bars:30px] lg:[--bars:34px]",
+  picks: "[--bars:30px] lg:[--bars:30px]",
+  "bench,picks": "[--bars:60px] lg:[--bars:64px]",
+};
 
 /**
  * How long the contents are faded out for while one drawer becomes the other.
@@ -392,9 +448,9 @@ const SWAP_MS = 170;
  */
 const DRAWER_BAR =
   "lab-anim flex w-full cursor-pointer items-center gap-1.5 bg-[image:var(--billet-bg)] px-1.5 text-left " +
-  "font-mono text-[length:var(--fs-12)] uppercase tracking-[0.02em] shadow-[var(--standing-strip-shadow)] " +
+  "font-mono text-[length:var(--fs-11)] uppercase tracking-[0.02em] shadow-[var(--standing-strip-shadow)] " +
   "transition-colors duration-200 focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-active/60 " +
-  "lg:gap-2.5 lg:px-3 lg:text-[length:var(--fs-13)] lg:tracking-[0.14em]";
+  "lg:gap-2.5 lg:px-3 lg:text-[length:var(--fs-12-5)] lg:tracking-[0.12em]";
 
 /**
  * One of the two bars pinned to the bottom of the roster pane's glass.
@@ -432,7 +488,7 @@ function DrawerBar({
           would be read the long way round. */}
       <span
         aria-hidden
-        className={`lab-anim w-[18px] shrink-0 text-right text-[length:var(--fs-13)] text-[color:var(--billet-label)] transition-transform duration-[240ms] ease-[cubic-bezier(0.2,0.8,0.2,1)] lg:w-[22px] lg:text-[length:var(--fs-14)] ${
+        className={`lab-anim w-4 shrink-0 text-right text-[length:var(--fs-12)] text-[color:var(--billet-label)] transition-transform duration-[240ms] ease-[cubic-bezier(0.2,0.8,0.2,1)] lg:w-5 lg:text-[length:var(--fs-13)] ${
           open ? "rotate-90" : ""
         }`}
       >
@@ -509,7 +565,7 @@ export function LineupBreakdown({
   };
 
   const benchTone = rankColor(rankPercentile(bench?.place ?? null));
-  const barsHeight = bars.reduce((sum, kind) => sum + BAR_HEIGHT[kind], 0);
+  const barsVar = BARS_VAR[bars.join(",")] ?? "";
   const span = pickSpan(picks);
 
   return (
@@ -517,8 +573,12 @@ export function LineupBreakdown({
     // rises inside it, and the bars are pinned to its floor. `overflow-hidden`
     // is what keeps the drawer's own corners inside the glass's radius and what
     // stops a mid-animation drawer painting over the pane's edge.
-    <PaneGlass className="flex flex-col overflow-hidden p-0.5 lg:p-1">
-      <div className="lab-scroll-glass relative min-h-0 flex-1 overflow-y-auto overflow-x-hidden">
+    <PaneGlass className="flex flex-col overflow-hidden p-[3px]">
+      {/* `pr-[9px]`: the scrollbar's gutter, so a figure's last digit clears
+          the thumb — the standings glass makes the same measurement at its
+          own 11px, and the difference is that this scroller sits 3px inside
+          a frame that already spends some of it. */}
+      <div className="lab-scroll-glass relative min-h-0 flex-1 overflow-y-auto overflow-x-hidden pr-[9px]">
         <ul className="m-0 list-none p-0">
           {lineup.starters.map((seat, i) => (
             <SeatRow
@@ -563,9 +623,11 @@ export function LineupBreakdown({
           <div
             id={drawerId}
             inert={open === null}
-            className="lab-anim absolute inset-x-1 z-[2] overflow-hidden rounded-[0.625rem] bg-[image:var(--billet-bg)] shadow-[var(--billet-shadow),0_-22px_34px_-14px_rgba(0,0,0,0.9)] [transition:max-height_340ms_cubic-bezier(0.2,0.8,0.2,1),opacity_200ms_ease,padding_340ms_cubic-bezier(0.2,0.8,0.2,1)]"
+            className={`lab-anim absolute inset-x-[3px] z-[2] overflow-hidden rounded-[0.625rem] bg-[image:var(--billet-bg)] shadow-[var(--billet-shadow),0_-22px_34px_-14px_rgba(0,0,0,0.9)] [transition:max-height_340ms_cubic-bezier(0.2,0.8,0.2,1),opacity_200ms_ease,padding_340ms_cubic-bezier(0.2,0.8,0.2,1)] ${barsVar}`}
             style={{
-              bottom: barsHeight,
+              // The bars it stands on, as the breakpoint-aware sum `BARS_VAR`
+              // wrote onto this element — see `BAR_CLASS`.
+              bottom: "var(--bars)",
               // The bars it stands on, plus a sliver of the starters so the
               // drawer reads as *over* the list rather than as having replaced
               // it. **`max()` and not the bare `calc`**, which is what the
@@ -576,7 +638,7 @@ export function LineupBreakdown({
               // cramped drawer overflows upward instead and is clipped by the
               // glass, which shows less than it wants and never nothing.
               maxHeight: open
-                ? `max(5.75rem, calc(100% - ${barsHeight + 14}px))`
+                ? "max(5.75rem, calc(100% - var(--bars) - 14px))"
                 : 0,
               padding: open ? 4 : 0,
               opacity: open ? 1 : 0,
@@ -609,7 +671,7 @@ export function LineupBreakdown({
                 onClick={() => toggle("bench")}
                 aria-expanded={open === "bench"}
                 aria-controls={drawerId}
-                className={`${DRAWER_BAR} h-[46px] ${
+                className={`${DRAWER_BAR} ${BAR_CLASS.bench} ${
                   open === "bench"
                     ? "text-[color:var(--billet-accent)]"
                     : "text-[color:var(--billet-name)]"
@@ -630,7 +692,7 @@ export function LineupBreakdown({
                           the card's rank windows run — and neutral rather than
                           red where there is no place to report. */}
                       <span
-                        className="w-7 shrink-0 text-right tabular-nums lg:w-10"
+                        className="w-7 shrink-0 text-right tabular-nums lg:w-9"
                         style={{ color: benchTone }}
                       >
                         {bench.place ? ordinal(bench.place.rank) : "—"}
@@ -647,7 +709,7 @@ export function LineupBreakdown({
                 onClick={() => toggle("picks")}
                 aria-expanded={open === "picks"}
                 aria-controls={drawerId}
-                className={`${DRAWER_BAR} h-[42px] ${
+                className={`${DRAWER_BAR} ${BAR_CLASS.picks} ${
                   open === "picks"
                     ? "text-[color:var(--billet-accent)]"
                     : "text-[color:var(--billet-name)]"

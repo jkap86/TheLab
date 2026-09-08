@@ -4,14 +4,14 @@ import { memo, type MouseEvent } from "react";
 
 import type { LineupCheckLeague, ManagerLeague } from "@/shared/contract";
 import {
-  CardPlateRow,
+  CardBilletRow,
   CardRule,
   CONSOLE_CARD_SHELL,
   CONSOLE_HOUSING_INSET,
   CONSOLE_METAL,
   CONSOLE_WINDOW,
   LeagueConfigWindow,
-  LeaguePlate,
+  LeagueBillet,
   PlateBay,
   PlateDivider,
   rankColor,
@@ -164,7 +164,13 @@ export const LineupCheckCard = memo(function LineupCheckCard({
         <summary
           onClick={(event) => onToggle(league.league_id, event)}
           className={
-            `lab-card-3d ${CONSOLE_CARD_SHELL} pb-[1.125rem] pt-[1.875rem] flex flex-1 cursor-pointer list-none flex-col font-mono ` +
+            // `pt` clears the billet hung 16px / 18px above the edge — it
+            // rose 4px from `sm` when the plate became a billet, and the
+            // manager card made the same change. The bottom padding stays:
+            // this card's expanded half is still its own housing under the
+            // summary rather than the same stock under a groove, so there is
+            // no seam here to close.
+            `lab-card-3d ${CONSOLE_CARD_SHELL} pb-[1.125rem] pt-[1.875rem] sm:pt-[2.125rem] flex flex-1 cursor-pointer list-none flex-col font-mono ` +
             // **The gutter is 14px below `sm`**, where the card takes 18px from
             // `sm` up. Four tiles across a 362px card is what asks for it — the
             // strip is the card's full width less this inset, and the four
@@ -197,10 +203,10 @@ export const LineupCheckCard = memo(function LineupCheckCard({
 
           {/* Outside the clipping layer: the plates straddle the top edge, and
               a clip is exactly what would cut them off. */}
-          <CardPlateRow>
-            <LeaguePlate name={league.name} avatarUrl={league.avatar_url} />
+          <CardBilletRow>
+            <LeagueBillet name={league.name} avatarUrl={league.avatar_url} />
             <ProjectionPlate entry={entry} />
-          </CardPlateRow>
+          </CardBilletRow>
 
           <CardRule />
 

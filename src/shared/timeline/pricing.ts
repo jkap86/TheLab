@@ -228,6 +228,7 @@ function trimProjections(
       weeks: line.weeks,
       name: line.name,
       positions: line.positions,
+      team: line.team,
     };
   }
   return out;

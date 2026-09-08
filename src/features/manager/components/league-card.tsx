@@ -11,15 +11,15 @@ import { resolveKtcFormat } from "@/shared/ktc/board-choice";
 import { isKtcMetric, lineupColumnKey } from "@/shared/ktc/columns";
 import { resolveKtcLineup } from "@/shared/ktc/roster";
 import {
-  CardPlateRow,
+  CardBilletRow,
   CardRule,
   CONSOLE_CARD_SHELL,
   CONSOLE_METAL,
   CONSOLE_WINDOW,
   ExpandedPanel,
   ktcBoardLabel,
+  LeagueBillet,
   LeagueConfigWindow,
-  LeaguePlate,
   leagueType,
   LINEUP_METRIC_LABELS,
   ordinal,
@@ -265,12 +265,77 @@ export const LeagueCard = memo(function LeagueCard({
       <details
         open={open}
         data-lit={lit ? "" : undefined}
-        className={`group/card ${CONSOLE_METAL} flex min-w-0 flex-1 flex-col`}
+        // **The housing is the `<details>`, not the `<summary>`**, since the
+        // expanded-card pass — see the note above the summary. Everything that
+        // is the card's *object* lives here: the shell, the metal, the tilt,
+        // the lit and hover chrome, and the reduced-motion hook.
+        //
+        // **An open card is flat at `translateZ(0)`, and hovering it lifts
+        // nothing.** It was held at `translateZ(20px)` while lit and lifted to
+        // 30 under a hover, and both were the summary's alone; with the whole
+        // housing transformed, a lift is a projection of the *card* — 0.84%
+        // larger under the list's 2400px perspective — and the open card is
+        // the parked shell's exact height, so 20px of lift was a housing 3px
+        // taller than its shell and a scrollbar on a list with nothing to
+        // scroll. The halo and the lit border are what say the card is open;
+        // there is no neighbour left on the page for it to rise above. The
+        // hover lift is gated to a closed card (`:not([open])`) for the same
+        // reason, and to the summary rather than the whole housing so that a
+        // pointer crossing a closed card's edge is what lifts it — the only
+        // part of a closed card there is.
+        className={
+          `group/card lab-card-3d ${CONSOLE_CARD_SHELL} ${CONSOLE_METAL} flex min-w-0 flex-1 flex-col ` +
+          "pointer-fine:[transform-style:preserve-3d] [transform-origin:center_bottom] " +
+          "pointer-fine:[transform:translateZ(0)_rotateX(3deg)] " +
+          "pointer-fine:[&:not([open]):has(summary:hover)]:[transform:translateZ(30px)_rotateX(0deg)] " +
+          "pointer-fine:data-[lit]:[transform:translateZ(0)_rotateX(0deg)] " +
+          "transition-[transform,box-shadow,border-color] duration-[450ms] ease-[cubic-bezier(0.2,0.8,0.2,1)] " +
+          "has-[summary:hover]:border-active/45 data-[lit]:border-active/45 " +
+          "pointer-fine:[&:not([open]):has(summary:hover)]:shadow-[var(--housing-shadow),var(--card-lift-hover),var(--card-halo-hover)] " +
+          "pointer-fine:data-[lit]:shadow-[var(--housing-shadow),var(--card-lift-hover),var(--card-halo-hover)]"
+        }
       >
+        {/* Everything decorative, in the one layer that clips — and the one
+            place in the card that is *before* the summary in the tree. It is
+            the housing's layer now rather than the summary's, so the glow, the
+            floor and the edge light cover the whole card, open half included,
+            rather than ending at the seam. First rather than last so it paints
+            under everything: a positioned `z-auto` span is painted in tree
+            order among its siblings' positioned content, and the summary and
+            the panel both come after it. (A `z-index` would have done the same
+            and needed a stacking context on the housing to be contained by;
+            `isolation: isolate` is a grouping value that flattens `preserve-3d`,
+            and the transform that would otherwise provide one is
+            `pointer-fine:` only.) The browser reads the *first summary child*
+            as the disclosure whatever precedes it.
+
+            The sheen and the floor only ever move under a hover, so they stay
+            out of the tree entirely on a coarse pointer rather than sitting
+            there as gradients nobody sees. */}
+        <span
+          aria-hidden
+          className="pointer-events-none absolute inset-0 overflow-hidden rounded-[inherit]"
+        >
+          <span className="lab-anim absolute inset-y-0 left-0 hidden w-[55%] -translate-x-[180%] -skew-x-12 bg-[image:var(--card-sheen)] transition-transform duration-[900ms] ease-out group-hover/card:translate-x-[450%] pointer-fine:block" />
+          <span className="absolute -inset-x-1/4 -bottom-[8%] hidden h-[62%] origin-bottom bg-[image:var(--card-floor)] opacity-40 transition-opacity duration-[450ms] [mask-image:linear-gradient(to_top,#000,transparent_72%)] [transform:perspective(320px)_rotateX(66deg)] group-hover/card:opacity-100 group-data-[lit]/card:opacity-100 pointer-fine:block" />
+          <span className="absolute -bottom-[45%] left-1/2 h-[85%] w-[120%] -translate-x-1/2 bg-[radial-gradient(closest-side,var(--accent-glow),transparent_75%)] opacity-30 transition-opacity duration-[450ms] group-hover/card:opacity-80 group-data-[lit]/card:opacity-80" />
+          <span className="absolute inset-x-[18%] top-0 h-px bg-[image:var(--card-edge-light)] opacity-0 transition-opacity duration-[450ms] group-hover/card:opacity-100 group-data-[lit]/card:opacity-100" />
+        </span>
         <summary
           onClick={(event) => onToggle(league.league_id, event)}
+          // **The summary is the card's header and nothing else.** It used to
+          // carry the housing — the shell, the tilt, the hover lift — and the
+          // expanded half was a sibling *under* it: a second housing below the
+          // first, which is the "card inside a card" the expanded-card pass
+          // closed. With the shell on the `<details>` the summary is the top
+          // half of one part and the panel the bottom half, and the groove
+          // between them is a cut in one piece of stock. What stays here is
+          // what a header owns: the inset, the `preserve-3d` its own planes
+          // project through (a `preserve-3d` parent is what carries the
+          // housing's context down to the windows' `translateZ`), and the
+          // focus ring, since the summary is the element a keyboard lands on.
           className={
-            `lab-card-3d ${CONSOLE_CARD_SHELL} flex flex-1 cursor-pointer list-none flex-col font-mono ` +
+            "relative flex flex-1 cursor-pointer list-none flex-col font-mono " +
             // **The gutter is 14px below `sm`**, where the card takes 18px from
             // `sm` up. Four windows across a 362px card is what asks for it —
             // the strip is the card's full width less this inset, and the four
@@ -288,54 +353,41 @@ export const LeagueCard = memo(function LeagueCard({
             // one number clears it in every case and there is nothing left to
             // branch on.
             //
-            // **The whole inset is smaller below `sm`** — `26 / 14 / 14`
-            // against the desktop `30 / 18 / 18` — which is the same argument
+            // **The whole inset is smaller below `sm`** — `30 / 14 / 14`
+            // against the desktop `34 / 18 / 18` — which is the same argument
             // as the gutter one line down, spent on the other two axes. The
             // card carries four parts on a phone (the settings strip, the
             // standing, the four rank windows and, open, the browser under
-            // them) and every one of them wants the width; 26px still clears a
-            // plate hung 13px above the edge with 13 to spare, which is what
-            // the top padding is *for* rather than a rhythm it happens to sit
-            // on.
-            "px-3.5 pb-3.5 pt-[1.625rem] sm:px-[1.125rem] sm:pb-[1.125rem] sm:pt-[1.875rem] " +
-            "pointer-fine:[transform-style:preserve-3d] [transform-origin:center_bottom] " +
-            "pointer-fine:[transform:translateZ(0)_rotateX(3deg)] " +
-            "pointer-fine:hover:[transform:translateZ(30px)_rotateX(0deg)] " +
-            "pointer-fine:group-data-[lit]/card:[transform:translateZ(20px)_rotateX(0deg)] " +
-            "transition-[transform,box-shadow,border-color] duration-[450ms] ease-[cubic-bezier(0.2,0.8,0.2,1)] " +
-            "hover:border-active/45 group-data-[lit]/card:border-active/45 " +
-            "pointer-fine:hover:shadow-[var(--housing-shadow),var(--card-lift-hover),var(--card-halo-hover)] " +
-            "pointer-fine:group-data-[lit]/card:shadow-[var(--housing-shadow),var(--card-lift-hover),var(--card-halo-hover)] " +
+            // them) and every one of them wants the width. The top padding is
+            // what clears the billet hung 16px / 18px above the edge with the
+            // same 13–16px to spare a plate used to get, which is what it is
+            // *for* rather than a rhythm it happens to sit on; it rose 4px at
+            // both widths when the plate became a billet.
+            //
+            // **The bottom padding is 0 while the card is open.** The expanded
+            // half is no longer a housing set 14px into the card — it is the
+            // same piece of stock under a milled groove, and the groove is
+            // the panel's first child (see `ExpandedPanel`). So the summary
+            // hands its bottom inset to the panel for as long as there is a
+            // panel; shut, a card is one housing and keeps it, or the rank
+            // windows would sit flush on its bottom edge. `group-open` rather
+            // than `group-data-[lit]` because the padding has to hold through
+            // the collapse: `lit` goes off as the close *begins*, and 18px
+            // returning under a panel still clipping shut is a jump.
+            "px-3.5 pb-3.5 pt-[1.875rem] sm:px-[1.125rem] sm:pb-[1.125rem] sm:pt-[2.125rem] group-open/card:pb-0 " +
+            "pointer-fine:[transform-style:preserve-3d] " +
             "focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-active/60"
           }
         >
-          {/* Everything decorative, in the one layer that clips. */}
-          <span
-            aria-hidden
-            className="pointer-events-none absolute inset-0 overflow-hidden rounded-[inherit]"
-          >
-            {/* The checker's four, verbatim. The billet pass had cut this to
-                three — the graticule floor and the accent underglow went with
-                it, on the argument that the card should spend teal twice and
-                no more — and they come back here because the two cards draw
-                one object and this is the object. The grain went the other
-                way: it is `CONSOLE_METAL`'s own background layer now, rather
-                than a fourth span over a card that had no finish of its own.
 
-                The sheen and the floor only ever move under a hover, so they
-                stay out of the tree entirely on a coarse pointer rather than
-                sitting there as gradients nobody sees. */}
-            <span className="lab-anim absolute inset-y-0 left-0 hidden w-[55%] -translate-x-[180%] -skew-x-12 bg-[image:var(--card-sheen)] transition-transform duration-[900ms] ease-out group-hover/card:translate-x-[450%] pointer-fine:block" />
-            <span className="absolute -inset-x-1/4 -bottom-[8%] hidden h-[62%] origin-bottom bg-[image:var(--card-floor)] opacity-40 transition-opacity duration-[450ms] [mask-image:linear-gradient(to_top,#000,transparent_72%)] [transform:perspective(320px)_rotateX(66deg)] group-hover/card:opacity-100 group-data-[lit]/card:opacity-100 pointer-fine:block" />
-            <span className="absolute -bottom-[45%] left-1/2 h-[85%] w-[120%] -translate-x-1/2 bg-[radial-gradient(closest-side,var(--accent-glow),transparent_75%)] opacity-30 transition-opacity duration-[450ms] group-hover/card:opacity-80 group-data-[lit]/card:opacity-80" />
-            <span className="absolute inset-x-[18%] top-0 h-px bg-[image:var(--card-edge-light)] opacity-0 transition-opacity duration-[450ms] group-hover/card:opacity-100 group-data-[lit]/card:opacity-100" />
-          </span>
-
-          {/* Outside the clipping layer: the plates straddle the top edge, and
-              a clip is exactly what would cut them off. */}
-          <CardPlateRow>
-            <LeaguePlate name={league.name} avatarUrl={league.avatar_url} />
-          </CardPlateRow>
+          {/* Outside the clipping layer: the billet straddles the top edge, and
+              a clip is exactly what would cut it off. It is a billet rather
+              than a plate since the expanded-card pass — the name engraved in
+              chrome on the same stock as the two strips under it. See
+              `LeagueBillet` for what that replaced and why. */}
+          <CardBilletRow>
+            <LeagueBillet name={league.name} avatarUrl={league.avatar_url} />
+          </CardBilletRow>
 
           <CardRule />
 

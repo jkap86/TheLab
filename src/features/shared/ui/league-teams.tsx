@@ -175,7 +175,7 @@ export function LeagueTeams({ entry }: { entry: LeagueLineupEntry }) {
     // item refuses to go below its content, the cap has nothing to bite on, and
     // a twelve-team table pushes the page exactly as it did before.
     <div className="flex min-h-0 flex-1 flex-col pointer-fine:[transform-style:preserve-3d]">
-      <div className="flex min-h-0 flex-1 items-stretch gap-1.5 sm:gap-3 lg:gap-[1.125rem] pointer-fine:[transform:translateZ(7px)]">
+      <div className="flex min-h-0 flex-1 items-stretch gap-1.5 sm:gap-2.5 lg:gap-3.5 pointer-fine:[transform:translateZ(7px)]">
         <Pane>
           <PaneLedge>
             {/* A labelled recess with the menu raised out of it, on the pane it
@@ -183,7 +183,7 @@ export function LeagueTeams({ entry }: { entry: LeagueLineupEntry }) {
                 none of its own — but it keeps an `sr-only` one, because a
                 screen reader reaches the select without the text beside it. */}
             <label
-              className={`${CONSOLE_PANE_TRACK} flex min-w-0 items-center gap-1.5 p-[3px] pl-[9px] lg:gap-2.5 lg:p-1 lg:pl-3.5`}
+              className={`${CONSOLE_PANE_TRACK} flex min-w-0 items-center gap-1.5 p-[3px] pl-[9px] lg:gap-2.5 lg:pl-3`}
             >
               <span
                 aria-hidden
@@ -221,18 +221,18 @@ export function LeagueTeams({ entry }: { entry: LeagueLineupEntry }) {
             {/* The column heads, in the rows' own widths. Below `lg` the pane
                 is ~165px and the only head worth the line is the list's own
                 name — the place and the total are labelled by their shape. */}
-            <div className="mt-1.5 flex items-center gap-2.5 px-[3px] lg:mt-0 lg:px-1 lg:pb-px lg:pt-[9px]">
+            <div className="mt-1.5 flex items-center gap-[9px] px-[3px] lg:mt-0 lg:px-1 lg:pb-px lg:pt-[7px]">
               <span
                 aria-hidden
-                className="hidden w-[44px] shrink-0 text-center font-mono text-[length:var(--fs-10)] tracking-[0.14em] text-[color:var(--billet-label)] lg:block"
+                className="hidden w-10 shrink-0 text-center font-mono text-[length:var(--fs-10)] tracking-[0.14em] text-[color:var(--billet-label)] lg:block"
               >
                 #
               </span>
-              <span aria-hidden className="hidden w-5 shrink-0 @lg:w-6 lg:block" />
+              <span aria-hidden className="hidden w-5 shrink-0 lg:block" />
               <PaneHead className="min-w-0 flex-1">Teams</PaneHead>
               <span
                 aria-hidden
-                className="hidden w-[86px] shrink-0 text-right font-mono text-[length:var(--fs-10)] uppercase tracking-[0.14em] text-[color:var(--billet-label)] lg:block"
+                className="hidden w-[78px] shrink-0 text-right font-mono text-[length:var(--fs-10)] uppercase tracking-[0.14em] text-[color:var(--billet-label)] lg:block"
               >
                 Total
               </span>
@@ -242,8 +242,18 @@ export function LeagueTeams({ entry }: { entry: LeagueLineupEntry }) {
           {/* This pane's glass *is* the scroller — there is nothing pinned to
               it, unlike the roster's. `overflow-x-hidden` is required: the
               row's cells are fixed widths and would otherwise produce a
-              horizontal bar inside a pane that has no room for one. */}
-          <PaneGlass className="lab-scroll-glass overflow-y-auto overflow-x-hidden p-0.5 lg:p-1">
+              horizontal bar inside a pane that has no room for one.
+
+              **The right gutter is the scrollbar's own 11px**, so a six-figure
+              total clears the thumb — the last digit sat under it. It is a
+              padding and not `scrollbar-gutter: stable`, which
+              `.lab-scroll-glass` deliberately reserves nothing for: 11px off a
+              165px phone pane on every card is what that decision was made
+              against, and a padding is spent only where a bar can actually
+              be. Four longhands rather than `p-[3px] pr-[11px]` — a shorthand
+              beside a longhand of the same property is settled by Tailwind's
+              emit order, the trap the console constants are split to avoid. */}
+          <PaneGlass className="lab-scroll-glass overflow-y-auto overflow-x-hidden pb-[3px] pl-[3px] pr-[11px] pt-[3px]">
             <ul className="relative m-0 list-none p-0">
               {teams.map((team, i) => (
                 <StandingRow
@@ -276,7 +286,7 @@ export function LeagueTeams({ entry }: { entry: LeagueLineupEntry }) {
             {/* Whose roster the seats below belong to. It is the pane's own
                 head rather than a comparison of two teams: the ghost column
                 that needed attributing went with the bars. */}
-            <div className="mt-1.5 flex items-baseline gap-2.5 px-[3px] lg:mt-0 lg:px-1 lg:pb-px lg:pt-[9px]">
+            <div className="mt-1.5 flex items-baseline gap-[9px] px-[3px] lg:mt-0 lg:px-1 lg:pb-px lg:pt-[7px]">
               <PaneHead className="min-w-0 flex-1">{selected.name}</PaneHead>
               <span
                 aria-hidden
@@ -366,7 +376,7 @@ function LensControl({
       </label>
 
       <div
-        className={`${CONSOLE_PANE_TRACK} hidden min-w-0 items-center gap-2 p-1 pl-3.5 lg:flex`}
+        className={`${CONSOLE_PANE_TRACK} hidden min-w-0 items-center gap-2 p-[3px] pl-3 lg:flex`}
       >
         <span
           aria-hidden
@@ -419,38 +429,51 @@ function StandingRow({
         type="button"
         onClick={onSelect}
         aria-pressed={selected}
-        className={`${CONSOLE_ROW_WELL} relative mb-[5px] flex h-[66px] w-full flex-col justify-center gap-2 rounded-lg px-[7px] text-left transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-active/60 lg:mb-1 lg:h-[50px] lg:flex-row lg:items-center lg:gap-2.5 lg:rounded-[9px] lg:px-3 ${
+        // 38px at `lg` and 52 below it, since the expanded-card pass — the two
+        // heights the seat row opposite takes, because the two lists are read
+        // across. The selected overlay and the manager's lit edge keep their
+        // insets against the smaller radius.
+        className={`${CONSOLE_ROW_WELL} relative mb-[3px] flex h-[52px] w-full flex-col justify-center gap-[5px] rounded-[7px] px-1.5 text-left transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-active/60 lg:h-[38px] lg:flex-row lg:items-center lg:gap-[9px] lg:px-2.5 ${
           selected ? "" : "hover:bg-foreground/[0.04]"
         }`}
       >
         {selected && (
           <span
             aria-hidden
-            className="pointer-events-none absolute inset-x-0 inset-y-[2px] rounded-lg bg-[color:var(--row-well-selected-bg)] shadow-[var(--row-well-selected-shadow)]"
+            className="pointer-events-none absolute inset-x-0 inset-y-[2px] rounded-[7px] bg-[color:var(--row-well-selected-bg)] shadow-[var(--row-well-selected-shadow)]"
           />
         )}
         {team.is_manager && (
           <span
             aria-hidden
-            className="pointer-events-none absolute inset-y-[5px] left-0 w-[3px] rounded-full bg-[image:var(--lit-bar-bg)] shadow-[0_0_9px_var(--accent-glow)]"
+            className="pointer-events-none absolute inset-y-1 left-0 w-[3px] rounded-full bg-[image:var(--lit-bar-bg)] shadow-[0_0_9px_var(--accent-glow)] lg:inset-y-[5px]"
           />
         )}
 
         {/* One node, two layouts: the name shares its line with the mark below
             `lg` and takes the third cell of the row above it. `lg:contents`
             rather than two trees — the alternative renders every team twice and
-            reads each of them twice to anything listening. */}
+            reads each of them twice to anything listening.
+
+            **Every cell names its `lg` order**, the mark included: place (1),
+            mark (2), name (3), total (4), which is the order the column heads
+            on the ledge are laid out in. The mark used to carry no order at
+            all and so sorted to 0 — ahead of the place cell, under a `#` head
+            that promised the place first. */}
         <span className="relative flex w-full min-w-0 items-center gap-1.5 lg:contents">
           {/* **The letter mount, always** — `LeagueTeam` carries no avatar,
               and that is what the mark is: a lit initial is a claim about an
               image that was never fetched. `Avatar`'s fallback is exactly this
               object (a bordered `foreground/5` disc with a semibold letter at
               `foreground/40`), so it is the component rather than a hand-drawn
-              copy of its own fallback, and the mark grows with the *pane*
-              rather than the viewport — see `Pane`'s `@container`. */}
-          <Avatar url={null} name={team.name} size="sm" />
+              copy of its own fallback. `xs` is the 20px / 18px the slimmer row
+              holds, and it turns on `lg` with the row rather than with the
+              pane — see `Avatar`. */}
+          <span className="contents lg:order-2 lg:block lg:shrink-0">
+            <Avatar url={null} name={team.name} size="xs" />
+          </span>
           <span
-            className={`relative min-w-0 flex-1 truncate text-[length:var(--fs-14)] lg:order-3 ${
+            className={`relative min-w-0 flex-1 truncate text-[length:var(--fs-13)] lg:order-3 ${
               team.is_manager
                 ? "font-semibold text-readout [text-shadow:var(--readout-text-glow)]"
                 : "text-foreground/86"
@@ -460,12 +483,12 @@ function StandingRow({
           </span>
         </span>
 
-        <span className="relative flex w-full items-center justify-between gap-[7px] lg:contents">
-          <span className="shrink-0 font-mono text-[length:var(--fs-11)] tabular-nums text-readout-label lg:order-1 lg:min-w-[44px] lg:overflow-hidden lg:rounded-md lg:bg-[color:var(--figure-well-bg)] lg:px-[5px] lg:py-1 lg:text-center lg:text-readout-line lg:shadow-[var(--figure-well-shadow)]">
+        <span className="relative flex w-full items-center justify-between gap-1.5 lg:contents">
+          <span className="shrink-0 font-mono text-[length:var(--fs-11)] tabular-nums text-readout-label lg:order-1 lg:w-10 lg:overflow-hidden lg:rounded-[5px] lg:bg-[color:var(--figure-well-bg)] lg:px-1 lg:py-0.5 lg:text-center lg:text-readout-line lg:shadow-[var(--figure-well-shadow)]">
             {ordinal(place)}
           </span>
           <span
-            className={`${CONSOLE_FIGURE_WELL} shrink-0 px-[5px] py-1 text-right font-mono text-[length:var(--fs-12)] tabular-nums lg:order-4 lg:w-[86px] lg:text-[length:var(--fs-13)]`}
+            className={`${CONSOLE_FIGURE_WELL} shrink-0 px-[5px] py-0.5 text-right font-mono text-[length:var(--fs-12)] tabular-nums lg:order-4 lg:w-[78px] lg:text-[length:var(--fs-12-5)]`}
           >
             {/* The colour rides an inner span so it tints the figure rather
                 than the channel the figure sits in. */}

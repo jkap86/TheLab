@@ -137,6 +137,8 @@ export type TimelineProjectionPayload = {
   weeks: number[];
   name: string | null;
   positions: string[];
+  /** His NFL team off the latest projection, or null — see `LineupPlayer.team`. */
+  team: string | null;
 };
 
 /** One pick cell, resolved — `PickCell` on the wire. */

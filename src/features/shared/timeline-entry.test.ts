@@ -24,6 +24,7 @@ const pricing: NonNullable<RosterTimelinePayload["pricing"]> = {
       weeks: [1],
       name: "Star",
       positions: ["QB"],
+      team: null,
     },
     scrub: {
       player_id: "scrub",
@@ -31,6 +32,7 @@ const pricing: NonNullable<RosterTimelinePayload["pricing"]> = {
       weeks: [1],
       name: "Scrub",
       positions: ["QB"],
+      team: null,
     },
   },
   adp: { star: { board: "full", adp: 1 } },

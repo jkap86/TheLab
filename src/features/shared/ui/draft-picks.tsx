@@ -97,7 +97,7 @@ export function PickRows({ picks }: { picks: readonly RosterPick[] }) {
           leadWidth="lg:w-[54px]"
           figure={pick.value !== null ? pick.value.toLocaleString("en-US") : "—"}
         >
-          <span className="relative min-w-0 flex-1 truncate text-[length:var(--fs-14)] lg:order-3">
+          <span className="relative min-w-0 flex-1 truncate text-[length:var(--fs-13)] lg:order-3">
             {/* Lit where the pick came from somebody else — the pills' own
                 rule, and the one thing about a portfolio that is not simply a
                 list of rounds. */}

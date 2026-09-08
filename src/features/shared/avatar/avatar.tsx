@@ -6,6 +6,11 @@
  * stays at its base size. `lg` and `xl` are fixed and need no container.
  */
 const SIZES = {
+  // A standings row's mark since the expanded-card pass slimmed the rows to
+  // 38px: 20px at `lg` and 18 below it. Viewport-gated rather than container-
+  // gated like `sm`, because the row it labels turns its layout on `lg` and
+  // the mark has to turn with the row rather than with the pane around it.
+  xs: "h-[18px] w-[18px] text-[length:var(--fs-9)] lg:h-5 lg:w-5 lg:text-[length:var(--fs-9-6)]",
   sm: "h-5 w-5 text-[length:var(--fs-9-6)] @lg:h-6 @lg:w-6 @lg:text-[length:var(--fs-12)]",
   md: "h-7 w-7 text-[length:var(--fs-12)] @lg:h-9 @lg:w-9 @lg:text-[length:var(--fs-14)]",
   // An identity plate: big enough to anchor a card, small enough to share a
