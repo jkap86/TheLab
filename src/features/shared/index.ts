@@ -148,9 +148,13 @@ export type { LeagueLineupState } from "./use-league-lineup";
 export { useManagerLeagues } from "./use-manager-leagues";
 export type { ManagerLeaguesState } from "./use-manager-leagues";
 export { ThemeToggle } from "./theme-toggle";
-// Two identity headers, one content: the plate the lineup checker draws and
-// the billet `/manager` does. Siblings rather than a variant — see the module.
+// Two identity headers, one content: the billet both `/manager` and the
+// lineup checker draw now, and the plate that has no caller since the checker
+// took the billet. Siblings rather than a variant — see the module.
 export { ManagerBillet, ManagerPlate } from "./ui/manager-plate";
+// One count stamped into a billet. It came out of `season-summary.tsx` when the
+// lineup checker's header took the billet — a second reader of the same well.
+export { StampedCount } from "./ui/stamped-count";
 // The console card's header, shared by all four league cards — see the module.
 // `CardLedge` and the bays under it are the manager card's own arrangement of
 // the same header, and live beside the plates for the same reason the plates

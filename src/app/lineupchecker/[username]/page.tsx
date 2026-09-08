@@ -22,16 +22,36 @@ export default async function LineupCheckerPage({
       <PageShell width="console">
         {/* The heading is passed in rather than owned by `LineupCheckerHome`,
             which is a client component: this keeps the page's one piece of static
-            copy on the server side of the boundary. It is the plate's eyebrow,
+            copy on the server side of the boundary. It is the billet's eyebrow,
             not its headline — the headline is the manager's display name, which
             only exists once the stream has answered. */}
         <LineupCheckerHome
           username={username}
           heading={
-            // A `span`, not a heading: the page's one `<h1>` is the engraved name
-            // inside the plate, and this sits above it as an eyebrow.
-            <span className="font-mono text-[length:var(--fs-9)] uppercase tracking-[0.16em] text-foreground/60 sm:text-[length:var(--fs-11)]">
-              Lineup Checker
+            // A `span`, not a heading: the page's one `<h1>` is the manager's
+            // name on the billet, and this sits above it as an eyebrow.
+            //
+            // It carries no ink and no size of its own, on `/manager`'s page's
+            // terms: the header owns the eyebrow's treatment — it is a caption
+            // stamped on metal there, and the season rendered beside this word
+            // has to be inked with it rather than to match it. What crosses
+            // this seam is the copy, which is the one thing that has to stay on
+            // the server side of it.
+            //
+            // The copy is two spellings switched by the cascade, which is the
+            // rack's own `Tool.short` rule at the eyebrow's grain: below `sm`
+            // the billet's name column shares its row with the Filters and
+            // Clear keys and is ~116px at 390, where `Lineup Checker · 2026`
+            // wants ~150 — rendered, it broke inside the tool's name and left
+            // the middot orphaned on the line above the year. `Lineups` is
+            // the word the rack's readout already uses at exactly these
+            // widths, so the page and the rack name the tool the same way on
+            // a phone. `whitespace-nowrap` is what keeps a break from landing
+            // inside either spelling; the season beside it is its own span
+            // and drops whole if it has to.
+            <span className="whitespace-nowrap">
+              <span className="sm:hidden">Lineups</span>
+              <span className="hidden sm:inline">Lineup Checker</span>
             </span>
           }
         />
