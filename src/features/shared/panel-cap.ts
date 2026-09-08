@@ -64,8 +64,13 @@ export const SHELL_BREATH = 16;
  * The park is one discrete layout and cannot be made cheap, so it happens once,
  * on the press, and the card is flown from where it was to where it now is —
  * compositor work, which no amount of list is able to block.
+ *
+ * **A second is a chosen feel, not a measurement.** Lengthening it costs
+ * nothing — the park it follows is already done and the flight itself is one
+ * transform — so the number buys how long the card takes to travel and nothing
+ * else.
  */
-export const FLIGHT_MS = 340;
+export const FLIGHT_MS = 1000;
 export const FLIGHT_EASE = "cubic-bezier(0.22, 1, 0.36, 1)";
 
 /**
@@ -79,10 +84,17 @@ export const FLIGHT_EASE = "cubic-bezier(0.22, 1, 0.36, 1)";
  * already taken that off the screen. So the panel stands at its final size from
  * its first frame, and both directions are opacity, a small rise and a clip —
  * all of which the compositor owns.
+ *
+ * **A second each, on the flight's argument: neither length is a
+ * measurement.** What a longer one spends is the reader's time before the panel
+ * settles and before a closing card lets go, rather than any work. Keep
+ * `COLLAPSE_MS` and the collapse animation one number — it is also the timer
+ * that shuts the disclosure, so a shorter timer would cut the sweep off and a
+ * longer one would leave a finished card on screen.
  */
-export const EXPAND_MS = 260;
+export const EXPAND_MS = 1000;
 export const EXPAND_EASE = "cubic-bezier(0.2, 0.8, 0.2, 1)";
-export const COLLAPSE_MS = 240;
+export const COLLAPSE_MS = 1000;
 export const COLLAPSE_EASE = "cubic-bezier(0.4, 0, 0.2, 1)";
 
 /**

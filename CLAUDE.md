@@ -9439,6 +9439,13 @@ account whose panels hold real solves, and whether unmounting a closed card's
 browser is felt as losing the selected team on a card a reader opens, closes and
 opens again.
 
+**The three durations are a second each since** — flight, unfold and collapse —
+where the run above measured them at 340/260/240ms. Every figure in that
+Verified block is from that run and is a measurement of the *work*, which the
+change does not touch: all three animations are compositor-owned and the park is
+one discrete layout spent on the press, so length is the one thing about them
+that is free. What a second buys is a card that travels rather than arrives.
+
 ## The identity plate became a billet, and the win rate the hero
 
 `/manager`'s header was the one object on the page not made of metal. Every
