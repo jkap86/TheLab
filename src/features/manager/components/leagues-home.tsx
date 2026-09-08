@@ -514,11 +514,10 @@ export function LeaguesHome({
 
       {/* The drawers hide their own state once closed, so the narrowing they
           applied has to be named somewhere the reader can see and undo it. */}
-      {/* `contents` at rest so the page's layout is what it was; a block while
-          it fades, because opacity has no effect on an element with no box —
-          and a block wrapper with no padding or border lays out its children
-          exactly as `contents` did. */}
-      <div className={card.chromeClass || "contents"}>
+      {/* `contents` at rest so the page's layout is what it was; the
+          stylesheet gives it a box for as long as it is fading, because opacity
+          has no effect on an element that has none. */}
+      <div className={`contents ${card.chromeClass}`}>
         <SubjectTokens
           subjects={subjects}
           names={subjectName}

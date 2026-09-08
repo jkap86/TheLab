@@ -47,7 +47,7 @@ export function ExpandedPanel({
   /** Whether it is closing: open for as long as the collapse takes. */
   closing: boolean;
 }) {
-  const { ref, style } = usePanelCap<HTMLDivElement>(open, closing);
+  const { ref, style, mounted } = usePanelCap<HTMLDivElement>(open, closing);
 
   return (
     <div
@@ -64,7 +64,11 @@ export function ExpandedPanel({
       className={`${CONSOLE_HOUSING_INSET_SHELL} mt-3.5 flex flex-col rounded-[0.875rem] p-1.5 sm:p-3 pointer-fine:[perspective:1400px]`}
       style={style}
     >
-      {children}
+      {/* **Nothing is rendered while the card is shut** — see `usePanelCap`'s
+          `mounted` for the measurement. The children are still *created* by the
+          caller either way, which is only a descriptor object; what this saves
+          is mounting the subtree they describe. */}
+      {mounted ? children : null}
     </div>
   );
 }

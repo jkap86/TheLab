@@ -185,12 +185,12 @@ export function TradesHome({
           what it was when nothing is open, and none of these is unmounted: the
           two dialogs keep their drafts and the search panel its query.
 
-          `chromeClass` rather than `parked`: it fades the six out during the
-          settle and in again on the return, and is `hidden` in between. It is a
-          block while it fades, since opacity has no effect on an element with
-          no box, and a block wrapper with neither padding nor border lays its
-          children out exactly as `contents` did. */}
-      <div className={card.chromeClass || "contents"}>
+          `chromeClass` is a constant that the stylesheet reads against the
+          stage on the `<main>`: it fades the six out during the settle and in
+          again on the return, and is `hidden` in between. It takes a box for as
+          long as it is fading, since opacity has no effect on an element with
+          none. */}
+      <div className={`contents ${card.chromeClass}`}>
         <header className="relative flex flex-wrap items-center gap-4">
           <div className="min-w-0">
             {heading}

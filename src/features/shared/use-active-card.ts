@@ -13,14 +13,13 @@ import {
 
 import {
   COLLAPSE_MS,
-  PARK_SETTLE_MS,
+  FLIGHT_EASE,
+  FLIGHT_MS,
   PLATE_OVERHANG,
   SHELL_BREATH,
-  STAND_BACK_MS,
   measureFreezeTop,
   parkedShell,
   prefersReducedMotion,
-  scrollEase,
 } from "./panel-cap";
 
 /**
@@ -118,102 +117,88 @@ export type ActiveCard = {
   /** Close whatever is open, from anywhere. */
   close: () => void;
   /**
-   * Spread onto the list. While parked it marks the list as the shell, which is
-   * what stands every other card down (`globals.css`) and what the panel
-   * measures itself against (`usePanelCap`). Its *box* is written beside the
-   * `<main>`'s padding rather than rendered — see the module note. Either side
-   * of the park it carries the stage instead — settling, or returning — which
-   * is what the other cards fade on.
+   * Spread onto the list. **A constant**, which is the whole point of it: it
+   * marks the list for the stylesheet and for {@link usePanelCap}, and the
+   * *stage* is written onto the page's `<main>` imperatively rather than
+   * rendered — see {@link ActiveCard.chromeClass} and the module note.
    */
   shellProps: ShellProps;
   /**
    * For everything on the page that is not the list: the header, a rule, a
-   * status pill. Empty at rest; a fade-out class while the card settles;
-   * `hidden` while it is parked; a fade-in class while the page returns. A
-   * page composes it onto each of those rather than reading `parked`, so the
-   * header goes the way the other cards go rather than cutting to nothing
-   * while they fade.
+   * status pill. **A constant too**, and for a measured reason.
+   *
+   * It used to be the stage as a class — `lab-stand-down`, `hidden`,
+   * `lab-stand-back` — which meant every stage change re-rendered the page, and
+   * a page is a hundred league cards. Measured on a hundred-card fixture, one
+   * such render blocked the main thread for 50–90ms and a close spent four of
+   * them: 402ms of blocking across a 300ms animation, so the animation ran at
+   * about six frames. The stage is a *presentational* fact with exactly one
+   * writer, which is the same argument the scroll lock and the shell's box are
+   * already DOM writes by — so it is one attribute on the `<main>` and the
+   * stylesheet does the rest, and a page renders only when the open card
+   * actually changes.
    */
   chromeClass: string;
 };
 
-/** Where the page is between at rest and parked, on the way in or out. */
-type Stage = "idle" | "settling" | "parked" | "returning";
+/**
+ * Where the page is: at rest, or with one card holding the screen.
+ *
+ * **There were four**, `settling` and `returning` either side of the park,
+ * because the page used to scroll the card into place over ~340ms and only
+ * then stand the list down. That is what put the list's own layout — hiding a
+ * hundred cards, then showing them again — *inside* the animation: measured on
+ * a hundred-card fixture, 139ms of blocked main thread landing at +283ms and
+ * +361ms of a 340ms walk, and the same again on the way back. The park is one
+ * discrete layout and it cannot be made cheap, so it happens **once, on the
+ * press**, and what moves afterwards is a transform on the one card. See
+ * {@link ActiveCard.parked}.
+ */
+type Stage = "idle" | "parked";
 
-type ShellProps = {
-  "data-card-shell"?: string;
-  "data-card-settling"?: string;
-  "data-card-returning"?: string;
-};
+type ShellProps = { "data-card-list": string };
 
-const SHELL_PROPS: Record<Stage, ShellProps> = {
-  idle: {},
-  settling: { "data-card-settling": "" },
-  parked: { "data-card-shell": "" },
-  returning: { "data-card-returning": "" },
-};
+/** Marks the list for the stylesheet and for the panel's own measurement. */
+const SHELL_PROPS: ShellProps = { "data-card-list": "" };
 
-const CHROME_CLASS: Record<Stage, string> = {
-  idle: "",
-  settling: "lab-stand-down",
-  parked: "hidden",
-  returning: "lab-stand-back",
-};
+/**
+ * Marks the page's own chrome — header, rule, pills — for the stylesheet.
+ *
+ * What it does is decided by the stage on the `<main>` above it, so the class
+ * never changes and neither does the element that carries it.
+ */
+const CHROME_CLASS = "lab-card-chrome";
+
+/** The one attribute the stylesheet reads, and the one writer of it. */
+function writeStage(main: Element | null | undefined, stage: Stage): void {
+  if (!(main instanceof HTMLElement)) return;
+  if (stage === "idle") delete main.dataset.cardStage;
+  else main.dataset.cardStage = stage;
+}
 
 /** `useLayoutEffect` on the client, `useEffect` where there is no layout. */
 const useIsomorphicLayoutEffect =
   typeof window === "undefined" ? useEffect : useLayoutEffect;
 
 /**
- * Walk the page to a line, a frame at a time, and say when it has arrived.
+ * Fly a card from where it was to where it now is.
  *
- * Not `behavior: "smooth"`, and the reason is in `scrollEase`'s note: the
- * browser clamps a smooth scroll's destination to the document as it stands
- * when the call is made, and on a press the document is still growing under
- * the panel's unfold. `to` is read every frame and clamped to what the document
- * can reach *now*, so a card near the foot of the page is walked to where it
- * actually ends up rather than to where the page could reach when the reader
- * pressed. Under reduced motion it is one instant scroll and an immediate
- * arrival.
+ * The park has already happened, so the card is standing at its final line and
+ * the browser has laid the page out around it; this only puts it back where the
+ * reader last saw it and lets it travel. A transform and nothing else, so the
+ * motion is the compositor's and a hundred-card list cannot stutter it — which
+ * is the whole of what {@link FLIGHT_MS} is for.
  *
- * Returns the cancel; an arrival that was cancelled never reports.
+ * A card that has not moved gets no animation, which is the deeplink's case and
+ * the case of pressing a card already on the park line.
  */
-function walkTo(
-  to: () => number,
-  duration: number,
-  onArrive: () => void,
-): () => void {
-  const clamp = (line: number) => {
-    const max = Math.max(
-      0,
-      (document.scrollingElement?.scrollHeight ?? 0) - window.innerHeight,
-    );
-    return Math.min(Math.max(0, line), max);
-  };
-  if (duration <= 0 || prefersReducedMotion()) {
-    window.scrollTo({ top: clamp(to()), behavior: "auto" });
-    onArrive();
-    return () => {};
-  }
-  const from = window.scrollY;
-  const started = performance.now();
-  let frame = 0;
-  const step = (now: number) => {
-    const progress = scrollEase((now - started) / duration);
-    const end = clamp(to());
-    window.scrollTo({ top: from + (end - from) * progress, behavior: "auto" });
-    if (progress < 1) {
-      frame = requestAnimationFrame(step);
-    } else {
-      frame = 0;
-      onArrive();
-    }
-  };
-  frame = requestAnimationFrame(step);
-  return () => {
-    if (frame) cancelAnimationFrame(frame);
-    frame = 0;
-  };
+function flyCard(card: HTMLElement, from: number, to: number): Animation | null {
+  const delta = Math.round(from - to);
+  if (!delta || prefersReducedMotion()) return null;
+  return card.animate(
+    [{ transform: `translateY(${delta}px)` }, { transform: "none" }],
+    { duration: FLIGHT_MS, easing: FLIGHT_EASE },
+  );
 }
 
 /**
@@ -307,16 +292,23 @@ export function useActiveCard({
    *
    * This is the whole of why `active` can be derived and still animate: the URL
    * changes the instant a close begins — on a press, on a Back, on a narrowing
-   * — and something has to hold the card on screen for the 300ms after it.
+   * — and something has to hold the card on screen for the collapse after it.
    */
   const [closingId, setClosingId] = useState<string | null>(null);
-  /** True during the walk into place, before the list stands down. */
-  const [settling, setSettling] = useState(false);
+
   /**
-   * The card the page is walking back from: set when a collapse ends with
-   * nothing open, cleared once the other cards have faded back in.
+   * The card the page is closing, held past the point `seen` lets go of it.
+   *
+   * **`seen` is not usable here and that is a bug this had.** The URL drops the
+   * card the moment a close begins — a press writes it away, and the browser's
+   * own Back delivers its `popstate` about 220ms later — so by the time the
+   * collapse's timer runs out, `seen` has been null for a while and the return
+   * had no card to look up. It found nothing and the card jumped home instead
+   * of being left where it was, which is the cut this exists to remove. Written
+   * by the collapse's own effect, which is the one place every kind of close
+   * passes through.
    */
-  const [returningId, setReturningId] = useState<string | null>(null);
+  const leavingId = useRef<string | null>(null);
 
   /**
    * A Back, or a narrowing that took the open card off the list, is a close
@@ -348,252 +340,87 @@ export function useActiveCard({
 
   const active = target ?? closingId;
   const closing = closingId !== null;
-  // A card is parked from the moment the scroll settles until the collapse has
-  // finished — so the list stays stood down under a panel that is still moving.
-  const parked = active !== null && !settling;
-  const stage: Stage =
-    active !== null
-      ? settling
-        ? "settling"
-        : "parked"
-      : returningId !== null
-        ? "returning"
-        : "idle";
 
+  /* ── The stage, which is a DOM write rather than a render ──────────
+   *
+   * `settling`, `parked` and `returning` used to be React state, and on a page
+   * that is one card per league that made every step of the open and the close
+   * a re-render of the whole list — 50–90ms of blocked main thread each, four
+   * of them on a close. They are a ref and one attribute now; the two things
+   * that genuinely change what React renders, `active` and `closing`, are the
+   * only state left.
+   */
+
+  const stage = useRef<Stage>("idle");
   /** Whether this view owns the history entry, and may therefore pop it. */
   const pushed = useRef(false);
+  /** Whichever flight is running, so the next one can cancel it. */
+  const flight = useRef<Animation | null>(null);
   /**
-   * Where to return the reader on close, or null for a card nobody pressed —
-   * a deeplink — which has nowhere to walk back to and is left where it is.
+   * Where the pressed card's top edge was, in the viewport, at the moment of
+   * the press — read in the handler, because by the time the layout effect runs
+   * the park has already moved it. Null for a card nobody pressed.
    */
-  const scrollAtPress = useRef<number | null>(null);
-  /** The walk into place, so a close inside it can stop it. */
-  const walk = useRef<(() => void) | null>(null);
+  const flewFrom = useRef<number | null>(null);
+  /** Restores the `<main>`, the list and the lock. Set while parked. */
+  const unpark = useRef<(() => void) | null>(null);
 
-  /**
-   * Cancel a pending park **without declaring the settle over**.
-   *
-   * The difference matters for exactly one case, and it is a visible one:
-   * closing inside the 340ms before the list has stood down. Clearing
-   * `settling` there would make `parked` true on the very render the collapse
-   * begins — the other cards would vanish, the panel would fold, and the whole
-   * list would come back, all inside a third of a second. Left set, the card
-   * never parks at all and the collapse runs in the ordinary list — whose
-   * other cards are already fading, and fade back on the return like any
-   * other close. The close's own timer is what clears it.
-   */
-  const cancelPark = useCallback(() => {
-    walk.current?.();
-    walk.current = null;
+  const stopFlight = useCallback(() => {
+    flight.current?.cancel();
+    flight.current = null;
   }, []);
 
-  const open = useCallback(
-    (id: string, li: HTMLElement | null) => {
-      // Read the URL rather than closing over the derived value: it is the same
-      // source of truth and it keeps this callback's identity stable, which is
-      // what a board of memo'd trade cards is relying on.
-      const current = readQueryParam(param);
-      // Pushed only when opening from nothing: switching cards would otherwise
-      // leave Back walking through every card the reader had looked at.
-      const push = current === null;
-
-      // **Only on the press that opens from nothing.** Switching cards happens
-      // inside the settle, mid-walk, so re-reading here would replace the row
-      // the reader actually came from with wherever the animation had got to.
-      if (push) scrollAtPress.current = window.scrollY;
-      setClosingId(null);
-      setReturningId(null);
-      setSettling(true);
-      writeQueryParam(param, id, push);
-      if (push) pushed.current = true;
-
-      // **The walk and the wait for it are one decision.** The list stands
-      // down when the walk arrives — which under reduced motion is at once, so
-      // the card parks against a page that has already arrived rather than a
-      // third of a second later.
-      cancelPark();
-      const freezeTop = measureFreezeTop();
-      const line = li
-        ? () => window.scrollY + li.getBoundingClientRect().top - freezeTop
-        : () => window.scrollY;
-      walk.current = walkTo(line, PARK_SETTLE_MS, () => {
-        walk.current = null;
-        setSettling(false);
-      });
-    },
-    [param, cancelPark],
-  );
-
   /**
-   * Close: the URL lets the card go, and the render-time branch above turns
-   * that into the collapse.
+   * Give the parked shell its scroller back once the card has landed.
    *
-   * The history write is at the *start* rather than the end, which is what
-   * makes a press and a Back the same thing from here on: both leave the URL
-   * naming no card while `closingId` holds it on screen.
+   * A scroll container clips a translated child, so the list runs `visible`
+   * while a card is in flight — see `park`. This is the other half of that, and
+   * it is `finished` rather than a timer so a cancelled flight never restores a
+   * scroller onto a page that has since un-parked.
    */
-  const close = useCallback(() => {
-    const id = readQueryParam(param);
-    if (id === null) return;
-    cancelPark();
-    // **The collapse begins here, not when the URL catches up**, and that is a
-    // measurement rather than a shortcut. Popping a history entry is a
-    // same-document traversal Chrome queues as a task: driven, `back()` took
-    // **220ms** to deliver its `popstate`, against the collapse — so a close
-    // that waited for the URL sat still for most of its own animation and then
-    // vanished. Setting it here costs nothing in correctness, because the
-    // render-time branch below is guarded on this being unset: whichever of the
-    // two notices first, the card collapses exactly once.
-    setClosingId(id);
-    if (pushed.current) {
-      // Pop the entry this view pushed, so the address bar and the history
-      // stack agree about there being nothing open.
-      pushed.current = false;
-      window.history.back();
-    } else {
-      writeQueryParam(param, null);
-    }
-  }, [param, cancelPark]);
-
-  const toggle = useCallback(
-    (id: string, event: MouseEvent<HTMLElement>) => {
-      // **The disclosure is driven, not native.** The list has to change with
-      // it, and a `<details>` that toggled itself would be open for a frame
-      // before the page knew.
-      event.preventDefault();
-      // The URL rather than the derived value, for `open`'s reason: it is the
-      // same source of truth and reading it here is what keeps this callback's
-      // identity stable across a render of the whole board.
-      if (readQueryParam(param) === id) {
-        close();
-        return;
-      }
-      open(id, event.currentTarget.closest("li"));
-    },
-    [close, open, param],
-  );
-
-  /**
-   * The collapse's own clock.
-   *
-   * When it runs out the URL has let the card go and nothing has put another
-   * back, so the page begins its return: the list comes back around the card
-   * and the walk back to where the reader pressed starts — both in the layout
-   * effect below, on the same frame, so the card never paints anywhere but
-   * where it was.
-   */
-  useEffect(() => {
-    if (closingId === null) return;
-    const id = closingId;
-    const timer = setTimeout(() => {
-      setClosingId(null);
-      // Whatever `cancelPark` left standing — see it for why it does not.
-      setSettling(false);
-      // Something put a card back inside the collapse — a Forward, or a press
-      // on another row. The page is where it should be; leave it alone.
-      if (readQueryParam(param) !== null) return;
-      setReturningId(id);
-    }, COLLAPSE_MS);
-    return () => clearTimeout(timer);
-  }, [closingId, param]);
-
-  /**
-   * The return: land the page where the card already is, then walk it back.
-   *
-   * **A layout effect, and the order inside the commit is the whole of it.**
-   * The render that starts the return is the one that un-parks: React removes
-   * the shell attribute and shows the other cards in the mutation phase, runs
-   * the park effect's cleanup (which hands the `<main>` and the list their own
-   * boxes back) in the same phase, and only then runs this — so the card's
-   * line is read from a document that is whole again, and the instant scroll
-   * that keeps the card where the reader is looking lands before anything is
-   * painted. Released outright the document is at scroll 0 with a hundred
-   * cards above the one being read, and a passive effect would have painted
-   * exactly that for a frame.
-   *
-   * The walk back reads as the press undone, and the other cards fade in over
-   * it. A deeplinked card has no press to undo, so the page stays on it.
-   */
-  useIsomorphicLayoutEffect(() => {
-    if (returningId === null) return;
-    const card =
-      listRef.current?.querySelector<HTMLElement>(
-        `li[data-card="${CSS.escape(returningId)}"]`,
-      ) ?? null;
-    const main = listRef.current?.closest("main");
-    let rest = 0;
-    let slack = 0;
-    if (card && card.isConnected) {
-      const here = Math.max(
-        0,
-        card.getBoundingClientRect().top + window.scrollY - measureFreezeTop(),
-      );
-      // **A card near the foot of the page cannot stay where it was parked**,
-      // because the document under it is too short to scroll that far — so
-      // without help it would jump down the screen the instant the list came
-      // back, which is the one cut the return would still have. The page is
-      // lent exactly the slack it is short, as padding under the `<main>`, for
-      // the length of the walk; the walk's own destination is always reachable
-      // without it (it is a line the page stood at before), so taking the
-      // slack away at the end moves nothing.
-      const reach = Math.max(
-        0,
-        (document.scrollingElement?.scrollHeight ?? 0) - window.innerHeight,
-      );
-      slack = Math.max(0, here - reach);
-      if (slack > 0 && main instanceof HTMLElement) {
-        const own = Number.parseFloat(getComputedStyle(main).paddingBottom) || 0;
-        main.style.paddingBottom = `${own + slack}px`;
-      }
-      window.scrollTo({ top: here, behavior: "auto" });
-      // Where the card can rest once the slack goes: a deeplinked card, which
-      // has no press to walk back to, is walked here rather than left to drop.
-      rest = here - slack;
-    }
-    const to = scrollAtPress.current ?? rest;
-    scrollAtPress.current = null;
-    const release = () => {
-      if (main instanceof HTMLElement) main.style.paddingBottom = "";
+  const landFlight = useCallback(() => {
+    const grant = () => {
+      const list = listRef.current;
+      if (list && stage.current === "parked") list.style.overflowY = "auto";
     };
-    const cancel = walkTo(
-      () => to,
-      STAND_BACK_MS,
-      () => {
-        release();
-        setReturningId(null);
-      },
-    );
-    return () => {
-      cancel();
-      release();
-    };
-  }, [returningId, listRef]);
+    const run = flight.current;
+    // A card that had nowhere to travel — a deeplink, or one already on the
+    // line — is landed already.
+    if (!run) {
+      grant();
+      return;
+    }
+    run.finished
+      .then(() => {
+        if (flight.current !== run) return;
+        flight.current = null;
+        grant();
+      })
+      .catch(() => {});
+  }, [listRef]);
 
-  /* ── The park's own DOM: the lock, the shell's box, the resize ────── */
-
-  useIsomorphicLayoutEffect(() => {
-    if (!parked) return;
+  /**
+   * Lock the page and make the list the parked shell.
+   *
+   * The three writes are one measurement applied to two halves of one box —
+   * see the module note — and they are imperative for the reason the stage is:
+   * nothing else writes them, so there is no render to race, and threading them
+   * through a server component's `<main>` for a client-side disclosure is the
+   * worse trade.
+   */
+  const park = useCallback(() => {
+    if (unpark.current) return;
     const root = document.documentElement;
     const body = document.body;
     const list = listRef.current;
     const main = list?.closest("main");
 
-    // The list is a fixed box under the rack now, so there is nothing above it
-    // to scroll to.
-    window.scrollTo({ top: 0 });
+    window.scrollTo({ top: 0, behavior: "auto" });
     const rootOverflow = root.style.overflow;
     const bodyOverflow = body.style.overflow;
     root.style.overflow = "hidden";
     body.style.overflow = "hidden";
 
-    /**
-     * One measurement, applied to the two halves of one box.
-     *
-     * The shell opens at the **plate's** line and carries the overhang as its
-     * own padding, so the `<main>` above it stops short by exactly that: clipped
-     * to the housing's edge instead, every league's name would lose its top
-     * third to the plate that hangs above it.
-     */
     const apply = () => {
       const box = parkedShell(window.innerHeight, measureFreezeTop());
       if (main instanceof HTMLElement) {
@@ -601,32 +428,27 @@ export function useActiveCard({
         main.style.paddingBottom = `${SHELL_BREATH}px`;
       }
       if (list) {
-        // **Its own margins go, and that is a measurement rather than
-        // tidiness.** Every one of these lists carries a rhythm margin above it
-        // (`/manager`'s `mt-2`) for the gap between the rule and the first
-        // card, and parked that margin sits between the `<main>` padding and
-        // the shell — so the card lands 8px below the offset the park scrolled
-        // it to, the shell overhangs the fold by the same 8, and the breath
-        // under it is half what it was asked for. Measured: the plate parked at
-        // 89 against a 81px offset until this line.
+        // Its own rhythm margins go, or the card lands that far below the line
+        // the park scrolled it to and the shell overhangs the fold by the same.
         list.style.marginTop = "0px";
         list.style.marginBottom = "0px";
         list.style.height = `${box.height}px`;
         list.style.paddingTop = `${PLATE_OVERHANG}px`;
-        // Used only where the panel hit its floor — see `panelFit`. `auto`
-        // rather than a computed `hidden`/`auto` because the two answers are the
-        // same one: nothing overflows when the panel fits.
-        list.style.overflowY = "auto";
+        // The scroller is the flight's to grant — see `landFlight`. A scroll
+        // container clips a translated child, and a card starts its flight
+        // offset by however far it has to travel, so the shell runs `visible`
+        // until it lands. `panelFit`'s floor is the only case that ever needs
+        // to scroll at all, and it needs it after the motion rather than during.
+        list.style.overflowY = "visible";
       }
     };
     apply();
-
     // Both terms are functions of `innerHeight`: a window dragged taller, or a
     // phone's URL bar retracting, changes the shell without changing anything a
     // `ResizeObserver` on the card could see.
     window.addEventListener("resize", apply);
 
-    return () => {
+    unpark.current = () => {
       window.removeEventListener("resize", apply);
       root.style.overflow = rootOverflow;
       body.style.overflow = bodyOverflow;
@@ -641,10 +463,208 @@ export function useActiveCard({
         list.style.paddingTop = "";
         list.style.overflowY = "";
       }
+      unpark.current = null;
     };
-  }, [parked, listRef]);
+  }, [listRef]);
 
-  /* ── Escape, and the settle timer ────────────────────────────────── */
+  /** Move to a stage: write the attribute, and do that stage's DOM work. */
+  const toStage = useCallback(
+    (next: Stage) => {
+      if (stage.current === next) return;
+      stage.current = next;
+      const list = listRef.current;
+      writeStage(list?.closest("main"), next);
+      // The panel re-measures itself off the list's own box, which the park
+      // gives a fixed height — so its `ResizeObserver` is what notices, and
+      // that render is the open card's alone rather than the page's.
+      if (next === "parked") park();
+      else unpark.current?.();
+    },
+    [listRef, park],
+  );
+
+  const open = useCallback(
+    (id: string, li: HTMLElement | null) => {
+      // Read the URL rather than closing over the derived value: it is the same
+      // source of truth and it keeps this callback's identity stable, which is
+      // what a board of memo'd trade cards is relying on.
+      const current = readQueryParam(param);
+      // Pushed only when opening from nothing: switching cards would otherwise
+      // leave Back walking through every card the reader had looked at.
+      const push = current === null;
+
+      // **Read before the commit, because the park is what moves it.** This is
+      // where the card is on screen as the reader presses it; the layout effect
+      // below reads where it has landed and flies it between the two.
+      flewFrom.current = li ? li.getBoundingClientRect().top : null;
+      leavingId.current = null;
+
+      setClosingId(null);
+      writeQueryParam(param, id, push);
+      if (push) pushed.current = true;
+    },
+    [param],
+  );
+
+  /**
+   * Close: the URL lets the card go, and the render-time branch above turns
+   * that into the collapse.
+   *
+   * The history write is at the *start* rather than the end, which is what
+   * makes a press and a Back the same thing from here on: both leave the URL
+   * naming no card while `closingId` holds it on screen.
+   */
+  const close = useCallback(() => {
+    const id = readQueryParam(param);
+    if (id === null) return;
+    // A close inside the flight cancels it: the card is where it is, and the
+    // collapse runs from there.
+    stopFlight();
+    // **The collapse begins here, not when the URL catches up.** Popping a
+    // history entry is a same-document traversal the browser queues as a task —
+    // driven, `back()` took 220ms to deliver its `popstate` against a 300ms
+    // collapse — so a close that waited for the URL sat still for most of its
+    // own animation and then vanished. The render-time branch above is the
+    // fallback, guarded on this being unset, so the card collapses exactly once.
+    setClosingId(id);
+    if (pushed.current) {
+      pushed.current = false;
+      window.history.back();
+    } else {
+      writeQueryParam(param, null);
+    }
+  }, [param, stopFlight]);
+
+  const toggle = useCallback(
+    (id: string, event: MouseEvent<HTMLElement>) => {
+      // **The disclosure is driven, not native.** The list has to change with
+      // it, and a `<details>` that toggled itself would be open for a frame
+      // before the page knew.
+      event.preventDefault();
+      if (readQueryParam(param) === id) {
+        close();
+        return;
+      }
+      open(id, event.currentTarget.closest("li"));
+    },
+    [close, open, param],
+  );
+
+  /**
+   * The collapse's own clock.
+   *
+   * When it runs out the URL has let the card go and nothing has put another
+   * back, so the page returns: the list comes back around the card, the page is
+   * landed where the card already is, and the walk back to where the reader
+   * pressed begins. All of it in the layout effect below rather than a render,
+   * so the card never paints anywhere but where it was.
+   */
+  useEffect(() => {
+    if (closingId === null) return;
+    // **Read the parked line here, because this is the last moment it can be
+    // read.** By the time the return runs, `active` is null, so the card's own
+    // disclosure is shut and the parked rule has already taken it off the page
+    // — and `getBoundingClientRect()` on a `display: none` element is four
+    // zeroes rather than a position. Driven, that is exactly what it answered:
+    // the card was scrolled to as though it had been sitting at the top of the
+    // viewport, which put it 81px out on every close. Nothing moves it between
+    // here and there — it is parked for the whole of the collapse.
+    // Both are read here rather than where the close was asked for, because
+    // this is the one place that runs for every way a card can close — a press,
+    // the browser's own Back, and a narrowing that takes the card off the list
+    // — and it is not a render, which may not write a ref at all.
+    leavingId.current = closingId;
+    flewFrom.current =
+      listRef.current
+        ?.querySelector<HTMLElement>(`li[data-card="${CSS.escape(closingId)}"]`)
+        ?.getBoundingClientRect().top ?? null;
+    const timer = setTimeout(() => setClosingId(null), COLLAPSE_MS);
+    return () => clearTimeout(timer);
+  }, [closingId, listRef]);
+
+  /**
+   * The open: park on the press, then fly the card to the line.
+   *
+   * **A layout effect, so all of it lands in one commit.** The render that
+   * names the card is the one that mounts its panel; `toStage("parked")` locks
+   * the page, takes the rest of the list off it and gives the `<main>` and the
+   * list their parked boxes in the same phase — so the whole of the layout the
+   * open costs happens here, before anything is painted, rather than in the
+   * middle of a motion. What is left to animate is one transform.
+   */
+  useIsomorphicLayoutEffect(() => {
+    if (active === null || stage.current === "parked") return;
+    const from = flewFrom.current;
+    flewFrom.current = null;
+
+    stopFlight();
+    toStage("parked");
+
+    const card =
+      listRef.current?.querySelector<HTMLElement>(
+        `li[data-card="${CSS.escape(active)}"]`,
+      ) ?? null;
+    if (!card || from === null) return;
+
+    flight.current = flyCard(card, from, card.getBoundingClientRect().top);
+    landFlight();
+  }, [active, listRef, stopFlight, toStage, landFlight]);
+
+  /**
+   * The return: un-park in one commit, and land the page **on the card**.
+   *
+   * **Nothing moves, which is the only way this direction can be smooth.** The
+   * open can fly, because the whole of its layout is spent in the commit that
+   * parks and the card then has the thread to itself. Closing is the opposite:
+   * the page has to come *back*, and a hundred cards laid out and painted again
+   * is 246ms in three bursts on the fixture — so a flight started into that
+   * spends itself inside it. Driven, the card hung at its parked line for 333ms
+   * and then travelled, which is a freeze followed by a slide.
+   *
+   * So the page is scrolled to wherever leaves the card at the line it is
+   * already standing on, and the list simply grows back around it. The reader
+   * ends on the card they were reading rather than on the row they pressed —
+   * which is the same place, seen from the list rather than from the screen —
+   * and there is no motion to stutter. Only a card too near the top of the
+   * document for that scroll to be reachable moves at all, and then by less
+   * than the park's own offset, which is what the flight is kept for.
+   *
+   * A layout effect, and the order inside the commit is the whole of it: the
+   * card's parked line is read *before* `toStage("idle")` hands the `<main>`
+   * and the list their own boxes back, and the page is landed before anything
+   * is painted. Released outright the document is at scroll 0 with a hundred
+   * cards above the one being read, and a passive effect would have painted it.
+   */
+  useIsomorphicLayoutEffect(() => {
+    if (active !== null || stage.current === "idle") return;
+    const leaving = leavingId.current;
+    leavingId.current = null;
+    stopFlight();
+
+    const card =
+      leaving === null
+        ? null
+        : (listRef.current?.querySelector<HTMLElement>(
+            `li[data-card="${CSS.escape(leaving)}"]`,
+          ) ?? null);
+    // Read while the card is still parked — this is where the reader is looking.
+    // Where the card was parked, read while it was still on the page — see the
+    // collapse's own effect above.
+    const from = flewFrom.current;
+    flewFrom.current = null;
+
+    toStage("idle");
+
+    if (!card || !card.isConnected || from === null) return;
+    const top = card.getBoundingClientRect().top + window.scrollY;
+    window.scrollTo({ top: Math.max(0, top - from), behavior: "auto" });
+    // Whatever the document was too short to give, and nothing in the ordinary
+    // case: `flyCard` answers null for a card that has not moved.
+    flight.current = flyCard(card, from, card.getBoundingClientRect().top);
+    landFlight();
+  }, [active, listRef, stopFlight, toStage, landFlight]);
+
+  /* ── Escape, and the teardown ────────────────────────────────────── */
 
   useEffect(() => {
     if (active === null) return;
@@ -662,21 +682,24 @@ export function useActiveCard({
 
   useEffect(
     () => () => {
-      walk.current?.();
-      walk.current = null;
+      // Unmounting mid-open must not leave the document locked or the `<main>`
+      // padded: the writes have exactly one owner and this is where it lets go.
+      flight.current?.cancel();
+      flight.current = null;
+      unpark.current?.();
     },
     [],
   );
 
   return {
     active,
-    parked,
+    parked: active !== null,
     closing,
     isOpen: (id) => active === id,
     isLit: (id) => active === id && !closing,
     toggle,
     close,
-    shellProps: SHELL_PROPS[stage],
-    chromeClass: CHROME_CLASS[stage],
+    shellProps: SHELL_PROPS,
+    chromeClass: CHROME_CLASS,
   };
 }
