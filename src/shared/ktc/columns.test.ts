@@ -10,13 +10,18 @@ import {
   normalizeLineupPositions,
   parseAdpBoards,
   parseKtcVariants,
+  normalizeLineupSlots,
   parsePositionSets,
+  parseSlotSets,
   positionSetsOf,
   qbBoardKeySuffix,
   readsQbBoard,
   serializeAdpBoards,
   serializeKtcVariants,
   serializePositionSets,
+  serializeSlotSets,
+  slotKeySuffix,
+  slotSetsOf,
 } from "./columns.ts";
 
 /**
@@ -37,7 +42,8 @@ const col = (
   format: "auto" | "dynasty" | "redraft" = "auto",
   lineup: "auto" | "oneqb" | "sf" = "auto",
   positions: Col["positions"] = [],
-): Col => ({ metric, format, lineup, positions });
+  slots: Col["slots"] = [],
+): Col => ({ metric, format, lineup, positions, slots });
 
 describe("what prices a metric", () => {
   test("a market is KeepTradeCut's alone", () => {
@@ -326,5 +332,133 @@ describe("parsePositionSets", () => {
     assert.deepEqual(parsePositionSets("nonsense,qb"), [["QB"]]);
     assert.deepEqual(parsePositionSets("nonsense"), []);
     assert.deepEqual(parsePositionSets(null), []);
+  });
+});
+
+describe("the slot clause in a key", () => {
+  test("an un-narrowed column keys exactly as it always did", () => {
+    // The whole reason the axis is a suffix rather than a segment: the ten base
+    // ranks are filed under bare metric ids, and an `@all` token on every key
+    // would rename every one of them.
+    assert.equal(lineupColumnKey(col("ros_starters")), "ros_starters");
+    assert.equal(slotKeySuffix([]), "");
+  });
+
+  test("the `@` is what keeps it apart from the position clause", () => {
+    // Both clauses are `+`-joined lower-cased sets after a `:`, so without the
+    // prefix a column counting the seats and one counting the players would be
+    // one string — a rank filed under one question, read back as the other.
+    const seats = lineupColumnKey(col("ros_starters", "auto", "auto", [], ["WR"]));
+    const players = lineupColumnKey(col("ros_starters", "auto", "auto", ["WR"]));
+    assert.equal(seats, "ros_starters:@wr");
+    assert.equal(players, "ros_starters:wr");
+    assert.notEqual(seats, players);
+  });
+
+  test("the seats come before the players, and the pricing before both", () => {
+    assert.equal(
+      lineupColumnKey(
+        col("ros_starters", "auto", "auto", ["WR"], ["FLEX", "SUPER_FLEX"]),
+      ),
+      "ros_starters:@flex+super_flex:wr",
+    );
+    assert.equal(
+      lineupColumnKey(col("capital_starters", "auto", "sf", [], ["FLEX"])),
+      "capital_starters:sf:@flex",
+    );
+    assert.equal(
+      lineupColumnKey(col("ktc_starters", "dynasty", "sf", ["QB"], ["SUPER_FLEX"])),
+      "ktc_starters:dynasty:sf:@super_flex:qb",
+    );
+  });
+
+  test("two seat sets are two columns", () => {
+    // Which is the whole reason the clause is in the key: without it the two
+    // dedupe into one, and the rank shown under one narrowing is the other's.
+    assert.notEqual(
+      lineupColumnKey(col("ros_starters", "auto", "auto", [], ["FLEX"])),
+      lineupColumnKey(col("ros_starters", "auto", "auto", [], ["SUPER_FLEX"])),
+    );
+  });
+
+  test("the order is taken as given, never sorted here", () => {
+    // `positionKeySuffix`' rule one clause over, and worth pinning because it
+    // looks like an omission: two press orders are made one identity by
+    // `normalizeLineupSlots` inside `column()`, which is the single constructor
+    // every stored and pressed value goes through. Sorting again here would be
+    // a second answer to that, and one a hand-built literal could disagree
+    // with silently.
+    assert.equal(
+      lineupColumnKey(
+        col("ros_starters", "auto", "auto", [], ["SUPER_FLEX", "FLEX"]),
+      ),
+      "ros_starters:@super_flex+flex",
+    );
+    assert.deepEqual(normalizeLineupSlots(["SUPER_FLEX", "FLEX"]), [
+      "FLEX",
+      "SUPER_FLEX",
+    ]);
+  });
+});
+
+describe("normalizeLineupSlots", () => {
+  test("sorts into the vocabulary's own order, whatever the press order", () => {
+    assert.deepEqual(normalizeLineupSlots(["SUPER_FLEX", "QB", "FLEX"]), [
+      "QB",
+      "FLEX",
+      "SUPER_FLEX",
+    ]);
+  });
+
+  test("upper-cases, dedupes, and drops what no lineup can seat", () => {
+    assert.deepEqual(normalizeLineupSlots(["flex", "FLEX", "BN", "OP", 7]), [
+      "FLEX",
+    ]);
+    assert.deepEqual(normalizeLineupSlots("FLEX"), []);
+    assert.deepEqual(normalizeLineupSlots(undefined), []);
+  });
+
+  test("keeps a seat the reader's leagues no longer start", () => {
+    // The vocabulary here is the whole table, deliberately wider than the track
+    // that writes it: a stored `@dl` is still a good question about the leagues
+    // it was asked of, and dropping it would silently widen that column to the
+    // whole lineup.
+    assert.deepEqual(normalizeLineupSlots(["DL"]), ["DL"]);
+  });
+});
+
+describe("slotSetsOf", () => {
+  test("names the distinct sets and drops the empty one", () => {
+    // Sets and not columns, on `positionSetsOf`' terms: the base ranks answer
+    // the un-narrowed column, so a reader who never touches the axis is on
+    // exactly the request they had.
+    assert.deepEqual(
+      slotSetsOf([
+        col("ros_starters"),
+        col("ros_starters", "auto", "auto", [], ["FLEX"]),
+        col("capital_starters", "auto", "sf", [], ["FLEX"]),
+        col("ktc_starters", "auto", "auto", [], ["FLEX", "SUPER_FLEX"]),
+      ]),
+      [["FLEX"], ["FLEX", "SUPER_FLEX"]],
+    );
+  });
+});
+
+describe("parseSlotSets", () => {
+  test("round-trips what the columns needed, with no `@` on the wire", () => {
+    // The prefix keeps two clauses apart inside one key; a parameter named
+    // `slots` has nothing to be told apart from.
+    const sets = slotSetsOf([
+      col("ros_starters", "auto", "auto", [], ["FLEX", "SUPER_FLEX"]),
+      col("capital_starters", "auto", "auto", [], ["QB"]),
+    ]);
+    assert.equal(serializeSlotSets(sets), "flex+super_flex,qb");
+    assert.deepEqual(parseSlotSets(serializeSlotSets(sets)), sets);
+  });
+
+  test("a set that folds to empty is dropped rather than ranked", () => {
+    assert.deepEqual(parseSlotSets("nonsense,flex"), [["FLEX"]]);
+    assert.deepEqual(parseSlotSets("nonsense"), []);
+    assert.deepEqual(parseSlotSets(null), []);
   });
 });

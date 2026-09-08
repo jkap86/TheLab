@@ -23,6 +23,7 @@ export {
   type LeagueLineup,
   type LineupMetricId,
   type LineupPosition,
+  type LineupSlot,
   type MetricRank,
   type LineupRanks,
   type ColumnRanks,
@@ -83,6 +84,7 @@ export {
   type PicktrackerPickPayload,
   type PicktrackerPayload,
   type PicktrackerStreamMessage,
+  type PicktrackerCardPayload,
 } from "./picktracker";
 export {
   type CompWindowId,

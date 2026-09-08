@@ -131,6 +131,37 @@ export type LineupPosition =
   | "DB";
 
 /**
+ * A starting slot a column can be narrowed to.
+ *
+ * A type-only union on {@link LineupPosition}'s exact terms: the runtime list
+ * is `STARTING_SLOTS` in `shared/projections/starting-slots`, and
+ * `starting-slots.test.ts` pins that it, this union and the solver's own
+ * `SLOT_POSITIONS` name the same fourteen — so a slot the solver learns breaks
+ * a test rather than being silently unofferable, and one named here that no
+ * lineup can seat breaks it the other way.
+ *
+ * **A slot is a seat, where a position is a player**, and that is the whole
+ * reason this is a second axis rather than more values on the first: the two
+ * compose. A column narrowed to `FLEX` and to `WR` counts the wide receivers
+ * *occupying flex seats*, which is a question neither axis can ask alone.
+ */
+export type LineupSlot =
+  | "QB"
+  | "RB"
+  | "WR"
+  | "TE"
+  | "FLEX"
+  | "WRRB_FLEX"
+  | "REC_FLEX"
+  | "SUPER_FLEX"
+  | "K"
+  | "DEF"
+  | "DL"
+  | "LB"
+  | "DB"
+  | "IDP_FLEX";
+
+/**
  * One column a card carries: a metric, and — for the metrics that read one —
  * which market and which QB board it is priced on.
  *
@@ -180,6 +211,26 @@ export type LineupColumn = {
    * order would make one column read two ways.
    */
   positions: readonly LineupPosition[];
+  /**
+   * Which starting seats the total counts, or **empty for the whole lineup**.
+   *
+   * Empty is the absence of a narrowing on {@link positions}' exact terms, and
+   * for the same two reasons: a stored selection written before this axis
+   * existed reads correctly (slots did not exist, and "every seat" is what the
+   * page was doing), and an un-narrowed column keys exactly as it always did —
+   * which is what keeps the ten base ranks the route always ships readable.
+   *
+   * **Only a starters column can carry one**, because a seat is a thing only a
+   * starting lineup has: a bench player occupies none, a whole-roster total
+   * spans both halves, and a draft pick is not a player. `column()` forces this
+   * empty off the `starters` scope, so a press and a stored value cannot
+   * disagree about it.
+   *
+   * Always in the axis's own canonical order, never in press order — the bay's
+   * second line and the card's tile both print it, and press order would make
+   * one column read two ways.
+   */
+  slots: readonly LineupSlot[];
 };
 
 /**

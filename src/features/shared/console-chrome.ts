@@ -45,9 +45,22 @@ const KEY_PRESS =
  * Tailwind happened to emit them in, not by the order they appear in the class
  * attribute. A shape that names no colour cannot lose that flip.
  */
+export const CONSOLE_KEY_PILL_BARE =
+  `shrink-0 rounded-full border font-mono uppercase ${KEY_PRESS}`;
+
+/**
+ * The pill above at the standard type size, and it is split off
+ * {@link CONSOLE_KEY_PILL_BARE} for the padding's own reason one property over.
+ *
+ * `text-[length:…]` and `tracking-[…]` are arbitrary values, so a caller
+ * appending a second of either does not override this one — both have the same
+ * specificity and which wins is Tailwind's emit order. A key that has to be
+ * smaller than the row it stands in (the columns picker's `Save`, milled into a
+ * ledge rather than standing on a panel) therefore needs the bare shape, not a
+ * size bolted onto this one.
+ */
 export const CONSOLE_KEY_PILL_SHELL =
-  "shrink-0 rounded-full border " +
-  `font-mono text-[length:var(--fs-11)] uppercase tracking-[0.16em] ${KEY_PRESS}`;
+  `${CONSOLE_KEY_PILL_BARE} text-[length:var(--fs-11)] tracking-[0.16em]`;
 
 /**
  * The pill above, at the standard gutter.

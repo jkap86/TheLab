@@ -17,5 +17,13 @@
 // mark, the engraved wordmark — and `features/tools` may read
 // `features/shared` where the reverse would invert the layering.
 
+// The Open Graph cards (`./og/card`) are deliberately **not** exported here,
+// and the image routes name that module path instead. It is the exception
+// `features/shared`'s timeline subtree already earns, argued the same way:
+// this barrel's other two exports are `AppRack` and `ToolsHome`, so from it an
+// image route that draws a PNG would pull the rack, `next/link` and the whole
+// client tree into its own graph. They are in this folder rather than in
+// `features/shared` for `AppRack`'s reason — they are built from the registry,
+// the flask mark and the engraved wordmark, all of which are this folder's own.
 export { AppRack } from "./components/app-rack";
 export { ToolsHome } from "./components/tools-home";

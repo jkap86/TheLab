@@ -55,3 +55,26 @@ export type PicktrackerStreamMessage =
   | { type: "board"; payload: PicktrackerPayload }
   | { type: "stale"; error: string }
   | { type: "error"; error: string };
+
+/**
+ * What the Open Graph card draws — the unfurl a link to a tracked draft
+ * renders as in a text thread, Sleeper chat, Slack, Discord or X.
+ *
+ * **Deliberately holds nothing that moves.** An unfurl is a static PNG the
+ * client scrapes once and then caches against the URL, hard and for a long
+ * time — so the next pick, the manager on the clock and any countdown are all
+ * claims that are false minutes after the image renders, and stale-but-
+ * plausible is worse than obviously old. Every field here is fixed the moment
+ * the draft is set up, which is what lets the image route cache for an hour.
+ *
+ * If a live reading is ever added to the card, that `revalidate` has to come
+ * down — and the card is still wrong in every message already posted, which is
+ * the argument for not adding one.
+ */
+export type PicktrackerCardPayload = {
+  /** `avatar_url` is resolved, as everywhere else on this wire. */
+  league: { name: string; avatar_url: string | null };
+  season: string;
+  teams: number;
+  rounds: number;
+};

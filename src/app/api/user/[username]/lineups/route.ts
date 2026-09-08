@@ -19,6 +19,7 @@ import {
   parseAdpBoards,
   parseKtcVariants,
   parsePositionSets,
+  parseSlotSets,
   qbBoardKeySuffix,
 } from "@/shared/ktc/columns";
 import type { KtcVariant } from "@/shared/ktc/columns";
@@ -104,6 +105,16 @@ export const dynamic = "force-dynamic";
  * force a board and narrow a position at once — and the key each rank is filed
  * under is exactly what `lineupColumnKey` writes on the card's side.
  *
+ * **`?slots=` is the fourth axis and travels on its own parameter** —
+ * `flex+super_flex,qb`, the distinct seat narrowings the reader's bays carry.
+ * Sets and not columns for `?positions=`' reason, and crossed with them rather
+ * than paired: the two are one intersection — a slot picks the seats and a
+ * position picks who is sitting in them — so a column can narrow both ways at
+ * once, and the key each rank is filed under is exactly what `lineupColumnKey`
+ * writes on the card's side. Only a *starters* column can carry one, a seat
+ * being a thing only a starting lineup has, which `column()` enforces on the
+ * client and `lineupMetricTotals` answers honestly for anyway.
+ *
  * A token that cannot be read folds to the empty set and is dropped, on
  * `parsePositionSets`' terms: the column that named it loses its narrowing and
  * reads an em dash, and nothing else on the page moves. That is the same
@@ -166,6 +177,7 @@ export async function GET(
 
     const forced = parseKtcVariants(url.searchParams.get("ktc_boards"));
     const narrowings = parsePositionSets(url.searchParams.get("positions"));
+    const seats = parseSlotSets(url.searchParams.get("slots"));
     // The ADP aggregate is already split superflex/standard by
     // `getManagerDraftAdp`, so a forced board costs no read at all — it points
     // at the other half of one answer that was fetched before any of this.
@@ -212,6 +224,13 @@ export async function GET(
         // of pricing off it — the pool the curve is anchored to — is computed
         // where the league is.
         adpBoards,
+        // Unresolved for the position sets' reason and one grain further: a
+        // slot is a seat in *this* league's own `roster_positions`, so a set
+        // naming one no league on the page starts simply counts nobody there —
+        // which is the honest answer and needs no rule of its own. The picker
+        // never offers such a set, having built its keys from these very
+        // leagues.
+        seats,
       );
       // A null entry means the store moved between the query and here — the
       // league drops out of the payload, as it always has for roster-less ones.
