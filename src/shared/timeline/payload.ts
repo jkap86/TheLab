@@ -1,5 +1,6 @@
 import type {
   KtcBoardChoice,
+  KtcLineupChoice,
   RosterTimelinePayload,
   TimelineRosterPayload,
   TimelineSeasonPayload,
@@ -24,7 +25,14 @@ export async function resolveTimelinePayload(
     managerUserId,
     season,
     board,
-  }: { managerUserId: string | null; season: string; board: KtcBoardChoice },
+    qbBoard,
+  }: {
+    managerUserId: string | null;
+    season: string;
+    board: KtcBoardChoice;
+    /** Which QB column both valuations read — see `readTimelinePricing`. */
+    qbBoard: KtcLineupChoice;
+  },
 ): Promise<RosterTimelinePayload> {
   if (!timeline) return { timeline: null, players: {}, pricing: null };
 
@@ -51,7 +59,14 @@ export async function resolveTimelinePayload(
 
   const [players, priced] = await Promise.all([
     getPlayersByIds([...playerIds]),
-    readTimelinePricing({ seasons, playerIds, managerUserId, season, board }),
+    readTimelinePricing({
+      seasons,
+      playerIds,
+      managerUserId,
+      season,
+      board,
+      qbBoard,
+    }),
   ]);
 
   // The grid each rewind starts from is the same enumeration the price table is

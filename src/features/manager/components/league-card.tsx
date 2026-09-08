@@ -1,11 +1,12 @@
 import { memo, type MouseEvent } from "react";
 
 import type {
-  KtcBoardChoice,
   LeagueLineupEntry,
   LeagueRecord,
   LineupColumn,
+  LineupSlot,
   ManagerLeague,
+  ManagerLineupsPayload,
 } from "@/shared/contract";
 import { resolveKtcFormat } from "@/shared/ktc/board-choice";
 import { isKtcMetric, lineupColumnKey } from "@/shared/ktc/columns";
@@ -215,10 +216,12 @@ const GRID_COLS: Record<number, string> = {
 export const LeagueCard = memo(function LeagueCard({
   league,
   columns,
+  teamsColumn,
+  ktc,
+  slots,
   entry,
   season,
   username,
-  board,
   open,
   lit,
   onToggle,
@@ -226,16 +229,30 @@ export const LeagueCard = memo(function LeagueCard({
   league: ManagerLeague;
   /** The chosen rank columns, in canonical order — see `useLineupColumns`. */
   columns: readonly LineupColumn[];
+  /**
+   * What the expanded card's standings pane reads — see `useTeamsColumn`.
+   *
+   * **It is also what a past stop is priced on**, which is why it reaches the
+   * rail rather than stopping at the pane: the two boards a stop is solved
+   * against have to be the two the table in front of it is on, and that table
+   * names its own now. It replaces the `board` prop this card used to take,
+   * which was always `"auto"` and was there to say exactly that — that the rail
+   * follows the table.
+   */
+  teamsColumn: LineupColumn;
+  /** Which markets answered and when — the standings picker's foot. */
+  ktc: ManagerLineupsPayload["ktc"];
+  /** The starting seats this account's leagues run — that picker's slot track. */
+  slots: readonly LineupSlot[];
   /** This league's solve + ranks, once the batched lineups read lands. */
   entry?: LeagueLineupEntry | null;
   /**
-   * What a *past* stop is priced against — the same season, manager and market
-   * the present table was solved on, so the two are one comparison rather than
-   * two rulers. See `TimelineSubject`.
+   * What a *past* stop is priced against — the same season and manager the
+   * present table was solved on, so the two are one comparison rather than two
+   * rulers. See `TimelineSubject`.
    */
   season: string | null;
   username: string;
-  board: KtcBoardChoice;
   /** Whether the disclosure is open — the page's, not the element's own. */
   open: boolean;
   /** Whether the chrome is lit: open, and not yet collapsing. See the note. */
@@ -515,9 +532,20 @@ export const LeagueCard = memo(function LeagueCard({
               leagueId: league.league_id,
               season,
               username,
-              board,
+              // **The teams column, where this used to be `board="auto"`.**
+              // That literal was the right answer to the question as it stood:
+              // the rail redraws this card's own team browser, that browser
+              // read `LeagueTeam.totals`, and the route computed those on the
+              // league's own market and QB board whatever any bay had forced —
+              // so `auto` was what kept a past stop and the present table on
+              // one ruler. The browser names its own board now, and the same
+              // argument points the other way: the rail follows *it*.
+              column: teamsColumn,
             }}
             entry={entry ?? null}
+            column={teamsColumn}
+            ktc={ktc}
+            slots={slots}
             // The reader's own team, so a past stop marks and ranks the same
             // team the present table does. Read off the payload the table is
             // drawn from, so the two cannot disagree; null while the lineups

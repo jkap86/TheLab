@@ -2,6 +2,8 @@
 
 import { type ReactNode, useCallback, useMemo, useRef, useState } from "react";
 
+import type { ManagerLineupsPayload } from "@/shared/contract";
+
 import {
   activeFilterCount,
   DEFAULT_LEAGUE_FILTERS,
@@ -31,6 +33,7 @@ import {
   usePublishRackControls,
   useKtcBoard,
   useLineupColumns,
+  useTeamsColumn,
   useManagerLeagues,
 } from "@/features/shared";
 
@@ -117,6 +120,13 @@ const BROWSE_KEYS: readonly RackDrawerKey[] = [
  * now and runs to the viewport edges. With the rack floating above, a second
  * bounded rectangle inside the viewport read as a panel inside a panel.
  */
+/**
+ * No market answered — a page whose lineups read has not landed, or one whose
+ * boards could not be. A shared empty so a `memo`'d card is not handed a new
+ * array identity on every render of the page above it.
+ */
+const NO_KTC: ManagerLineupsPayload["ktc"] = [];
+
 export function LeaguesHome({
   username,
   season,
@@ -334,6 +344,15 @@ export function LeaguesHome({
   };
 
   const columns = useLineupColumns();
+  /**
+   * What the expanded card's standings pane reads and is ordered by.
+   *
+   * Read once here rather than in each card, on the rule the rack's own
+   * `columns` already follows: a hundred cards subscribing to one device
+   * preference is a hundred subscriptions to buy nothing, and both the request
+   * below and the cards need the same answer.
+   */
+  const teamsColumn = useTeamsColumn();
 
   // Fetched once the leagues settle — `!refreshing` flipping true is also what
   // refetches after a cold sync, when the rosters this read solves from were
@@ -346,6 +365,12 @@ export function LeaguesHome({
     state.season,
     leagues.length > 0 && !refreshing,
     columns,
+    // **The standings pane's column rides the same request**, and it has to:
+    // its figure is a total per *roster* rather than a rank, so a column
+    // narrowed to a seat or priced on a forced market is a sum only the server
+    // can make — and a page that asked for the four bays' pricings alone would
+    // leave that one column an em dash on every card. See the hook.
+    teamsColumn,
   );
 
   // Sleeper lets a display name go missing, so the username is the fallback
@@ -759,15 +784,17 @@ export function LeaguesHome({
                   // page's raw query — see `parseRequestedSeason`.
                   season={state.season}
                   username={username}
-                  // **`auto`, not the stored board.** The rail redraws this
-                  // card's own team browser over past rosters, and that browser
-                  // reads `LeagueTeam.totals` — which the route computes on the
-                  // league's own market and QB board, whatever any column has
-                  // forced. A past stop priced on a different board from the
-                  // present table beside it is two numbers on two rulers, which
-                  // is the one thing the timeline's three narrowing parameters
-                  // exist to prevent.
-                  board="auto"
+                  // **What the card's standings pane reads, and therefore what
+                  // its history rail prices on.** This was `board="auto"` — the
+                  // right answer while that pane read `LeagueTeam.totals` on
+                  // each league's own market whatever any bay had forced, since
+                  // a past stop on a different board from the table in front of
+                  // it is two numbers on two rulers. The pane names its own
+                  // board now, so the rail follows *it* and the rule is
+                  // unchanged.
+                  teamsColumn={teamsColumn}
+                  ktc={lineups?.ktc ?? NO_KTC}
+                  slots={seatsInHand}
                   open={card.isOpen(league.league_id)}
                   lit={card.isLit(league.league_id)}
                   onToggle={card.toggle}

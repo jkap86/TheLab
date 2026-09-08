@@ -95,9 +95,13 @@ export type RosterTimelinePayload = {
  * **The boards must be the same ones the card in front of the rail reads.**
  * A past total measured on a different ADP board or a different KTC market than
  * the present one is not a comparison, so this route takes the same `season`,
- * `user` and `ktc_board` the lineups route does and resolves all three the same
- * way. That is why a league-scoped read carries a manager parameter at all: the
- * ADP fallback board is built from *that manager's* synced drafts.
+ * `user`, `ktc_board` and `qb_board` the per-league lineup route does and
+ * resolves all four the same way. That is why a league-scoped read carries a
+ * manager parameter at all: the ADP fallback board is built from *that
+ * manager's* synced drafts. The two board halves come off the **teams column**
+ * the standings pane reads, which is what makes "the same ones" checkable: that
+ * pane names its own market and its own QB board, so the card in front of the
+ * rail and the rail behind it are asked with one object.
  *
  * **It is the solver's own inputs rather than a table of answers**, which is
  * the same trade the rest of this payload makes. One stop is one roster set,

@@ -83,7 +83,9 @@ export {
   slotsInHand,
   slotsLabel,
   storeLineupColumns,
+  storeTeamsColumn,
   useLineupColumns,
+  useTeamsColumn,
 } from "./lineup-columns";
 // The picker those columns are chosen in. It moved here from `features/manager`
 // when the app rack became a second reader — the same line the filters dialog

@@ -20,6 +20,7 @@ import {
   parseKtcVariants,
   parsePositionSets,
   parseSlotSets,
+  parseTeamTotalKeys,
   qbBoardKeySuffix,
 } from "@/shared/ktc/columns";
 import type { KtcVariant } from "@/shared/ktc/columns";
@@ -115,6 +116,15 @@ export const dynamic = "force-dynamic";
  * being a thing only a starting lineup has, which `column()` enforces on the
  * client and `lineupMetricTotals` answers honestly for anyway.
  *
+ * **`?team_totals=` is not a fifth axis but a list of columns**, and it asks a
+ * different question from the four above: those decide what the manager is
+ * *ranked* on, where this decides which of the resulting columns ship a total
+ * for **every roster** in the league. A rank answers a card's window and a
+ * per-roster total answers a standings table, and only the second wants a
+ * number per team. It names keys rather than axes precisely because it is
+ * bounded by what a reader is looking at — one column, where the axes' cross
+ * product across four bays is hundreds of sums a league.
+ *
  * A token that cannot be read folds to the empty set and is dropped, on
  * `parsePositionSets`' terms: the column that named it loses its narrowing and
  * reads an em dash, and nothing else on the page moves. That is the same
@@ -164,6 +174,22 @@ export async function GET(
     const forced = parseKtcVariants(url.searchParams.get("ktc_boards"));
     const narrowings = parsePositionSets(url.searchParams.get("positions"));
     const seats = parseSlotSets(url.searchParams.get("slots"));
+    // **The one parameter that names columns rather than axes**, and it is a
+    // different question from the four beside it: those say which pricings and
+    // narrowings to *rank* the manager on, where this says which of the
+    // resulting columns a caller will read across **every** roster. The teams
+    // pane is what asks — its column picker offers the same six axes the card's
+    // bays do, and a standings table narrowed to a seat or priced on a forced
+    // market is a total per team that only this route can compute.
+    //
+    // It carries no axes of its own: a key names a pricing the four above must
+    // already have asked for, or the route never composes it and the total is
+    // simply absent. That is the client's job to keep true (see
+    // `useManagerLineups`, which sends the teams column through both), and the
+    // failure is an em dash on one column rather than a wrong number anywhere.
+    const teamTotals = new Set(
+      parseTeamTotalKeys(url.searchParams.get("team_totals")),
+    );
     // The ADP aggregate is already split superflex/standard by
     // `getManagerDraftAdp`, so a forced board costs no read at all — it points
     // at the other half of one answer that was fetched before any of this.
@@ -235,6 +261,7 @@ export async function GET(
         // never offers such a set, having built its keys from these very
         // leagues.
         seats,
+        teamTotals,
       );
       // A null entry means the store moved between the query and here — the
       // league drops out of the payload, as it always has for roster-less ones.

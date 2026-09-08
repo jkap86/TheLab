@@ -404,6 +404,32 @@ export type RankedRoster = {
   roster: LeagueRosterRow;
   lineup: LeagueLineup;
   totals: Record<LineupMetricId, number>;
+  /**
+   * The same roster's total under each *keyed* column the caller asked for —
+   * a forced market, a forced draft board, a seat or position narrowing, or any
+   * combination — and nothing else.
+   *
+   * **It is the ranks' own arithmetic, kept rather than discarded.** Every one
+   * of these numbers is already computed below: a narrowing and a variant are
+   * re-totals over every roster, of which only the manager's index is read to
+   * make a rank. What the teams pane needs is the column, not the rank, so
+   * `teamTotals` names the keys worth carrying out and the loops record them as
+   * they pass — no second solve, no second price table, and no second spelling
+   * of a key.
+   *
+   * **Only what was named**, which is why this is a record rather than the
+   * whole cross product: four bays' axes crossed against a dozen rosters is
+   * hundreds of sums a league, where a pane reads one. A key the caller did not
+   * ask for is absent, and a key it asked for that this league could not
+   * produce — a pricing the request never carried — is absent too, which reads
+   * as an em dash rather than as a zero.
+   *
+   * An un-narrowed column on each league's own board is keyed by its bare
+   * metric id, so it is answered by {@link RankedRoster.totals} above and never
+   * appears here. That is {@link lineupColumnKey}'s `auto`-folding rule doing
+   * the same work for a total that it already does for a rank.
+   */
+  columns: Record<string, number>;
 };
 
 /**
@@ -482,6 +508,22 @@ export function rankLeagueLineups(
    * nobody happens to be reading is one more sum over a dozen lineups.
    */
   slotSets: readonly (readonly LineupSlot[])[] = [],
+  /**
+   * Which column keys to carry a **per-roster** total out for, beside the ranks.
+   *
+   * Empty for every caller that only ranks — which is most of them, the
+   * timeline included. What asks is a pane that reads a column across a whole
+   * league rather than a rank: the standings' own column picker, one key.
+   *
+   * **Matched against the keys this function composes, never parsed.** The
+   * loops below already spell every key they file a rank under; this set is
+   * compared to those strings, so there is no second reading of a format whose
+   * own note says it is never read back. A key naming a pricing this call was
+   * not also given (a market with no variant, a board with no aggregate) simply
+   * never comes up, and the total is absent — the honest answer, and the one
+   * the pane draws a dash for.
+   */
+  teamTotals: ReadonlySet<string> = NO_TEAM_TOTALS,
 ): {
   lineup: LeagueLineup | null;
   ranks: ColumnRanks;
@@ -500,21 +542,57 @@ export function rankLeagueLineups(
       lineup,
       pickValues.get(roster.roster_id) ?? 0,
     );
-    return { roster, lineup, totals };
+    // Populated as the keyed loops below pass, and only for the keys the caller
+    // named — see {@link RankedRoster.columns}.
+    return { roster, lineup, totals, columns: {} as Record<string, number> };
   });
+
+  /**
+   * Keep one keyed column's totals if anybody asked for it.
+   *
+   * Called from inside each loop with the totals it has already summed, so a
+   * carried number is the *same* number the rank beside it was made from —
+   * which is the whole point of recording here rather than re-totalling
+   * afterwards, since a second pass is a second chance to cross the two
+   * narrowing axes differently.
+   */
+  const carry = (key: string, of: (index: number) => number) => {
+    if (!teamTotals.has(key)) return;
+    solved.forEach((one, i) => {
+      one.columns[key] = of(i);
+    });
+  };
 
   const managerIndex = solved.findIndex(
     ({ roster }) => roster.owner_id === managerUserId,
   );
-  if (managerIndex < 0) {
-    return { lineup: null, ranks: NO_RANKS, rosters: solved };
-  }
-  const manager = solved[managerIndex];
+  /**
+   * Whether there is anybody in this league to rank.
+   *
+   * **A flag rather than the early return this used to take**, and the
+   * difference is the totals: a rank is a statement about the manager and a
+   * *column total* is a statement about a roster, so a league the reader holds
+   * no team in still has twelve rosters worth totalling. Returning above the
+   * loops answered every keyed column with an absence on exactly the read that
+   * has no manager by construction — the league-scoped one behind a trade card,
+   * where the teams pane is the whole of what the reader opened.
+   *
+   * Unranked, every rank the loops would file is null, which is what a card
+   * draws an em dash for — and `baseRanks` is what says so, where a second
+   * all-null literal beside it (`NO_RANKS`, which this replaces) was a second
+   * exhaustive `LineupRanks` for a new metric id to be forgotten in. The keys
+   * are still named, because they were still asked.
+   */
+  const ranked = managerIndex >= 0;
+
+  /** A rank among these totals, or null where there is nobody to rank. */
+  const rankOn = (totals: readonly number[]): MetricRank | null =>
+    ranked ? rankAmong(totals, managerIndex) : null;
 
   // The ten, on the league's own board over the whole roster — the totals
   // already hung on every solve, so this path is untouched by either axis.
   const base = baseRanks((metric) =>
-    rankAmong(solved.map(({ totals }) => totals[metric]), managerIndex),
+    rankOn(solved.map(({ totals }) => totals[metric])),
   );
 
   const keyed: Record<string, MetricRank | null> = {};
@@ -540,12 +618,14 @@ export function rankLeagueLineups(
       ),
     );
     const narrowed = baseRanks((metric) =>
-      rankAmong(totals.map((one) => one[metric]), managerIndex),
+      rankOn(totals.map((one) => one[metric])),
     );
     // Off the literal rather than a list of the nine, so the exhaustive
     // `LineupRanks` stays the one seam a new metric id has to pass through.
     for (const [metric, rank] of Object.entries(narrowed)) {
-      keyed[`${metric}${suffix}`] = rank;
+      const key = `${metric}${suffix}`;
+      keyed[key] = rank;
+      carry(key, (i) => totals[i][metric as LineupMetricId]);
     }
   }
 
@@ -567,10 +647,9 @@ export function rankLeagueLineups(
         ),
       );
       for (const metric of KTC_METRIC_IDS) {
-        keyed[`${metric}:${variant.key}${suffix}`] = rankAmong(
-          totals.map((one) => one[metric]),
-          managerIndex,
-        );
+        const key = `${metric}:${variant.key}${suffix}`;
+        keyed[key] = rankOn(totals.map((one) => one[metric]));
+        carry(key, (i) => totals[i][metric]);
       }
     }
   }
@@ -598,20 +677,29 @@ export function rankLeagueLineups(
         ),
       );
       for (const metric of CAPITAL_METRIC_IDS) {
-        keyed[`${metric}${variant.key}${suffix}`] = rankAmong(
-          totals.map((one) => one[metric]),
-          managerIndex,
-        );
+        const key = `${metric}${variant.key}${suffix}`;
+        keyed[key] = rankOn(totals.map((one) => one[metric]));
+        carry(key, (i) => totals[i][metric]);
       }
     }
   }
 
   return {
-    lineup: manager.lineup,
+    lineup: ranked ? solved[managerIndex].lineup : null,
     ranks: { ...keyed, ...base },
     rosters: solved,
   };
 }
+
+/**
+ * No column asked for a per-roster total — the state every caller that only
+ * ranks is in.
+ *
+ * A shared empty rather than a literal default, so the identity is stable and a
+ * caller that passes nothing costs no allocation per league on a page of a
+ * hundred.
+ */
+const NO_TEAM_TOTALS: ReadonlySet<string> = new Set();
 
 /** No narrowing at all — the scope the base ranks answer, named so the loops
  * can walk it beside the reader's sets rather than special-casing it. */
@@ -785,16 +873,3 @@ function rankAmong(totals: readonly number[], mine: number): MetricRank | null {
   return { rank: ahead + 1, of: totals.length };
 }
 
-/** A league the manager holds no roster in: every metric unanswerable. */
-const NO_RANKS: LineupRanks = {
-  ros_total: null,
-  ros_starters: null,
-  ros_bench: null,
-  capital_total: null,
-  capital_bench: null,
-  capital_starters: null,
-  ktc_total: null,
-  ktc_starters: null,
-  ktc_bench: null,
-  ktc_picks: null,
-};

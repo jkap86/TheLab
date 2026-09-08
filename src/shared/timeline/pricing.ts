@@ -1,5 +1,6 @@
 import type {
   KtcBoardChoice,
+  KtcLineupChoice,
   TimelinePickCellPayload,
   TimelinePricingPayload,
 } from "@/shared/contract";
@@ -36,6 +37,7 @@ export async function readTimelinePricing({
   managerUserId,
   season,
   board,
+  qbBoard,
 }: {
   /** The league's seasons, newest first — the first of them is the ruler. */
   seasons: readonly TimelineSeason[];
@@ -45,6 +47,19 @@ export async function readTimelinePricing({
   managerUserId: string | null;
   season: string;
   board: KtcBoardChoice;
+  /**
+   * Which of the two QB columns both valuations read, or `auto` for the
+   * league's own reading.
+   *
+   * **The axis `board` beside it always lacked.** A market is KeepTradeCut's
+   * own; a QB board is a fact about how a league starts quarterbacks, and *both*
+   * priced valuations split on it — the ADP fold aggregates superflex drafts
+   * apart from standard ones. It is here because the card in front of this rail
+   * can now force one, and a past stop priced on the league's own board beside
+   * a present one priced on `sf` is the two-rulers reading this payload's whole
+   * shape exists to prevent.
+   */
+  qbBoard: KtcLineupChoice;
 }): Promise<{
   pricing: TimelinePricingPayload;
   /**
@@ -63,7 +78,12 @@ export async function readTimelinePricing({
   // it — see `TimelinePricingPayload.league` for why a past season's own scoring
   // and lineup are deliberately not used to price it.
   const ruler: ManagerLeagueRow = seasons[0].league;
-  const superflex = isSuperflexLineup(ruler.roster_positions);
+  // The reader's choice where they made one, the league's own reading
+  // otherwise — which is what `auto` means on both axes everywhere else.
+  const superflex =
+    qbBoard === "auto"
+      ? isSuperflexLineup(ruler.roster_positions)
+      : qbBoard === "sf";
 
   const [projections, adp, ktc] = await Promise.all([
     readProjections(season),

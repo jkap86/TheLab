@@ -3,7 +3,10 @@ import { NextResponse } from "next/server";
 import type { ApiErrorPayload, LeagueHistoryPayload } from "@/shared/contract";
 import { extendLeagueHistory } from "@/shared/manager";
 import type { LeagueHistoryResult } from "@/shared/manager";
-import { parseKtcBoardChoice } from "@/shared/ktc/board-choice";
+import {
+  parseKtcBoardChoice,
+  parseKtcLineupChoice,
+} from "@/shared/ktc/board-choice";
 import { getActiveSeason, parseRequestedSeason } from "@/shared/season";
 import { getLeagueTimeline, resolveTimelinePayload } from "@/shared/timeline";
 import { resolveManagerUser } from "@/shared/user";
@@ -30,8 +33,8 @@ export const dynamic = "force-dynamic";
  * projections feed, the ADP the manager's drafts measure, the KTC market — all
  * of them cached reads shared with that route rather than work of this one's.
  *
- * **The three narrowing parameters are the lineups route's, deliberately.**
- * `?season=`, `?user=` and `?ktc_board=` are what decide which boards answer, and
+ * **The narrowing parameters are the lineups route's, deliberately.**
+ * `?season=`, `?user=`, `?ktc_board=` and `?qb_board=` decide which boards answer, and
  * a past roster priced on a different board from the card in front of the rail
  * is not a comparison — it is two numbers on two rulers. `?user=` is the one
  * that looks out of place on a league-scoped read and is the one that matters
@@ -39,9 +42,18 @@ export const dynamic = "force-dynamic";
  * without it the three capital metrics have nothing to price against and rank
  * null. Omitting it is allowed and costs exactly that.
  *
+ * **`?qb_board=` is the axis `?ktc_board=` always lacked**, and it arrived with
+ * the teams pane's column picker: a market is KeepTradeCut's own, where which
+ * of the two QB columns a roster is priced on is a fact about the league that
+ * *both* priced valuations split on. The card in front of this rail can force
+ * one now, so the rail has to be able to follow it — a past stop on the
+ * league's own board beside a present one on `sf` is the two-rulers reading
+ * every parameter here exists to prevent.
+ *
  * A malformed `?season=` is a 400 on `parseRequestedSeason`'s own terms — a
  * season names *which data* this is about — while an unreadable `?ktc_board=`
- * falls back to `auto`, which is the opposite call for the opposite reason. An
+ * or `?qb_board=` falls back to `auto`, which is the opposite call for the
+ * opposite reason. An
  * unknown `?user=` is neither: the read answers without an ADP board rather than
  * failing a league's history over a name that is not this route's subject.
  *
@@ -75,6 +87,7 @@ export async function GET(
         managerUserId,
         season,
         board: parseKtcBoardChoice(url.searchParams.get("ktc_board")),
+        qbBoard: parseKtcLineupChoice(url.searchParams.get("qb_board")),
       },
     );
     return NextResponse.json(payload, {

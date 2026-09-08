@@ -113,17 +113,14 @@ export function solveLeagueEntry(
    * off the request. Empty for a page whose columns all count every position,
    * which is every page until a reader narrows a bay.
    *
-   * **They ride through to the ranks and stop there**, and that is a decision
-   * rather than an omission. A narrowing decides what a *rank* counts; it
-   * touches neither the picks resolved above nor the lineups the teams pane
-   * renders, and a {@link LeagueTeam} still carries the ten whole-roster
-   * totals it always did. Shipping a per-position total beside them was the
-   * alternative and nothing would read it: the expanded browser sorts and
-   * prints by a bare {@link LineupMetricId} (`team.totals[metric]`) and the
-   * timeline re-solves through {@link rankLeagueLineups} for the same ten, so
-   * a narrowed total would be a field on every team of every league that no
-   * reader could name — the dead weight the next reader has to prove is dead.
-   * It arrives with a browser that can ask the question.
+   * **They decide what a rank counts, and — since the teams pane learned to
+   * ask — what a named column totals.** A narrowing touches neither the picks
+   * resolved above nor the lineups that pane renders: the roster a card shows
+   * is the one the league's own board seated, and the narrowing only sums over
+   * fewer of its players. What changed is that a {@link LeagueTeam} no longer
+   * carries the ten whole-roster totals *alone*; see {@link teamTotals} below,
+   * which is the seam this note used to say arrives "with a browser that can
+   * ask the question".
    */
   positionSets: readonly (readonly LineupPosition[])[] = [],
   /**
@@ -140,17 +137,31 @@ export function solveLeagueEntry(
    * the request. Empty for a page whose columns all count the whole lineup,
    * which is every page until a reader narrows a starters bay to a seat.
    *
-   * **They ride through to the ranks and stop there**, exactly as the position
-   * sets above do and for that field's argument verbatim: a narrowing decides
-   * what a *rank* counts, and a {@link LeagueTeam} still carries the ten
-   * whole-roster totals it always did. A per-seat total beside them is the one
-   * seam of the four this axis deliberately does not land, because nothing
-   * would read it — the expanded browser sorts and prints by a bare
-   * {@link LineupMetricId} and the timeline re-solves for the same ten, so it
-   * would be a field on every team of every league that no reader could name.
-   * It arrives with a browser that can ask the question.
+   * They rank and total exactly as the position sets above do, and the note
+   * there covers both: a per-seat total was "the one seam of the four this axis
+   * deliberately does not land", and {@link teamTotals} is where it landed.
    */
   slotSets: readonly (readonly LineupSlot[])[] = [],
+  /**
+   * Which column keys every team's total should be carried out for, beside the
+   * ten it already ships.
+   *
+   * **This is the seam the two fields above say they deliberately do not
+   * land**, and both said why: a per-seat or per-position total would be a
+   * field on every team of every league that nothing could name, because the
+   * expanded browser sorted and printed by a bare {@link LineupMetricId}. Both
+   * notes end "it arrives with a browser that can ask the question", and the
+   * teams pane's own column picker is that browser — it reads one column on the
+   * same six axes the card's bays do, so the pane needs a total per roster on a
+   * pricing and a narrowing only this can compute.
+   *
+   * What keeps the widening honest is that it is a **named list rather than the
+   * cross product**: the reductions above are axes, whose product across four
+   * bays is hundreds of sums a league, where a pane reads one. See
+   * `TeamTotals`, and {@link rankLeagueLineups}' own parameter for how the
+   * numbers are kept rather than recomputed.
+   */
+  teamTotals: ReadonlySet<string> = new Set(),
 ): LeagueLineupEntry | null {
   const board = leaguePickBoard(league, season, (pick) =>
     pickValue(ktc, league.total_rosters, pick),
@@ -180,21 +191,30 @@ export function solveLeagueEntry(
     positionSets,
     adpVariants,
     slotSets,
+    teamTotals,
   );
   // Only where a manager was *named*: a league-scoped read has no lineup of its
   // own to miss, and answering null there would be refusing to draw a league
   // over the absence of somebody the question never mentioned.
   if (managerUserId !== null && !lineup) return null;
-  const teams: LeagueTeam[] = rosters.map(({ roster, lineup, totals }) => ({
-    roster_id: roster.roster_id,
-    name: leagueTeamName(league.users, roster.roster_id, roster.owner_id),
-    // Never `roster.owner_id === managerUserId` unguarded: an orphan roster's
-    // owner is null, and a null manager would mark every one of them.
-    is_manager: managerUserId !== null && roster.owner_id === managerUserId,
-    lineup,
-    totals,
-    picks: picks.get(roster.roster_id) ?? [],
-  }));
+  const teams: LeagueTeam[] = rosters.map(
+    ({ roster, lineup, totals, columns }) => ({
+      roster_id: roster.roster_id,
+      name: leagueTeamName(league.users, roster.roster_id, roster.owner_id),
+      // Never `roster.owner_id === managerUserId` unguarded: an orphan roster's
+      // owner is null, and a null manager would mark every one of them.
+      is_manager: managerUserId !== null && roster.owner_id === managerUserId,
+      lineup,
+      // **The ten first and the named columns over them**, which is the order
+      // that makes the spread safe: an un-narrowed column on each league's own
+      // board is keyed by its bare metric id, so it is one of the ten already
+      // and `columns` never carries it — but were it ever to, the value is the
+      // same sum either way. The keyed half is what the request asked for and
+      // is absent otherwise, which is a real state and not a zero.
+      totals: { ...totals, ...columns },
+      picks: picks.get(roster.roster_id) ?? [],
+    }),
+  );
 
   return { teams, ranks };
 }
