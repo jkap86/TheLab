@@ -7,6 +7,8 @@
 export {
   findPlaceholderDraft,
   draftTeamCount,
+  leagueTeamCount,
+  placeholderRounds,
   pickLabel,
   placeholderPicks,
   nextPickLabel,
@@ -15,5 +17,6 @@ export type { PlaceholderManager, PlaceholderPick } from "./picks";
 export { trackPlaceholderDraft, retrackPlaceholderDraft } from "./track";
 export type { PicktrackerContext, PicktrackerResult } from "./track";
 export { toPicktrackerPayload } from "./payload";
+export { readPicktrackerCard } from "./card";
 export { joinRoom, roomStats } from "./live";
 export type { JoinResult, RoomListener } from "./live";

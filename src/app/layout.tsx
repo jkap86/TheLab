@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import { RackControlsProvider, THEME_BOOT_SCRIPT } from "@/features/shared";
 import { AppRack } from "@/features/tools";
+import { resolveSiteUrl } from "@/shared/og/site-url";
 
 import "./globals.css";
 
@@ -19,7 +20,27 @@ const geistMono = Geist_Mono({
   subsets: ["latin"],
 });
 
+/**
+ * The origin every generated URL in `metadata` is resolved against.
+ *
+ * **Without it Next emits a relative `og:image`**, and several scrapers —
+ * iMessage among them — resolve that against the wrong origin and show no
+ * preview at all. It is the one piece of metadata whose absence is invisible
+ * from inside the app.
+ *
+ * **`SITE_URL` belongs in the build environment as much as the runtime one**:
+ * a prerendered page writes its `<meta>` at build time, so the origin is baked
+ * in then. `resolveSiteUrl` says so when it is missing.
+ *
+ * `resolveSiteUrl` is deep-imported rather than taken from `@/shared/og`,
+ * which that barrel explains: the barrel reads the OG fonts off disk at module
+ * scope, and this layout is on every page's path.
+ */
+const site = resolveSiteUrl(process.env, process.env.NODE_ENV === "production");
+if (site.warning) console.warn(`[metadata] ${site.warning}`);
+
 export const metadata: Metadata = {
+  metadataBase: new URL(site.url),
   title: "The Lab",
   description: "Fantasy football tools for Sleeper leagues.",
 };

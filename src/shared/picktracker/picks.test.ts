@@ -4,13 +4,16 @@ import { describe, test } from "node:test";
 import {
   draftTeamCount,
   findPlaceholderDraft,
+  leagueTeamCount,
   nextPickLabel,
   pickLabel,
   placeholderPicks,
+  placeholderRounds,
 } from "./picks.ts";
 import type {
   SleeperDraft,
   SleeperDraftPick,
+  SleeperLeague,
   SleeperLeagueUser,
 } from "@/shared/sleeper";
 
@@ -152,5 +155,65 @@ describe("nextPickLabel", () => {
 
   test("is null once the draft is complete", () => {
     assert.equal(nextPickLabel(draft({ status: "complete" }), 24, 12), null);
+  });
+});
+
+/**
+ * The two readings the Open Graph card states, which the card's own module
+ * cannot be tested through: it imports the Sleeper client for `sleeperAvatarUrl`
+ * and so does not resolve under Node's runner. Both are silent when wrong — the
+ * card renders, the numbers look plausible, and only somebody who knows the
+ * draft can tell.
+ */
+const league = (overrides: Partial<SleeperLeague> = {}): SleeperLeague => ({
+  league_id: "l1",
+  name: "Dynasty Warehouse",
+  season: "2025",
+  sport: "nfl",
+  status: "in_season",
+  total_rosters: 12,
+  avatar: "abc123",
+  previous_league_id: null,
+  draft_id: "d1",
+  roster_positions: null,
+  settings: null,
+  scoring_settings: null,
+  metadata: null,
+  ...overrides,
+});
+
+describe("leagueTeamCount", () => {
+  test("takes the draft's own team count", () => {
+    assert.equal(leagueTeamCount(draft({ settings: { teams: 10 } }), league()), 10);
+  });
+
+  test("falls back to the league's rosters, never to the draft order", () => {
+    // The trap `draftTeamCount` documents: two managers have claimed a slot in
+    // a twelve-team league, and twelve is what a card describing the league
+    // has to say.
+    const pre = draft({ settings: { slots_k: 3 }, draft_order: { u1: 1, u2: 2 } });
+    assert.equal(draftTeamCount(pre), 2);
+    assert.equal(leagueTeamCount(pre, league()), 12);
+  });
+});
+
+describe("placeholderRounds", () => {
+  test("counts kicker slots, not the startup draft's own rounds", () => {
+    // A 22-round startup standing in for a 3-round rookie draft. Reading
+    // `settings.rounds` here would put "22 rounds" on a card headed "rookie
+    // pick tracker".
+    const startup = draft({ settings: { teams: 12, slots_k: 3, rounds: 22 } });
+    assert.equal(placeholderRounds(startup), 3);
+  });
+
+  test("is positive for any draft findPlaceholderDraft returned", () => {
+    const found = findPlaceholderDraft([draft({ settings: { teams: 12, rounds: 22 } }), draft()]);
+    assert.ok(found);
+    assert.ok(placeholderRounds(found) > 0);
+  });
+
+  test("is zero where the setting is absent or not a number", () => {
+    assert.equal(placeholderRounds(draft({ settings: null })), 0);
+    assert.equal(placeholderRounds(draft({ settings: { slots_k: "3" } })), 0);
   });
 });

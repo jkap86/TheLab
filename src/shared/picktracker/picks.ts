@@ -17,6 +17,7 @@
 import type {
   SleeperDraft,
   SleeperDraftPick,
+  SleeperLeague,
   SleeperLeagueUser,
 } from "@/shared/sleeper";
 
@@ -75,6 +76,43 @@ export function draftTeamCount(draft: SleeperDraft): number {
   const teams = settingNumber(draft, "teams");
   if (teams > 0) return teams;
   return Object.keys(draft.draft_order ?? {}).length;
+}
+
+/**
+ * How many teams the league has, as a description rather than as a width.
+ *
+ * **Not {@link draftTeamCount}, and the difference is the question.** That one
+ * answers "how wide is the placeholder sequence", which the pick labels are
+ * counted against, so it must read the draft and nothing else — and its
+ * fallback, the size of `draft_order`, undercounts to however many managers
+ * have claimed a slot. This answers "how many teams are in this league", where
+ * `total_rosters` is a fact about the league rather than about who has claimed
+ * a slot, and is the better fallback. Where `settings.teams` is set — every
+ * ordinary draft — the two agree.
+ */
+export function leagueTeamCount(
+  draft: SleeperDraft,
+  league: SleeperLeague,
+): number {
+  return settingNumber(draft, "teams") || league.total_rosters;
+}
+
+/**
+ * How many rookie rounds a placeholder draft stands for.
+ *
+ * **`slots_k`, not `settings.rounds`.** The draft running the convention is a
+ * *startup*, so its `rounds` is the startup's own depth — twenty-odd — where
+ * what is being tracked is the rookie sequence the kickers stand for. Every
+ * team holds `slots_k` kicker slots and the Nth kicker off the board is rookie
+ * pick N, so that count is exactly how many rookie rounds the sequence covers.
+ *
+ * It is fixed when the draft is set up, which is what lets the Open Graph card
+ * state it — see `PicktrackerCardPayload` on why nothing that moves may go
+ * there. And it is the predicate {@link findPlaceholderDraft} selected the
+ * draft by, so on any draft that function returned it is positive.
+ */
+export function placeholderRounds(draft: SleeperDraft): number {
+  return settingNumber(draft, "slots_k");
 }
 
 /** "round.slot" for the zero-based `index`-th pick of a `teams`-wide draft. */
