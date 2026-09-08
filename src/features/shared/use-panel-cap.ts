@@ -13,6 +13,8 @@ import {
 import {
   COLLAPSE_EASE,
   COLLAPSE_MS,
+  EXPAND_EASE,
+  EXPAND_MS,
   measureFreezeTop,
   panelFit,
   panelRoom,
@@ -77,13 +79,24 @@ import {
  * on a busy page is no better, and the 260ms timer that ends the close does not
  * wait for it. So the card sat still and then vanished.
  *
- * The collapse is a {@link Animation} instead, which is what the handoff asks
- * for and what the prototype does: keyframes carry their own from-value, so
- * nothing has to be painted first and the whole thing starts in the layout
+ * Both motions are {@link Animation}s instead: keyframes carry their own
+ * from-value, so nothing has to be painted first and each starts in the layout
  * effect of the render that begins it. It also keeps the rule that made the
  * transition attractive — React stays the only writer of the panel's `style`,
  * and an animation runs in its own cascade origin above that style, so a
- * re-render mid-collapse cannot clobber it.
+ * re-render mid-motion cannot clobber it.
+ *
+ * **The collapse does not move the box.** The `collapse` phase keeps the open
+ * style — the cap, the floor, the flex — and the animation clips the panel's
+ * bottom edge up under the summary while it fades. Folding `max-height`
+ * instead re-solved the two panes on every frame, so the pinned bars rode the
+ * edge up and a twelve-team table re-laid itself thirty times; a clip and an
+ * opacity are compositor work and the contents stay exactly where they were.
+ * Nothing under the panel needs the box to shrink: parked, the card is alone
+ * in the shell, and inside the settle the cards below it are already fading
+ * out (see `useActiveCard`). The animation fills forwards, because it ends a
+ * frame or so before the timer that closes the disclosure and the panel must
+ * not flash back for that frame.
  */
 type Phase = "shut" | "open" | "collapse";
 
@@ -100,28 +113,32 @@ export function usePanelCap<T extends HTMLElement>(
   const ref = useRef<T | null>(null);
   const [fit, setFit] = useState<PanelFit | null>(null);
   /**
-   * The box the panel last stood at while open, which is where the collapse
-   * starts from.
-   *
-   * **Recorded while open rather than read when the close begins**, because by
-   * then it is too late: the collapse is a render, so the layout effect that
-   * runs the animation sees a panel React has already set to zero. A ref rather
-   * than state for the same reason it is not a measurement — nothing renders
-   * differently for it.
+   * Whichever motion is driving the panel — the unfold or the collapse — so
+   * the one that begins can stop the other. A card closed inside its own
+   * unfold would otherwise have two animations on one element, and the
+   * compositor would take the later one only for the properties it names.
    */
-  const openBox = useRef<{ height: number; marginTop: number } | null>(null);
+  const motion = useRef<Animation | null>(null);
+  /**
+   * Whether the panel was open on the last commit, which is what tells a
+   * *press* from a mount: a card deeplinked open has nothing to unfold from,
+   * and animating it from nothing would grow a panel the reader had already
+   * asked for.
+   */
+  const wasOpen = useRef(open);
 
   /**
-   * Re-read the room from the shell the card is standing in.
+   * Re-read the room from the shell the card is standing in, and answer it.
    *
    * Cheap and idempotent — three rects and a `setState` React drops when the
    * number has not moved — because it runs from the observer as well as from
-   * the open.
+   * the open. It returns the fit as well as setting it, for the unfold, which
+   * needs the target before the re-render that carries it.
    */
-  const measure = useCallback(() => {
+  const measure = useCallback((): PanelFit | null => {
     const panel = ref.current;
     const card = panel?.parentElement;
-    if (!panel || !card) return;
+    if (!panel || !card) return null;
 
     // The header's height *and* the panel's margin above it, as one distance:
     // read separately, the margin is a second number to keep in step with a
@@ -129,11 +146,7 @@ export function usePanelCap<T extends HTMLElement>(
     const offset =
       panel.getBoundingClientRect().top - card.getBoundingClientRect().top;
 
-    openBox.current = {
-      height: Math.round(panel.getBoundingClientRect().height),
-      marginTop: Number.parseFloat(getComputedStyle(panel).marginTop) || 0,
-    };
-
+    let next: PanelFit;
     const shell = panel.closest("[data-card-shell]");
     if (shell instanceof HTMLElement) {
       // `clientHeight` is the shell's content box, so it carries the plate's
@@ -141,20 +154,74 @@ export function usePanelCap<T extends HTMLElement>(
       // rather than the constant: the shell is the one that set it, and this
       // reads back what it actually did.
       const pad = Number.parseFloat(getComputedStyle(shell).paddingTop) || 0;
-      setFit(panelFit(Math.round(shell.clientHeight - pad - offset)));
-      return;
+      next = panelFit(Math.round(shell.clientHeight - pad - offset));
+    } else {
+      // No shell yet: the press has happened and the list has not stood down.
+      // The same number, predicted, so the panel does not resize under the
+      // park.
+      const { height } = parkedShell(window.innerHeight, measureFreezeTop());
+      next = panelFit(panelRoom(height, offset));
     }
-
-    // No shell yet: the press has happened and the list has not stood down.
-    // The same number, predicted, so the panel does not resize under the park.
-    const { height } = parkedShell(window.innerHeight, measureFreezeTop());
-    setFit(panelFit(panelRoom(height, offset)));
+    setFit(next);
+    return next;
   }, []);
 
-  // Measure while open, and stop measuring while shut — so a closed card's
-  // panel is never a box with a stale height, and the *next* open reads a
-  // header that has laid out at the current width rather than one from whenever
-  // it was last open.
+  /**
+   * The first measurement, and the unfold — **before paint**.
+   *
+   * A layout effect rather than a frame later, and the difference was visible:
+   * measured after paint, the panel stood at its full content height for a
+   * frame and then snapped to the cap. Here `getBoundingClientRect` forces the
+   * layout that has the panel in the flow, `setFit` re-renders synchronously
+   * before the browser paints, and the unfold starts on the same frame the
+   * disclosure opened.
+   *
+   * The unfold grows `max-height` from nothing to what the panel will actually
+   * stand at — the content's own height under the cap, or the floor — so the
+   * animation ends exactly where the style leaves it, with no jump at the end.
+   * `min-height` rides along because a floored panel's floor would otherwise
+   * win over an animated max from the first frame, and the box would not move.
+   */
+  useIsomorphicLayoutEffect(() => {
+    const panel = ref.current;
+    const arrived = open && !wasOpen.current;
+    wasOpen.current = open;
+    if (!open || !panel) return;
+
+    // Read at the content's own height: `fit` is still null on the render that
+    // opened the disclosure, so nothing is capping it yet.
+    const natural = panel.getBoundingClientRect().height;
+    const next = measure();
+    if (!arrived || !next) return;
+
+    motion.current?.cancel();
+    const target = next.floored ? next.minHeight : Math.min(natural, next.cap);
+    const marginTop = Number.parseFloat(getComputedStyle(panel).marginTop) || 0;
+    const animation = panel.animate(
+      [
+        { maxHeight: "0px", minHeight: "0px", marginTop: "0px", opacity: 0 },
+        {
+          maxHeight: `${Math.round(target)}px`,
+          minHeight: `${next.minHeight}px`,
+          marginTop: `${marginTop}px`,
+          opacity: 1,
+        },
+      ],
+      { duration: prefersReducedMotion() ? 0 : EXPAND_MS, easing: EXPAND_EASE },
+    );
+    motion.current = animation;
+    animation.finished.then(
+      () => {
+        if (motion.current === animation) motion.current = null;
+      },
+      () => {},
+    );
+  }, [open, measure]);
+
+  // Keep measuring while open, and stop while shut — so a closed card's panel
+  // is never a box with a stale height, and the *next* open reads a header that
+  // has laid out at the current width rather than one from whenever it was
+  // last open.
   useEffect(() => {
     const panel = ref.current;
     if (!open || !panel) {
@@ -182,43 +249,52 @@ export function usePanelCap<T extends HTMLElement>(
     if (list) observer.observe(list);
     window.addEventListener("resize", measure);
 
-    // One frame, so the cap is read from a header that has laid out with the
-    // panel in the flow rather than from the one that was there before it.
-    const frame = requestAnimationFrame(measure);
     return () => {
-      cancelAnimationFrame(frame);
       observer.disconnect();
       window.removeEventListener("resize", measure);
     };
   }, [open, measure]);
 
   /**
-   * Run the collapse, from the box the panel was standing at.
+   * Run the collapse, over the box the panel is standing at.
    *
    * A **layout effect**, so it starts in the same frame the close does rather
    * than a paint later — and cancelled on cleanup, so a card re-opened inside
-   * the 260ms is not left with an animation still driving it to zero.
+   * the collapse is not left with an animation still holding it shut. The clip
+   * keeps the housing's own radius at the edge that moves, read off the
+   * element rather than spelled again here, because the two expanded halves
+   * are cut at two different radii.
    */
   useIsomorphicLayoutEffect(() => {
     if (!closing) return;
     const panel = ref.current;
-    const box = openBox.current;
-    if (!panel || !box) return;
+    if (!panel) return;
+    motion.current?.cancel();
+    const radius = getComputedStyle(panel).borderRadius || "0px";
     const animation = panel.animate(
       [
         {
-          maxHeight: `${box.height}px`,
-          marginTop: `${box.marginTop}px`,
+          clipPath: `inset(0 0 0 0 round ${radius})`,
           opacity: 1,
+          transform: "translateY(0px)",
         },
-        { maxHeight: "0px", marginTop: "0px", opacity: 0 },
+        {
+          clipPath: `inset(0 0 100% 0 round ${radius})`,
+          opacity: 0,
+          transform: "translateY(-10px)",
+        },
       ],
       {
         duration: prefersReducedMotion() ? 0 : COLLAPSE_MS,
         easing: COLLAPSE_EASE,
+        fill: "forwards",
       },
     );
-    return () => animation.cancel();
+    motion.current = animation;
+    return () => {
+      animation.cancel();
+      if (motion.current === animation) motion.current = null;
+    };
   }, [closing]);
 
   const phase: Phase = !open ? "shut" : closing ? "collapse" : "open";
@@ -227,27 +303,19 @@ export function usePanelCap<T extends HTMLElement>(
 }
 
 function styleFor(phase: Phase, fit: PanelFit | null): CSSProperties | undefined {
-  if (phase === "shut") return undefined;
-  if (phase === "open") {
-    if (fit === null) return undefined;
-    return {
-      // The panel takes what the card's column has left, clamped. `flex-basis:
-      // auto` and not `0%`: a basis of zero makes the box's hypothetical size
-      // nothing, and a card whose panel has not measured yet would open at a
-      // height flex invented rather than at its content's.
-      flex: "1 1 auto",
-      maxHeight: fit.cap,
-      // Only where the room is under the floor — see `panelFit`.
-      minHeight: fit.minHeight || undefined,
-    };
-  }
-  // **Flex comes out of the equation first**, in the same style the collapse's
-  // end state is: left a shrinkable item with a floor, the box would snap to
-  // whatever room flex has the moment the floor lifts. Frozen at `0 0 auto` the
-  // used height is the animation's and nothing else's.
-  //
-  // These are the values the panel *ends* at, and the animation above plays
-  // over them — so when it finishes there is nothing to hand back to and no
-  // fill to hold.
-  return { flex: "0 0 auto", minHeight: 0, maxHeight: 0, marginTop: 0, opacity: 0 };
+  if (phase === "shut" || fit === null) return undefined;
+  // **Open and collapsing are one style.** The collapse moves no box — see the
+  // note on `Phase` — so the cap, the floor and the flex all stand for as long
+  // as the animation runs over them, and the disclosure closing is what takes
+  // the panel out of the flow at the end.
+  return {
+    // The panel takes what the card's column has left, clamped. `flex-basis:
+    // auto` and not `0%`: a basis of zero makes the box's hypothetical size
+    // nothing, and a card whose panel has not measured yet would open at a
+    // height flex invented rather than at its content's.
+    flex: "1 1 auto",
+    maxHeight: fit.cap,
+    // Only where the room is under the floor — see `panelFit`.
+    minHeight: fit.minHeight || undefined,
+  };
 }

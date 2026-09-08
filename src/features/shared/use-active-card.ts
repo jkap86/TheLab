@@ -3,6 +3,7 @@
 import {
   useCallback,
   useEffect,
+  useLayoutEffect,
   useRef,
   useState,
   useSyncExternalStore,
@@ -15,9 +16,11 @@ import {
   PARK_SETTLE_MS,
   PLATE_OVERHANG,
   SHELL_BREATH,
+  STAND_BACK_MS,
   measureFreezeTop,
   parkedShell,
   prefersReducedMotion,
+  scrollEase,
 } from "./panel-cap";
 
 /**
@@ -74,6 +77,19 @@ import {
  * is what stops the padding and the height from being taken a frame apart.
  * Nothing else writes any of them, so there is no render to race. Everything
  * the page *does* own — which cards stand down, the panel's cap — is rendered.
+ * The writes are **layout effects**, which is what keeps them one frame with
+ * the render: a passive effect runs after paint, so the list would be painted
+ * once as a shell with no height and the page as a document with no lock —
+ * the card jumping to the top of the page and back — before the write landed.
+ *
+ * **Nothing cuts.** The open and the close each pass through a stage in which
+ * the rest of the page is on its way rather than there or gone: the other
+ * cards and the header fade *during* the settle, so they are already invisible
+ * when the shell makes them `display: none`; and they come back fading in over
+ * the walk to where the reader pressed, so the un-park is not a page appearing
+ * around a card. {@link ActiveCard.chromeClass} and the two stage attributes on
+ * `shellProps` are how the page and the stylesheet read that — see
+ * `globals.css`, which is where the fades are.
  */
 
 /** What a page hands over, and what it gets back. */
@@ -94,7 +110,7 @@ export type ActiveCard = {
    * card lit off `[open]` would hold its border, halo and edge light through
    * the whole of it and let go afterwards. Lit is its own attribute, so the
    * card lets go *as* the panel closes — its own 450ms transitions running out
-   * under the 260ms collapse.
+   * under the 300ms collapse.
    */
   isLit: (id: string) => boolean;
   /** A press on a card's summary. Drives the disclosure; the native one is not. */
@@ -105,12 +121,100 @@ export type ActiveCard = {
    * Spread onto the list. While parked it marks the list as the shell, which is
    * what stands every other card down (`globals.css`) and what the panel
    * measures itself against (`usePanelCap`). Its *box* is written beside the
-   * `<main>`'s padding rather than rendered — see the module note.
+   * `<main>`'s padding rather than rendered — see the module note. Either side
+   * of the park it carries the stage instead — settling, or returning — which
+   * is what the other cards fade on.
    */
   shellProps: ShellProps;
+  /**
+   * For everything on the page that is not the list: the header, a rule, a
+   * status pill. Empty at rest; a fade-out class while the card settles;
+   * `hidden` while it is parked; a fade-in class while the page returns. A
+   * page composes it onto each of those rather than reading `parked`, so the
+   * header goes the way the other cards go rather than cutting to nothing
+   * while they fade.
+   */
+  chromeClass: string;
 };
 
-type ShellProps = { "data-card-shell"?: string };
+/** Where the page is between at rest and parked, on the way in or out. */
+type Stage = "idle" | "settling" | "parked" | "returning";
+
+type ShellProps = {
+  "data-card-shell"?: string;
+  "data-card-settling"?: string;
+  "data-card-returning"?: string;
+};
+
+const SHELL_PROPS: Record<Stage, ShellProps> = {
+  idle: {},
+  settling: { "data-card-settling": "" },
+  parked: { "data-card-shell": "" },
+  returning: { "data-card-returning": "" },
+};
+
+const CHROME_CLASS: Record<Stage, string> = {
+  idle: "",
+  settling: "lab-stand-down",
+  parked: "hidden",
+  returning: "lab-stand-back",
+};
+
+/** `useLayoutEffect` on the client, `useEffect` where there is no layout. */
+const useIsomorphicLayoutEffect =
+  typeof window === "undefined" ? useEffect : useLayoutEffect;
+
+/**
+ * Walk the page to a line, a frame at a time, and say when it has arrived.
+ *
+ * Not `behavior: "smooth"`, and the reason is in `scrollEase`'s note: the
+ * browser clamps a smooth scroll's destination to the document as it stands
+ * when the call is made, and on a press the document is still growing under
+ * the panel's unfold. `to` is read every frame and clamped to what the document
+ * can reach *now*, so a card near the foot of the page is walked to where it
+ * actually ends up rather than to where the page could reach when the reader
+ * pressed. Under reduced motion it is one instant scroll and an immediate
+ * arrival.
+ *
+ * Returns the cancel; an arrival that was cancelled never reports.
+ */
+function walkTo(
+  to: () => number,
+  duration: number,
+  onArrive: () => void,
+): () => void {
+  const clamp = (line: number) => {
+    const max = Math.max(
+      0,
+      (document.scrollingElement?.scrollHeight ?? 0) - window.innerHeight,
+    );
+    return Math.min(Math.max(0, line), max);
+  };
+  if (duration <= 0 || prefersReducedMotion()) {
+    window.scrollTo({ top: clamp(to()), behavior: "auto" });
+    onArrive();
+    return () => {};
+  }
+  const from = window.scrollY;
+  const started = performance.now();
+  let frame = 0;
+  const step = (now: number) => {
+    const progress = scrollEase((now - started) / duration);
+    const end = clamp(to());
+    window.scrollTo({ top: from + (end - from) * progress, behavior: "auto" });
+    if (progress < 1) {
+      frame = requestAnimationFrame(step);
+    } else {
+      frame = 0;
+      onArrive();
+    }
+  };
+  frame = requestAnimationFrame(step);
+  return () => {
+    if (frame) cancelAnimationFrame(frame);
+    frame = 0;
+  };
+}
 
 /**
  * `pushState` and `replaceState` fire no event, so this is the one they fire.
@@ -203,11 +307,16 @@ export function useActiveCard({
    *
    * This is the whole of why `active` can be derived and still animate: the URL
    * changes the instant a close begins — on a press, on a Back, on a narrowing
-   * — and something has to hold the card on screen for the 260ms after it.
+   * — and something has to hold the card on screen for the 300ms after it.
    */
   const [closingId, setClosingId] = useState<string | null>(null);
-  /** True during the smooth scroll, before the list stands down. */
+  /** True during the walk into place, before the list stands down. */
   const [settling, setSettling] = useState(false);
+  /**
+   * The card the page is walking back from: set when a collapse ends with
+   * nothing open, cleared once the other cards have faded back in.
+   */
+  const [returningId, setReturningId] = useState<string | null>(null);
 
   /**
    * A Back, or a narrowing that took the open card off the list, is a close
@@ -242,12 +351,24 @@ export function useActiveCard({
   // A card is parked from the moment the scroll settles until the collapse has
   // finished — so the list stays stood down under a panel that is still moving.
   const parked = active !== null && !settling;
+  const stage: Stage =
+    active !== null
+      ? settling
+        ? "settling"
+        : "parked"
+      : returningId !== null
+        ? "returning"
+        : "idle";
 
   /** Whether this view owns the history entry, and may therefore pop it. */
   const pushed = useRef(false);
-  /** Where to return the reader on close. */
-  const scrollAtPress = useRef(0);
-  const parkTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  /**
+   * Where to return the reader on close, or null for a card nobody pressed —
+   * a deeplink — which has nowhere to walk back to and is left where it is.
+   */
+  const scrollAtPress = useRef<number | null>(null);
+  /** The walk into place, so a close inside it can stop it. */
+  const walk = useRef<(() => void) | null>(null);
 
   /**
    * Cancel a pending park **without declaring the settle over**.
@@ -257,13 +378,13 @@ export function useActiveCard({
    * `settling` there would make `parked` true on the very render the collapse
    * begins — the other cards would vanish, the panel would fold, and the whole
    * list would come back, all inside a third of a second. Left set, the card
-   * never parks at all and the collapse runs in the ordinary list, which is
-   * what a reader who changed their mind that fast is looking at anyway. The
-   * close's own timer is what clears it.
+   * never parks at all and the collapse runs in the ordinary list — whose
+   * other cards are already fading, and fade back on the return like any
+   * other close. The close's own timer is what clears it.
    */
   const cancelPark = useCallback(() => {
-    if (parkTimer.current) clearTimeout(parkTimer.current);
-    parkTimer.current = null;
+    walk.current?.();
+    walk.current = null;
   }, []);
 
   const open = useCallback(
@@ -277,37 +398,30 @@ export function useActiveCard({
       const push = current === null;
 
       // **Only on the press that opens from nothing.** Switching cards happens
-      // inside the settle, mid-smooth-scroll, so re-reading here would replace
-      // the row the reader actually came from with wherever the animation had
-      // got to.
+      // inside the settle, mid-walk, so re-reading here would replace the row
+      // the reader actually came from with wherever the animation had got to.
       if (push) scrollAtPress.current = window.scrollY;
       setClosingId(null);
+      setReturningId(null);
       setSettling(true);
       writeQueryParam(param, id, push);
       if (push) pushed.current = true;
 
-      // **The scroll and the wait for it are one decision.** Under reduced
-      // motion the scroll is instant, so the settle is a third of a second of
-      // the list standing there for no reason — the card would park late
-      // against a page that had already arrived.
-      const still = prefersReducedMotion();
-      if (li) {
-        const delta = li.getBoundingClientRect().top - measureFreezeTop();
-        window.scrollTo({
-          top: Math.max(0, window.scrollY + delta),
-          behavior: still ? "auto" : "smooth",
-        });
-      }
-      if (parkTimer.current) clearTimeout(parkTimer.current);
-      parkTimer.current = setTimeout(
-        () => {
-          parkTimer.current = null;
-          setSettling(false);
-        },
-        still ? 0 : PARK_SETTLE_MS,
-      );
+      // **The walk and the wait for it are one decision.** The list stands
+      // down when the walk arrives — which under reduced motion is at once, so
+      // the card parks against a page that has already arrived rather than a
+      // third of a second later.
+      cancelPark();
+      const freezeTop = measureFreezeTop();
+      const line = li
+        ? () => window.scrollY + li.getBoundingClientRect().top - freezeTop
+        : () => window.scrollY;
+      walk.current = walkTo(line, PARK_SETTLE_MS, () => {
+        walk.current = null;
+        setSettling(false);
+      });
     },
-    [param],
+    [param, cancelPark],
   );
 
   /**
@@ -325,7 +439,7 @@ export function useActiveCard({
     // **The collapse begins here, not when the URL catches up**, and that is a
     // measurement rather than a shortcut. Popping a history entry is a
     // same-document traversal Chrome queues as a task: driven, `back()` took
-    // **220ms** to deliver its `popstate`, against a 260ms collapse — so a close
+    // **220ms** to deliver its `popstate`, against the collapse — so a close
     // that waited for the URL sat still for most of its own animation and then
     // vanished. Setting it here costs nothing in correctness, because the
     // render-time branch below is guarded on this being unset: whichever of the
@@ -360,56 +474,104 @@ export function useActiveCard({
   );
 
   /**
-   * The collapse's own clock, and the walk back to where the reader pressed.
+   * The collapse's own clock.
    *
-   * **The page is landed where the card already is, then walked back.**
-   * Released outright the document is at scroll 0 with a hundred cards above
-   * the one being read; put back at the card's own line first, the smooth
-   * scroll to where the reader pressed reads as the press undone.
+   * When it runs out the URL has let the card go and nothing has put another
+   * back, so the page begins its return: the list comes back around the card
+   * and the walk back to where the reader pressed starts — both in the layout
+   * effect below, on the same frame, so the card never paints anywhere but
+   * where it was.
    */
   useEffect(() => {
     if (closingId === null) return;
     const id = closingId;
     const timer = setTimeout(() => {
-      const card =
-        listRef.current?.querySelector<HTMLElement>(
-          `li[data-card="${CSS.escape(id)}"]`,
-        ) ?? null;
-      const freezeTop = measureFreezeTop();
-      const to = scrollAtPress.current;
-
       setClosingId(null);
       // Whatever `cancelPark` left standing — see it for why it does not.
       setSettling(false);
-
-      // Something put a card back inside the 260ms — a Forward, or a press on
-      // another row. The page is where it should be; leave it alone.
+      // Something put a card back inside the collapse — a Forward, or a press
+      // on another row. The page is where it should be; leave it alone.
       if (readQueryParam(param) !== null) return;
-
-      // One frame, so the list is back around the card before its line is read:
-      // measured inside the parked shell the rect would be the shell's.
-      requestAnimationFrame(() => {
-        if (card && card.isConnected) {
-          const here =
-            card.getBoundingClientRect().top + window.scrollY - freezeTop;
-          window.scrollTo({ top: Math.max(0, here) });
-          requestAnimationFrame(() =>
-            window.scrollTo({
-              top: to,
-              behavior: prefersReducedMotion() ? "auto" : "smooth",
-            }),
-          );
-        } else {
-          window.scrollTo({ top: to });
-        }
-      });
+      setReturningId(id);
     }, COLLAPSE_MS);
     return () => clearTimeout(timer);
-  }, [closingId, listRef, param]);
+  }, [closingId, param]);
+
+  /**
+   * The return: land the page where the card already is, then walk it back.
+   *
+   * **A layout effect, and the order inside the commit is the whole of it.**
+   * The render that starts the return is the one that un-parks: React removes
+   * the shell attribute and shows the other cards in the mutation phase, runs
+   * the park effect's cleanup (which hands the `<main>` and the list their own
+   * boxes back) in the same phase, and only then runs this — so the card's
+   * line is read from a document that is whole again, and the instant scroll
+   * that keeps the card where the reader is looking lands before anything is
+   * painted. Released outright the document is at scroll 0 with a hundred
+   * cards above the one being read, and a passive effect would have painted
+   * exactly that for a frame.
+   *
+   * The walk back reads as the press undone, and the other cards fade in over
+   * it. A deeplinked card has no press to undo, so the page stays on it.
+   */
+  useIsomorphicLayoutEffect(() => {
+    if (returningId === null) return;
+    const card =
+      listRef.current?.querySelector<HTMLElement>(
+        `li[data-card="${CSS.escape(returningId)}"]`,
+      ) ?? null;
+    const main = listRef.current?.closest("main");
+    let rest = 0;
+    let slack = 0;
+    if (card && card.isConnected) {
+      const here = Math.max(
+        0,
+        card.getBoundingClientRect().top + window.scrollY - measureFreezeTop(),
+      );
+      // **A card near the foot of the page cannot stay where it was parked**,
+      // because the document under it is too short to scroll that far — so
+      // without help it would jump down the screen the instant the list came
+      // back, which is the one cut the return would still have. The page is
+      // lent exactly the slack it is short, as padding under the `<main>`, for
+      // the length of the walk; the walk's own destination is always reachable
+      // without it (it is a line the page stood at before), so taking the
+      // slack away at the end moves nothing.
+      const reach = Math.max(
+        0,
+        (document.scrollingElement?.scrollHeight ?? 0) - window.innerHeight,
+      );
+      slack = Math.max(0, here - reach);
+      if (slack > 0 && main instanceof HTMLElement) {
+        const own = Number.parseFloat(getComputedStyle(main).paddingBottom) || 0;
+        main.style.paddingBottom = `${own + slack}px`;
+      }
+      window.scrollTo({ top: here, behavior: "auto" });
+      // Where the card can rest once the slack goes: a deeplinked card, which
+      // has no press to walk back to, is walked here rather than left to drop.
+      rest = here - slack;
+    }
+    const to = scrollAtPress.current ?? rest;
+    scrollAtPress.current = null;
+    const release = () => {
+      if (main instanceof HTMLElement) main.style.paddingBottom = "";
+    };
+    const cancel = walkTo(
+      () => to,
+      STAND_BACK_MS,
+      () => {
+        release();
+        setReturningId(null);
+      },
+    );
+    return () => {
+      cancel();
+      release();
+    };
+  }, [returningId, listRef]);
 
   /* ── The park's own DOM: the lock, the shell's box, the resize ────── */
 
-  useEffect(() => {
+  useIsomorphicLayoutEffect(() => {
     if (!parked) return;
     const root = document.documentElement;
     const body = document.body;
@@ -500,7 +662,8 @@ export function useActiveCard({
 
   useEffect(
     () => () => {
-      if (parkTimer.current) clearTimeout(parkTimer.current);
+      walk.current?.();
+      walk.current = null;
     },
     [],
   );
@@ -513,6 +676,7 @@ export function useActiveCard({
     isLit: (id) => active === id && !closing,
     toggle,
     close,
-    shellProps: parked ? { "data-card-shell": "" } : {},
+    shellProps: SHELL_PROPS[stage],
+    chromeClass: CHROME_CLASS[stage],
   };
 }

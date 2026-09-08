@@ -374,8 +374,10 @@ export function LeaguesHome({
     <div className="relative">
       {/* The page's own header stands down while a card is parked: it is
           `display: none` rather than unmounted, so the two dialogs it holds
-          keep their draft state and neither is rebuilt when the card closes. */}
-      <header className={`relative ${card.parked ? "hidden" : ""}`}>
+          keep their draft state and neither is rebuilt when the card closes.
+          `chromeClass` is what fades it out on the way there and in on the
+          way back, with the other cards — see `useActiveCard`. */}
+      <header className={`relative ${card.chromeClass}`}>
         <ManagerBillet
           name={name}
           avatarUrl={user?.avatar_url ?? null}
@@ -507,12 +509,16 @@ export function LeaguesHome({
           controls; it is only a boundary now. */}
       <div
         aria-hidden
-        className={`relative my-9 h-px bg-gradient-to-r from-active/35 via-foreground/5 to-transparent ${card.parked ? "hidden" : ""}`}
+        className={`relative my-9 h-px bg-gradient-to-r from-active/35 via-foreground/5 to-transparent ${card.chromeClass}`}
       />
 
       {/* The drawers hide their own state once closed, so the narrowing they
           applied has to be named somewhere the reader can see and undo it. */}
-      <div className={card.parked ? "hidden" : "contents"}>
+      {/* `contents` at rest so the page's layout is what it was; a block while
+          it fades, because opacity has no effect on an element with no box —
+          and a block wrapper with no padding or border lays out its children
+          exactly as `contents` did. */}
+      <div className={card.chromeClass || "contents"}>
         <SubjectTokens
           subjects={subjects}
           names={subjectName}
@@ -536,7 +542,7 @@ export function LeaguesHome({
         <>
           {refreshing && (
             <p
-              className={`relative mb-6 inline-flex items-center gap-3 rounded-full border border-foreground/8 bg-[image:var(--key-bg)] py-2 pl-2.5 pr-5 shadow-[var(--plate-shadow)] ${card.parked ? "hidden" : ""}`}
+              className={`relative mb-6 inline-flex items-center gap-3 rounded-full border border-foreground/8 bg-[image:var(--key-bg)] py-2 pl-2.5 pr-5 shadow-[var(--plate-shadow)] ${card.chromeClass}`}
               aria-live="polite"
             >
               <span className="relative inline-flex items-center gap-2.5 overflow-hidden rounded-full border border-black/85 bg-[image:var(--readout-bg)] px-3.5 py-1.5 shadow-[var(--readout-shadow)]">
@@ -566,7 +572,7 @@ export function LeaguesHome({
           {refreshError && (
             <p
               role="alert"
-              className={`relative mb-6 inline-flex items-center gap-3 rounded-full border border-error/28 bg-[image:var(--alert-bg)] px-5 py-2.5 font-mono text-[length:var(--fs-13)] text-error shadow-[inset_0_1px_0_rgba(255,255,255,0.12),0_3px_0_rgba(0,0,0,0.7)] ${card.parked ? "hidden" : ""}`}
+              className={`relative mb-6 inline-flex items-center gap-3 rounded-full border border-error/28 bg-[image:var(--alert-bg)] px-5 py-2.5 font-mono text-[length:var(--fs-13)] text-error shadow-[inset_0_1px_0_rgba(255,255,255,0.12),0_3px_0_rgba(0,0,0,0.7)] ${card.chromeClass}`}
             >
               <span aria-hidden className="size-[0.4375rem] rounded-full bg-error shadow-[0_0_10px_var(--error)]" />
               {refreshError}
