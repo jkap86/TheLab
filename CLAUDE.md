@@ -7100,6 +7100,109 @@ designs this does not carry: the ref-count already bounds pollers by actual
 readers, and each of those arrives with a second instance or a load problem to
 size it against.
 
+## Taking TheLabX's address
+
+This app replaces TheLabX at the URL that one served, so every link a reader
+ever bookmarked there arrives here. Most already answer — `/tools`, `/trades`,
+`/comps`, `/picktracker` and `/picktracker/<id>` are the same path in both, and
+`/` is this app's own landing rather than anything inherited. What was left was
+four paths and whatever nobody has thought of, and the two are answered by two
+different mechanisms for a reason.
+
+**A manager's URL over there was always a tab.** `app/manager/[searched]/` in
+that repo holds `leagues/`, `players/` and `leaguemates/` and **no page of its
+own**, so there is no such thing as a bookmarked `/manager/<name>` from TheLabX
+— every real one is three segments. All three are one page here: the leagues
+grid, with players and leaguemates as its two drawers. So the redirect drops the
+tab and keeps the manager (`/manager/:username/:tab+` → `/manager/:username`),
+which leaves the bookmark answering the question it was made for instead of
+dumping its reader on a lookup field with the name they arrived with thrown
+away. Sleeper's query string rides along, which `redirects()` does for free.
+
+**`:tab+`, not `:tab*`, and that is the difference between a redirect and a
+loop.** Redirects are checked *before* the filesystem, so a `*` — zero or more —
+matches `/manager/<name>` itself and sends it back to itself for ever, taking
+the page the redirect exists to deliver readers to with it.
+
+**The two bare routes go to `/tools` because there is nothing to carry.**
+Neither `/manager` nor `/lineupchecker` exists here by construction — a tool
+about somebody's leagues names them in its path — and the tools page resolves
+both off the stored account, so a reader arriving with no name is one press from
+the page they wanted. All four are **308**, because none of them will be a page
+here: the two bare routes are a deliberate absence and the tab segment has no
+meaning left to recover. A 308 is cached by a browser for ever, which is the
+right claim about a retired URL and the wrong one about a path this app might
+yet serve — which is why anything worth one has to be named in `next.config.ts`,
+and why the catch-all makes no such claim.
+
+### Everything else falls through to the tool grid
+
+`app/not-found.tsx` calls `redirect("/tools")`, and **it is there rather than in
+`redirects()` because of what fires it.** A config redirect is checked before
+the filesystem, so a catch-all `source` would have to carry a negative lookahead
+naming every real route — and would then silently swallow the next one added,
+which is a page that renders perfectly in development and redirects away in
+production with nothing on screen saying why. `not-found` runs only where Next
+itself found no route, which is the signal that is right by construction rather
+than by a list somebody has to keep in step.
+
+**The redirect is the client's, and the response is still a 404.** Next pins
+this route's status whatever is rendered in it — `force-dynamic` does not move
+it, which was checked — so what ships is a 404 carrying a `Location: /tools`
+header no browser follows, plus a `NEXT_REDIRECT` in the flight payload that
+React runs on hydration. What it does not do is redirect a client with no
+JavaScript, so a crawler sees a 404 for a URL that genuinely does not exist,
+which is the honest answer to give one. The other side of catching everything is
+that an unmatched `/api/...` — TheLabX's `/api/adp` and the rest — answers HTML
+rather than saying there is nothing there; nothing outside this app called
+those, and a reader holding a stale *page* link is far likelier than a caller
+holding a stale JSON one.
+
+**A root `[...slug]` page would answer a real 307 and would cost `/logs` its
+cover**, which is why it was not taken. That page answers a missing or wrong key
+with `notFound()` precisely so it looks like no page at all, and a catch-all
+*route* does not catch `notFound()` — so `/logs` would be the one path in the
+app still answering 404 while every unknown one answered 307, which makes the
+404 the tell rather than the cover. Rendered through `not-found` instead they
+are the same answer to a reader.
+
+### Verified
+
+Against the production build on a throwaway port, with the four loops off.
+Every enumerated redirect lands: `/` and `/manager` and `/lineupchecker` → 308
+`/tools`; `/manager/jkap86/leagues`, `/players`, `/leaguemates` and a
+deliberately over-deep `/leagues/deep` → 308 `/manager/jkap86`, with
+`?season=2024` carried through. **`/manager/jkap86` itself answers 200** — the
+`+`/`*` loop, checked rather than reasoned about — and so do `/tools`,
+`/trades`, `/comps`, `/picktracker`, `/picktracker/1234` and
+`/lineupchecker/jkap86`.
+
+The catch-all was driven in headless Chrome over CDP, since a `curl` cannot see
+a redirect React performs: `/nonsense` lands on `/tools` inside ~50ms, and under
+20× CPU throttling the frame before hydration is the app's own dark ground
+carrying the rack rather than an error page. The browser logs one 404 for the
+document, which is the whole of the visible cost. `/nonsense`, `/old/thelabx/path`,
+`/api/adp` and `/api/user/jkap86/ranks` all carry the same
+`NEXT_REDIRECT;replace;/tools;307` — and so does `/logs` with no key, which is
+the indistinguishability claim above, checked. They are not byte-identical: a
+prerendered 404 carries `x-nextjs-prerender` and the `Location` header where a
+dynamically rendered one carries neither, but that asymmetry is `/logs` being
+`force-dynamic` and predates this. `/api/logs` is untouched — a route handler
+answers it with its own JSON 404 and never reaches `not-found`.
+
+`lint`, `typecheck` and `build` are clean and 2,087 unit tests pass. One
+pre-existing failure was cleared on the way: `.next/types/validator.ts` was
+stale from a build when `app/lineupchecker/page.tsx` still existed, so
+`typecheck` was failing on a generated file; a build regenerates it.
+
+**Not verified against the real domain**, which is the gap to close first: every
+path above was typed by hand from TheLabX's own `app/` tree, so what this cannot
+say is which URLs readers actually hold. `/logs` is the app's own record of
+that, and the first week of 404s after the cutover is what would name a path
+this list has missed — a path the catch-all already delivers, but which may
+deserve a destination better than the tool grid.
+
+
 ## Who has visited
 
 `/logs` is every request this app has recorded, narrowed three ways, over a
