@@ -1,14 +1,20 @@
 /**
  * Whether the league crawler may spend anything right now.
  *
- * The crawler shares a process — and on a Heroku Basic dyno a 512 MB quota —
- * with the web server it exists to fill the cache for, and it is the only thing
- * in that process that can be asked to wait. A tick is a Sleeper fan-out over a
- * batch of leagues whose parsed graphs, rosters, transactions and matchups all
- * live in memory at once, so it is also the one workload that can walk the dyno
- * into swapping while a request is being served. This module is what lets it
- * stand down: **background freshness is opportunistic, user-facing traffic is
- * not.**
+ * Under `APP_PROCESS_ROLE=all` — the default, and a deployment that is one Heroku
+ * Basic dyno — the crawler shares a process and a 512 MB quota with the web
+ * server it exists to fill the cache for, and it is the only thing in that
+ * process that can be asked to wait. A tick is a Sleeper fan-out over a batch of
+ * leagues whose parsed graphs, rosters, transactions and matchups all live in
+ * memory at once, so it is also the one workload that can walk the dyno into
+ * swapping while a request is being served. This module is what lets it stand
+ * down: **background freshness is opportunistic, user-facing traffic is not.**
+ *
+ * It is complementary to the worker split rather than an alternative to it. A
+ * `web` role starts no crawler and never reaches here; a `worker` role brings
+ * this along unchanged, where it bounds that process's own RSS — the right unit
+ * either way, and conservative there, since the bands below are sized for a
+ * process that is *also* holding Next's runtime.
  *
  * **The signal is RSS, deliberately, and not `heapUsed`.** What the platform
  * kills a dyno for is resident memory, and this process holds a great deal that
@@ -403,6 +409,11 @@ export type PoolPressure = PoolSignal & {
    * queue. Both are read at a batch boundary, where the crawler itself holds one
    * lock session and no transactions, so what they measure is mostly somebody
    * else.
+   *
+   * "Somebody else" is a request under `APP_PROCESS_ROLE=all` and one of this
+   * crawler's own passes on a `worker`, which are different sentences and the
+   * same decision: the signal only ever narrows the width, so reading it on a
+   * worker costs a slower batch rather than a wrong one.
    */
   saturated: boolean;
 };

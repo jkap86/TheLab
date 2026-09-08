@@ -34,12 +34,37 @@ import type { DraftAdpBoards, ManagerLeagueRow } from "./queries";
 export const managerReadKey = (userId: string, season: string): string =>
   `${userId}:${season}`;
 
-export type ReadMemoOptions = {
+export type ReadMemoOptions<V = unknown> = {
   /** How long an answer is served before the next read replaces it. */
   ttlMs: number;
   /** How many keys are held; past it the least recently written goes. */
   max: number;
   now?: () => number;
+  /**
+   * The most total weight held, in {@link weigh}'s own unit.
+   *
+   * **An entry count alone is not a bound on memory here**, and these two memos
+   * are exactly why: one manager's league rows are a dozen leagues and
+   * another's are a hundred and thirteen, each carrying every roster, every
+   * member and every draft of its league. Two hundred of the first is nothing
+   * and two hundred of the second is the process. So a memo whose answers vary
+   * that way states a weight budget beside the count and is trimmed to whichever
+   * bites first.
+   */
+  maxWeight?: number;
+  /**
+   * How heavy one *resolved* answer is, in a unit of the caller's own choosing
+   * — rows, ids, entries. Never bytes, and deliberately never a
+   * `JSON.stringify().length`: measuring a value by serialising it costs more
+   * than the query it stands in front of.
+   *
+   * It runs when the promise resolves rather than when it is stored, which is
+   * the one thing this cannot share with {@link BoundedCache}: what is held
+   * here is a promise, and its weight is not knowable until it settles. Until
+   * then the entry weighs nothing, which is right — an in-flight read is a
+   * promise and a closure, not an answer.
+   */
+  weigh?: (value: V) => number;
 };
 
 /**
@@ -52,11 +77,46 @@ export type ReadMemo<V> = {
   forget(matches: (key: string) => boolean): number;
   clear(): void;
   readonly size: number;
+  /** Total weight of the answers that have resolved. For tests and diagnostics. */
+  readonly weight: number;
 };
 
-export function createReadMemo<V>(options: ReadMemoOptions): ReadMemo<V> {
-  const { ttlMs, max, now = Date.now } = options;
-  const entries = new Map<string, { at: number; value: Promise<V> }>();
+type MemoEntry<V> = { at: number; value: Promise<V>; weight: number };
+
+export function createReadMemo<V>(options: ReadMemoOptions<V>): ReadMemo<V> {
+  const {
+    ttlMs,
+    max,
+    now = Date.now,
+    maxWeight = Infinity,
+    weigh,
+  } = options;
+  const entries = new Map<string, MemoEntry<V>>();
+  let weight = 0;
+
+  const drop = (key: string): boolean => {
+    const entry = entries.get(key);
+    if (!entry) return false;
+    weight -= entry.weight;
+    entries.delete(key);
+    return true;
+  };
+
+  /**
+   * Trim to both bounds, oldest first.
+   *
+   * `size > 1` on the weight arm for {@link BoundedCache}'s reason: an answer
+   * heavier than the whole budget cannot be evicted *to*, so trimming to it
+   * would empty the memo and still be over. The oversized entry is dropped
+   * where it is written instead — see the resolution handler.
+   */
+  const trim = (): void => {
+    while (entries.size > max || (weight > maxWeight && entries.size > 1)) {
+      const oldest = entries.keys().next();
+      if (oldest.done) break;
+      drop(oldest.value);
+    }
+  };
 
   return {
     read(key, load) {
@@ -71,41 +131,58 @@ export function createReadMemo<V>(options: ReadMemoOptions): ReadMemo<V> {
       // otherwise hold up to `max` answers nobody can be served.
       for (const [stale, entry] of entries) {
         if (at - entry.at < ttlMs) break;
-        entries.delete(stale);
+        drop(stale);
       }
 
-      const entry = { at, value: load() };
+      const entry: MemoEntry<V> = { at, value: load(), weight: 0 };
       // Delete-then-set so a refreshed key is the youngest.
-      entries.delete(key);
+      drop(key);
       entries.set(key, entry);
       // A rejection un-stores *this* entry only — a newer read may already be
       // underway — which is what makes a database blip immediately retryable
       // rather than remembered for the TTL.
-      entry.value.catch(() => {
-        if (entries.get(key) === entry) entries.delete(key);
-      });
+      entry.value.then(
+        (value) => {
+          // **Weighed on resolution, which is the only moment it can be.** An
+          // entry that has been replaced or forgotten in the meantime is not
+          // this one, and adding its weight to the running total would leave a
+          // figure describing entries the map no longer holds.
+          if (weigh === undefined || entries.get(key) !== entry) return;
+          entry.weight = weigh(value);
+          weight += entry.weight;
+          // One answer bigger than the whole budget is not held: trimming
+          // cannot reach it, and exempting it is the unbounded map both bounds
+          // exist to prevent. Everyone already awaiting it is still served —
+          // the promise is theirs — and the next reader pays a query.
+          if (entry.weight > maxWeight) drop(key);
+          else trim();
+        },
+        () => {
+          if (entries.get(key) === entry) drop(key);
+        },
+      );
 
-      while (entries.size > max) {
-        const oldest = entries.keys().next();
-        if (oldest.done) break;
-        entries.delete(oldest.value);
-      }
+      trim();
       return entry.value;
     },
     forget(matches) {
       let dropped = 0;
       for (const key of [...entries.keys()]) {
         if (!matches(key)) continue;
-        entries.delete(key);
+        drop(key);
         dropped += 1;
       }
       return dropped;
     },
     clear() {
       entries.clear();
+      weight = 0;
     },
     get size() {
       return entries.size;
+    },
+    get weight() {
+      return weight;
     },
   };
 }
@@ -256,8 +333,71 @@ export const MANAGER_DRAFT_ADP_TTL_MS = 15 * 60 * 1000;
  */
 export const MANAGER_LEAGUE_ROWS_TTL_MS = 60 * 1000;
 
-/** Sized for the managers a process is asked about inside one TTL, with room. */
+/**
+ * How many managers' answers each memo holds, and how much of each.
+ *
+ * **Two bounds because these two answers are not the same size as each
+ * other, and neither is the same size from one manager to the next.** Two
+ * hundred was the count both memos shared, and it is a reasonable *count* — the
+ * managers a process is asked about inside one TTL, with room. What it is not
+ * is a bound on memory: one league row carries every roster of its league, with
+ * every player id on each, plus its members, its drafts and its traded picks,
+ * and a 113-league account's rows are two orders of magnitude heavier than a
+ * six-league account's. Two hundred of the heavy kind is a heap this process
+ * cannot afford; two hundred of the light kind is nothing, and a count low
+ * enough for the first would throw the second away for no reason.
+ *
+ * So each memo states what it is measured in, and the count survives as the
+ * bound on *keys*. Whichever bites first is what trims.
+ */
 const MANAGER_READ_MAX = 200;
+
+/**
+ * The league-rows budget, in **rostered player ids** — the thing that actually
+ * varies, and the one figure in a row that a `length` reaches without walking
+ * anything.
+ *
+ * A twelve-team league of 25-man rosters is ~300; a 113-league account is
+ * ~34,000. 400,000 is therefore about a dozen such accounts, or a great many
+ * ordinary ones, and it is the number to lower if a box ever runs tight. An
+ * account past it on its own is not held at all — see {@link createReadMemo} —
+ * which costs that reader a query per request and everyone else their cache.
+ */
+const MANAGER_LEAGUE_ROWS_MAX_WEIGHT = 400_000;
+
+/**
+ * The draft-capital budget, in **priced player ids** across both boards.
+ *
+ * An entry is two maps of id → `AdpEntry`, so its weight is what those maps
+ * hold: a few hundred for one league's rookie draft, a few thousand for a
+ * manager whose account spans a corpus of full drafts. 200,000 is generous
+ * against either and is a real ceiling rather than a count that says nothing.
+ */
+const MANAGER_DRAFT_ADP_MAX_WEIGHT = 200_000;
+
+/**
+ * How heavy one manager's league rows are: the ids their rosters hold.
+ *
+ * **Cheap and deterministic**, which is what {@link ReadMemoOptions.weigh}
+ * requires: two nested `length` reads per league and no allocation. It is not
+ * the whole of what a row weighs — the users, drafts and traded picks are
+ * there too — and it does not need to be, because it is the term that varies
+ * by two orders of magnitude between accounts. A weight function is a bound's
+ * unit, not an estimate of bytes.
+ */
+export function weighManagerLeagueRows(rows: readonly ManagerLeagueRow[]): number {
+  let weight = 0;
+  for (const league of rows) {
+    weight += 1;
+    for (const roster of league.rosters) weight += roster.players.length;
+  }
+  return weight;
+}
+
+/** How heavy one manager's draft-capital boards are: the ids they price. */
+export function weighDraftAdpBoards(boards: DraftAdpBoards): number {
+  return boards.superflex.size + boards.standard.size;
+}
 
 /**
  * On `globalThis`, for `board-read`'s and `ros-read`'s reason: a per-bundle
@@ -272,15 +412,19 @@ const globalScope = globalThis as typeof globalThis & {
 };
 
 const draftAdpMemo = (): ReadMemo<DraftAdpBoards> =>
-  (globalScope[DRAFT_ADP_KEY] ??= createReadMemo({
+  (globalScope[DRAFT_ADP_KEY] ??= createReadMemo<DraftAdpBoards>({
     max: MANAGER_READ_MAX,
     ttlMs: MANAGER_DRAFT_ADP_TTL_MS,
+    maxWeight: MANAGER_DRAFT_ADP_MAX_WEIGHT,
+    weigh: weighDraftAdpBoards,
   }));
 
 const leagueRowsMemo = (): ReadMemo<ManagerLeagueRow[]> =>
-  (globalScope[LEAGUE_ROWS_KEY] ??= createReadMemo({
+  (globalScope[LEAGUE_ROWS_KEY] ??= createReadMemo<ManagerLeagueRow[]>({
     max: MANAGER_READ_MAX,
     ttlMs: MANAGER_LEAGUE_ROWS_TTL_MS,
+    maxWeight: MANAGER_LEAGUE_ROWS_MAX_WEIGHT,
+    weigh: weighManagerLeagueRows,
   }));
 
 /**

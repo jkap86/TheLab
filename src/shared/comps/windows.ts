@@ -80,17 +80,34 @@ export function windowReading(
   }
 
   const of = spanOf(window, row.history.length);
-  const series = row.history
-    .slice(0, of)
-    .map((line) => line[field])
-    .filter((v): v is number => v !== null);
-  if (series.length === 0) return { value: null, used: 0, of };
 
-  const value =
-    window === "chigh"
-      ? Math.max(...series)
-      : series.reduce((a, b) => a + b, 0) / series.length;
-  return { value, used: series.length, of };
+  // **One pass, no intermediate arrays**, and that is a hot-path decision
+  // rather than a style: `rankComps` calls this once per (candidate × criterion
+  // × field × window) *and* once more per pool row per requested pair to build
+  // the z-score scales, which over eight thousand player-seasons and eleven
+  // criteria is hundreds of thousands of calls per request. The `slice` +
+  // `map` + `filter` + spread this replaces allocated three arrays and an
+  // argument list every one of them, all of them dead the moment the number
+  // came out.
+  //
+  // The arithmetic is unchanged, including the two rules that are easy to lose
+  // in a rewrite: a null season is **skipped** rather than counted as a zero
+  // (which would drag every average down and make "no figure on file"
+  // indistinguishable from "played and did nothing"), and a window in which
+  // *every* season is null answers null rather than 0 or NaN.
+  let used = 0;
+  let sum = 0;
+  let max = 0;
+  for (let i = 0; i < of; i++) {
+    const value = row.history[i][field];
+    if (value === null) continue;
+    if (used === 0 || value > max) max = value;
+    used += 1;
+    sum += value;
+  }
+  if (used === 0) return { value: null, used: 0, of };
+
+  return { value: window === "chigh" ? max : sum / used, used, of };
 }
 
 /**

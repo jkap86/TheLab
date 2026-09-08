@@ -33,6 +33,7 @@ export {
   type TeamTotals,
   type LeagueTeam,
   type LeagueLineupEntry,
+  type LeagueLineupSummary,
   type LeagueLineupPayload,
   type ManagerLineupsPayload,
 } from "./lineups";

@@ -2,7 +2,9 @@
   "name": "thelab",
   "version": "0.1.0",
   "private": true,
-  "sideEffects": ["**/*.css"],
+  "sideEffects": [
+    "**/*.css"
+  ],
   "scripts": {
     "dev": "next dev",
     "build": "next build",
@@ -16,7 +18,8 @@
     "migrate:down": "node --env-file=.env node_modules/.bin/node-pg-migrate down -m db/migrations",
     "migrate:create": "node-pg-migrate create -m db/migrations -j sql",
     "verify:manager-scope": "node --experimental-strip-types --import ./scripts/register-alias.mjs scripts/verify-manager-scope.ts",
-    "verify:crawl-pressure": "node --experimental-strip-types --import ./scripts/register-alias.mjs scripts/verify-crawl-pressure.ts"
+    "verify:crawl-pressure": "node --experimental-strip-types --import ./scripts/register-alias.mjs scripts/verify-crawl-pressure.ts",
+    "worker": "node --experimental-strip-types --import ./scripts/register-alias.mjs scripts/worker.ts"
   },
   "dependencies": {
     "next": "16.3.3",

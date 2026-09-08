@@ -427,3 +427,74 @@ describe("isEligible", () => {
     assert.equal(isEligible(season({ position: "RB", player_id: "p1" }), null, bounds), true);
   });
 });
+
+/**
+ * The execution-scoped field tables against the reference they replaced.
+ *
+ * The distance loop no longer calls `windowReading` per row per field, nor
+ * `zStats` over an array of the readable values: the pass that builds the
+ * z-scale keeps what it read, in typed arrays indexed by the row's position in
+ * the pool, and computes mean and SD inline. **Both halves of that are silent
+ * when wrong** — a scale off by a row shifts every gap on one criterion, and a
+ * table indexed by the wrong row ranks the right pool in the wrong order — so
+ * the arithmetic is pinned against `zStats`, which is the spelling this module
+ * exports and the one its own tests already drive.
+ */
+describe("the pool scale, inlined", () => {
+  test("matches zStats over the same readable values", () => {
+    // A pool with nulls scattered through it, which is the case the inline
+    // pass has to get right: the statistics are over the values that exist,
+    // and a null counted as zero would drag the mean and widen the SD.
+    // `tgtsh` because it is one of the three nullable columns, which is the
+    // case the inline pass has to get right: the statistics are over the values
+    // that exist, and a null counted as zero would drag the mean and widen the
+    // standard deviation for every row on the board.
+    const values: (number | null)[] = [
+      12, null, 3.5, 20, null, 0, 4, 8, null, 15,
+    ];
+    const pool = values.map((tgtsh, i) => row(`p${i}`, { tgtsh }));
+    const readable = values.filter((v): v is number => v !== null);
+    const expected = zStats(readable);
+
+    // The scale is only observable through a ranking, so the check is against
+    // the gap each row reads: it is exactly `|z(row) − z(subject)|` under the
+    // mean and SD `zStats` computes, and nothing else.
+    const subject = row("subject", { tgtsh: expected.mean });
+    const ranking = rankComps(subject, pool, [pair("tgtsh")], {
+      minCoverage: 0,
+    });
+    // The three null rows have no readable pair at all, so their distance is
+    // not a number and the existing guard drops them — pre-existing behaviour,
+    // asserted here so a change to it is visible from this test too.
+    assert.equal(ranking.ranked.length, readable.length);
+
+    for (const entry of ranking.ranked) {
+      const reading = entry.pairs["tgtsh:last"];
+      assert.ok(reading.read !== null);
+      const expectedGap = Math.abs((reading.read - expected.mean) / expected.sd);
+      assert.ok(
+        Math.abs((reading.gap as number) - expectedGap) < 1e-12,
+        `gap for ${reading.read}: ${reading.gap} vs ${expectedGap}`,
+      );
+    }
+  });
+
+  test("a pool with no readable value for a field still ranks the rest", () => {
+    // The `count === 0` arm of the inline pass: no scale exists, so the pair is
+    // unreadable on every row and the ranking falls back to the other one.
+    const pool = [
+      row("a", { ppg: 10, tgtsh: null }),
+      row("b", { ppg: 20, tgtsh: null }),
+    ];
+    const subject = row("subject", { ppg: 15, tgtsh: null });
+    const ranking = rankComps(subject, pool, [pair("ppg"), pair("tgtsh")], {
+      minCoverage: 0,
+    });
+    assert.equal(ranking.ranked.length, 2);
+    assert.equal(ranking.comparableWeight, 1, "the unreadable pair is nobody's");
+    for (const entry of ranking.ranked) {
+      assert.equal(entry.pairs["tgtsh:last"].gap, null);
+      assert.ok(entry.pairs["ppg:last"].gap !== null);
+    }
+  });
+});

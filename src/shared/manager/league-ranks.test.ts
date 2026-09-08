@@ -1312,3 +1312,91 @@ describe("rankLeagueLineups — a slot narrowing", () => {
     assert.equal(ranks[key("ktc_picks", [], null, ["FLEX"])], null);
   });
 });
+
+/**
+ * The reused ranking column, which is the one thing an ordinary rank test
+ * cannot see.
+ *
+ * **Every rank is now a pass over one `Float64Array` that every metric, every
+ * narrowing and every forced board refills in turn.** A fill that stopped short
+ * would leave the previous column's figures in the tail — so a metric would be
+ * ranked partly on its own numbers and partly on the last one's, which is a
+ * plausible rank with nothing on screen saying it is the wrong question's. The
+ * assertions below are the same ranks computed one column at a time and
+ * compared to the ranks computed all at once, over a league whose metrics
+ * genuinely disagree about the order.
+ */
+describe("rankLeagueLineups — the reused column", () => {
+  test("every metric is ranked on its own figures, whatever precedes it", () => {
+    // Points and capital order these rosters *oppositely*: `w1` is the best
+    // projection and the worst ADP, so a column left carrying the previous
+    // metric's numbers would rank the manager the wrong way round on one of
+    // them and both readings are plausible.
+    const board: RosProjections = {
+      w1: projected("w1", ["WR"], { rec: 30 }),
+      w2: projected("w2", ["WR"], { rec: 20 }),
+      w3: projected("w3", ["WR"], { rec: 10 }),
+    };
+    // Adjacent picks, deliberately: the ADP curve is an exponential decay
+    // anchored to the league's startable pool, so a three-team, one-slot
+    // fixture drives anything past a handful of picks to the same near-zero
+    // and the two columns would tie rather than disagree.
+    const adp = new Map<string, AdpEntry>([
+      ["w1", full(3)],
+      ["w2", full(2)],
+      ["w3", full(1)],
+    ]);
+    const l = league([
+      roster(1, "me", ["w1"]),
+      roster(2, "t2", ["w2"]),
+      roster(3, "t3", ["w3"]),
+    ]);
+
+    const { ranks } = rankLeagueLineups(l, "me", board, adp);
+    assert.deepEqual(ranks.ros_starters, { rank: 1, of: 3 });
+    assert.deepEqual(ranks.capital_starters, { rank: 3, of: 3 });
+    assert.deepEqual(ranks.ros_total, { rank: 1, of: 3 });
+    assert.deepEqual(ranks.capital_total, { rank: 3, of: 3 });
+  });
+
+  test("a narrowed column and a forced board rank on their own numbers", () => {
+    // Four columns off one solve: the base ten, one position narrowing, one
+    // forced market and one forced draft board — all of them filling the same
+    // buffer in turn. Each is checked against what it alone should say.
+    const board: RosProjections = {
+      qb: projected("qb", ["QB"], { rec: 5 }),
+      wr: projected("wr", ["WR"], { rec: 30 }),
+      wr2: projected("wr2", ["WR"], { rec: 1 }),
+    };
+    const l = league([roster(1, "me", ["qb", "wr"]), roster(2, "t2", ["wr2"])], {
+      roster_positions: ["QB", "WR", "BN"],
+    });
+    const { ranks } = rankLeagueLineups(
+      l,
+      "me",
+      board,
+      new Map<string, AdpEntry>([["qb", full(1)], ["wr", full(200)], ["wr2", full(2)]]),
+      new Map([["wr", 9000]]),
+      new Map(),
+      [
+        {
+          key: "dynasty:sf",
+          values: new Map([["wr2", 9999]]),
+          pickValues: new Map(),
+        },
+      ],
+      [["QB"]],
+      [{ key: ":sf", adp: new Map<string, AdpEntry>([["qb", full(1)]]) }],
+    );
+
+    // The whole roster on points: the manager is ahead.
+    assert.deepEqual(ranks.ros_starters, { rank: 1, of: 2 });
+    // Narrowed to quarterbacks, the other roster has none at all — so its total
+    // is zero and the manager is still ahead, on a genuinely different column.
+    assert.deepEqual(ranks["ros_starters:qb"], { rank: 1, of: 2 });
+    // On the league's own KTC board the manager holds the only priced player…
+    assert.deepEqual(ranks.ktc_starters, { rank: 1, of: 2 });
+    // …and on the forced one, the other roster does.
+    assert.deepEqual(ranks["ktc_starters:dynasty:sf"], { rank: 2, of: 2 });
+  });
+});

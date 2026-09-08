@@ -585,15 +585,48 @@ export function rankLeagueLineups(
    */
   const ranked = managerIndex >= 0;
 
-  /** A rank among these totals, or null where there is nobody to rank. */
-  const rankOn = (totals: readonly number[]): MetricRank | null =>
-    ranked ? rankAmong(totals, managerIndex) : null;
+  /**
+   * One reusable column of figures, filled per metric and read by
+   * {@link rankAmong}.
+   *
+   * **A rank is one pass over one column of numbers, and this used to allocate
+   * that column every time.** Ten metrics for the base ranks, ten more per
+   * narrowing, four per forced market per narrowing and three per forced draft
+   * board per narrowing — each of them a `solved.map(...)` producing an array
+   * of the league's size that is dead the moment the rank comes out. On a
+   * hundred-league page with four bays that is thousands of short-lived arrays
+   * a request, for an answer that reads each one exactly once.
+   *
+   * Reused, because nothing keeps it: `rankAmong` reads it and returns two
+   * numbers. It is **local to this call** rather than module-scoped, which is
+   * the whole of what makes that safe — a shared buffer would be a
+   * cross-request hazard the moment two leagues were solved concurrently, and
+   * this is one league's own working space, dropped with the call.
+   */
+  const column = new Float64Array(solved.length);
+
+  /**
+   * A rank among the figures `read` answers for, or null where there is nobody
+   * to rank.
+   *
+   * The reader is an index rather than an array, which is what lets the same
+   * closure feed both this and {@link carry} — one spelling of "which number is
+   * this roster's on this column", so a carried total is by construction the
+   * number the rank beside it was made from.
+   *
+   * **Nothing is filled where nothing is ranked.** A league-scoped read has no
+   * manager, so every rank is null and the fill would be a pass over the league
+   * for a figure nobody reads.
+   */
+  const rankOn = (read: (index: number) => number): MetricRank | null => {
+    if (!ranked) return null;
+    for (let i = 0; i < column.length; i++) column[i] = read(i);
+    return rankAmong(column, managerIndex);
+  };
 
   // The ten, on the league's own board over the whole roster — the totals
   // already hung on every solve, so this path is untouched by either axis.
-  const base = baseRanks((metric) =>
-    rankOn(solved.map(({ totals }) => totals[metric])),
-  );
+  const base = baseRanks((metric) => rankOn((i) => solved[i].totals[metric]));
 
   const keyed: Record<string, MetricRank | null> = {};
 
@@ -617,9 +650,7 @@ export function rankLeagueLineups(
         slots,
       ),
     );
-    const narrowed = baseRanks((metric) =>
-      rankOn(totals.map((one) => one[metric])),
-    );
+    const narrowed = baseRanks((metric) => rankOn((i) => totals[i][metric]));
     // Off the literal rather than a list of the nine, so the exhaustive
     // `LineupRanks` stays the one seam a new metric id has to pass through.
     for (const [metric, rank] of Object.entries(narrowed)) {
@@ -648,8 +679,9 @@ export function rankLeagueLineups(
       );
       for (const metric of KTC_METRIC_IDS) {
         const key = `${metric}:${variant.key}${suffix}`;
-        keyed[key] = rankOn(totals.map((one) => one[metric]));
-        carry(key, (i) => totals[i][metric]);
+        const read = (i: number) => totals[i][metric];
+        keyed[key] = rankOn(read);
+        carry(key, read);
       }
     }
   }
@@ -678,8 +710,9 @@ export function rankLeagueLineups(
       );
       for (const metric of CAPITAL_METRIC_IDS) {
         const key = `${metric}${variant.key}${suffix}`;
-        keyed[key] = rankOn(totals.map((one) => one[metric]));
-        carry(key, (i) => totals[i][metric]);
+        const read = (i: number) => totals[i][metric];
+        keyed[key] = rankOn(read);
+        carry(key, read);
       }
     }
   }
@@ -859,11 +892,16 @@ const CAPITAL_METRIC_IDS: readonly CapitalMetricId[] = [
  * rather than two, so the base ranks and a forced board's cannot come to
  * disagree about what a tie or an all-zero column means.
  */
-function rankAmong(totals: readonly number[], mine: number): MetricRank | null {
+function rankAmong(totals: ArrayLike<number>, mine: number): MetricRank | null {
   const value = totals[mine];
   let ahead = 0;
   let anyNonZero = false;
-  for (const total of totals) {
+  // Indexed rather than `for…of`: the caller now hands in a reused
+  // `Float64Array` rather than a fresh array per metric, and `ArrayLike` is
+  // what the two have in common. The arithmetic is byte-identical — these are
+  // doubles either way.
+  for (let i = 0; i < totals.length; i++) {
+    const total = totals[i];
     if (total !== 0) anyNonZero = true;
     if (total > value) ahead += 1;
   }

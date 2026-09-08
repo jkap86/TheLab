@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { describe, test } from "node:test";
 
-import type { CompSeasonLine } from "@/shared/contract";
+import type { CompSeasonLine, CompWindowId } from "@/shared/contract";
 
 import { UDFA_PICK } from "./criteria.ts";
 import { observationTag, windowReading, windowTag, windowValue } from "./windows.ts";
@@ -195,5 +195,104 @@ describe("observationTag", () => {
     assert.equal(observationTag(true, "avg2", { used: null, of: 2 }, tag), "");
     assert.equal(observationTag(true, "avg2", { used: 0, of: 2 }, tag), "");
     assert.equal(observationTag(false, "last", { used: 1, of: 1 }, "last yr"), "");
+  });
+});
+
+/**
+ * The optimised reading against a deliberately naive one.
+ *
+ * **A snapshot of the new numbers would only say the code still does what it
+ * does**, which is `sample.test.ts`' own argument one folder over. So the
+ * reference below is the formula as this module's header states it, written the
+ * obvious way — slice, map, filter, spread — and the assertion is that the
+ * allocation-free loop that replaced it answers identically over every shape a
+ * series can take: absent seasons at the head, in the middle, at the tail, all
+ * of them, and none.
+ */
+describe("windowReading — against a naive reference", () => {
+  type Line = Record<string, number | null>;
+
+  function naive(
+    history: readonly Line[],
+    field: string,
+    window: CompWindowId,
+  ): { value: number | null; used: number; of: number } {
+    const of =
+      window === "last"
+        ? 1
+        : window === "avg2"
+          ? Math.min(2, history.length)
+          : history.length;
+    const series = history
+      .slice(0, of)
+      .map((line) => line[field])
+      .filter((v): v is number => v !== null && v !== undefined);
+    if (series.length === 0) return { value: null, used: 0, of };
+    const value =
+      window === "chigh"
+        ? Math.max(...series)
+        : series.reduce((a, b) => a + b, 0) / series.length;
+    return { value, used: series.length, of };
+  }
+
+  /** A tiny deterministic PRNG, so a failure is reproducible. */
+  function prng(seed: number) {
+    let state = seed >>> 0;
+    return () => {
+      state = (state * 1664525 + 1013904223) >>> 0;
+      return state / 4294967296;
+    };
+  }
+
+  const WINDOWS: CompWindowId[] = ["last", "avg2", "cavg", "chigh"];
+
+  test("agrees on every shape a series can take", () => {
+    const random = prng(20260908);
+    for (let trial = 0; trial < 400; trial++) {
+      const seasons = 1 + Math.floor(random() * 6);
+      const history = Array.from({ length: seasons }, (_, i) => ({
+        season: 2020 + i,
+        // Negative and zero values are in range on purpose: a `max` seeded at
+        // 0 rather than at the first observation is wrong for a column that
+        // can go below it, and nothing else in the suite would say so.
+        ppg: random() < 0.35 ? null : Math.round((random() * 40 - 10) * 10) / 10,
+      })) as unknown as CompSeasonLine[];
+      const row: CompRow = { facts, history };
+
+      for (const window of WINDOWS) {
+        const expected = naive(history as unknown as Line[], "ppg", window);
+        const actual = windowReading(row, "ppg", window);
+        assert.deepEqual(
+          actual,
+          expected,
+          `trial ${trial} window ${window} over ${JSON.stringify(history)}`,
+        );
+      }
+    }
+  });
+
+  test("a window of nothing but nulls is null, never zero or NaN", () => {
+    const history = [
+      { season: 2024, ppg: null },
+      { season: 2023, ppg: null },
+    ] as unknown as CompSeasonLine[];
+    for (const window of WINDOWS) {
+      assert.deepEqual(windowReading({ facts, history }, "ppg", window), {
+        value: null,
+        used: 0,
+        of: window === "last" ? 1 : 2,
+      });
+    }
+  });
+
+  test("a maximum below zero is found, not floored at zero", () => {
+    const history = [
+      { season: 2024, ppg: -3 },
+      { season: 2023, ppg: -8 },
+    ] as unknown as CompSeasonLine[];
+    assert.equal(
+      windowReading({ facts, history }, "ppg", "chigh").value,
+      -3,
+    );
   });
 });

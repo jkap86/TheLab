@@ -131,21 +131,84 @@ export function rankComps<T extends CompRow>(
     return empty(pool.length, requestedWeight, minCoverage);
   }
 
-  // The scale is the pool's. Computed lazily and cached per (field, window),
-  // since a field read over two windows is two different scales.
-  const stats = new Map<string, Stats>();
-  const statsFor = (field: CompField, window: CompWindowId): Stats => {
+  /**
+   * One (field, window) read over the **whole pool**, once, plus the scale it
+   * implies.
+   *
+   * **The same value was being read twice and its scale looked up per row.**
+   * The z-scale for a `(field, window)` is a pass over the pool; the distance
+   * loop then read every one of those values again, and built a
+   * `` `${field}:${window}` `` key and did a `Map` lookup *per row per field* to
+   * find the scale to divide by. On eight thousand player-seasons and ten
+   * requested pairs that is a hundred and sixty thousand string concatenations
+   * and as many redundant window reads, per request.
+   *
+   * So the pass that computes the scale keeps what it read. Three parallel
+   * arrays indexed by the row's position in `pool` — the value (`NaN` standing
+   * for null, which is the one thing a `Float64Array` can say), and the two
+   * counts a reading carries — so the distance loop is an indexed read and the
+   * scale is one property access.
+   *
+   * **Execution-scoped, deliberately.** It is built here and dropped when this
+   * returns: the pool is the *caller's* narrowing (a position lock, a season
+   * range, an excluded subject), so a corpus-level table would be keyed by a
+   * question rather than by the data and would have to be invalidated by every
+   * load. Bounded by the distinct pairs actually requested — at most a few
+   * dozen over a pool, which is megabytes at the outside and none of it
+   * retained.
+   */
+  type FieldTable = {
+    /** `NaN` where the row could not be read — see {@link WindowReading}. */
+    values: Float64Array;
+    used: Int32Array;
+    of: Int32Array;
+    stats: Stats;
+  };
+  const tables = new Map<string, FieldTable>();
+  const tableFor = (field: CompField, window: CompWindowId): FieldTable => {
     const key = `${field}:${window}`;
-    const cached = stats.get(key);
+    const cached = tables.get(key);
     if (cached) return cached;
-    const values: number[] = [];
-    for (const row of pool) {
-      const value = windowReading(row, field, window).value;
-      if (value !== null) values.push(value);
+
+    const values = new Float64Array(pool.length);
+    const used = new Int32Array(pool.length);
+    const of = new Int32Array(pool.length);
+    // The scale is the pool's, and it is taken over the values that exist —
+    // a null is absent from the statistics exactly as it is absent from a
+    // distance. Mean and population SD in one pass each rather than through
+    // `zStats`, so the readable values need no array of their own.
+    let count = 0;
+    let sum = 0;
+    for (let i = 0; i < pool.length; i++) {
+      const reading = windowReading(pool[i], field, window);
+      used[i] = reading.used;
+      of[i] = reading.of;
+      if (reading.value === null) {
+        values[i] = NaN;
+        continue;
+      }
+      values[i] = reading.value;
+      count += 1;
+      sum += reading.value;
     }
-    const computed = zStats(values);
-    stats.set(key, computed);
-    return computed;
+    let stats: Stats;
+    if (count === 0) {
+      stats = { mean: 0, sd: 1 };
+    } else {
+      const mean = sum / count;
+      let variance = 0;
+      for (let i = 0; i < pool.length; i++) {
+        const value = values[i];
+        if (Number.isNaN(value)) continue;
+        variance += (value - mean) ** 2;
+      }
+      const sd = Math.sqrt(variance / count);
+      stats = { mean, sd: Number.isFinite(sd) && sd > 0 ? sd : 1 };
+    }
+
+    const table = { values, used, of, stats };
+    tables.set(key, table);
+    return table;
   };
 
   // Which pairs the subject can answer at all, read once rather than per row.
@@ -160,6 +223,19 @@ export function rankComps<T extends CompRow>(
       key: pairKey(pair.criterion, pair.window),
       readable: readings.every((r) => r.value !== null),
       values: readings.map((r) => r.value),
+      /**
+       * The pool's tables for this pair's fields, and the subject's own
+       * z-scores against them.
+       *
+       * Filled below for the readable pairs only, which is what keeps a pair
+       * nobody can be compared on from costing a pool pass. **The subject is
+       * transformed by the scale and never part of it** — see this module's
+       * header for why that is a correction rather than a refinement — and the
+       * transform is one subtraction and one division per field per *request*
+       * rather than per row.
+       */
+      tables: [] as FieldTable[],
+      subjectZ: [] as number[],
     };
   });
 
@@ -171,47 +247,86 @@ export function rankComps<T extends CompRow>(
     return empty(pool.length, requestedWeight, minCoverage);
   }
 
+  for (const spec of subjectPairs) {
+    if (!spec.readable) continue;
+    for (let i = 0; i < spec.criterion.fields.length; i++) {
+      const table = tableFor(spec.criterion.fields[i], spec.pair.window);
+      spec.tables.push(table);
+      spec.subjectZ.push(
+        ((spec.values[i] as number) - table.stats.mean) / table.stats.sd,
+      );
+    }
+  }
+
   const scored: RankedComp<T>[] = [];
   let excludedLowCoverage = 0;
 
-  for (const row of pool) {
+  for (let index = 0; index < pool.length; index++) {
+    const row = pool[index];
     let acc = 0;
     let availableWeight = 0;
     const readings: Record<string, CompPairReading> = {};
 
     for (const spec of subjectPairs) {
       const { pair, criterion, key } = spec;
+      const fields = criterion.fields;
 
-      // The row's own reading comes first, so a pair the subject cannot answer
-      // still reports how much of its window this row had — the chip draws an
-      // em dash either way, and the count is what the diagnostics read.
-      const rowReadings = criterion.fields.map((field) =>
-        windowReading(row, field, pair.window),
-      );
-      // The criterion's own span: the weakest of its fields, since a pair is
-      // only as well founded as the thinnest column behind it.
-      const of = Math.min(...rowReadings.map((r) => r.of));
-      const used = Math.min(...rowReadings.map((r) => r.used));
+      // **One pass over the criterion's fields, no arrays.** This was three
+      // `map`s and two spreads into `Math.min` per row per pair — five
+      // allocations each, on a loop that runs pool-size times — for four
+      // numbers that can be accumulated as they are read.
+      //
+      // A pair the subject cannot answer is still walked, so it reports how
+      // much of its window *this row* had: the chip draws an em dash either
+      // way, and the count is what the diagnostics read. Its fields have no
+      // table (only readable pairs are given one), so that arm reads the row
+      // directly.
+      let of = Infinity;
+      let used = Infinity;
+      let first: number | null = null;
+      let anyNull = false;
+      let gapSum = 0;
 
-      if (!spec.readable || rowReadings.some((r) => r.value === null)) {
+      for (let i = 0; i < fields.length; i++) {
+        let value: number | null;
+        let rowUsed: number;
+        let rowOf: number;
+        if (spec.readable) {
+          const table = spec.tables[i];
+          const raw = table.values[index];
+          value = Number.isNaN(raw) ? null : raw;
+          rowUsed = table.used[index];
+          rowOf = table.of[index];
+          if (value !== null && !anyNull) {
+            gapSum += Math.abs(
+              (value - table.stats.mean) / table.stats.sd - spec.subjectZ[i],
+            );
+          }
+        } else {
+          const reading = windowReading(row, fields[i], pair.window);
+          value = reading.value;
+          rowUsed = reading.used;
+          rowOf = reading.of;
+        }
+        // The criterion's own span: the weakest of its fields, since a pair is
+        // only as well founded as the thinnest column behind it.
+        if (rowOf < of) of = rowOf;
+        if (rowUsed < used) used = rowUsed;
+        if (i === 0) first = value;
+        if (value === null) anyNull = true;
+      }
+
+      if (!spec.readable || anyNull) {
         readings[key] = unread(of);
         continue;
       }
 
-      let gapSum = 0;
-      for (let i = 0; i < criterion.fields.length; i++) {
-        const a = rowReadings[i].value as number;
-        const b = spec.values[i] as number;
-        const { mean, sd } = statsFor(criterion.fields[i], pair.window);
-        gapSum += Math.abs((a - mean) / sd - (b - mean) / sd);
-      }
-
-      const gap = gapSum / criterion.fields.length;
+      const gap = gapSum / fields.length;
       readings[key] = {
         gap,
         // The chip prints the criterion's *first* field: "Rec yd / rec" shows
         // the yards, which is the half its label names.
-        read: rowReadings[0].value,
+        read: first,
         used,
         of,
       };

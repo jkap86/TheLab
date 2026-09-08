@@ -52,12 +52,26 @@ const CIRCLE_TTL_MS = 10 * 60 * 1000;
 /**
  * Keyed by `user:season:circle` — one entry per reader per circle they use.
  *
- * Small because there is one of these per *reader*, not per id looked up: a
- * thousand entries is a thousand people using the page inside one TTL, and the
- * eviction order is recency, so the rest lose an entry they were about to stop
- * using anyway. The values are id arrays a few thousand long at the outside.
+ * **Two bounds, because a thousand of these is not one size.** The count is
+ * what it always was: a thousand entries is a thousand people using the page
+ * inside one TTL, and the eviction order is recency, so the rest lose an entry
+ * they were about to stop using anyway. What the count could not say is how
+ * *big* those entries are — a circle is a hundred league ids for one reader and
+ * several thousand leaguemate ids for another, so a thousand of the second kind
+ * is a couple of million strings held for ten minutes on the strength of a
+ * bound that reads "1000".
+ *
+ * So the weight is the ids themselves, which is exactly what the value is, and
+ * `MAX_CIRCLE_IDS` is a real ceiling on what this can retain. A single circle
+ * past it is not held at all — see {@link BoundedCache} — which costs that one
+ * reader a re-derivation per request rather than costing the box its heap.
  */
-const circleCache = new BoundedCache<string[]>(1000, CIRCLE_TTL_MS);
+const MAX_CIRCLE_IDS = 250_000;
+
+const circleCache = new BoundedCache<string[]>(1000, CIRCLE_TTL_MS, {
+  maxWeight: MAX_CIRCLE_IDS,
+  weigh: (ids) => ids.length,
+});
 
 /**
  * The ids behind `query.circle`, or null where it is not narrowing.
