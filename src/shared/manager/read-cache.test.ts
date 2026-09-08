@@ -6,6 +6,8 @@ import {
   createStaleWhileRevalidateMemo,
   managerReadKey,
   managerReadMatcher,
+  weighDraftAdpBoards,
+  weighManagerLeagueRows,
 } from "./read-cache.ts";
 
 /**
@@ -342,5 +344,146 @@ describe("the manager read keys and what an invalidation matches on", () => {
     assert.equal(memo.forget(managerReadMatcher(["u1", "u2"], null)), 2);
     assert.equal(memo.size, 1);
     assert.equal(memo.forget(managerReadMatcher([], null)), 0);
+  });
+});
+
+/**
+ * The weight bound, which is the half an entry count cannot express.
+ *
+ * **Two hundred entries is a bound on keys and says nothing about memory**, and
+ * these two memos are exactly why it had to become two bounds: one manager's
+ * league rows are a dozen leagues and another's are a hundred and thirteen,
+ * each carrying every roster of its league. Every rule below is one that
+ * renders as a perfectly healthy cache while the process runs out of heap.
+ */
+describe("createReadMemo — the weight bound", () => {
+  const weighArray = (value: number[]) => value.length;
+
+  test("weighs on resolution and evicts oldest-first past the budget", async () => {
+    const { now } = clock();
+    const memo = createReadMemo<number[]>({
+      ttlMs: 1000,
+      max: 100,
+      maxWeight: 5,
+      weigh: weighArray,
+      now,
+    });
+
+    await memo.read("a", async () => [1, 2, 3]);
+    await memo.read("b", async () => [4, 5]);
+    assert.equal(memo.weight, 5);
+    assert.equal(memo.size, 2, "the count never bites at 100 slots");
+
+    await memo.read("c", async () => [6]);
+    assert.equal(memo.size, 2, "the weight did");
+    assert.equal(memo.weight, 3);
+  });
+
+  test("an in-flight read weighs nothing until it settles", async () => {
+    const { now } = clock();
+    const memo = createReadMemo<number[]>({
+      ttlMs: 1000,
+      max: 100,
+      maxWeight: 5,
+      weigh: weighArray,
+      now,
+    });
+    let settle: ((value: number[]) => void) | null = null;
+    const pending = memo.read("a", () => new Promise((r) => (settle = r)));
+    assert.equal(memo.weight, 0, "a promise and a closure, not an answer");
+    settle!([1, 2, 3, 4]);
+    await pending;
+    assert.equal(memo.weight, 4);
+  });
+
+  test("an answer heavier than the whole budget is not held", async () => {
+    // Eviction cannot reach a bound smaller than one entry, so the choice is
+    // between a trim that never converges and one value exempt from the limit
+    // it exceeds. It is dropped after its awaiters are served.
+    const { now } = clock();
+    const memo = createReadMemo<number[]>({
+      ttlMs: 1000,
+      max: 100,
+      maxWeight: 3,
+      weigh: weighArray,
+      now,
+    });
+    await memo.read("small", async () => [1]);
+    const huge = await memo.read("huge", async () => [1, 2, 3, 4, 5]);
+
+    assert.deepEqual(huge, [1, 2, 3, 4, 5], "the caller still got its answer");
+    assert.equal(memo.size, 1, "and nothing else was evicted to make room");
+    assert.equal(memo.weight, 1);
+  });
+
+  test("the running total follows every way an entry can leave", async () => {
+    // A drifted total is a memo that evicts everything or nothing, silently —
+    // and it can only drift where an entry is replaced, forgotten, expired or
+    // rejected rather than trimmed.
+    const { now, tick } = clock();
+    const memo = createReadMemo<number[]>({
+      ttlMs: 100,
+      max: 100,
+      maxWeight: 1000,
+      weigh: weighArray,
+      now,
+    });
+
+    await memo.read("a", async () => [1, 2, 3]);
+    tick(100);
+    await memo.read("a", async () => [1]);
+    assert.equal(memo.weight, 1, "a replacement replaces its weight");
+
+    await memo.read("b", async () => [1, 2]);
+    memo.forget((key) => key === "b");
+    assert.equal(memo.weight, 1, "a forget takes its weight with it");
+
+    await assert.rejects(
+      memo.read("c", async () => {
+        throw new Error("blip");
+      }),
+    );
+    assert.equal(memo.weight, 1, "a rejection was never weighed");
+
+    memo.clear();
+    assert.equal(memo.weight, 0);
+  });
+
+  test("a memo with no weight options is the one it always was", async () => {
+    const { now } = clock();
+    const memo = createReadMemo<number[]>({ ttlMs: 1000, max: 2, now });
+    await memo.read("a", async () => [1, 2, 3]);
+    await memo.read("b", async () => [4]);
+    await memo.read("c", async () => [5]);
+    assert.equal(memo.size, 2, "the count is the bound, as before");
+    assert.equal(memo.weight, 0, "and nothing is weighed");
+  });
+});
+
+describe("the manager memos' own weight functions", () => {
+  test("league rows weigh their rostered ids", () => {
+    // The term that varies by two orders of magnitude between accounts, and the
+    // one a `length` reaches without walking anything.
+    const rows = [
+      {
+        rosters: [{ players: ["a", "b"] }, { players: ["c"] }],
+      },
+      { rosters: [{ players: [] }] },
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    ] as any;
+    assert.equal(weighManagerLeagueRows(rows), 5, "3 ids + 2 leagues");
+    assert.equal(weighManagerLeagueRows([]), 0);
+  });
+
+  test("draft boards weigh the ids they price, on both boards", () => {
+    assert.equal(
+      weighDraftAdpBoards({
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        superflex: new Map([["a", 1]]) as any,
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        standard: new Map([["a", 1], ["b", 2]]) as any,
+      }),
+      3,
+    );
   });
 });

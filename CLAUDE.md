@@ -515,6 +515,49 @@ the running server added no second `Loop started` line, and `LEAGUE_CRAWLER=off`
 printed `[crawl] Loop disabled (LEAGUE_CRAWLER=off)` while KTC and players
 started and skipped as fresh — the retrofit keeping their unforced boot tick.
 
+### The web process stopped doing the maintenance
+
+`BACKGROUND_JOBS` and a worker split were "deliberately not ported", on the
+argument that one instance makes the advisory lock the only thing that matters
+and a mode gate only adds *which process*. That is right about correctness and
+says nothing about **contention**: a crawl tick is a Sleeper fan-out holding a
+pooled connection for its length, a players refresh is a ~5MB download and
+twelve thousand upserts in one transaction, a comps load is eighteen weeks of
+Sleeper per uncovered season — and every one of them was competing for the same
+process, the same pool and the same limiter as the manager page's lineups read.
+
+`APP_PROCESS_ROLE` is the switch (`util/process-role.ts`): `web` serves and
+starts no loops, `worker` starts them, and **`all` — the default, and what an
+unreadable value reads as — is both**, which is a single instance and a laptop
+and is exactly what `instrumentation.ts` did before. That fallback is the
+opposite call from `parseRequestedSeason` and right for the opposite reason: a
+season names which data a page is about, where this names which of two jobs a
+process does, and the honest answer to "we could not tell" is the behaviour the
+app already had. A typo that starts the crawler on a web dyno is a log line; one
+that stops it on the only worker is a database going quiet for hours.
+
+**Migrations run under every role**, because a process must not serve *or*
+maintain against a schema it cannot vouch for — and a boot that starts nothing
+says so, since a web dyno doing as it was told and a worker with a misspelled
+role look identical from outside.
+
+**Nothing about the loops moved.** `scripts/worker.ts` (`npm run worker`) is
+the same four `start*` calls `instrumentation.ts` makes, in the same order,
+behind the same `LOOP=off` switches, the same `globalThis` singleton guards and
+the same per-tick advisory locks — so two workers against one database stand
+down for each other exactly as a second web instance already did. What it adds
+is a `ref`'d keep-alive, because `startBackgroundLoop` `unref`s its timers (what
+keeps a web server from being held open by one, and exactly wrong where the
+timers are the job). The `Procfile` is the two lines:
+
+```
+web: APP_PROCESS_ROLE=web npm run start
+worker: APP_PROCESS_ROLE=worker npm run worker
+```
+
+Deploying only a web dyno and leaving the variable unset keeps today's
+behaviour, which is what makes this additive.
+
 ### One loop helper, and a reversed decision
 
 `players/scheduler.ts` used to argue *against* sharing timer code with KTC: "two
@@ -632,13 +675,22 @@ everything. The client (`use-manager-lineups`) fetches it after the leagues
 stream settles; `!refreshing` flipping true is also the refetch after a cold
 sync, which is exactly when the rosters it solves from were written.
 
-**Every team ships, solved.** Each league's payload entry is
-`{ teams, ranks }` (`LeagueLineupEntry`), one `LeagueTeam` per stored roster —
-lineup, all nine metric totals, pick portfolio, label, `is_manager` — because
-the expanded card is a team browser, not a mirror of the manager's roster.
-(It used to ship the manager's lineup alone and reduce everyone else to a
-rank; the team picker is what reversed that, and the ~50KB a twelve-team
-league costs is the price of never refetching per click.) `totals` ships
+**What that request answers is the ranks alone**, which is the one thing in
+this section that has moved: the solve is unchanged and every number it makes
+is unchanged, and the teams it makes them from now go out one league at a time
+to the card that opened. See The collapsed card and the expanded one are two
+reads, below.
+
+**Every team ships, solved — from the *per-league* route.** Each league's
+expanded-card answer is `{ teams, ranks }` (`LeagueLineupEntry`), one
+`LeagueTeam` per stored roster — lineup, all ten metric totals, pick portfolio,
+label, `is_manager` — because the expanded card is a team browser, not a mirror
+of the manager's roster. (It used to ship the manager's lineup alone and reduce
+everyone else to a rank; the team picker is what reversed that.) **What changed
+since is which request carries it**: the batched route above answers
+`{ ranks }` per league and the teams arrive from
+`GET /api/league/[leagueId]/lineup` when a reader opens a card — see The
+collapsed card and the expanded one are two reads, below. `totals` ships
 rather than being re-summed on the client because the sums carry edge rules
 (`lineupMetricTotals`) and a second spelling is how the teams column would
 drift from the ranks beside it. `manager/league-teams.ts` composes the entry
@@ -695,6 +747,72 @@ zero-runtime character, and the client cannot read a list out of
 ids is what that seam is for**: it broke four compiles — the ranks literal,
 `lineupMetricTotals`, `METRIC_ORDER` and `LINEUP_METRIC_LABELS` — and nothing
 else.
+
+### The collapsed card and the expanded one are two reads
+
+The batched lineups route used to answer a whole `LeagueLineupEntry` per league
+— twelve solved lineups, their ten totals apiece and their pick portfolios —
+and a **collapsed** card renders four ordinals off `ranks` and nothing else.
+Measured against a fixture stand-in for the 113-league account: **4.23MB built,
+held, serialised, parsed and retained so that four hundred ordinals could be
+printed.** It answers `{ ranks }` now — **26.2KB**, a 99.4% cut — and the teams
+arrive from `GET /api/league/[leagueId]/lineup` when a reader opens a card.
+
+**Nothing about the arithmetic moved, and that is what the split rests on.**
+`solveLeagueRanks` and `solveLeagueEntry` are one `solveLeague` behind two entry
+points — the same pick board, the same twelve solves, the same variants and
+narrowings — so the ranks a collapsed card prints are the ranks its own
+expanded half would have made. `league-teams.test.ts` asserts the two answer
+`deepEqual` ranks, including under a forced board and both narrowing axes,
+because a rank is a plausible number whichever arithmetic produced it.
+
+**The route this reaches for already existed**, which is the whole reason this
+was a payload change rather than a feature: `/api/league/[leagueId]/lineup` was
+built for the trades board, whose leagues belong to no one account and so could
+never be batched. The manager card mounts the same hook the trade card does
+(`LeagueDetail` beside `TradeLeague`), which is also what keeps the two cards
+one object rather than two readings of one league.
+
+**`?team_totals=` came off the batched route with the teams.** It named the
+columns whose totals should be carried out for *every roster* — which only a
+standings table reads, and a standings table only exists inside an expanded
+card. The standings column therefore no longer joins `useManagerLineups`'
+subject key either, so changing what that pane is sorted by costs one open
+card's round trip rather than a hundred leagues' ranks.
+
+**The answers live in a shared store, not in the hook** —
+`features/shared/league-lineup-cache.ts` — and it is what makes the split
+affordable rather than a request per press. One entry per key, so two cards
+naming one league make one request; a resolved answer outlives the card that
+asked for it, so closing and re-opening pays nothing; `MAX_ENTRIES` (8) bounds
+what is kept *for later*, and an entry with a live subscriber is never counted
+out, so the bound never blanks a card being read. An in-flight read is aborted
+when its last reader goes and a resolved one is kept — a half-read answer is
+worth nothing to anybody.
+
+**A stale response cannot overwrite a current one by construction.** The key is
+the whole question — league, season, manager, column, narrowing — so a response
+for the previous manager resolves into the previous manager's entry, which
+nothing is reading. That is the protection `request-guard` gives a hook that
+owns its own state, obtained here from the shape of the store.
+
+**A sync landing invalidates it, and the invalidation asks again itself.** The
+leagues stream settling is exactly when the rosters behind those answers were
+rewritten, so `leagues-home` calls `invalidateLeagueLineups` on that
+*transition*. A key a card is still reading is re-fetched in place and one
+nothing is reading is dropped; a response that predates the invalidation cannot
+land after the one replacing it, which is what the per-entry `run` counter is
+for. The re-issue passes `cache: "reload"`, because the route answers
+`private, max-age=60` — the window that makes re-opening a card free is exactly
+the window a post-sync re-read would be answered from with the pre-sync numbers.
+
+**Development-only size instrumentation** rides both routes
+(`util/payload-log.ts`): `[payload] lineups jkap86 2026 26.2 KB (leagues=113
+answered=113 ms=812)`. Silent in production — this is one request per page load
+per reader — and `LOG_PAYLOAD_SIZE=on` turns it on anywhere for a deliberate
+measurement, on `KTC_SYNC=off`'s spelling. It serialises exactly once either
+way: the quiet path hands the object to `Response.json`, the loud path
+stringifies, measures the string and builds the response from it.
 
 ### The KeepTradeCut columns
 
@@ -11389,3 +11507,70 @@ row while parked, so it wants a render to confirm rather than an argument. The
 timeline scrub still rebuilds its two pricing Maps per `back` change. And the
 `/api/user/[username]/lineups` payload still ships every team of every league;
 what changed is that a bay edit no longer re-downloads it with the page blank.
+
+## The second performance pass
+
+The pass above ends "the payload still ships every team of every league", and
+this is the one that stopped it. Seven changes, each with its own note where it
+lives; what they have in common is that none of them is memoisation around the
+existing shape.
+
+- **The manager page's two reads** — the batched route answers `{ ranks }` and
+  a card reads its own league when opened. **4.23MB → 26.2KB** on the fixture
+  stand-in for a 113-league account, and the same cut in what the server holds
+  while it builds the answer and what the browser retains after parsing it. See
+  The collapsed card and the expanded one are two reads.
+- **Memory-weighted cache bounds.** An entry count is a bound on memory only
+  where entries are one size, and four of these hold answers that are not: a
+  manager's league rows, their draft-capital boards, a resolved trade circle, a
+  league's rostered population. `BoundedCache` and `createReadMemo` take
+  `maxWeight` beside `max` with a caller-supplied `weigh` — never
+  `JSON.stringify().length`, which costs more than the read it stands in front
+  of — and **an entry heavier than the whole budget is refused rather than
+  exempted**, which is the one arm eviction cannot reach.
+- **The shares drawers unmount while shut.** They stay *mounted* for the
+  session by design (the page's `opened` latch is what the grid's subject
+  narrowing needs), which meant four hundred row trees and every derived list
+  behind them lived in the document for the rest of it. Driven over CDP against
+  the real component: **8,926 DOM nodes and 400 rows while closed, against 78
+  and 0 after** — with the scroll position, the search rule, the facet
+  selections and the picked subjects all unchanged, because every one of those
+  lives above the subtree that goes.
+- **`content-visibility: auto` on collapsed league cards**, and the reason it
+  is opt-in rather than a rule on every list is verified rather than assumed:
+  it implies paint containment, which clips descendants to the padding box, and
+  the card's billet hangs 16–18px *above* its own top edge carrying the
+  league's engraved name. Rendered in this engine, the contained card loses it
+  and nothing errors. The `<li>` therefore takes a padding-top equal to the
+  overhang and an equal negative margin — measured, the card's box, the
+  billet's, the gap between cards and `scrollHeight` are identical to the pixel
+  with the rule on and off, because a grid track is sized from the margin box.
+  The open card is excluded: it is the one whose height the panel measures
+  itself against, and it is on screen anyway.
+- **`windowReading` is one loop**, where it was a `slice` + `map` + `filter` +
+  spread per call on a path `rankComps` walks hundreds of thousands of times a
+  request. Pinned against a deliberately naive reference over four hundred
+  random series rather than against a snapshot of its own output. In `knn`, the
+  pass that computes a `(field, window)`'s z-scale now **keeps what it read** —
+  three typed arrays indexed by pool position — so the distance loop is an
+  indexed read rather than a second window read plus a string concat and a
+  `Map` lookup per row per field. Execution-scoped and dropped with the call:
+  the pool is the caller's own narrowing, so a corpus-level table would be keyed
+  by a question rather than by the data.
+- **One reusable column in `rankLeagueLineups`.** A rank is a pass over one
+  column of numbers and it allocated that column every time — ten for the base
+  ranks, ten more per narrowing, four per forced market per narrowing, three per
+  forced draft board. It is one `Float64Array`, **local to the call** rather
+  than module-scoped, which is the whole of what makes it safe.
+- **The players sync iterates the map in place**, where it built
+  `Object.entries` — twelve thousand two-element arrays beside a ~5MB parse,
+  alive until the transaction finished, to carry a key the map already had.
+
+**Deliberately not taken.** `RankedComp.pairs` is still built for every scored
+row rather than for the `k` the caller keeps, which on a large pool is the
+biggest transient allocation left in `/comps`; it is part of that function's
+documented shape ("Not truncated — `k` is the caller's") and truncating it is a
+contract change. True virtualization of the league list is a separate follow-up
+— containment is the low-risk half, and whether the remaining per-card cost
+warrants a virtualizer wants a measurement on a real 113-league page rather than
+an argument.

@@ -1383,6 +1383,63 @@ html {
 }
 
 /*
+ * A collapsed card off screen is laid out and painted for nothing.
+ *
+ * `content-visibility: auto` is the browser's own answer: a card outside the
+ * viewport keeps its box and skips its contents — no layout of its rank
+ * windows, no paint of its six composited planes — and renders the moment it
+ * comes near. On a 113-league account that is a hundred cards' worth of work a
+ * scroll does not have to do. `contain-intrinsic-size`'s `auto` keyword is what
+ * makes it safe for the scrollbar: the browser remembers each card's real
+ * height once it has rendered, so the placeholder figure below is only ever the
+ * *first* layout's guess and the document does not resize under a reader.
+ *
+ * **The padding and the negative margin are the whole of why this is opt-in
+ * rather than a rule on every list.** `content-visibility: auto` implies paint
+ * containment, which clips an element's descendants to its padding box — and
+ * the card's billet hangs 16px (18 from `sm`) *above* the card's own top edge,
+ * carrying the league's engraved name. Contained naively, every card on the
+ * page loses the top of its own header, and nothing errors. So the `<li>` takes
+ * a padding-top equal to that overhang, which brings the billet inside the box
+ * that clips, and an equal negative margin, which puts the card back exactly
+ * where it was: a grid track is sized from the item's margin box, so
+ * `-18 + 18` is no change to the track, to the gap, or to the document's
+ * height. Measured in this engine: the card's own box, the billet's, the
+ * spacing between cards and `scrollHeight` are identical to the pixel with the
+ * rule on and off.
+ *
+ * **The open card is excluded**, because it is the one card whose height the
+ * expanded panel measures itself against (`usePanelCap`) and the one that
+ * flies; it is also on screen by construction, so containment would buy
+ * nothing. The `:not(:has())` is the same shape as the parked rule above.
+ *
+ * Scoped to the class rather than to `[data-card-list]` so it applies where the
+ * numbers were checked. The trades board's cards are a different height and its
+ * list is an infinite scroll with a sentinel at the foot, which is exactly the
+ * arrangement a first-layout height estimate could disturb — it opts in when
+ * somebody has measured it.
+ */
+.lab-card-contain > li {
+  padding-top: 16px;
+  margin-top: -16px;
+}
+
+.lab-card-contain > li:not(:has(> details[open])) {
+  content-visibility: auto;
+  /* A collapsed manager card measures ~221px on a phone and ~226px on a
+     desktop; the padding above puts its `<li>` a little over that. `auto` means
+     this is the first paint's estimate and nothing more. */
+  contain-intrinsic-size: auto 240px;
+}
+
+@media (min-width: 40rem) {
+  .lab-card-contain > li {
+    padding-top: 18px;
+    margin-top: -18px;
+  }
+}
+
+/*
  * The rack's two other heights. Declared here rather than beside the token
  * because Tailwind's `@theme` block sits between them and a media query cannot
  * live inside it; the breakpoints are `sm` (40rem) and `md` (48rem), spelled to

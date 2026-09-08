@@ -260,6 +260,13 @@ const CELL_TEXT: Record<SharesColumnId, string> = {
  * and spelling a slot are per-row costs the search and the selection would
  * otherwise pay per render.
  */
+/**
+ * The empty list a shut drawer holds instead of its rows — a module-level
+ * identity, so the memo that returns it while closed hands the same array
+ * every render rather than a fresh one.
+ */
+const NO_PREPARED: Prepared[] = [];
+
 type Prepared = {
   row: SharesDrawerRow;
   /** {@link SharesDrawerRow.held} as a share of the counted leagues. */
@@ -467,6 +474,17 @@ export function SharesDrawer({
   const sortKey =
     sort === "name" || cols.includes(sort) ? sort : cols[cols.length - 1];
 
+  /**
+   * Where the list was scrolled to, kept across the close.
+   *
+   * **The panel's contents are unmounted while it is shut** — see the render —
+   * so the scroller's own `scrollTop` goes with them, and a reader who scrolled
+   * two hundred rows down, closed the drawer and opened it again would land
+   * back at the top. This is the cheap half of that state, written on every
+   * scroll (a ref, so no render) and restored when the list comes back.
+   */
+  const savedScroll = useRef(0);
+
   useEffect(() => {
     const dialog = ref.current;
     if (!dialog) return;
@@ -477,6 +495,10 @@ export function SharesDrawer({
     }
     if (dialog.open) return;
     dialog.showModal();
+    // The list mounted in this same commit, so it exists by the time an effect
+    // runs. Restored before focus, so a coarse-pointer focus on the panel does
+    // not scroll it somewhere else first.
+    if (listRef.current) listRef.current.scrollTop = savedScroll.current;
 
     // Fine pointer → the search field, which is what the drawer is for.
     // Coarse → the panel itself, so opening it on a phone does not raise the
@@ -501,8 +523,25 @@ export function SharesDrawer({
   const deferredQuery = useDeferredValue(query);
   const needle = deferredQuery.trim().toLowerCase();
 
-  // Per row list, never per keystroke — see `Prepared`.
+  /**
+   * Per row list, never per keystroke — see `Prepared`.
+   *
+   * **Released while the drawer is shut**, which is the one thing a memo does
+   * not do for free: it holds its last value for as long as the component is
+   * mounted, and this drawer is mounted for the rest of the session once it has
+   * been opened (the page's `opened` latch, which the subject narrowing needs).
+   * On a 113-league account that is four hundred and seventy-one objects here,
+   * as many again in `shown`, and the row tree under them — all of it display
+   * work for a panel nobody is looking at. Depending on `open` is what lets it
+   * go, and the recompute on the next press is the one the first press already
+   * paid.
+   *
+   * What is *not* released is anything the grid behind the drawer narrows by:
+   * those maps are the payload's own (`rolls` in `leagues-home`), and this is
+   * the second, display-shaped copy of them.
+   */
   const prepared = useMemo<Prepared[]>(() => {
+    if (!open) return NO_PREPARED;
     const share = (n: number | null | undefined) =>
       leagueCount > 0 && n != null ? Math.round((n / leagueCount) * 100) : 0;
     return rows.map((row) => ({
@@ -513,7 +552,7 @@ export function SharesDrawer({
       search: row.name.toLowerCase(),
       slot: subjectSlot({ kind, id: row.id }),
     }));
-  }, [rows, leagueCount, kind]);
+  }, [open, rows, leagueCount, kind]);
 
   const shown = useMemo(() => {
     // The name is what a search means for every panel; a panel whose rows
@@ -562,8 +601,12 @@ export function SharesDrawer({
     [kind],
   );
 
-  // A narrowed list scrolled halfway down reads as an empty one.
+  // A narrowed list scrolled halfway down reads as an empty one. The saved
+  // position goes with it: a reader who searched, closed the drawer (which
+  // clears the query) and re-opened it must land where the *unfiltered* list
+  // starts, which is what this already did when nothing unmounted.
   useEffect(() => {
+    savedScroll.current = 0;
     if (listRef.current) listRef.current.scrollTop = 0;
   }, [needle, sortKey]);
 
@@ -608,6 +651,24 @@ export function SharesDrawer({
           className="pointer-events-none absolute inset-x-[12%] top-0 h-px bg-[image:var(--panel-specular)]"
         />
 
+        {/*
+          **Nothing inside the panel is mounted while it is shut**, and that is
+          the drawer's memory pass in one line.
+
+          The page keeps this component mounted once it has been opened — the
+          `opened` latch, which the *grid's* subject narrowing needs — and until
+          now that meant the whole panel stayed too: on a 113-league account,
+          four hundred and seventy-one row trees, their headers, their badges
+          and the tray of controls above them, live in the document for the rest
+          of the session so that a second press could be instant. What survives
+          the unmount is everything cheap: the search text, the sort key, the
+          lifted column, the columns themselves (persisted), the scroll position
+          (see {@link savedScroll}), and — held by the caller, which is what
+          makes this safe — the reader's facet selections and the subjects they
+          picked. The second press pays the render the first one already did.
+        */}
+        {open ? (
+          <>
         {/* The control deck: one raised plate carrying four bands. Kept tight,
             because the list is what the panel is for. */}
         <div className="relative shrink-0 bg-[image:var(--plate-raised-bg)] shadow-[var(--plate-raised-shadow)]">
@@ -764,6 +825,10 @@ export function SharesDrawer({
               row silently, and a hair shorter would leave a gap. */}
           <div
             ref={listRef}
+            // A ref write per scroll event and no render — see `savedScroll`.
+            onScroll={(e) => {
+              savedScroll.current = e.currentTarget.scrollTop;
+            }}
             className="lab-scroll relative min-h-0 flex-1 overflow-y-auto overscroll-contain pb-3 pl-[0.6875rem] pr-[0.4375rem] pt-2 [mask-image:linear-gradient(to_bottom,transparent_0,#000_0.625rem,#000_calc(100%-0.75rem),transparent_100%)]"
           >
             {detail ? (
@@ -861,6 +926,8 @@ export function SharesDrawer({
             )}
           </div>
         </div>
+          </>
+        ) : null}
       </div>
     </dialog>
   );

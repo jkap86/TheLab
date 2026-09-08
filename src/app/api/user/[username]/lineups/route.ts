@@ -20,14 +20,13 @@ import {
   parseKtcVariants,
   parsePositionSets,
   parseSlotSets,
-  parseTeamTotalKeys,
   qbBoardKeySuffix,
 } from "@/shared/ktc/columns";
 import type { KtcVariant } from "@/shared/ktc/columns";
 import {
   lookupManagerDraftAdp,
   lookupManagerLeagueRows,
-  solveLeagueEntry,
+  solveLeagueRanks,
 } from "@/shared/manager";
 import type {
   AdpVariant,
@@ -40,17 +39,28 @@ import type { RosProjections } from "@/shared/projections";
 import { getActiveSeason, parseRequestedSeason } from "@/shared/season";
 import { getNflState } from "@/shared/sleeper";
 import { resolveManagerUser } from "@/shared/user";
+import { jsonWithPayloadSize } from "@/shared/util";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 /**
  * Every league's rosters solved into rest-of-season lineups and the manager's
- * rank among them — one request for the whole page, like the leagues stream it
- * rides beside, because the projections span is shared across every league and
- * per-card requests would refetch nothing but re-enter everything. Every
- * stored roster is solved (a rank needs the other eleven), but only the
- * manager's lineup ships — see `manager/league-ranks`.
+ * **rank** among them — one request for the whole page, like the leagues stream
+ * it rides beside, because the projections span is shared across every league
+ * and per-card requests would refetch nothing but re-enter everything. Every
+ * stored roster is solved (a rank needs the other eleven) and **none of them
+ * ships**: what crosses the wire is `{ ranks }` per league.
+ *
+ * **That is the split this route exists on the near side of.** It used to
+ * answer a whole {@link LeagueLineupEntry} per league — twelve solved lineups,
+ * their ten totals apiece and their pick portfolios — which on a 113-league
+ * account is several megabytes built, held, serialised, parsed and retained so
+ * that four ordinals could be printed on each *collapsed* card. The teams are
+ * what an expanded card's browser draws, and a reader opens one league at a
+ * time, so they come from `GET /api/league/[leagueId]/lineup` on the press. See
+ * `LeagueLineupSummary`, and `use-league-lineup` for the client cache that
+ * makes re-opening free.
  *
  * The solve is projections first, draft capital second — see
  * `manager/ros-lineups` for the arithmetic. What this route decides is only
@@ -116,14 +126,13 @@ export const dynamic = "force-dynamic";
  * being a thing only a starting lineup has, which `column()` enforces on the
  * client and `lineupMetricTotals` answers honestly for anyway.
  *
- * **`?team_totals=` is not a fifth axis but a list of columns**, and it asks a
- * different question from the four above: those decide what the manager is
- * *ranked* on, where this decides which of the resulting columns ship a total
- * for **every roster** in the league. A rank answers a card's window and a
- * per-roster total answers a standings table, and only the second wants a
- * number per team. It names keys rather than axes precisely because it is
- * bounded by what a reader is looking at — one column, where the axes' cross
- * product across four bays is hundreds of sums a league.
+ * **`?team_totals=` is gone from this route**, and its absence is the same
+ * change as the payload's. It named the columns whose totals should be carried
+ * out for *every roster*, which only a standings table reads — and a standings
+ * table only exists inside an expanded card, which now asks
+ * `/api/league/[leagueId]/lineup` for its own league. A batched read that
+ * carried per-roster totals for a hundred leagues was answering the question
+ * one of them would be asked.
  *
  * A token that cannot be read folds to the empty set and is dropped, on
  * `parsePositionSets`' terms: the column that named it loses its narrowing and
@@ -136,6 +145,7 @@ export async function GET(
   request: Request,
   { params }: { params: Promise<{ username: string }> },
 ) {
+  const startedAt = performance.now();
   const { username } = await params;
 
   const resolved = await resolveManagerUser(username);
@@ -178,22 +188,6 @@ export async function GET(
     const forced = parseKtcVariants(url.searchParams.get("ktc_boards"));
     const narrowings = parsePositionSets(url.searchParams.get("positions"));
     const seats = parseSlotSets(url.searchParams.get("slots"));
-    // **The one parameter that names columns rather than axes**, and it is a
-    // different question from the four beside it: those say which pricings and
-    // narrowings to *rank* the manager on, where this says which of the
-    // resulting columns a caller will read across **every** roster. The teams
-    // pane is what asks — its column picker offers the same six axes the card's
-    // bays do, and a standings table narrowed to a seat or priced on a forced
-    // market is a total per team that only this route can compute.
-    //
-    // It carries no axes of its own: a key names a pricing the four above must
-    // already have asked for, or the route never composes it and the total is
-    // simply absent. That is the client's job to keep true (see
-    // `useManagerLineups`, which sends the teams column through both), and the
-    // failure is an em dash on one column rather than a wrong number anywhere.
-    const teamTotals = new Set(
-      parseTeamTotalKeys(url.searchParams.get("team_totals")),
-    );
     // The ADP aggregate is already split superflex/standard by
     // `getManagerDraftAdp`, so a forced board costs no read at all — it points
     // at the other half of one answer that was fetched before any of this.
@@ -235,7 +229,15 @@ export async function GET(
       const board = isSuperflexLineup(league.roster_positions)
         ? adp.superflex
         : adp.standard;
-      const entry = solveLeagueEntry(
+      // **Ranks, not the entry.** The solves behind them are identical and so
+      // is every number they produce; what does not happen is the twelve
+      // `LeagueTeam` objects, their lineups, their ten totals and their pick
+      // arrays being built and then held here until the last league is done.
+      // A collapsed card renders four ordinals off `ranks`; the teams are the
+      // *expanded* card's answer and come from
+      // `GET /api/league/[leagueId]/lineup`, one league at a time, on the
+      // press. See `LeagueLineupSummary`.
+      const ranks = solveLeagueRanks(
         league,
         userId,
         season,
@@ -265,11 +267,10 @@ export async function GET(
         // never offers such a set, having built its keys from these very
         // leagues.
         seats,
-        teamTotals,
       );
-      // A null entry means the store moved between the query and here — the
+      // A null answer means the store moved between the query and here — the
       // league drops out of the payload, as it always has for roster-less ones.
-      if (entry) solved[league.league_id] = entry;
+      if (ranks) solved[league.league_id] = { ranks };
     }
 
     const payload: ManagerLineupsPayload = {
@@ -282,7 +283,12 @@ export async function GET(
     // the moment a cold sync completes, and a browser cache would answer it
     // with the pre-sync payload — the server memo has no such problem, since
     // the persist that wrote the new rosters is what evicts it.
-    return NextResponse.json(payload);
+    return jsonWithPayloadSize(
+      payload,
+      `lineups ${username} ${season}`,
+      { leagues: leagues.length, answered: Object.keys(solved).length },
+      startedAt,
+    );
   } catch (error) {
     console.error(`[lineups] failed for ${username} ${season}:`, error);
     const payload: ApiErrorPayload = { error: "Failed to load lineups" };

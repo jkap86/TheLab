@@ -14,6 +14,17 @@
  * Each is started and not awaited, and each guards its own ticks; a failure
  * reaching one of these catch blocks means the module itself failed to load.
  * Further loops add their own block below.
+ *
+ * **Whether they start at all is `APP_PROCESS_ROLE`'s**, and that is the one
+ * thing this file gained that is not about a loop. Every one of those four is
+ * scheduled maintenance — a Sleeper fan-out holding a pooled connection, a ~5MB
+ * download, twelve thousand upserts in a transaction — and every one of them
+ * was competing for the same process as the request a reader is waiting on. A
+ * deployment can now put them on a worker dyno: `web` serves and starts none of
+ * them, `worker` starts them, and the default `all` is both, which is what a
+ * single instance and a laptop want and is exactly what this file did before.
+ * Migrations run under every role, because a process must not serve *or*
+ * maintain against a schema it cannot vouch for. See `util/process-role`.
  */
 export async function register(): Promise<void> {
   if (process.env.NEXT_RUNTIME !== "nodejs") return;
@@ -29,6 +40,18 @@ export async function register(): Promise<void> {
     // schema it can't vouch for.
     console.error("[db] Failed to initialise the database on boot:", error);
     throw error;
+  }
+
+  // **A boot that starts nothing says why.** A web dyno doing exactly what it
+  // was told and a worker whose role was misspelled look identical from the
+  // outside — no ticks, no errors — and the difference is a database that stops
+  // being refreshed. An unreadable value reads as `all` rather than as a
+  // refusal, on the same argument: see `processRole`.
+  const { backgroundJobsSkipReason } = await import("@/shared/util");
+  const skip = backgroundJobsSkipReason();
+  if (skip !== null) {
+    console.log(`[jobs] Background loops not started on this process (${skip}).`);
+    return;
   }
 
   // Started, not awaited: the boot tick can run half an hour of history

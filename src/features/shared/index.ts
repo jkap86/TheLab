@@ -145,8 +145,12 @@ export { THEME_BOOT_SCRIPT } from "./theme";
 // One league's rosters solved, for a card with no batched answer to draw on —
 // the trades board's, whose leagues belong to no one account. See the module for
 // why it takes the timeline's own subject.
-export { useLeagueLineup } from "./use-league-lineup";
+export { leagueLineupKey, useLeagueLineup } from "./use-league-lineup";
 export type { LeagueLineupState } from "./use-league-lineup";
+export {
+  invalidateLeagueLineups,
+  MAX_ENTRIES as MAX_LEAGUE_LINEUP_ENTRIES,
+} from "./league-lineup-cache";
 export { createRequestGuard, useRequestGuard } from "./request-guard";
 export type { RequestGuard, RequestTicket } from "./request-guard";
 export { useManagerLeagues } from "./use-manager-leagues";

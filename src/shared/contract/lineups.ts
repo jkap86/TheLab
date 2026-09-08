@@ -370,13 +370,46 @@ export type LeagueTeam = {
  * the reader open any team, not just the manager's — plus the manager's ranks.
  * Teams arrive in roster-id order; the card sorts by whichever metric its
  * column is showing.
+ *
+ * **This is the *expanded* card's answer and no longer the batched one.** It
+ * used to ship once per league from `/api/user/[username]/lineups`, which on a
+ * 113-league account is a hundred twelve-team solves — every seat, every bench
+ * player, every pick and ten totals apiece — serialised, parsed and retained so
+ * that four ordinals could be printed on each collapsed card. What a reader
+ * actually looks at is one league's teams at a time, when they open one. So the
+ * batched route answers {@link LeagueLineupSummary} and this arrives per league
+ * from `/api/league/[leagueId]/lineup`, on the press. See
+ * {@link ManagerLineupsPayload.leagues}.
  */
 export type LeagueLineupEntry = {
   teams: LeagueTeam[];
   ranks: ColumnRanks;
 };
 
-/** `GET /api/user/[username]/lineups` — every roster solved, batched. */
+/**
+ * One league's **collapsed**-card answer: the manager's ranks and nothing else.
+ *
+ * **The whole of what a card shows before it is opened is four ordinals**, and
+ * each is `ranks[lineupColumnKey(column)]`. Everything else a
+ * {@link LeagueLineupEntry} carries — the twelve solved lineups, their ten
+ * totals apiece, their pick portfolios — is what the *expanded* card's team
+ * browser renders, and it is fetched for the one league a reader opens rather
+ * than for the hundred they do not (see {@link LeagueLineupPayload}).
+ *
+ * Measured on the fixture stand-in for a 113-league account, that is the
+ * difference between ~5MB and ~40KB on the wire, and the same difference in
+ * what the server holds while it builds the answer and what the browser retains
+ * after parsing it.
+ *
+ * A record rather than a bare {@link ColumnRanks} so `leagues[id].ranks` reads
+ * the same on both sides of the split, and so a field the collapsed card needs
+ * later has somewhere to land that is not the entry.
+ */
+export type LeagueLineupSummary = {
+  ranks: ColumnRanks;
+};
+
+/** `GET /api/user/[username]/lineups` — every league's ranks, batched. */
 export type ManagerLineupsPayload = {
   season: string;
   /**
@@ -403,7 +436,13 @@ export type ManagerLineupsPayload = {
    * showing them should be able to say how old they are.
    */
   ktc: readonly KtcBoardStamp[];
-  leagues: Record<string, LeagueLineupEntry>;
+  /**
+   * Every league the manager fields a team in, keyed by id — **ranks only**.
+   *
+   * See {@link LeagueLineupSummary} for why the teams are not here. A league
+   * whose solve produced no manager lineup is absent, exactly as it always was.
+   */
+  leagues: Record<string, LeagueLineupSummary>;
 };
 
 /** One market that answered, and when it was last scraped. */

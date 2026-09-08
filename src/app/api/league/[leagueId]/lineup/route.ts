@@ -37,6 +37,7 @@ import type { RosProjections } from "@/shared/projections";
 import { getActiveSeason, parseRequestedSeason } from "@/shared/season";
 import { getNflState } from "@/shared/sleeper";
 import { resolveManagerUser } from "@/shared/user";
+import { jsonWithPayloadSize } from "@/shared/util";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -108,6 +109,7 @@ export async function GET(
   request: Request,
   { params }: { params: Promise<{ leagueId: string }> },
 ) {
+  const startedAt = performance.now();
   const { leagueId } = await params;
   const url = new URL(request.url);
 
@@ -202,7 +204,17 @@ export async function GET(
         teamTotals,
       ),
     };
-    return NextResponse.json(payload, { headers: CACHE });
+    // The other half of the manager page's split, measured beside it: this is
+    // what one expanded card costs where the batched read used to carry a
+    // hundred of them. Development only — see `jsonWithPayloadSize`.
+    const response = jsonWithPayloadSize(
+      payload,
+      `league lineup ${leagueId} ${season}`,
+      { teams: payload.entry?.teams.length ?? 0 },
+      startedAt,
+    );
+    response.headers.set("Cache-Control", CACHE["Cache-Control"]);
+    return response;
   } catch (error) {
     console.error(`[league] lineup failed for ${leagueId}:`, error);
     const body: ApiErrorPayload = { error: "Failed to load the league" };

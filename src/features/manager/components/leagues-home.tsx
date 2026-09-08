@@ -1,6 +1,13 @@
 "use client";
 
-import { type ReactNode, useCallback, useMemo, useRef, useState } from "react";
+import {
+  type ReactNode,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 
 import type { ManagerLineupsPayload } from "@/shared/contract";
 
@@ -29,6 +36,7 @@ import {
   type RackDrawerKey,
   type SubjectMode,
   type SubjectRolls,
+  invalidateLeagueLineups,
   useActiveCard,
   usePublishRackControls,
   useKtcBoard,
@@ -127,13 +135,6 @@ const BROWSE_KEYS: readonly RackDrawerKey[] = [
  * now and runs to the viewport edges. With the rack floating above, a second
  * bounded rectangle inside the viewport read as a panel inside a panel.
  */
-/**
- * No market answered — a page whose lineups read has not landed, or one whose
- * boards could not be. A shared empty so a `memo`'d card is not handed a new
- * array identity on every render of the page above it.
- */
-const NO_KTC: ManagerLineupsPayload["ktc"] = [];
-
 export function LeaguesHome({
   username,
   season,
@@ -367,17 +368,38 @@ export function LeaguesHome({
   // applied here, because their ranks are the server's: only it can rank a
   // roster against the other eleven, and a forced market is a board only it can
   // price.
+  /**
+   * A sync landed, so every expanded card's stored answer is out of date.
+   *
+   * **This is the invalidation the per-league split needed.** A card's teams
+   * are read once and kept — closing and re-opening must not pay again — which
+   * is right until the rosters behind them are rewritten, and the leagues
+   * stream settling is exactly when that has happened. The store re-asks for
+   * the keys a card is still reading and drops the rest, so an open card
+   * refreshes in place and a closed one costs nothing.
+   *
+   * The whole store rather than this page's keys: the event is rare (one per
+   * refresh), and a trades card holding a stale league would want the same
+   * news. Fired on the *transition*, not on the state, so a page that arrives
+   * already settled does not throw away an answer it has just read.
+   */
+  const wasRefreshing = useRef(refreshing);
+  useEffect(() => {
+    const settled = wasRefreshing.current && !refreshing;
+    wasRefreshing.current = refreshing;
+    if (settled) invalidateLeagueLineups();
+  }, [refreshing]);
+
   const lineups = useManagerLineups(
     username,
     state.season,
     leagues.length > 0 && !refreshing,
+    // **The four bays and nothing else.** The standings pane's own column used
+    // to ride this request, because its per-roster totals came off this
+    // payload; they come off the expanded card's own per-league read now, so
+    // changing what that pane is sorted by costs one open card's round trip
+    // rather than the whole page's ranks. See `useManagerLineups`.
     columns,
-    // **The standings pane's column rides the same request**, and it has to:
-    // its figure is a total per *roster* rather than a rank, so a column
-    // narrowed to a seat or priced on a forced market is a sum only the server
-    // can make — and a page that asked for the four bays' pricings alone would
-    // leave that one column an em dash on every card. See the hook.
-    teamsColumn,
   );
 
   // Sleeper lets a display name go missing, so the username is the fallback
@@ -790,14 +812,22 @@ export function LeaguesHome({
             <ul
               ref={listRef}
               {...card.shellProps}
-              className="relative m-0 mt-2 grid list-none grid-cols-1 gap-[1.125rem] p-0 [overflow-anchor:none]"
+              // **`lab-card-contain` is `content-visibility: auto` on every
+              // collapsed card**, plus the padding and negative margin that
+              // keep the billet's overhang inside the box paint containment
+              // clips — see `globals.css`, where the measurement is. It is a
+              // class rather than a rule on `[data-card-list]` because the
+              // trades board's cards are a different height and its list ends
+              // in an infinite-scroll sentinel, which is the one arrangement a
+              // first-layout height estimate could disturb.
+              className="lab-card-contain relative m-0 mt-2 grid list-none grid-cols-1 gap-[1.125rem] p-0 [overflow-anchor:none]"
             >
               {visible.map((league) => (
                 <LeagueCard
                   key={league.league_id}
                   league={league}
                   columns={columns}
-                  entry={lineups?.leagues[league.league_id] ?? null}
+                  summary={lineups?.leagues[league.league_id] ?? null}
                   // The three that decide which boards a *past* stop is priced
                   // on. They are the same three the lineups read above was
                   // asked for the present, which is the whole point: a rewound
@@ -815,7 +845,6 @@ export function LeaguesHome({
                   // board now, so the rail follows *it* and the rule is
                   // unchanged.
                   teamsColumn={teamsColumn}
-                  ktc={lineups?.ktc ?? NO_KTC}
                   slots={seatsInHand}
                   open={card.isOpen(league.league_id)}
                   lit={card.isLit(league.league_id)}

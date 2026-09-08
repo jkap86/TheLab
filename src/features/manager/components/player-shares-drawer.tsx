@@ -122,12 +122,28 @@ export function PlayerSharesDrawer({
   const clearFilters = useCallback(() => setFilters(NO_PLAYER_FILTERS), []);
   const toggleTray = useCallback(() => setTrayOpen((v) => !v), []);
 
+  /**
+   * The fold, and the two lists derived from it.
+   *
+   * **Released while the drawer is shut**, on {@link SharesDrawer}'s own terms:
+   * this component stays mounted for the rest of the session once a drawer has
+   * been opened (the page's `opened` latch, which the grid's subject narrowing
+   * needs), and a `useMemo` holds its last value for as long as it is. That is
+   * four hundred-odd `PlayerShare` objects here and as many `SharesDrawerRow`s
+   * below, every one of them display work for a panel nobody is looking at.
+   *
+   * **What narrows the grid is untouched**, which is what makes this safe: that
+   * reads the payload's own maps (`rolls` in `leagues-home`), not these. And
+   * the reader's own state — the facet selections, the tray — lives in this
+   * component's `useState` above rather than in the subtree being unmounted, so
+   * closing the drawer costs a render and nothing they chose.
+   */
   const shares = useMemo(
     () =>
-      read.data
+      open && read.data
         ? playerShares(leagues, read.data.rosters, read.data.players)
         : null,
-    [leagues, read.data],
+    [open, leagues, read.data],
   );
 
   // Memoised rather than defaulted inline, so a render while the read is in

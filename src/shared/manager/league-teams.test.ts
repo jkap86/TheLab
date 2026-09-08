@@ -1,7 +1,11 @@
 import assert from "node:assert/strict";
 import { describe, test } from "node:test";
 
-import { leagueTeamName, solveLeagueEntry } from "./league-teams.ts";
+import {
+  leagueTeamName,
+  solveLeagueEntry,
+  solveLeagueRanks,
+} from "./league-teams.ts";
 import type { KtcPricing, LineupLeagueRow } from "./league-teams.ts";
 import { ktcPickKey } from "../ktc/picks.ts";
 import { DYNASTY_LEAGUE_TYPE } from "./draft-picks.ts";
@@ -359,5 +363,92 @@ describe("solveLeagueEntry — KeepTradeCut", () => {
     assert.equal(entry.ranks.ktc_starters, null);
     assert.equal(entry.ranks.ktc_bench, null);
     assert.equal(entry.ranks.ktc_picks, null);
+  });
+});
+
+/**
+ * The batched manager route's own answer: the same ranks, none of the teams.
+ *
+ * **The property worth pinning is the equality**, not the shape. A collapsed
+ * card renders `ranks[key]` and the expanded one renders the teams; the split
+ * is only safe while the two entry points agree about the first, and they agree
+ * because they run one solve behind a shared core. A future edit that
+ * "optimised" the ranks path by skipping a variant, a narrowing or the pick
+ * board would show up here and nowhere on screen — a rank is a plausible number
+ * whichever arithmetic produced it.
+ */
+describe("solveLeagueRanks", () => {
+  /** Two rosters, each keeping its own 2027 first, on a set draft order. */
+  function priced(overrides: Partial<LineupLeagueRow> = {}) {
+    return row({
+      drafts: [
+        {
+          draft_id: "d27",
+          season: "2027",
+          status: "pre_draft",
+          type: "linear",
+          start_time: 1,
+          rounds: 1,
+          teams: 2,
+          reversal_round: null,
+          draft_order: { me: 1, t2: 2 },
+        },
+      ],
+      ...overrides,
+    });
+  }
+
+  test("answers exactly the ranks solveLeagueEntry does", () => {
+    const league = priced({
+      traded_picks: [{ season: "2027", round: 1, roster_id: 2, owner_id: 1 }],
+    });
+    const entry = solveLeagueEntry(league, "me", "2026", PROJECTIONS, NO_ADP, KTC);
+    const ranks = solveLeagueRanks(league, "me", "2026", PROJECTIONS, NO_ADP, KTC);
+    assert.ok(entry);
+    assert.deepEqual(ranks, entry.ranks);
+  });
+
+  test("agrees under a forced board and both narrowing axes", () => {
+    const league = priced();
+    const variants = [
+      { key: "dynasty:sf", values: new Map([["w1", 9000]]), picks: KTC.picks, superflex: true },
+    ];
+    const positions: (readonly ("WR" | "QB")[])[] = [["WR"]];
+    const slots: (readonly "FLEX"[])[] = [["FLEX"]];
+    const entry = solveLeagueEntry(
+      league, "me", "2026", PROJECTIONS, NO_ADP, KTC, variants, positions, [], slots,
+    );
+    const ranks = solveLeagueRanks(
+      league, "me", "2026", PROJECTIONS, NO_ADP, KTC, variants, positions, [], slots,
+    );
+    assert.ok(entry);
+    assert.deepEqual(ranks, entry.ranks);
+    // And the keyed variants really were computed, so the equality above is
+    // over something rather than over two empty records.
+    assert.ok("ktc_total:dynasty:sf" in (ranks ?? {}));
+    assert.ok("ros_starters:@flex:wr" in (ranks ?? {}));
+  });
+
+  // The manager route's own arm: the query filters these leagues out, so
+  // reaching it means the store moved between reads and the league is dropped.
+  test("a named manager holding no roster answers null, as the entry does", () => {
+    const league = row();
+    assert.equal(
+      solveLeagueRanks(league, "nobody", "2026", PROJECTIONS, NO_ADP),
+      null,
+    );
+    assert.equal(
+      solveLeagueEntry(league, "nobody", "2026", PROJECTIONS, NO_ADP),
+      null,
+    );
+  });
+
+  // A league-scoped read has no manager, and every rank is null rather than
+  // absent — the state a card draws an em dash for.
+  test("a null manager ranks nothing and still answers", () => {
+    const ranks = solveLeagueRanks(row(), null, "2026", PROJECTIONS, NO_ADP);
+    assert.ok(ranks);
+    assert.equal(ranks.ros_starters, null);
+    assert.equal(ranks.capital_total, null);
   });
 });

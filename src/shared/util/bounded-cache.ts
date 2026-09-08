@@ -27,6 +27,21 @@
  * `shared/trades/cache` re-exports it under the name its own consumers, their
  * tests among them, read it by.
  *
+ * **Why a weight as well as a count.** An entry count is a bound on memory only
+ * where the entries are the same size, and several of these hold answers that
+ * are not: a resolved trade circle is a hundred ids for one reader and several
+ * thousand for another, and a manager's league rows are a dozen leagues or a
+ * hundred and thirteen. Two hundred of the small ones is nothing and two
+ * hundred of the large ones is a heap this process cannot afford, so a cache
+ * whose values vary that way takes `maxWeight` beside `max` and a `weigh`
+ * function that says, cheaply and deterministically, how big one is.
+ *
+ * The weight is a *unit of its caller's own choosing* — rows, ids, nested
+ * entries — never bytes, and deliberately never `JSON.stringify().length`:
+ * measuring a value by serialising it costs more than the read it is standing
+ * in front of. A cache whose values are uniform passes neither option and pays
+ * nothing, which is every caller that was here before this.
+ *
  * Note what it deliberately does *not* do: nothing here dedupes concurrent
  * misses, so two requests arriving together on a cold key both compute. That is
  * the right trade for a value this cheap to recompute and this awkward to key a
@@ -34,7 +49,23 @@
  * not a change here.
  */
 
-type Entry<V> = { value: V; expires: number };
+type Entry<V> = { value: V; expires: number; weight: number };
+
+/** The two optional halves of a bound that is not just a count. */
+export type BoundedCacheOptions<V> = {
+  /**
+   * The most total weight held, in whatever unit {@link weigh} answers in.
+   * Omitted, only {@link BoundedCache}'s entry count bounds the map.
+   */
+  maxWeight?: number;
+  /**
+   * How heavy one value is. Must be cheap — it runs on every write — and
+   * deterministic, or the running total drifts from the entries it describes.
+   * A caller that passes `maxWeight` without this weighs every entry 1, which
+   * is the entry count again.
+   */
+  weigh?: (value: V) => number;
+};
 
 export class BoundedCache<V> {
   private readonly entries = new Map<string, Entry<V>>();
@@ -45,17 +76,31 @@ export class BoundedCache<V> {
   // has to be *emitted*. It fails to parse rather than failing a test.
   private readonly max: number;
   private readonly ttlMs: number;
+  private readonly maxWeight: number;
+  private readonly weigh: (value: V) => number;
+  /** The sum of every stored entry's weight, maintained on every write. */
+  private weight = 0;
 
-  constructor(max: number, ttlMs: number) {
+  constructor(max: number, ttlMs: number, options: BoundedCacheOptions<V> = {}) {
     this.max = max;
     this.ttlMs = ttlMs;
+    this.maxWeight = options.maxWeight ?? Infinity;
+    this.weigh = options.weigh ?? (() => 1);
+  }
+
+  /** Drop one entry and take its weight off the running total. */
+  private drop(key: string): void {
+    const entry = this.entries.get(key);
+    if (!entry) return;
+    this.weight -= entry.weight;
+    this.entries.delete(key);
   }
 
   get(key: string): V | undefined {
     const hit = this.entries.get(key);
     if (!hit) return undefined;
     if (hit.expires <= Date.now()) {
-      this.entries.delete(key);
+      this.drop(key);
       return undefined;
     }
     // Re-inserted so the iteration order the eviction below walks is recency
@@ -76,20 +121,38 @@ export class BoundedCache<V> {
    * its data moves on — a sliding expiry would let a popular key answer from a
    * snapshot indefinitely.
    */
-  set(key: string, value: V, options?: { ttlMs?: number }): void {
+  set(
+    key: string,
+    value: V,
+    options?: { ttlMs?: number; weight?: number },
+  ): void {
     const ttlMs = options?.ttlMs ?? this.ttlMs;
-    this.entries.delete(key);
+    this.drop(key);
     // A non-positive lifetime is an entry already expired at the moment it is
     // written: `get` would delete it unread, so storing it only holds a value in
     // memory and a slot against `max` that nothing can ever be answered from.
     if (ttlMs <= 0) return;
-    this.entries.set(key, { value, expires: Date.now() + ttlMs });
-    // A `while` rather than an `if`: `max` can be lowered between writes, and a
-    // single-step trim would then never converge.
-    while (this.entries.size > this.max) {
+    const weight = options?.weight ?? this.weigh(value);
+    // **An entry too heavy for the whole budget is not stored at all**, which
+    // is the one arm that cannot be handled by eviction: trimming would empty
+    // the cache and still be over, so either the loop never converges or one
+    // pathological value is exempt from the bound it exceeds — which is the
+    // unbounded map this class exists to not be. Refusing it costs its caller a
+    // recompute, which is what a cache miss already is.
+    if (weight > this.maxWeight) return;
+    this.entries.set(key, { value, expires: Date.now() + ttlMs, weight });
+    this.weight += weight;
+    // A `while` rather than an `if` on both bounds: `max` can be lowered
+    // between writes, and one write can put the total several entries over.
+    // The entry just written is never the one evicted — it is last in insertion
+    // order — so this always converges.
+    while (
+      this.entries.size > this.max ||
+      (this.weight > this.maxWeight && this.entries.size > 1)
+    ) {
       const oldest = this.entries.keys().next();
       if (oldest.done) break;
-      this.entries.delete(oldest.value);
+      this.drop(oldest.value);
     }
   }
 
@@ -114,7 +177,7 @@ export class BoundedCache<V> {
 
   /** Drop one key, for a caller that knows it has just been rewritten. */
   delete(key: string): void {
-    this.entries.delete(key);
+    this.drop(key);
   }
 
   /**
@@ -142,7 +205,7 @@ export class BoundedCache<V> {
     let dropped = 0;
     for (const key of [...this.entries.keys()]) {
       if (!matches(key)) continue;
-      this.entries.delete(key);
+      this.drop(key);
       dropped += 1;
     }
     return dropped;
@@ -151,9 +214,15 @@ export class BoundedCache<V> {
   /** For tests and for a sync that knows it has invalidated everything. */
   clear(): void {
     this.entries.clear();
+    this.weight = 0;
   }
 
   get size(): number {
     return this.entries.size;
+  }
+
+  /** Total held weight, in the caller's own unit. For tests and diagnostics. */
+  get totalWeight(): number {
+    return this.weight;
   }
 }
