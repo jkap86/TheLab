@@ -19,9 +19,9 @@ import { SLOT_POSITIONS } from "../../../shared/projections/slots.ts";
  * - a **clear** — a real and good answer (`Set`, `In order`, `QB seated`,
  *   `Full`). The tile draws a **checkmark** and keeps the word as its
  *   accessible name;
- * - a **count** — a real figure that is *not* a problem. Two open roster spots
- *   is a number worth reading and a check there would delete it, which is the
- *   whole reason this state is not folded into `clear`;
+ * - a **count** — a real figure that is *not* a problem, and a check there
+ *   would delete it. Nothing produces one today: an open roster spot, which
+ *   was the case it was written for, is an alert now (see {@link rosterCell});
  * - a **none** — no answer at all: the em dash.
  *
  * A zero and an absence must never render the same. That is what the whole
@@ -35,11 +35,13 @@ import { SLOT_POSITIONS } from "../../../shared/projections/slots.ts";
  * a row of four tiles reads as "the mark, or something it is telling you"
  * rather than as four differently-toned readings. That is a decision about
  * ink, and this file keeps all four states regardless, because the two that
- * share an ink do **not** share a meaning anywhere it counts:
- * {@link needsAttention} and {@link attentionByReason} read `alert` alone, so
- * an open roster spot still sends nobody to a league that is in perfectly good
- * order. Folding `count` into `alert` *here* is what would break that, and it
- * is why the union is a union rather than a boolean.
+ * share an ink do **not** share a meaning where it counts:
+ * {@link needsAttention} and {@link attentionByReason} read `alert` alone, so a
+ * `count` is a figure the header does not send anybody to. Nothing answers
+ * `count` today — an open roster spot is an alert, since it is a trip to
+ * Sleeper — and the state is kept because it is the one place that distinction
+ * is written down, ready for the next figure that is a reading rather than a
+ * fault.
  *
  * **It was a boolean `alert`, and the checkmark is what ended that.** A mark
  * saying "nothing to do here" is not the same answer as a figure that merely
@@ -331,12 +333,14 @@ export function superflexCell(
  * `roster_count`. Folding them together is how this tile would report a fault
  * nobody can fix.
  *
- * **Under is a `count` and not an alert**, which is the whole reason that state
- * exists: an open roster spot is an opportunity — a waiver claim to make — and
- * counting it as a fault would send a reader to a league that is fine. (The
- * *tile* draws the two figures alike now; what the state still decides is
- * whether the league is counted off, which is the half that matters. See the
- * module note.) Over is an alert, because Sleeper refuses adds until somebody is
+ * **Under and over are both alerts**, and only `Full` is clear. Under was a
+ * `count` on the argument that an open spot is an opportunity rather than a
+ * fault; that is true of the *word* and not of the *page*, which answers "how
+ * many of my leagues want a press". An unclaimed roster spot wants one — it is
+ * a waiver claim to make, and a seat left empty scores nothing every week it
+ * stays empty — so it belongs in the count beside the over-full leagues rather
+ * than sitting silently on a page whose whole purpose is to name the leagues
+ * to open. Over is an alert because Sleeper refuses adds until somebody is
  * dropped. IR and taxi over their own limits are alerts too — an ineligible
  * player parked on IR is the common real case — and the roster figure is
  * preferred when both are wrong, with the title carrying the rest.
@@ -406,7 +410,14 @@ export function rosterCell(
       figure: `${open}`,
       unit: "open",
       scope,
-      state: "count",
+      // **An open spot is an alert**, which reverses what this arm shipped as.
+      // The state's one remaining job is whether the league is counted off (the
+      // tile draws a figure either way), and an unfilled roster is a move the
+      // reader has to make in Sleeper exactly as an over-full one is: a free
+      // agent nobody has claimed is points left on the board every week it
+      // stays open. The `count` state stays in the union for the tone a future
+      // figure-that-is-not-a-fault would want.
+      state: "alert",
       title: `${open} roster spot${open === 1 ? "" : "s"} open — ${held} filled${rest}`,
     };
   }
@@ -429,9 +440,10 @@ export function rosterCell(
  * the question the page answers: how many of your lineups want a press. A
  * league off for three reasons is one league, and one trip to Sleeper.
  *
- * The two new checks join it on their **alert** state alone — `rosterCell`'s
- * `count` is an open spot, which is an opportunity rather than a fault and must
- * never send a reader to a league that is in perfectly good order.
+ * The two new checks join it on their **alert** state alone, and `rosterCell`
+ * answers `alert` for a roster that is under its limit as well as one that is
+ * over: both are a trip to Sleeper, which is what this count is of. Only a
+ * `Full` roster is clear.
  */
 export function needsAttention(
   leagues: readonly { league_id: string }[],

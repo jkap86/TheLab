@@ -258,13 +258,12 @@ describe("rosterCell", () => {
     assert.equal(cell.state, "clear");
   });
 
-  test("an open spot is a count, not an alert", () => {
-    // The whole reason the fourth state exists: an open spot is a waiver claim
-    // to make, and the error tone would send a reader to fix a league that is
-    // fine.
+  test("an open spot is an alert, the same as being over", () => {
+    // Under and over are both a trip to Sleeper, and the page counts leagues to
+    // open. A seat left empty scores nothing every week it stays empty.
     const cell = rosterCell(league({ roster_count: 8, roster_max: 10 }));
     assert.equal(cell.text, "2 open");
-    assert.equal(cell.state, "count");
+    assert.equal(cell.state, "alert");
   });
 
   test("over the limit is an alert and says what Sleeper will refuse", () => {
@@ -326,8 +325,14 @@ describe("attentionByReason", () => {
     assert.equal(needsAttention(leagues, checked), 2);
   });
 
-  test("an open roster spot is not a reason", () => {
+  test("an open roster spot is a reason, exactly as being over is", () => {
     const checked = { a: league({ roster_count: 8, roster_max: 10 }) };
+    assert.equal(attentionByReason(leagues, checked).roster, 1);
+    assert.equal(needsAttention(leagues, checked), 1);
+  });
+
+  test("only a full, legal roster is quiet", () => {
+    const checked = { a: league({ roster_count: 10, roster_max: 10 }) };
     assert.equal(attentionByReason(leagues, checked).roster, 0);
     assert.equal(needsAttention(leagues, checked), 0);
   });
