@@ -551,12 +551,70 @@ keeps a web server from being held open by one, and exactly wrong where the
 timers are the job). The `Procfile` is the two lines:
 
 ```
-web: APP_PROCESS_ROLE=web npm run start
+web: APP_PROCESS_ROLE=${APP_PROCESS_ROLE:-all} npm run start
 worker: APP_PROCESS_ROLE=worker npm run worker
 ```
 
-Deploying only a web dyno and leaving the variable unset keeps today's
-behaviour, which is what makes this additive.
+**The web line shipped as `APP_PROCESS_ROLE=web` and that was wrong for the
+deployment this app actually has.** One Heroku Basic dyno with `worker` scaled
+to zero — the intended first deployment, and the one the whole crawler pressure
+guard below was written for — ran nothing: no crawl, no KTC refresh, no players
+map, no comps corpus, and therefore no exercise of the guard either. The split
+is the *later* shape and hard-coding it made the app's default deployment the one
+nobody is running.
+
+**The two lines read the variable differently, and that asymmetry is the whole
+mechanism.** The web line takes it as a shell default, so `all` is what one dyno
+runs and one `heroku config:set APP_PROCESS_ROLE=web` moves the deployment to
+the split with no redeploy. The worker line *assigns* it, because a config var
+reaches every dyno and a shell assignment in front of a command beats the
+inherited environment — so the same var that quietens the web process cannot
+tell the worker it is a web process. `process-role.test.ts` pins both lines
+textually, on `crawl-writes.test.ts`' terms: a role is a fact about a file no
+test imports, and a line that lost one is a database going quiet with a green
+suite behind it.
+
+**Running `all` beside a worker is safe and is still not the arrangement**: the
+per-tick advisory locks already make a second instance correct, so what a
+duplicated crawl costs is not correctness but the point of the split — that work
+being off the dyno serving requests. Set the config var and scale the worker in
+one change.
+
+### The four loops no longer start at the same instant
+
+`instrumentation.ts` starts four loops in one pass and every one of them fired
+its boot tick immediately, so a fresh dyno's first seconds were a KeepTradeCut
+scrape, a ~5MB Sleeper players download and twelve thousand upserts, a crawl
+tick's fan-out across a batch of leagues and a comps corpus probe — concurrently,
+against one pool and one Sleeper limiter, beside the first requests the process
+is also trying to serve. On the single dyno above that is the one moment the
+crawler's RSS guard is least able to help: it reads memory *the crawler* is
+making and stands the crawler down, where that spike is three other loops' as
+well.
+
+`util/boot-stagger.ts` is the table and `BackgroundLoop.initialDelayMs` is the
+mechanism. **What is staggered is the first tick and nothing else** — the
+interval is armed by the delayed boot tick rather than at start, so every
+recurring gap is still each loop's own `intervalMs` and a loop delayed 45s
+against a 60s interval does not tick at 45 and again at 60.
+
+**The order is the dependencies rather than a preference.** The players map goes
+first and undelayed, because the KTC matcher resolves `sleeper_id` against it
+(`lazyMatchIndex` calls `ensurePlayersFresh` itself) and the comps loader joins
+every season row to it — a load against an empty map skips every row and says
+so. KTC follows at 15s, behind the refresh it would otherwise trigger; the crawl
+at 45s, depending on neither and holding the most memory in flight at once; comps
+last at 90s, its boot tick being the heaviest thing here on the one boot a year
+where it does anything.
+
+**It is not a throttle and must not become one.** Each loop's own freshness check
+is still the primary mechanism and is unchanged: a restart inside KTC's TTL
+re-scrapes nothing, a players map under a day old is skipped, and the comps loop
+loads only the seasons its metadata row says are missing — so the *usual* boot is
+four cheap questions in whatever order they are asked. What the delays buy is the
+boot where the answers are yes, which is a deployment's first and the one after a
+season ends. Ninety seconds end to end; `process-role.test.ts` pins that no delay
+reaches two minutes.
 
 ### One loop helper, and a reversed decision
 
@@ -642,6 +700,18 @@ rather than leaving a 4/2/1 describing a crawler that no longer exists. Every
 configured width clamps **downward** and to its neighbours in order: a guard that
 could be configured to widen the crawler would be the failure it exists to
 prevent, reached through the variable meant to prevent it.
+
+**That was true of two of the three and `CRAWLER_MEMORY_NORMAL_CONCURRENCY` was
+the hole in it.** Throttled clamped to normal and high clamped to throttled, and
+normal itself was read with nothing above it — so against a `CRAWL_CONCURRENCY`
+of 4 a configured 20 was twenty leagues in flight on the dyno this guard exists
+to keep alive, with the two reduced levels reading as correct because they clamp
+to whatever normal claimed to be. It is `Math.min(configured, CRAWL_CONCURRENCY)`
+now, which is the sentence the paragraph above was already making. An oversized
+width is capped **in silence** rather than discarding the set: it is a legible
+number the guard will not honour past its ceiling, where an unordered *threshold*
+set is thrown out whole because a half-normalised set is a configuration nobody
+wrote.
 
 **Memory is read before the lock and again between every batch, and one reading
 would not do.** Before, because a tick that cannot afford to crawl must not take
@@ -1001,7 +1071,22 @@ affordable rather than a request per press. One entry per key, so two cards
 naming one league make one request; a resolved answer outlives the card that
 asked for it, so closing and re-opening pays nothing; `MAX_ENTRIES` (8) bounds
 what is kept *for later*, and an entry with a live subscriber is never counted
-out, so the bound never blanks a card being read. An in-flight read is aborted
+out, so the bound never blanks a card being read.
+
+**"Never counted out" had to mean counted out of the *arithmetic* as well as out
+of the eviction, and it did not.** The overflow was `map.size - MAX_ENTRIES`,
+which counts the subscribed entries it then refuses to evict — so one open card
+beside eight cached ones evicted a cached one to reach a total of nine, and a
+reader who opened a card was handed a smaller cache than one who did not, one
+slot per open card until a page with eight open cached nothing at all. It is
+counted over the droppable set now, so the store holds `MAX_ENTRIES` cached
+answers *plus* whatever is on screen; the ceiling stays finite because every
+subscribed entry is released by the component holding it and trims on the way
+out. And `at` is a monotonic counter touched on release rather than a
+`Date.now()` set on the last write: several cards settle in one microtask drain,
+so a millisecond timestamp gave a whole batch one key — and an entry read for ten
+minutes sorted as though it had not been touched since it arrived, which made the
+card a reader had *just* closed the first thing evicted. An in-flight read is aborted
 when its last reader goes and a resolved one is kept — a half-read answer is
 worth nothing to anybody.
 

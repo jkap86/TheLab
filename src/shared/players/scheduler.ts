@@ -1,4 +1,9 @@
-import { errorMessage, loopSwitch, startBackgroundLoop } from "@/shared/util";
+import {
+  BOOT_STAGGER_MS,
+  errorMessage,
+  loopSwitch,
+  startBackgroundLoop,
+} from "@/shared/util";
 import type { BackgroundLoopHandle } from "@/shared/util";
 
 import { PLAYERS_TTL_MS, syncPlayers } from "./sync";
@@ -44,6 +49,9 @@ export function startPlayersScheduler(): BackgroundLoopHandle {
     guardKey: "players-sync",
     ...loopSwitch(PLAYERS_SYNC_VAR),
     cadence: "daily",
+    // First of the four and undelayed: KTC and comps both read what this
+    // writes. See `BOOT_STAGGER_MS`.
+    initialDelayMs: BOOT_STAGGER_MS.players,
     tick: (firstRun) => tick(!firstRun),
   });
 }

@@ -112,6 +112,94 @@ describe("startBackgroundLoop", () => {
     await Promise.resolve();
   });
 
+  test("with no initial delay the boot tick is fired on start, as it always was", async () => {
+    // The default is 0 and 0 is the old behaviour byte for byte: every loop
+    // that does not ask for a stagger must be unchanged by the option existing.
+    let ticks = 0;
+    start({
+      tick: async () => {
+        ticks += 1;
+      },
+    });
+    await Promise.resolve();
+    assert.equal(ticks, 1);
+  });
+
+  test("an initial delay holds the boot tick, and then it runs", async () => {
+    // What staggers a cold boot: four loops start in one pass and this is what
+    // stops all four reaching for Sleeper, the pool and a few megabytes of
+    // parsed JSON in the same instant. The job still runs — a stagger that
+    // dropped a boot tick would be a corpus that never loaded.
+    let ticks = 0;
+    let sawFirstRun: boolean | null = null;
+    const handle = start({
+      initialDelayMs: 15,
+      tick: async (firstRun) => {
+        sawFirstRun = firstRun;
+        ticks += 1;
+      },
+    });
+
+    assert.equal(handle.running, true, "it reports itself started immediately");
+    await Promise.resolve();
+    assert.equal(ticks, 0, "and has not ticked yet");
+
+    await new Promise((resolve) => setTimeout(resolve, 40));
+    assert.equal(ticks, 1, "the delayed boot tick ran");
+    assert.equal(sawFirstRun, true, "and it is still the boot tick");
+  });
+
+  test("the interval is armed by the delayed tick, not at start", async () => {
+    // Armed at start, a loop delayed 45s against a 60s interval would tick at
+    // 45s and again at 60s — the two firing 15s apart, which is the one thing a
+    // stagger must not produce. Here the delay and the interval are both 20ms,
+    // so a loop that armed at start would run its boot tick and an interval
+    // tick within a millisecond of each other.
+    const at: number[] = [];
+    const started = Date.now();
+    start({ initialDelayMs: 20, intervalMs: 20, tick: async () => {
+      at.push(Date.now() - started);
+    } });
+
+    await new Promise((resolve) => setTimeout(resolve, 70));
+    assert.ok(at.length >= 2, `expected at least two ticks, saw ${at.length}`);
+    // The gap between the first two is the interval, not the difference between
+    // the interval and the delay.
+    assert.ok(
+      at[1]! - at[0]! >= 15,
+      `ticks ${at[0]} and ${at[1]} are closer than the interval`,
+    );
+  });
+
+  test("a loop stopped inside its delay never ticks at all", async () => {
+    // The pending timer is the one `stop` has to find: a handle that only ever
+    // cleared an interval would leave a boot tick to fire after shutdown.
+    let ticks = 0;
+    const handle = start({
+      initialDelayMs: 15,
+      tick: async () => {
+        ticks += 1;
+      },
+    });
+    handle.stop();
+
+    await new Promise((resolve) => setTimeout(resolve, 40));
+    assert.equal(ticks, 0);
+  });
+
+  test("the guard key is held for the whole delay, not from the first tick", async () => {
+    // Otherwise a repeated instrumentation run — or a dev/HMR reload — inside
+    // the stagger window would register a second timer for the same job, which
+    // is exactly what the guard exists to stop and exactly when it is most
+    // likely to happen.
+    const first = start({ initialDelayMs: 30 });
+    const second = start({ initialDelayMs: 30 });
+
+    assert.equal(first.running, true);
+    assert.equal(second.running, false);
+    assert.match(second.reason ?? "", /already started/);
+  });
+
   test("a tick that outruns its interval is not re-entered", async () => {
     // The guarantee the crawler is the first loop to need: it ticks every 60s
     // over a Sleeper fan-out that can take longer than that, and a loop without

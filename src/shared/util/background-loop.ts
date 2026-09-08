@@ -19,6 +19,27 @@ type BackgroundLoop = {
   /** Human-readable cadence for the startup log, e.g. `"every 60s"`. */
   cadence: string;
   /**
+   * How long to wait before the boot tick — and, with it, before the interval
+   * starts running. Defaults to 0, which is a boot tick fired synchronously on
+   * start and is exactly what every loop did before this existed.
+   *
+   * **It staggers a cold boot, and it is not a rate limit.** Four loops start
+   * in one `register()` and on a 512 MB dyno all four were reaching for
+   * Sleeper, the pool and a few megabytes of parsed JSON in the same instant —
+   * beside the first requests the dyno is also trying to serve. Spreading the
+   * *first* tick is enough, because after that the four cadences (15m, daily,
+   * 60s, daily) have nothing to keep in phase.
+   *
+   * **The interval is armed when the delayed boot tick fires, not at start**,
+   * which is what keeps the cadence honest: armed at start, a loop delayed 45s
+   * against a 60s interval would tick at 45s and again at 60s. Every recurring
+   * gap is `intervalMs` either way; what moves is only where the sequence
+   * begins. Both timers are `unref`'d and {@link BackgroundLoopHandle.stop}
+   * clears whichever is pending, so a loop stopped inside its delay never
+   * ticks at all.
+   */
+  initialDelayMs?: number;
+  /**
    * One tick. Runs on start, then every `intervalMs`. `firstRun` is true only
    * for the boot tick — which is what lets a loop respect a cache a scheduled
    * tick would refresh unconditionally. Every loop here uses it that way: see
@@ -79,7 +100,8 @@ const started = (globalForLoops.backgroundLoops ??= new Set<string>());
  * The timer is `unref`'d, so the loop never holds the process open by itself.
  * That is right for the web server, which is held open by its listening socket,
  * and it is what lets a build or a script that imports this transitively exit.
- * The first tick runs immediately without blocking startup.
+ * The first tick runs immediately without blocking startup — or after
+ * {@link BackgroundLoop.initialDelayMs}, where a caller staggers a cold boot.
  */
 export function startBackgroundLoop({
   name,
@@ -88,6 +110,7 @@ export function startBackgroundLoop({
   enabled = true,
   disabledReason,
   cadence,
+  initialDelayMs = 0,
   tick,
 }: BackgroundLoop): BackgroundLoopHandle {
   const idle = (reason: string): BackgroundLoopHandle => ({
@@ -123,14 +146,42 @@ export function startBackgroundLoop({
     }
   };
 
-  void runTick(true);
-
-  const timer = setInterval(() => void runTick(false), intervalMs);
   // `unref` exists on Node's Timeout; the cast guards the DOM `setInterval`
   // typing (returns `number`) that tsconfig's `lib` can pull in.
-  (timer as { unref?: () => void }).unref?.();
+  const unref = (timer: unknown) => {
+    (timer as { unref?: () => void }).unref?.();
+    return timer as NodeJS.Timeout;
+  };
 
-  console.log(`[${name}] Loop started (${cadence}).`);
+  // Exactly one of these is live at a time: the delay, then the interval it
+  // arms. `stop` clears whichever it finds, which is what makes a loop stopped
+  // inside its own delay a loop that never ticks.
+  let pending: NodeJS.Timeout | null = null;
+
+  const arm = () => {
+    pending = unref(setInterval(() => void runTick(false), intervalMs));
+  };
+
+  const boot = () => {
+    // The interval is armed *before* the tick is fired and not after it: a tick
+    // is not awaited here (that is what the re-entry guard is for), so awaiting
+    // one to arm the timer would mean a tick that never settled left the loop
+    // with no timer at all.
+    arm();
+    void runTick(true);
+  };
+
+  if (initialDelayMs > 0) {
+    pending = unref(setTimeout(boot, initialDelayMs));
+  } else {
+    boot();
+  }
+
+  const stagger =
+    initialDelayMs > 0
+      ? `; first tick in ${Math.round(initialDelayMs / 1000)}s`
+      : "";
+  console.log(`[${name}] Loop started (${cadence}${stagger}).`);
 
   let stopped = false;
   return {
@@ -144,7 +195,14 @@ export function startBackgroundLoop({
       // the loops in the same process (the tests do exactly that).
       if (stopped) return;
       stopped = true;
-      clearInterval(timer as unknown as NodeJS.Timeout);
+      // One handle holds two kinds of timer over its life — the initial delay,
+      // then the interval that delay arms — and never both at once. Node's
+      // `clearTimeout` and `clearInterval` are interchangeable on a `Timeout`,
+      // so clearing whichever one is outstanding is the whole of it.
+      if (pending !== null) {
+        clearInterval(pending);
+        pending = null;
+      }
       started.delete(guardKey);
       console.log(`[${name}] Loop stopped.`);
     },
