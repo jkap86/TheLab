@@ -1,11 +1,23 @@
+import {
+  isAutoVariant,
+  isAdpMetric,
+  ktcVariantKey,
+  lineupColumnKey,
+  qbBoardKeySuffix,
+} from "../../shared/ktc/columns.ts";
 import type { AdpEntry } from "../../shared/manager/adp-value.ts";
 import { pickCellKey } from "../../shared/manager/draft-picks.ts";
 import { rankLeagueLineups } from "../../shared/manager/league-ranks.ts";
+import type {
+  AdpVariant,
+  RankVariant,
+} from "../../shared/manager/league-ranks.ts";
 import { NO_MANAGER } from "../../shared/manager/league-teams.ts";
 import type { RosProjections } from "../../shared/projections/ros.ts";
 import type {
   LeagueLineupEntry,
   LeagueTeam,
+  LineupColumn,
   RosterPick,
   RosterTimelinePayload,
 } from "@/shared/contract";
@@ -49,6 +61,25 @@ export function timelineEntry(
   back: number,
   /** Which roster is the reader's own — the card knows, the payload does not. */
   managerRosterId: number | null,
+  /**
+   * The column the standings pane is reading, so this stop can answer it.
+   *
+   * **The pane reads one key and every producer of an entry has to file under
+   * it**, which is what keeps a scrub from blanking the column a reader is
+   * looking at. Two halves to that here. A *narrowing* is a re-total over the
+   * lineups this already solves, so it costs one more pass. A *pricing* is not:
+   * the payload carries one price table per board, resolved by the route from
+   * the `?ktc_board=` and `?qb_board=` the card asked with — so where the column
+   * has forced one, the same table is handed to the solve under that pricing's
+   * own name and the key exists.
+   *
+   * **That is sound only because the card asks with this column's boards.** If
+   * a caller fetched the payload on one pricing and passed a column naming
+   * another, this would file the wrong board's numbers under the right board's
+   * name — which is why `TimelineView`'s subject carries both halves and why
+   * they join its request key. Null asks for nothing and answers the ten.
+   */
+  column: LineupColumn | null = null,
 ): LeagueLineupEntry | null {
   const timeline = payload?.timeline;
   if (!timeline) return null;
@@ -78,6 +109,27 @@ export function timelineEntry(
     );
   }
 
+  // The one pricing this payload carries, named where the column forced it —
+  // see the parameter's note. Empty on `auto`, which the ten totals answer.
+  const variants: RankVariant[] =
+    column && !isAutoVariant({ format: column.format, lineup: column.lineup })
+      ? [
+          {
+            key: ktcVariantKey({
+              format: column.format,
+              lineup: column.lineup,
+            }),
+            values: ktc,
+            pickValues,
+          },
+        ]
+      : [];
+  /** The same, one valuation over: a capital column names the QB board alone. */
+  const adpVariants: AdpVariant[] =
+    column && isAdpMetric(column.metric) && column.lineup !== "auto"
+      ? [{ key: qbBoardKeySuffix(column.lineup), adp }]
+      : [];
+
   const solved = rankLeagueLineups(
     {
       league_id: timeline.league_id,
@@ -95,10 +147,17 @@ export function timelineEntry(
     adp,
     ktc,
     pickValues,
+    variants,
+    // The narrowing halves, each a list of one: this pane reads a single
+    // column, where the card's rack reads four and sends the distinct sets.
+    column && column.positions.length > 0 ? [column.positions] : [],
+    adpVariants,
+    column && column.slots.length > 0 ? [column.slots] : [],
+    column ? new Set([lineupColumnKey(column)]) : undefined,
   );
 
   const named = new Map(rosters.map((r) => [r.roster_id, r.name]));
-  const teams: LeagueTeam[] = solved.rosters.map(({ roster, lineup, totals }) => ({
+  const teams: LeagueTeam[] = solved.rosters.map(({ roster, lineup, totals, columns }) => ({
     roster_id: roster.roster_id,
     // The timeline's own name, which is `leagueTeamName`'s answer resolved on
     // the server — so a team is called the same thing at every stop and on the
@@ -108,7 +167,9 @@ export function timelineEntry(
     // the reader's even where the payload's owner column is null.
     is_manager: roster.roster_id === managerRosterId,
     lineup,
-    totals,
+    // The ten, with the pane's own column over them where it named one — the
+    // shape `solveLeagueEntry` composes on the server, spelled once each side.
+    totals: { ...totals, ...columns },
     picks: picks.get(roster.roster_id) ?? [],
   }));
 

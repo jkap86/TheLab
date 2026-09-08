@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 
-import type { KtcBoardChoice, RosterTimelinePayload } from "@/shared/contract";
+import type { LineupColumn, RosterTimelinePayload } from "@/shared/contract";
 
 import { apiFetch } from "./api";
 import { errorMessage } from "./error-message";
@@ -23,9 +23,21 @@ export type TimelineSubject = {
   season: string | null;
   /** Whose ADP board the capital metrics read; null prices none of them. */
   username: string | null;
-  board: KtcBoardChoice;
+  /**
+   * What the standings pane reads — and therefore which boards this league is
+   * priced on.
+   *
+   * **The column carries the boards rather than a preference beside it**, and
+   * that is the whole of why this field is a column and not a market. The pane
+   * in front of this rail names its own market and its own QB board now, so a
+   * past stop priced on anything else is two numbers on two rulers — the thing
+   * every parameter on these two routes exists to prevent. `format` and
+   * `lineup` are what each hook sends; the narrowing halves are read by
+   * whichever of them needs them, which is not the same for both (see
+   * `useLeagueLineup`'s key, and `useTimeline`'s).
+   */
+  column: LineupColumn;
 };
-
 /**
  * Read `GET /api/league/[leagueId]/timeline` — one league at every moment its
  * stored log can reach, with today's boards to price each moment against.
@@ -76,12 +88,18 @@ export function useTimeline(
   const [error, setError] = useState<string | null>(null);
   const inFlight = useRef<AbortController | null>(null);
 
-  const { leagueId, season, username, board } = subject;
+  const { leagueId, season, username, column } = subject;
+  // The two axes this route takes. The narrowing halves are deliberately *not*
+  // in the key: this payload carries price tables and a log, and a seat or a
+  // position set is a re-total the browser runs per stop — so narrowing a
+  // column must not re-fetch the heaviest read on the page.
+  const board = column.format;
+  const qbBoard = column.lineup;
 
   // Reset during render, the idiom `useManagerLeagues` documents: a subject
   // change must not paint one frame of the previous answer under the new
   // subject's heading.
-  const key = `${leagueId} ${season ?? ""} ${username ?? ""} ${board}`;
+  const key = `${leagueId} ${season ?? ""} ${username ?? ""} ${board} ${qbBoard}`;
   const [renderedKey, setRenderedKey] = useState(key);
   if (renderedKey !== key) {
     setRenderedKey(key);
@@ -96,7 +114,7 @@ export function useTimeline(
     const controller = new AbortController();
     inFlight.current = controller;
 
-    const query = new URLSearchParams({ ktc_board: board });
+    const query = new URLSearchParams({ ktc_board: board, qb_board: qbBoard });
     if (season) query.set("season", season);
     if (username) query.set("user", username);
 
@@ -117,7 +135,7 @@ export function useTimeline(
     })();
 
     return () => controller.abort();
-  }, [leagueId, season, username, board, enabled]);
+  }, [leagueId, season, username, board, qbBoard, enabled]);
 
   return {
     payload,

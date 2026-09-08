@@ -7,12 +7,14 @@ import {
   isKtcMetric,
   ktcVariantsOf,
   lineupColumnKey,
+  MAX_TEAM_TOTAL_KEYS,
   normalizeLineupPositions,
   parseAdpBoards,
   parseKtcVariants,
   normalizeLineupSlots,
   parsePositionSets,
   parseSlotSets,
+  parseTeamTotalKeys,
   positionSetsOf,
   qbBoardKeySuffix,
   readsQbBoard,
@@ -20,6 +22,7 @@ import {
   serializeKtcVariants,
   serializePositionSets,
   serializeSlotSets,
+  serializeTeamTotalKeys,
   slotKeySuffix,
   slotSetsOf,
 } from "./columns.ts";
@@ -460,5 +463,65 @@ describe("parseSlotSets", () => {
     assert.deepEqual(parseSlotSets("nonsense,flex"), [["FLEX"]]);
     assert.deepEqual(parseSlotSets("nonsense"), []);
     assert.deepEqual(parseSlotSets(null), []);
+  });
+});
+
+/**
+ * The list of column keys a caller names a per-roster total for.
+ *
+ * Every rule in it is about a string nothing here understands — a key is
+ * composed at both ends and matched by equality — so what is tested is the
+ * shape of the guard rather than the meaning of a token.
+ */
+describe("parseTeamTotalKeys", () => {
+  test("reads a comma list back", () => {
+    assert.deepEqual(parseTeamTotalKeys("ros_starters,ktc_total:dynasty:sf"), [
+      "ros_starters",
+      "ktc_total:dynasty:sf",
+    ]);
+  });
+
+  test("round-trips whatever `lineupColumnKey` writes", () => {
+    const key = lineupColumnKey({
+      metric: "ktc_starters",
+      format: "dynasty",
+      lineup: "sf",
+      positions: ["WR", "TE"],
+      slots: ["FLEX", "SUPER_FLEX"],
+    });
+    assert.deepEqual(parseTeamTotalKeys(serializeTeamTotalKeys([key])), [key]);
+  });
+
+  test("absent and empty are no keys at all", () => {
+    assert.deepEqual(parseTeamTotalKeys(null), []);
+    assert.deepEqual(parseTeamTotalKeys(""), []);
+  });
+
+  test("dedupes, so a repeated key is not carried twice", () => {
+    assert.deepEqual(parseTeamTotalKeys("ros_bench,ros_bench"), ["ros_bench"]);
+  });
+
+  test("drops a token that is not shaped like a key", () => {
+    // Upper case, spaces, a slash, a wildcard: none of them can occur in a key
+    // `lineupColumnKey` writes, and each is what a hand-typed query looks like.
+    assert.deepEqual(parseTeamTotalKeys("ros_bench,ROS_BENCH,a b,x/y,*"), [
+      "ros_bench",
+    ]);
+  });
+
+  test("drops a token too long to be a key", () => {
+    assert.deepEqual(parseTeamTotalKeys(`ros_bench,${"a".repeat(201)}`), [
+      "ros_bench",
+    ]);
+  });
+
+  /**
+   * The bound is the point: a key is matched rather than validated, so nothing
+   * else here can refuse a query asking for a thousand keyed sums over every
+   * roster of a hundred leagues.
+   */
+  test("stops at the cap", () => {
+    const asked = ["a", "b", "c", "d", "e", "f"].join(",");
+    assert.equal(parseTeamTotalKeys(asked).length, MAX_TEAM_TOTAL_KEYS);
   });
 });

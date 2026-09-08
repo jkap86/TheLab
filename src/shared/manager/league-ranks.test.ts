@@ -542,6 +542,179 @@ describe("rankLeagueLineups", () => {
 });
 
 
+/**
+ * The per-roster totals a caller can carry out beside the ranks.
+ *
+ * **A rank is a statement about the manager and a total is a statement about a
+ * roster**, and the standings pane reads the second: it prints one column for
+ * every team in the league, on whatever pricing and narrowing that column
+ * names. The numbers are the ranks' own — recorded as the loops pass rather
+ * than summed again — so what these pin is that they are recorded, that only
+ * what was asked for is, and that the one path with nobody to rank still
+ * answers.
+ */
+describe("rankLeagueLineups — per-column team totals", () => {
+  const board: RosProjections = {
+    q1: projected("q1", ["QB"], { rec: 20 }),
+    w1: projected("w1", ["WR"], { rec: 12 }),
+    w2: projected("w2", ["WR"], { rec: 6 }),
+  };
+
+  test("a narrowed key is carried for every roster", () => {
+    const l = league(
+      [roster(1, "me", ["q1", "w1"]), roster(2, "t2", ["w2"])],
+      { roster_positions: ["QB", "FLEX", "BN"] },
+    );
+    const key = "ros_starters:qb";
+    const { rosters } = rankLeagueLineups(
+      l,
+      "me",
+      board,
+      NO_ADP,
+      new Map(),
+      new Map(),
+      [],
+      [["QB"]],
+      [],
+      [],
+      new Set([key]),
+    );
+
+    // Narrowed to quarterbacks, the manager's starters are the one QB and the
+    // other roster's are nobody — which is the sum the rank was made from.
+    assert.equal(rosters[0].columns[key], 20);
+    assert.equal(rosters[1].columns[key], 0);
+    // And the whole-roster totals are untouched beside it.
+    assert.equal(rosters[0].totals.ros_starters, 32);
+  });
+
+  test("only the keys asked for are carried", () => {
+    const l = league([roster(1, "me", ["w1"]), roster(2, "t2", ["w2"])]);
+    const { rosters, ranks } = rankLeagueLineups(
+      l,
+      "me",
+      board,
+      NO_ADP,
+      new Map(),
+      new Map(),
+      [],
+      [["WR"], ["QB"]],
+      [],
+      [],
+      new Set(["ros_starters:wr"]),
+    );
+
+    // Both narrowings are *ranked* — the axes cross and the cost is a sum —
+    // where only the named one is carried out per roster. That asymmetry is
+    // the whole reason this is a set of keys rather than the cross product: a
+    // dozen rosters times every cell is hundreds of numbers a league.
+    //
+    // `in` rather than truthiness: a narrowing nobody in this league has a
+    // player for ranks *null*, which is the all-zero rule answering and is
+    // still the key having been asked and filed.
+    assert.deepEqual(ranks["ros_starters:wr"], { rank: 1, of: 2 });
+    assert.ok("ros_starters:qb" in ranks);
+    assert.deepEqual(Object.keys(rosters[0].columns), ["ros_starters:wr"]);
+  });
+
+  test("an un-narrowed column is answered by the ten and carried nowhere", () => {
+    const l = league([roster(1, "me", ["w1"]), roster(2, "t2", ["w2"])]);
+    const key = lineupColumnKey({
+      metric: "ros_starters",
+      format: "auto",
+      lineup: "auto",
+      positions: [],
+      slots: [],
+    });
+    const { rosters } = rankLeagueLineups(
+      l,
+      "me",
+      board,
+      NO_ADP,
+      new Map(),
+      new Map(),
+      [],
+      [],
+      [],
+      [],
+      new Set([key]),
+    );
+
+    // `auto` folds out of the key, so what the pane looks up is the bare metric
+    // id — already one of the ten. Carrying it again would be the same number
+    // twice, and a client that had to know which of the two to read would be a
+    // second rule to get wrong.
+    assert.equal(key, "ros_starters");
+    assert.deepEqual(rosters[0].columns, {});
+    assert.equal(rosters[0].totals.ros_starters, 12);
+  });
+
+  test("a forced market's totals are carried under that market's key", () => {
+    const l = league([roster(1, "me", ["w1"]), roster(2, "t2", ["w2"])]);
+    const forced = new Map([
+      ["w1", 900],
+      ["w2", 200],
+    ]);
+    const { rosters } = rankLeagueLineups(
+      l,
+      "me",
+      board,
+      NO_ADP,
+      new Map(),
+      new Map(),
+      [{ key: "dynasty:sf", values: forced, pickValues: new Map() }],
+      [],
+      [],
+      [],
+      new Set(["ktc_total:dynasty:sf"]),
+    );
+
+    assert.equal(rosters[0].columns["ktc_total:dynasty:sf"], 900);
+    assert.equal(rosters[1].columns["ktc_total:dynasty:sf"], 200);
+  });
+
+  /**
+   * The regression the manager guard was restructured for.
+   *
+   * A league-scoped read — the trade card's — solves a league the reader may
+   * hold no roster in, and this used to return above the loops the moment it
+   * could not find one. That answered every keyed column with an absence on
+   * exactly the path where the standings pane is the whole of what a reader
+   * opened.
+   */
+  test("a league with nobody to rank still carries the totals", () => {
+    const l = league([roster(1, "t1", ["w1"]), roster(2, "t2", ["w2"])]);
+    const key = "ros_starters:wr";
+    const { lineup, ranks, rosters } = rankLeagueLineups(
+      l,
+      "nobody",
+      board,
+      NO_ADP,
+      new Map(),
+      new Map(),
+      [],
+      [["WR"]],
+      [],
+      [],
+      new Set([key]),
+    );
+
+    assert.equal(lineup, null);
+    // Named and unanswerable, which is a different thing from absent — and
+    // what a card draws an em dash for either way.
+    assert.equal(ranks[key], null);
+    assert.equal(ranks.ros_starters, null);
+    assert.equal(rosters[0].columns[key], 12);
+    assert.equal(rosters[1].columns[key], 6);
+  });
+
+  test("carrying nothing is the default, so a caller that only ranks pays nothing", () => {
+    const l = league([roster(1, "me", ["w1"])]);
+    const { rosters } = rankLeagueLineups(l, "me", board, NO_ADP);
+    assert.deepEqual(rosters[0].columns, {});
+  });
+});
+
 /** The ten metric ids, so a stray key in the un-narrowed answer is visible. */
 const TEN: LineupMetricId[] = [
   "ros_total",

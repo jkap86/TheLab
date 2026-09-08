@@ -623,7 +623,17 @@ export function LineupBreakdown({
           <div
             id={drawerId}
             inert={open === null}
-            className={`lab-anim absolute inset-x-[3px] z-[2] overflow-hidden rounded-[0.625rem] bg-[image:var(--billet-bg)] shadow-[var(--billet-shadow),0_-22px_34px_-14px_rgba(0,0,0,0.9)] [transition:max-height_340ms_cubic-bezier(0.2,0.8,0.2,1),opacity_200ms_ease,padding_340ms_cubic-bezier(0.2,0.8,0.2,1)] ${barsVar}`}
+            // **A flex column, and its scroller below is `min-h-0 flex-1`.**
+            // The drawer's own height comes from `max-height` over auto
+            // content, so a percentage `max-height` on the child has nothing
+            // definite to resolve against and computes to `none` — which is
+            // not a scroller that fails to scroll but a scroller that is not
+            // one: the rows overflow and this box's `overflow-hidden` clips
+            // them, so a deep bench simply loses its last few players with
+            // nothing on screen saying so. Flexed, the child is free to shrink
+            // when the cap bites (which is what `min-h-0` buys, an item's
+            // automatic minimum being its content) and scrolls what is left.
+            className={`lab-anim absolute inset-x-[3px] z-[2] flex flex-col overflow-hidden rounded-[0.625rem] bg-[image:var(--billet-bg)] shadow-[var(--billet-shadow),0_-22px_34px_-14px_rgba(0,0,0,0.9)] [transition:max-height_340ms_cubic-bezier(0.2,0.8,0.2,1),opacity_200ms_ease,padding_340ms_cubic-bezier(0.2,0.8,0.2,1)] ${barsVar}`}
             style={{
               // The bars it stands on, as the breakpoint-aware sum `BARS_VAR`
               // wrote onto this element — see `BAR_CLASS`.
@@ -646,7 +656,7 @@ export function LineupBreakdown({
             }}
           >
             <div
-              className={`lab-anim lab-scroll-glass max-h-full overflow-y-auto overflow-x-hidden [transition:opacity_160ms_ease,transform_220ms_cubic-bezier(0.2,0.8,0.2,1)] ${
+              className={`lab-anim lab-scroll-glass min-h-0 flex-1 overflow-y-auto overflow-x-hidden [transition:opacity_160ms_ease,transform_220ms_cubic-bezier(0.2,0.8,0.2,1)] ${
                 swapping ? "translate-y-2 opacity-0" : "translate-y-0 opacity-100"
               }`}
             >

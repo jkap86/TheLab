@@ -925,3 +925,100 @@ export function useLineupColumns(): readonly LineupColumn[] {
     }
   }, [raw]);
 }
+
+// Which column the expanded card's **standings pane** reads and orders itself
+// by, remembered on the device beside the four the card's tile row shows.
+//
+// **One column, and the same six axes**, which is what makes it worth a store
+// of its own rather than a fifth bay: the rack is a strip of equals a reader
+// compares across, where this is the one figure a twelve-team table is sorted
+// on. It is a `LineupColumn` for the same reason it is not a `LineupMetricId`
+// any more — a narrowed or forced column is a different question from the metric
+// it is built on, and the pane's own picker offers both.
+//
+// **Persisted, where the metric and the lens it replaces were not.** Those were
+// `useState` on the argument that a way of reading one card is a fact about a
+// sitting; a column composed on six axes is not something a reader wants to
+// rebuild on every visit, and it is the same class of preference the four bays
+// already are. The key is its own — see {@link storeTeamsColumn}.
+const TEAMS_STORAGE_KEY = "thelab:teams-column";
+
+/**
+ * The column the standings pane opens on.
+ *
+ * `ros_starters` on every axis's default, which is what that pane sorted by
+ * before it had a picker — so a reader who never opens the dialog sees the card
+ * they had.
+ */
+export const DEFAULT_TEAMS_COLUMN: LineupColumn = column("ros_starters");
+
+/**
+ * Fold anything — a press, a stored string's parse, a value written before an
+ * axis existed — into a column this pane can actually read.
+ *
+ * **Through the one {@link column} constructor**, which is the whole of it: a
+ * stored value carrying a slot set on a bench scope, a position set on a pick
+ * column or a market on a projection is not a column that ranks nothing, it is
+ * a *key nothing answers* — the server files its totals under the folded
+ * spelling and the pane would look up the unfolded one and find an em dash. The
+ * same fold runs on write and read alike, so the two ends cannot disagree about
+ * what a valid column is.
+ *
+ * Exported for the tests: every rule in it is silent when it goes wrong.
+ */
+export function normalizeTeamsColumn(value: unknown): LineupColumn {
+  if (typeof value === "string") {
+    return value in METRIC_ORDER
+      ? column(value as LineupMetricId)
+      : DEFAULT_TEAMS_COLUMN;
+  }
+  if (!value || typeof value !== "object") return DEFAULT_TEAMS_COLUMN;
+  const { metric, format, lineup, positions, slots } = value as Record<
+    string,
+    unknown
+  >;
+  if (typeof metric !== "string" || !(metric in METRIC_ORDER)) {
+    return DEFAULT_TEAMS_COLUMN;
+  }
+  return column(
+    metric as LineupMetricId,
+    format === "dynasty" || format === "redraft" ? format : "auto",
+    lineup === "oneqb" || lineup === "sf" ? lineup : "auto",
+    normalizeLineupPositions(positions),
+    normalizeLineupSlots(slots),
+  );
+}
+
+/**
+ * Persist the standings pane's column (normalized, see above) and notify
+ * readers.
+ *
+ * **A key of its own rather than a fifth entry under the bays'.** The two are
+ * different shapes — a set of exactly four against a single column — so one key
+ * would have to carry a discriminator, and every reader of the rack would have
+ * to know to skip an entry that is not one of its own. The panes and the tile
+ * row are also two independent readings of the same league, which is the whole
+ * reason the pane got a picker: a reader can rank their card on KeepTradeCut
+ * and still sort the standings by projected points.
+ */
+export function storeTeamsColumn(col: LineupColumn) {
+  writeLocal(TEAMS_STORAGE_KEY, JSON.stringify(normalizeTeamsColumn(col)));
+}
+
+/**
+ * The standings pane's column — the default on the server, on the first client
+ * render, and wherever nothing valid is stored (the documented `local-store`
+ * trade: a stored choice swaps in after hydration).
+ */
+export function useTeamsColumn(): LineupColumn {
+  const raw = useLocalValue(TEAMS_STORAGE_KEY);
+  // Parsed in a memo keyed on the raw string, per the store's contract.
+  return useMemo(() => {
+    if (!raw) return DEFAULT_TEAMS_COLUMN;
+    try {
+      return normalizeTeamsColumn(JSON.parse(raw));
+    } catch {
+      return DEFAULT_TEAMS_COLUMN;
+    }
+  }, [raw]);
+}

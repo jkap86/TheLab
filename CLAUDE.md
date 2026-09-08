@@ -767,16 +767,20 @@ picks grid wants the full width, and they are the roster's, not the lineup's).
 See The detail is a comparison, below, for the standings table and the
 seat-level gaps. The panes sit side by side at
 *every* width, phones included — stacking put the roster below twelve teams —
-so truncation, not wrapping, is what carries a narrow card. The column's metric is a per-card
-`<select>` (default ROS starters) and the list is *sorted* by it, because it
-is the standings behind the card's "2nd" — the order and the number must
-agree — and when every team totals zero on the metric the column shows dashes,
-the same all-zero rule the server ranks `null` by. Selection is *resolved*,
+so truncation, not wrapping, is what carries a narrow card. The standings
+column is a **column** on the same six axes the card's bays take, chosen in a
+picker on that pane's own ledge and stored on the device (default ROS
+starters) — see The standings pane got a column of its own — and the list is
+*sorted* by it, because it is the standings behind the card's "2nd" and the
+order and the number must agree. When every team totals zero on it, or the
+payload carries no answer for it at all, the column shows dashes: the same
+all-zero rule the server ranks `null` by, with an absent key folded into it. Selection is *resolved*,
 not synced (`chosen ?? manager's team`), so a payload refresh under an open
 card falls back rather than pointing at a ghost. The breakdown's number column
 is one lens at a time, points or capital, flipped by
-a per-card toggle (`useState`, deliberately unpersisted, like the metric
-select): the two figures never
+three keys that write the standings column's own *value* axis — one column,
+two places to reach it (see the pane's picker) — so the lens is stored with it
+rather than held for a sitting: the two figures never
 share a column because they would read as the same unit, and the headline total
 follows the lens so it always agrees with the rows beneath it. **The lens is
 owned by `LeagueTeams`, not by `LineupBreakdown`** — the redesign put both
@@ -881,10 +885,13 @@ it: `ktcMetricTotals` re-totals the lineups already solved against a second
 price table, and `variantPickValues` re-prices the cells `leaguePickBoard`
 resolved once — never a second grid, which is the reconstruction `draft-picks`
 is arranged to avoid and the one way a forced board's `ktc_picks` could disagree
-with the pills on the card. `LeagueTeam.totals`, the expanded card's lens and
-the timeline all stay on the league's own board, which is why the card passes
-the rail `board="auto"` rather than a stored preference: a past stop priced on a
-different board from the present table beside it is two numbers on two rulers.
+with the pills on the card. `LeagueTeam.totals` carries the ten on the league's own board, and — since
+the standings pane got a picker — one keyed total per column the request named.
+That is also what inverted the rail's board: the card passed `board="auto"`
+precisely because the browser the rail redraws read those ten, and it passes the
+*standings column* now, because that browser names its own market. The rule is
+unchanged and points the other way — a past stop priced on a different board
+from the present table beside it is two numbers on two rulers.
 
 **`storeKtcBoard` / `useKtcBoard` stay**, for the trades board's control rail
 and for the shares drawer's Value column — one figure for a player held across a
@@ -903,7 +910,7 @@ only the server can compute, but a *gap* between two of them is arithmetic.
 
 **The standings pane is a table with a gap column** — place, team, the gap to
 the reader's own total, that total, and a meter on the rank ramp. The place is
-the row's own index, so it cannot disagree with the order the metric select
+the row's own index, so it cannot disagree with the order the column above
 sorted by, and the meter and the hue both come off `rankPercentile` so the bar
 and the colour cannot disagree either. Under the all-zero rule the totals go to
 dashes as before, and **the meters and the ramp go with them**: a full red bar
@@ -1202,14 +1209,18 @@ plus every cell of the pick grid; the browser solves each stop. That is the same
 trade the log makes one paragraph up, for the same reason — the alternative is a
 priced answer per notch.
 
-**Three narrowing parameters, and they are the lineups route's own.**
-`?season=`, `?user=` and `?ktc_board=` decide which boards answer, and a past
-roster priced on a different board from the card in front of the rail is not a
-comparison — it is two numbers on two rulers. `?user=` is the one that looks out
+**Four narrowing parameters, and they are the lineups route's own.**
+`?season=`, `?user=`, `?ktc_board=` and `?qb_board=` decide which boards answer,
+and a past roster priced on a different board from the card in front of the rail
+is not a comparison — it is two numbers on two rulers. The last is the axis
+`?ktc_board=` always lacked and it arrived with the standings pane's own picker:
+a market is KeepTradeCut's, where which of the two QB columns a roster is priced
+on is a fact about the league that both priced valuations split on, and the
+table in front of the rail can force one now. `?user=` is the one that looks out
 of place on a league-scoped read and is the one that matters most: the ADP
 fallback board is built from *that manager's* synced drafts, so without it the
 three capital metrics have nothing to price against and rank null. A malformed
-`?season=` is a 400 and an unreadable `?ktc_board=` falls back to `auto`, which
+`?season=` is a 400 and an unreadable board parameter falls back to `auto`, which
 is the opposite call for the opposite reason (see `parseKtcBoardChoice`); an
 unknown `?user=` is neither, because the manager is not this route's subject —
 it costs those three columns and nothing else.
@@ -4757,12 +4768,17 @@ route takes plus `solveLeagueEntry`, and it needed **no migration** — `leagues
 already wrote, and a league neither has reached comes back `entry: null` rather
 than being synced on demand.
 
-**Its three narrowing parameters are the timeline route's, to the name.**
-`?season=`, `?user=` and `?ktc_board=` decide which boards answer, and a card's
-present priced on a different board from the past its own rail scrubs to is not a
-comparison — it is two numbers on two rulers. So the two reads take the identical
-`TimelineSubject` and `useLeagueLineup` is `useTimeline` for the present, down to
-the subject key and the reset during render.
+**Its narrowing parameters are the timeline route's, to the name.**
+`?season=`, `?user=`, `?ktc_board=` and `?qb_board=` decide which boards answer,
+and a card's present priced on a different board from the past its own rail
+scrubs to is not a comparison — it is two numbers on two rulers. So the two reads
+take the identical `TimelineSubject`, which carries the **standings column**
+rather than a market: that pane names its own board now, so both reads derive
+theirs from one object. `useLeagueLineup` is `useTimeline` for the present, down
+to the reset during render — but not down to the key, since only this route is
+also sent the column's narrowing (`?positions=`, `?slots=`) and the key its
+per-roster totals are filed under (`?team_totals=`). A stop on the rail is
+solved in the browser, so a seat set there is arithmetic rather than a request.
 
 **Two alternatives were weighed and both are worse.** Extending
 `/api/trades/leagues` costs every reader a solve nobody asked for — the handoff's
@@ -7968,6 +7984,204 @@ database behind it. What a fixture cannot check is whether the rack diverging
 from the card's tile order between opens reads as wrong on a real account — the
 one cost this takes, and the thing to watch if the re-seed wants to be more
 frequent than once per open.
+
+### The standings pane got a column of its own
+
+The expanded card's left pane ordered itself through a `Sort by` `<select>` over
+the ten `LineupMetricId`s and printed one `Total`. It reads a **column** now, on
+the same six axes the card's four bays take and in the same panel — so the one
+place a reader could not ask how their leaguemates compare on the flex seat, or
+on the dynasty board, is the table of teams no longer. Applied from a design
+handoff. It needed no migration; what it needed was the one seam the two
+narrowing axes were deliberately landed without.
+
+**It is the seam those axes' own notes predicted.** `solveLeagueEntry` carried a
+`positionSets` and a `slotSets` parameter each with a paragraph saying a
+per-position or per-seat *total* was not shipped because nothing could read one
+— "the expanded browser sorts and prints by a bare `LineupMetricId`" — and both
+ended "it arrives with a browser that can ask the question". This is that
+browser, so the totals arrive.
+
+**A total is keyed by column, exactly as a rank already is.**
+`LeagueTeam.totals` is `TeamTotals`: the ten metric ids as before, widened with
+`ColumnRanks`' own index signature. `lineupColumnKey` folds an un-narrowed
+column on each league's own board back to its bare metric id, so the ten answer
+it for free and **every existing reader is byte-identical** — which is the same
+property the base ranks have always relied on, one reading over.
+
+**Shipped for the columns named and no others**, and that bound is the whole
+reason this is a keyed record rather than an exhaustive one. The route already
+*computes* every one of these numbers: a narrowing and a forced pricing are
+re-totals over every roster of which only the manager's index is read to make a
+rank. Carrying all of them out would be the cross product — four bays' axes
+against a dozen rosters is hundreds of sums a league, two and a half megabytes
+over a 113-league account — where a pane reads one. So `?team_totals=` names the
+keys, `rankLeagueLineups` records them as its loops pass, and the numbers are
+the ranks' own rather than a second summing to drift from them.
+
+**The keys are opaque and are never parsed back.** They are composed at both
+ends — `lineupColumnKey` on the client, metric-plus-suffixes on the server — and
+this third reader only ever compares one against the other, so
+`parseTeamTotalKeys` validates a *shape* and a count and nothing else. A key
+naming a pricing the request did not also ask for is one the route never
+composes, so the total is absent, which the pane draws an em dash for. Writing a
+parser would be a second spelling of a format whose own note says it is never
+read back, and would buy nothing.
+
+**The manager guard had to stop being an early return**, and that is the
+regression the restructure fixes rather than a tidy-up. `rankLeagueLineups`
+returned above its loops the moment it could not find the manager — right for
+ranks, which are a statement about *him*, and wrong for totals, which are a
+statement about a **roster**. A league-scoped read has no manager by
+construction: the trade card lists leagues the reader holds no team in, and that
+is precisely where this pane is the whole of what they opened. `ranked` is a
+flag now and `baseRanks` answers all-null where there is nobody, which also
+retired `NO_RANKS` — a second exhaustive `LineupRanks` literal for a new metric
+id to be forgotten in.
+
+### Which board a *pane* reads, and the rule that inverted
+
+**`TimelineSubject` carries the column rather than a market**, and every
+consumer derives its boards from it. The card used to pass `board="auto"` with a
+note arguing exactly why: the rail redraws this card's own team browser, that
+browser read `LeagueTeam.totals`, and the route computed those on each league's
+own market whatever any bay had forced — so `auto` was what kept a past stop and
+the present table on one ruler. The browser names its own board now, so the same
+argument points the other way and the rail follows *it*.
+
+**`?qb_board=` is the axis `?ktc_board=` always lacked**, and it landed on both
+league-scoped routes for that reason: a market is KeepTradeCut's own, where
+which of the two QB columns a roster is priced on is a fact about the league that
+the ADP fold splits on too. It is one line where the superflex reading is
+resolved and one parameter to carry it.
+
+**A single-board route files its one pricing under two names.** The batched route
+prices several markets and files each under its variant key, so a column forcing
+`dynasty:sf` finds `ktc_total:dynasty:sf` waiting; the per-league and timeline
+reads resolve *the* board — the reader's own choice — so the same numbers are
+also handed to the solve as a named variant and the key the pane looks up
+exists. The alternative is the client knowing which kind of read produced an
+entry and spelling the key two ways, which is the drift `lineupColumnKey` exists
+to prevent. It costs one re-total over a dozen lineups against a price table
+already in hand, never a second solve.
+
+**The two hooks key differently on purpose.** `useLeagueLineup` puts the whole
+column in its subject, because a narrowing changes what that route ships;
+`useTimeline` puts the two boards alone, because a stop there is solved in the
+browser and a seat set is arithmetic — so narrowing a column must not re-fetch
+the heaviest read on the page.
+
+### The panel is one panel, seen twice
+
+`column-panel.tsx` is the case, the header band, the copy line, the six-track
+axes housing and the foot, extracted from `LineupColumnsDialog` rather than
+copied beside it. What was going to be duplicated is **six switch tracks in one
+housing**, and a switch that stopped travelling in one of two spellings is a
+panel nobody can see is broken — which is the rule `SwitchTrack` itself exists
+for, at six times the scale. The two dialogs now differ in exactly what they
+*are*: one edits a rack of four bays and one edits a single column, so the rack,
+the socket order and the exchange `Save` runs stay with the first, and
+`ColumnAxes` hands its caller a composed column rather than writing anything.
+`columnSetting` (born `baySetting`) went with it and has a third reader: the
+teams panel's live readout, where the four-bay one prints `Bay 01 / 04` — there
+is no bay count to state with one column, and the setting is what moves.
+
+**The lens is the column's own value axis**, not a second control. Pressing
+`Points` / `Capital` / `KTC` on the roster pane's ledge writes the column's
+value straight through — one column, two places to reach it, nothing for the two
+to disagree about. Where the pressed value has no metric at the column's own
+scope (a `KTC · Picks` column pressed to `Points`) it falls back to that value's
+whole-roster scope, because refusing is a key that visibly does nothing and
+greying it would put a rule on this ledge only explicable in the panel two
+clicks away.
+
+**The choice is persisted**, where the metric and the lens it replaces were
+`useState`. A column composed on six axes is not something to rebuild on every
+visit; it is the class of preference the four bays already are. Its own key
+(`thelab:teams-column`), because the two are different shapes — a set of exactly
+four against a single column — and because a reader can rank their card on
+KeepTradeCut and still sort the standings by projected points.
+
+**The head prints the column's unit**, where it said `Total`. A literal was
+honest while the pane read one metric at a time and is not now: `Total` says
+nothing about which of ten scales, which board or which seats the figures under
+it are on, and the unit is the same word the card's own tile prints over the
+same number.
+
+#### Verified
+
+Driven over CDP against `next dev` through a temporary `/preview` route
+rendering the real `LeagueTeams`, `TeamsColumnDialog` and `LineupColumnsDialog`
+on the real store, then deleted — the method the console-card, shares, rack and
+timeline passes established. The mechanics are unchanged: `--no-proxy-server`,
+`localhost` rather than `127.0.0.1`, `data-theme` rather than
+`prefers-color-scheme`, `localStorage.clear()` between drives since the browser
+profile persists, a phone viewport from `Emulation.setDeviceMetricsOverride`
+with `mobile: true`, the `--blink-settings=availablePointerTypes=4,…` flags, a
+**client-component** harness, and a CDP client over Node's own `WebSocket` since
+Playwright is not installed. The fixture is a twelve-team league with an empty
+seat, an unprojected stash and an unpriced starter.
+
+Every arm landed at 1280 and 390 in both schemes. The ledge reads `Column` /
+`Col` beside a key printing `ROS starters` at `lg` and `Proj` below it, with
+`EDIT` in the accent; the head reads `Proj pts` at `lg` and is dropped below it.
+The panel is `:modal`, named `Teams column`, 560×640 at desktop and 352×799 at
+390 — inside the 812px cap with `Done` at 803 — with **zero** elements past its
+own box, six tracks at both widths, the chip reading `Teams`, the readout
+`Starters`, and the foot `KTC · dyn 6m · red 6m`. Composing `KTC` →
+`Dyn` → `SF` moved the readout `Starters` → `Auto · Auto` → `Dyn · SF` and the
+`Reads` sentence with it while the twelve rows behind **held still**, and `Save`
+then stored the column and re-sorted them. A `Picks` scope greyed the whole slot
+track with `Only a starters column counts slots` and the nine positions with
+`A draft pick has no position` while `All` stayed live; a projection greyed both
+pricing tracks with their own reasons. The all-zero entry drew dashes with no
+colour anywhere. Pressing `Capital` on the roster pane's ledge stored
+`capital_starters:sf:@flex+super_flex` — the value axis rewritten with the board
+and the seats carried over — and moved the trigger and the head with it. The
+four-bay panel was driven on the same page and is unchanged: the rack holds its
+sockets across a save, `Bay 03` stays bay 03 while the store re-sorts, and its
+own six tracks and titles are as they were. `documentElement.scrollWidth` equals
+the viewport at both widths, one `<h1>`, and **no console output of any kind**.
+
+**Two findings, both fixed and both re-measured.**
+
+The **header band wrapped at 390** when the readout named a setting — 155px of
+heading and 155 of reading in a 320px row — which took the case 799 → 812, its
+own `100dvh - 2rem` cap, *under the press that lengthened the reading*. Nothing
+on this panel may move under a press; that is the rule the three out-of-force
+tracks keep their places for and the rule the `Reads` window reserves its lines
+for, and a variable reading is the one part that could break it. The heading no
+longer wraps or shrinks and the reading truncates into what is left, which costs
+nothing that is not on screen — the `Reads` window states the same thing in a
+sentence and the `aria-live` text is whole whatever the box does to it. Measured
+after: one distinct case height across nine presses at both widths.
+
+And **the row printed the wrong figure under a narrowed head**, which is the
+failure this whole seam is arranged against and which the first drive did not
+catch because it checked the *order* and not the number. The sort read the
+column key and `StandingRow` looked its own figure up by metric id, so a column
+narrowed to the flex seats ordered the table by the narrowed sum and printed the
+whole-roster one beside it. The figure is a prop now, read by the one lookup.
+Re-driven against the fixture's own totals: all twelve rows print the narrowed
+number (`19,020`, where the un-narrowed figure for that team is `41,400`) and
+the order matches, at both widths.
+
+1,878 unit tests pass (34 more — the key parser's bound and shape, the stored
+column's fold through the one constructor, the carry and its
+only-what-was-asked rule, the no-manager path, the per-league query's five
+parameters, and a past stop answering a narrowed and a forced column);
+`lint`, `typecheck` and `build` are clean.
+
+**Not verified against real data**, which is the gap to close first: every number
+above is a fixture, and four things a render here cannot check. What the keyed
+totals actually add to a 113-league payload, which is one number per roster per
+league and ought to be negligible beside the ten already there — but nothing has
+weighed it. Whether a forced market on the *standings* column is worth a bay's
+worth of machinery, since every roster in one league reads the same board and
+the order barely moves. How the rail reads with the column forced, which is the
+one path where a single-board route files its pricing under a second name.
+And whether a reader finds the pane's own column and the card's four bays two
+controls or one, which is a question about a page a fixture cannot stand in for.
 
 ### Starters, broken out by seat
 

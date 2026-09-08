@@ -309,6 +309,29 @@ export type RosterPick = {
 };
 
 /**
+ * Every team's total, keyed by **column identity** rather than by metric id —
+ * {@link ColumnRanks}' shape one reading over, and for its reason.
+ *
+ * The ten metric ids are always present, totalled on the pricing a league reads
+ * for itself over its whole roster, which is what every reader that has forced
+ * nothing gets for free. A column that *has* forced a market or a QB board, or
+ * narrowed itself to a set of seats or positions, carries an extra key beside
+ * them (`ktc_total:dynasty:sf`, `ros_starters:@flex:wr`) — and only the columns
+ * the request named, which is the whole reason this is keyed rather than
+ * exhaustive: the cross product of four bays' axes against a dozen rosters is
+ * hundreds of numbers a league, where what any one pane reads is one.
+ *
+ * The exhaustive half is the compiler seam it always was — a new
+ * {@link LineupMetricId} breaks the totals literal until it is placed — and the
+ * index signature is what a column key reads through. It answers `undefined`
+ * for a key the payload never carried, which is a real state and not a zero: a
+ * client holding a column whose narrowing the server was not asked for.
+ */
+export type TeamTotals = Record<LineupMetricId, number> & {
+  readonly [column: string]: number | undefined;
+};
+
+/**
  * One team in a league's expanded card: its solved lineup, its pick portfolio,
  * and its total under every rankable lens.
  *
@@ -318,6 +341,17 @@ export type RosterPick = {
  * that includes the picks) and a second spelling of them is how the teams
  * column would drift from the ranks it sits beside. The `Record` is exhaustive
  * by construction, so a new metric id breaks this compile too until it ships.
+ *
+ * **It is keyed by column now, and this file used to argue it could not be.**
+ * The argument was that a narrowed total would be a field on every team of
+ * every league that nothing could name — the expanded browser sorted and
+ * printed by a bare {@link LineupMetricId} — and both narrowing axes were
+ * landed with a note saying the field "arrives with a browser that can ask the
+ * question". The teams pane's column picker is that browser: it reads one
+ * column on the same six axes the card's bays do, so the pane needs a total per
+ * roster on a pricing and a narrowing only the server can compute. What keeps
+ * the widening honest is that it ships **what was asked for and nothing else**
+ * — see {@link TeamTotals}.
  */
 export type LeagueTeam = {
   roster_id: number;
@@ -326,7 +360,7 @@ export type LeagueTeam = {
   /** True on the page's manager — the card's default selection, at most one. */
   is_manager: boolean;
   lineup: LeagueLineup;
-  totals: Record<LineupMetricId, number>;
+  totals: TeamTotals;
   /** The roster's future draft picks, sorted by season, round, own-first. */
   picks: RosterPick[];
 };

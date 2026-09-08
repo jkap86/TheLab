@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { describe, test } from "node:test";
 
+import { column } from "./lineup-columns.ts";
 import { timelineEntry } from "./timeline-entry.ts";
 import type { RosterTimelinePayload } from "@/shared/contract";
 
@@ -214,5 +215,59 @@ describe("timelineEntry", () => {
         [null, "Roster 2", null],
       ],
     );
+  });
+});
+
+/**
+ * The standings pane's own column, answered at a past stop.
+ *
+ * **A stop is solved in the browser**, so a column the pane reads has to be
+ * filed here or scrubbing back blanks the one figure a reader is looking at.
+ * Two halves, and they are answered two different ways: a *narrowing* is a
+ * re-total over the lineups this already solves, and a *pricing* is the one
+ * price table the payload carries, filed under the name the column will look it
+ * up by — which is sound because the card asks for the payload on that
+ * column's own boards.
+ */
+describe("timelineEntry — the standings column", () => {
+  test("a narrowed column is answered beside the ten", () => {
+    const col = column("ros_starters", "auto", "auto", ["QB"]);
+    const before = teamOf(timelineEntry(payload, 1, 1, col), 1);
+
+    // Alpha held the star before the trade: 10 passing touchdowns at four
+    // points each. Narrowed to quarterbacks it is the same number, this league
+    // starting one — which is what makes it a check of the *key* rather than
+    // of the sum.
+    assert.equal(before?.totals.ros_starters, 40);
+    assert.equal(before?.totals["ros_starters:qb"], 40);
+  });
+
+  test("a forced market is filed under its own name", () => {
+    // The payload's `ktc_values` were read on whatever `?ktc_board=` asked for,
+    // which the card sets from this very column — so the table in hand *is*
+    // the dynasty superflex one, and filing it under that name is what lets the
+    // pane find it.
+    const col = column("ktc_total", "dynasty", "sf");
+    const before = teamOf(timelineEntry(payload, 1, 1, col), 1);
+
+    // The star at 9,000, plus both 2027 firsts — its own and the one it sent
+    // to Beta in this very trade.
+    assert.equal(before?.totals["ktc_total:dynasty:sf"], 16_000);
+    // The same numbers under the bare key, since the table is the same table:
+    // a forced board on this route is a second *name*, never a second read.
+    assert.equal(before?.totals.ktc_total, 16_000);
+  });
+
+  test("a column asking for nothing leaves the ten alone", () => {
+    const before = teamOf(timelineEntry(payload, 1, 1), 1);
+    assert.equal(before?.totals.ros_starters, 40);
+    assert.equal(before?.totals["ros_starters:qb"], undefined);
+  });
+
+  test("an un-narrowed column on the league's own board needs no extra key", () => {
+    // `lineupColumnKey` folds `auto` away, so what the pane looks up is the
+    // bare metric id the ten already carry.
+    const before = teamOf(timelineEntry(payload, 1, 1, column("ros_starters")), 1);
+    assert.equal(before?.totals.ros_starters, 40);
   });
 });

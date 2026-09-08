@@ -4,6 +4,7 @@ import { useEffect, useState, type RefObject } from "react";
 
 import type {
   KtcBoardChoice,
+  LineupColumn,
   ManagerLeague,
   TradeValueBasis,
 } from "@/shared/contract";
@@ -60,6 +61,7 @@ export function TradesList({
   leaguesById,
   basis,
   board,
+  teamsColumn,
   season,
   username,
   hasMore,
@@ -86,6 +88,13 @@ export function TradesList({
    */
   basis: TradeValueBasis;
   board: KtcBoardChoice;
+  /**
+   * What the standings pane inside an open card reads — passed down on `basis`
+   * and `board`'s own rule, and separate from `board` because the two answer
+   * different questions: that one prices the *assets* printed on every card,
+   * this one prices the league behind one card's disclosure. See `TradeCard`.
+   */
+  teamsColumn: LineupColumn;
   /**
    * The season and the reader's own account, passed straight through to every
    * card: an opened card solves and rewinds the league it names, and both of
@@ -145,6 +154,7 @@ export function TradesList({
             view={view}
             basis={basis}
             board={board}
+            teamsColumn={teamsColumn}
             season={season}
             username={username}
             open={card.isOpen(trade.transaction_id)}

@@ -1,5 +1,6 @@
 import type {
   KtcBoardChoice,
+  KtcLineupChoice,
   RosterTimelinePayload,
   TimelineRosterPayload,
 } from "@/shared/contract";
@@ -22,7 +23,14 @@ export async function resolveTimelinePayload(
     managerUserId,
     season,
     board,
-  }: { managerUserId: string | null; season: string; board: KtcBoardChoice },
+    qbBoard,
+  }: {
+    managerUserId: string | null;
+    season: string;
+    board: KtcBoardChoice;
+    /** Which QB column both valuations read — see `readTimelinePricing`. */
+    qbBoard: KtcLineupChoice;
+  },
 ): Promise<RosterTimelinePayload> {
   if (!timeline) return { timeline: null, players: {}, pricing: null };
 
@@ -52,6 +60,7 @@ export async function resolveTimelinePayload(
       managerUserId,
       season,
       board,
+      qbBoard,
     }),
   ]);
 
