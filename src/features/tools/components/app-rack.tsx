@@ -59,10 +59,20 @@ import { ToolsMenu } from "./tools-menu";
  * read brand … name, controls, tray — the one object on it that *reports*
  * standing at the head of the three that *act*, because the readout inherited
  * the right-hand slot the tool key's legend had been in. It is brand, groove,
- * name … controls, tray now, which is the reading `md` has had since the rack
+ * name, controls … tray now, which is the reading `md` has had since the rack
  * landed and which the groove was already drawn for up there. The ~66px that
  * move freed on the right is most of what let the Browse pair come out of the
  * fold it was in below `md`.
+ *
+ * **The slack sits in one place, and it is after the controls.** It used to sit
+ * between the readout and the Browse caps, because the left-hand cluster below
+ * carried an `mr-auto` and the tray had none until `md` — so *both* control
+ * groups were pushed to the right edge and the row read as two clusters with a
+ * hole between them. The margin is the tray's now, at every width, which is the
+ * arrangement `md` has always had: the Browse keys follow the readout they sit
+ * beside, and only the tray is pinned right. Nothing changed width, so the
+ * measured 390px fit below is untouched — only where the row spends what it has
+ * left over.
  *
  * Two things it deliberately does not do:
  *
@@ -101,6 +111,7 @@ export function AppRack() {
         href: toolHref(tool, account?.username ?? null),
         text: tool.text,
         short: tool.short,
+        group: tool.group,
       })),
     [account],
   );
@@ -208,25 +219,33 @@ export function AppRack() {
         */}
         <div className="flex w-full items-center gap-[0.5625rem] rounded-full border border-foreground/8 bg-[image:var(--rack-pill-bg)] py-[0.3125rem] pl-[0.3125rem] pr-[0.4375rem] shadow-[var(--rack-pill-shadow)] md:contents">
           {/*
-            **Brand, groove and readout are one cluster below `md`, and the
-            cluster carries the row's one auto margin.** The three of them are
-            the rack's left-hand reading — who this is, and where you are — and
-            the design's whole move is putting that reading *before* the
-            controls rather than in among them.
+            **Brand, groove and readout are one cluster below `md`**, and the
+            three of them are the rack's left-hand reading — who this is, and
+            where you are. The design's whole move is putting that reading
+            *before* the controls rather than in among them.
 
-            The margin has to sit here rather than on any one of them because
-            which is last depends on the route: a page outside the registry has
-            no readout, and `/tools` has neither readout nor groove. The
-            alternative — an auto margin on whichever control leads the
-            right-hand cluster — is the same three conditionals seen from the
-            other end, and two auto margins in one row split the slack rather
-            than pinning either end.
+            **It carries no auto margin, and the row's one margin is the
+            tray's.** It carried an `mr-auto` until this pass, on the argument
+            that the margin could not sit on any one of the three because which
+            of them is last depends on the route — a page outside the registry
+            has no readout, and `/tools` has neither readout nor groove. That
+            argument is right about *these three* and is exactly why the margin
+            could move to the tray instead: the tray is always last, so there is
+            no conditional to be wrong about. What the `mr-auto` here cost was
+            the Browse keys, which it pushed to the right edge along with the
+            tray — leaving the readout and the caps that act on the same page at
+            opposite ends of the row, with all the slack in between.
+
+            Two auto margins in one row would split the slack rather than pin
+            either end, so there is exactly one, and it is on the object that is
+            unconditionally last. See `ToolsMenu`, and the theme pad below for
+            the routes that render no tray.
 
             `md:contents` is what keeps the wide layout untouched: the box stops
             existing and all three join the rack's own flex row under the orders
-            they already carried. A `display: contents` element generates no
-            box, so `mr-auto` and the gap here are inert there by construction
-            rather than by a `md:` override.
+            they already carried. A `display: contents` element generates no box
+            of its own, which is why nothing here has ever needed a `md:`
+            override to be inert up there.
 
             `self-stretch` is for the groove alone. Left to `items-center` this
             cluster would be as tall as the brand link, and the groove inside it
@@ -234,12 +253,13 @@ export function AppRack() {
             content height, which the 40px Browse channel sets. The groove is a
             channel milled through the part, not a tick beside the wordmark.
           */}
-          <div className="mr-auto flex items-center gap-[0.5625rem] self-stretch md:contents">
+          <div className="flex items-center gap-[0.5625rem] self-stretch md:contents">
             <Link
               href="/tools"
-              // **The auto margin moved out to the cluster above**, where it can
-              // be one spelling rather than three conditionals — see the note
-              // there. What is left here is the link's own geometry.
+              // **The auto margin left this row entirely** — it was here, then on
+              // the cluster above, and it is the tray's now, which is the one
+              // object in the row that is last on every route. See the note
+              // above. What is left here is the link's own geometry.
               //
               // 9px between mark and wordmark below `md` against the 12 the wide
               // rack keeps: at a phone's width the row is spending its slack on a
@@ -301,7 +321,9 @@ export function AppRack() {
                 tray. Measured at 390 on the same page: brand link 155 + 12 +
                 readout (`Lineups`) 68 + 12 + Browse key 42 + 12 + tool key 40 =
                 **341 against 342**, one row 54px tall with nothing clipped.
-                `/manager` is shorter still, its readout reading `Mgr`.
+                `/manager` measures the same, its readout having since given up
+                its `Mgr` for the whole word — seven characters either way, which
+                is the trade that change is made on.
 
                 **Tightening the row instead was tried and measured**, and it is
                 recorded here so it is not tried again as a way of buying room
@@ -407,9 +429,12 @@ export function AppRack() {
               cluster, above, and the legends becoming glyphs. */}
           {controls && <RackControlsKeys controls={controls} />}
 
-          {/* The tool tray's key, at the right end of the row: last child here
-              below `md`, and `md:order-6 md:ml-auto` on the nav itself above
-              it — the slot the theme pad used to hold. */}
+          {/* The tool tray's key, at the right end of the row, and **the one
+              object in it that carries an auto margin** — `ml-auto` on the nav
+              itself, at every width. It is last on every route, which is what
+              lets one unconditional margin do the job the left-hand cluster's
+              `mr-auto` used to do with three. `md:order-6` puts it in the same
+              slot the theme pad holds below. */}
           {showMenu && (
             <ToolsMenu links={links} currentBase={current?.base ?? null} />
           )}
@@ -421,12 +446,17 @@ export function AppRack() {
 
               Its geometry is untouched — icon-only at a phone's width, where
               the legend is the first thing to go, and the `Light` / `Dark`
-              legend back at `md`. `md:ml-auto` rather than `ml-auto`: below
-              `md` the brand link's `mr-auto` has already pushed it right, and a
-              second auto margin in that row would split the slack between the
-              two rather than pinning either end. */}
+              legend back at `md`.
+
+              **`ml-auto` at every width**, where it was `md:ml-auto` and leant
+              on the left-hand cluster's `mr-auto` to be pushed right below `md`.
+              That margin is gone, so this pad needs its own — and it can have
+              one for the tray's reason, which is that it is unconditionally the
+              last thing in the row on the routes that render it. There is still
+              exactly one auto margin per row at every width: this pad and the
+              tray are mutually exclusive by construction. */}
           {!showMenu && (
-            <div className="shrink-0 rounded-full bg-[image:var(--key-bg)] p-1 shadow-[var(--track-shadow)] md:order-6 md:ml-auto">
+            <div className="ml-auto shrink-0 rounded-full bg-[image:var(--key-bg)] p-1 shadow-[var(--track-shadow)] md:order-6">
               <ThemeToggle
                 className={
                   "inline-flex items-center gap-2 rounded-full bg-[image:var(--key-bg)] p-[0.4375rem] " +

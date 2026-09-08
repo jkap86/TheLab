@@ -12,6 +12,7 @@ import { resolveKtcFormat } from "@/shared/ktc/board-choice";
 import { isKtcMetric, lineupColumnKey } from "@/shared/ktc/columns";
 import { resolveKtcLineup } from "@/shared/ktc/roster";
 import {
+  BubblingFlask,
   CardBilletRow,
   CardRule,
   CONSOLE_CARD_SHELL,
@@ -220,6 +221,7 @@ export const LeagueCard = memo(function LeagueCard({
   teamsColumn,
   slots,
   summary,
+  ranksPending = false,
   season,
   username,
   open,
@@ -250,6 +252,16 @@ export const LeagueCard = memo(function LeagueCard({
    * reader opens — see {@link LeagueDetail} below and `LeagueLineupSummary`.
    */
   summary?: LeagueLineupSummary | null;
+  /**
+   * The batched read has not answered yet — so a window with no rank is one
+   * that is *waiting* rather than one with nothing to say.
+   *
+   * The page's own state and not this card's, because `summary` cannot tell the
+   * two apart: it is null while the read is in flight and null forever for a
+   * league the read does not answer for at all (a chopped one, which this list
+   * carries and the lineups query does not). See `ManagerLineupsState.pending`.
+   */
+  ranksPending?: boolean;
   /**
    * What a *past* stop is priced against — the same season and manager the
    * present table was solved on, so the two are one comparison rather than two
@@ -477,12 +489,18 @@ export const LeagueCard = memo(function LeagueCard({
           <div
             className={`relative mt-2 grid gap-1.5 sm:mt-2.5 sm:gap-2 ${GRID_COLS[columns.length] ?? GRID_COLS[2]} pointer-fine:[transform:translateZ(22px)]`}
           >
-            {columns.map((column) => (
+            {columns.map((column, i) => (
               <RankWindow
                 key={lineupColumnKey(column)}
                 column={column}
                 league={league}
                 summary={summary}
+                pending={ranksPending}
+                // Four windows mount in one frame, so four flasks would bubble
+                // in lockstep and read as one four-part widget rather than as
+                // four instruments each doing their own work. The index is
+                // already in hand — see `BubblingFlask`'s `phase`.
+                phase={i}
               />
             ))}
           </div>
@@ -828,10 +846,16 @@ function RankWindow({
   column,
   league,
   summary,
+  pending = false,
+  phase = 0,
 }: {
   column: LineupColumn;
   league: ManagerLeague;
   summary?: LeagueLineupSummary | null;
+  /** The page's read has not answered — see {@link LeagueCard}'s own prop. */
+  pending?: boolean;
+  /** Which of the row's windows this is, so the four do not bubble together. */
+  phase?: number;
 }) {
   const rank = summary?.ranks[lineupColumnKey(column)] ?? null;
   const fill = rankFill(rank);
@@ -892,9 +916,25 @@ function RankWindow({
             textShadow: `var(--figure-engrave), 0 0 22px ${rankColor(percentile, 0.4)}`,
           }}
         >
-          <span className="text-[length:var(--fs-24)] sm:text-[length:var(--fs-32)]">
-            {parts ? parts.figure : "—"}
-          </span>
+          {/* **The flask takes the wait and the em dash keeps the absence**,
+              which is the one distinction this window could not draw before:
+              `parts` is null both while the read is in flight and when there is
+              genuinely nothing to rank — an all-zero metric, a league too small
+              — and an em dash said both. It is the app's spelling of *no
+              answer*, so it stays where that is what is meant.
+
+              34px against the figure's `--fs-32` (37px), which is near enough
+              to hold the four windows on one baseline without touching
+              `mt-auto`. The meter under it keeps drawing its empty track and
+              both label lines keep their reserved heights, so nothing on the
+              card moves when the rank arrives. */}
+          {pending && !parts ? (
+            <BubblingFlask size={34} phase={phase} label="Loading rank" />
+          ) : (
+            <span className="text-[length:var(--fs-24)] sm:text-[length:var(--fs-32)]">
+              {parts ? parts.figure : "—"}
+            </span>
+          )}
           {parts && (
             <span className="text-[length:var(--fs-11)] font-normal tracking-normal opacity-55 sm:text-[length:var(--fs-15)]">
               {parts.suffix}

@@ -14,6 +14,7 @@ import {
   filterSummary,
   BILLET_KEY_CHROME,
   CONSOLE_METAL_TRACK_SM,
+  FlaskDefs,
   LeagueFiltersDialog,
   ManagerBillet,
   matchesFilters,
@@ -219,7 +220,7 @@ function Checker({
   const [drawer, setDrawer] = useState<Subject["kind"] | null>(null);
   const [opened, setOpened] = useState<ReadonlySet<Subject["kind"]>>(new Set());
 
-  const { payload: check, reread } = useLineupCheck(
+  const { payload: check, pending: checkPending, reread } = useLineupCheck(
     username,
     state.season,
     week,
@@ -371,6 +372,16 @@ function Checker({
 
   return (
     <div className="relative">
+      {/* The flask's gradients and its clip, once for the whole page — see
+          `FlaskDefs`, and `LineupMarkDefs` a few lines down, which is the same
+          arrangement for the cleared mark.
+
+          **At the root rather than beside the list**, which is where that one
+          sits, because this page's flasks are not all in the list: the counts
+          well and the win dial are in the header above, outside the branch the
+          list is one arm of. Mounted down there, the header would draw two
+          vessels whose fill and fluid resolve to nothing. */}
+      <FlaskDefs />
       {/* It stands down while a card is parked — `display: none` rather than
           unmounted, so the filters dialog it holds keeps its draft — and
           `chromeClass` fades it either side of that, with the other cards. */}
@@ -469,7 +480,15 @@ function Checker({
               summary={summary}
               attention={attention}
               of={answered}
-              pending={check === null}
+              // **The hook's own answer, not `check === null`.** Those two part
+              // company on exactly one path and it is the one a loading
+              // indicator must not be on: a check that failed resolves to null
+              // and stays there, with no retry, so read off the payload the
+              // header would claim to be reading for the rest of the session.
+              // The strip below keeps `check === null`, deliberately — its
+              // bays draw an em dash either way, which is the honest reading
+              // for both. See `LineupCheckState.pending`.
+              pending={checkPending}
             />
           ) : undefined}
         </ManagerBillet>
@@ -564,6 +583,9 @@ function Checker({
                     key={league.league_id}
                     league={league}
                     entry={checked[league.league_id] ?? null}
+                    // A fact about the page rather than about this league —
+                    // see the card's own prop for why `entry` cannot answer it.
+                    pending={checkPending}
                     onSynced={reread}
                     open={card.isOpen(league.league_id)}
                     lit={card.isLit(league.league_id)}

@@ -551,12 +551,70 @@ keeps a web server from being held open by one, and exactly wrong where the
 timers are the job). The `Procfile` is the two lines:
 
 ```
-web: APP_PROCESS_ROLE=web npm run start
+web: APP_PROCESS_ROLE=${APP_PROCESS_ROLE:-all} npm run start
 worker: APP_PROCESS_ROLE=worker npm run worker
 ```
 
-Deploying only a web dyno and leaving the variable unset keeps today's
-behaviour, which is what makes this additive.
+**The web line shipped as `APP_PROCESS_ROLE=web` and that was wrong for the
+deployment this app actually has.** One Heroku Basic dyno with `worker` scaled
+to zero — the intended first deployment, and the one the whole crawler pressure
+guard below was written for — ran nothing: no crawl, no KTC refresh, no players
+map, no comps corpus, and therefore no exercise of the guard either. The split
+is the *later* shape and hard-coding it made the app's default deployment the one
+nobody is running.
+
+**The two lines read the variable differently, and that asymmetry is the whole
+mechanism.** The web line takes it as a shell default, so `all` is what one dyno
+runs and one `heroku config:set APP_PROCESS_ROLE=web` moves the deployment to
+the split with no redeploy. The worker line *assigns* it, because a config var
+reaches every dyno and a shell assignment in front of a command beats the
+inherited environment — so the same var that quietens the web process cannot
+tell the worker it is a web process. `process-role.test.ts` pins both lines
+textually, on `crawl-writes.test.ts`' terms: a role is a fact about a file no
+test imports, and a line that lost one is a database going quiet with a green
+suite behind it.
+
+**Running `all` beside a worker is safe and is still not the arrangement**: the
+per-tick advisory locks already make a second instance correct, so what a
+duplicated crawl costs is not correctness but the point of the split — that work
+being off the dyno serving requests. Set the config var and scale the worker in
+one change.
+
+### The four loops no longer start at the same instant
+
+`instrumentation.ts` starts four loops in one pass and every one of them fired
+its boot tick immediately, so a fresh dyno's first seconds were a KeepTradeCut
+scrape, a ~5MB Sleeper players download and twelve thousand upserts, a crawl
+tick's fan-out across a batch of leagues and a comps corpus probe — concurrently,
+against one pool and one Sleeper limiter, beside the first requests the process
+is also trying to serve. On the single dyno above that is the one moment the
+crawler's RSS guard is least able to help: it reads memory *the crawler* is
+making and stands the crawler down, where that spike is three other loops' as
+well.
+
+`util/boot-stagger.ts` is the table and `BackgroundLoop.initialDelayMs` is the
+mechanism. **What is staggered is the first tick and nothing else** — the
+interval is armed by the delayed boot tick rather than at start, so every
+recurring gap is still each loop's own `intervalMs` and a loop delayed 45s
+against a 60s interval does not tick at 45 and again at 60.
+
+**The order is the dependencies rather than a preference.** The players map goes
+first and undelayed, because the KTC matcher resolves `sleeper_id` against it
+(`lazyMatchIndex` calls `ensurePlayersFresh` itself) and the comps loader joins
+every season row to it — a load against an empty map skips every row and says
+so. KTC follows at 15s, behind the refresh it would otherwise trigger; the crawl
+at 45s, depending on neither and holding the most memory in flight at once; comps
+last at 90s, its boot tick being the heaviest thing here on the one boot a year
+where it does anything.
+
+**It is not a throttle and must not become one.** Each loop's own freshness check
+is still the primary mechanism and is unchanged: a restart inside KTC's TTL
+re-scrapes nothing, a players map under a day old is skipped, and the comps loop
+loads only the seasons its metadata row says are missing — so the *usual* boot is
+four cheap questions in whatever order they are asked. What the delays buy is the
+boot where the answers are yes, which is a deployment's first and the one after a
+season ends. Ninety seconds end to end; `process-role.test.ts` pins that no delay
+reaches two minutes.
 
 ### One loop helper, and a reversed decision
 
@@ -642,6 +700,18 @@ rather than leaving a 4/2/1 describing a crawler that no longer exists. Every
 configured width clamps **downward** and to its neighbours in order: a guard that
 could be configured to widen the crawler would be the failure it exists to
 prevent, reached through the variable meant to prevent it.
+
+**That was true of two of the three and `CRAWLER_MEMORY_NORMAL_CONCURRENCY` was
+the hole in it.** Throttled clamped to normal and high clamped to throttled, and
+normal itself was read with nothing above it — so against a `CRAWL_CONCURRENCY`
+of 4 a configured 20 was twenty leagues in flight on the dyno this guard exists
+to keep alive, with the two reduced levels reading as correct because they clamp
+to whatever normal claimed to be. It is `Math.min(configured, CRAWL_CONCURRENCY)`
+now, which is the sentence the paragraph above was already making. An oversized
+width is capped **in silence** rather than discarding the set: it is a legible
+number the guard will not honour past its ceiling, where an unordered *threshold*
+set is thrown out whole because a half-normalised set is a configuration nobody
+wrote.
 
 **Memory is read before the lock and again between every batch, and one reading
 would not do.** Before, because a tick that cannot afford to crawl must not take
@@ -1001,7 +1071,22 @@ affordable rather than a request per press. One entry per key, so two cards
 naming one league make one request; a resolved answer outlives the card that
 asked for it, so closing and re-opening pays nothing; `MAX_ENTRIES` (8) bounds
 what is kept *for later*, and an entry with a live subscriber is never counted
-out, so the bound never blanks a card being read. An in-flight read is aborted
+out, so the bound never blanks a card being read.
+
+**"Never counted out" had to mean counted out of the *arithmetic* as well as out
+of the eviction, and it did not.** The overflow was `map.size - MAX_ENTRIES`,
+which counts the subscribed entries it then refuses to evict — so one open card
+beside eight cached ones evicted a cached one to reach a total of nine, and a
+reader who opened a card was handed a smaller cache than one who did not, one
+slot per open card until a page with eight open cached nothing at all. It is
+counted over the droppable set now, so the store holds `MAX_ENTRIES` cached
+answers *plus* whatever is on screen; the ceiling stays finite because every
+subscribed entry is released by the component holding it and trims on the way
+out. And `at` is a monotonic counter touched on release rather than a
+`Date.now()` set on the last write: several cards settle in one microtask drain,
+so a millisecond timestamp gave a whole batch one key — and an entry read for ten
+minutes sorted as though it had not been touched since it arrived, which made the
+card a reader had *just* closed the first thing evicted. An in-flight read is aborted
 when its last reader goes and a resolved one is kept — a half-read answer is
 worth nothing to anybody.
 
@@ -5885,6 +5970,180 @@ scrollbar press is likeliest to reach the DOM; and how a parked card reads on a
 real hundred-row board where the panel below the seam is a twelve-team solve
 rather than an error line.
 
+### The hauls became one exchange, and the date a billet
+
+The parked header condensed to the take track and then stopped: below `sm` the
+two hauls still **stacked**, which is 300px of a phone's card before the seam
+and leaves the opened league about four standings rows and three seats. They are
+one window cut into two bays at every width now, the format the settings strip
+was stating moves onto the rule line while the card is open, and the date ledge
+becomes a milled billet — which is where the league's name gets its width back.
+Applied from a design handoff, its changes 1–3, with 2 superseding 1 as that
+handoff asks. Nothing on the wire moved — no route, no query, no contract type,
+no payload field, no migration — and **no token was added**: every surface below
+already had one, light half included.
+
+**The two hauls are one exchange, and the 5px is not the reason.** One border
+and one pair of insets instead of two buys a bay 134px of content where two
+windows gave 129, which is worth having and is not the argument: two windows
+side by side are two instruments competing for a reading, where a trade is one
+exchange. It is what `Pane` already says for the two panes below the seam.
+
+**The groove is one absolutely-positioned child of the bay row, never a border
+on either bay.** Absolute so it consumes no width — which is what keeps the two
+bays exactly equal — and `left-1/2` lands it on the boundary *because* they are.
+A border on one bay would make that bay a pixel narrower than the other, and the
+two hauls would set at two different widths on a card whose whole point is that
+they are one thing. Measured: 333.6/333.6 at 768 and 534.9/534.9 at 1280, with
+the groove within 0.1px of the section's midline at every width driven.
+
+**A three-way keeps a window per side, and that is the handoff's own open
+question answered by measurement.** Three bays at 390 is ~89px of content each,
+which the two-line row below will not hold, and a clipped surname is the failure
+this whole pass exists to remove; the alternative it names — bays that scroll
+horizontally — is a second way to read a card that no other card on the board
+has. So the exchange window is drawn for exactly two sides, which is also the
+arm `givenBundle` already makes a different card of: a three-way has no knowable
+gives and has always drawn the take column alone. `bay` is therefore a second
+boolean beside `condensed` rather than a synonym for it — `condensed` is *what
+the haul says* and `bay` is *what it is drawn in*, and a three-way open card is
+the one combination that has the first without the second.
+
+**The two-line arm turns at `md`, and that number is neither of the two the
+handoff guessed at.** The header is the question — the rows fit long before it
+does — and one line of it wants the manager's name at the window's own `0.12em`,
+the unit, the total and two gaps: **259.8px**. Against the bay's own content box:
+390 gives **136.4**, 640 gives **249.0** — short by 10.8 — 768 gives **313.6**,
+and 1024 gives 442.7. So `sm` is the arm that looks right and is ten pixels
+wrong, and `lg` — the breakpoint the seat rows and the standings rows below the
+seam turn on, and the one this shipped with until it was driven — leaves a 768px
+card stacking a figure under a name in a 314px bay, which is a bay half empty.
+The one-line arm *is* the window's own header, so a name longer than the fixture
+truncates there exactly as it always has in a window; what the threshold buys is
+that the ordinary name is whole. Below it nothing truncates at all, because the
+name is set short.
+
+**`shortName` moved to `features/shared/format.ts`.** It was module-private in
+`lineup-breakdown.tsx` for the seat rows below `lg`; a 134px bay is the same
+measurement one card over, and a second spelling of "initial and surname" is the
+drift that module exists to prevent. A one-word name — a team defence, an id
+with no name on the feed — is returned whole, which is the rule visible on the
+`Denver` row.
+
+**A bay's figure sits in a milled well at every width**, where the window's is
+bare ink. Below `md` it is on a line of its own under the name and a bare number
+hanging there reads as an orphan; at `md` it is the last cell of a row, which is
+exactly where the standings rows and the seat rows below the seam already put
+theirs. One treatment rather than a breakpoint's worth of resets — and `ml-auto`
+rather than `self-end`, because an auto margin absorbs the free space on the
+*cross* axis of a column flex exactly as it does on the main axis of a row, so
+one declaration serves both arms.
+
+**The settings strip collapses onto the rule while the card is open.** It is a
+30px part plus its 12px margin, and eleven of its twelve readings are stated
+again by the panel under the seam *by construction*: twelve standings rows are
+the team count and nine seat rows are the starters. What no table below states
+is which game is being played, so `LeagueFormatTags` — the strip's own format
+group, read from the same `readLeagueConfig` and never re-derived — moves onto a
+row that was carrying a 92px hairline and nothing else. It is gated on `open`,
+threaded as the prop this card already has, on the same "spent once open"
+argument the give track and `DisclosureHint` already live by; and the
+`{league && …}` gate stays, so an absent league row draws nothing rather than
+claiming `Redraft · Managed`.
+
+**The Superflex tag comes with them**, which the handoff's "two lit tags" does
+not name and which follows from keeping the group whole: it is drawn on exactly
+the disagreement the ladders cannot state, and while the card is open there are
+no ladders at all, so it is the only thing left that could say it. An ordinary
+league still draws the two tags the handoff shows.
+
+**The rule row carries `preserve-3d` and no transform, and each child names its
+own plane.** A plain wrapper is a flat rendering context, so a `translateZ`
+written on the row would collapse `CardRule`'s own 36px into it and the hairline
+would sit at the tags' depth — with nothing to say so. Measured after: row
+`preserve-3d` with `transform: none`, rule at 36, tags at the strip's 18, window
+at 22.
+
+**The date ledge is a billet, and that is where the width goes.** It was a
+`ReadingPlate` — one pill, one line, one ink — and the widest object in the
+billet row after the league's own name, which is what paid for it. **A plate
+carrying two readings on a line pays for the second in width; a billet pays for
+it in height**, and height is the one thing nothing on that row competes for.
+`PlateBay`'s own argument, one part further out. The day is stamped on the face
+and the minute dropped into a well cut in the same part, because the minute is
+the reading — `TradeDate`'s own note. It is a new export rather than a `well`
+arm on `ReadingPlate`, which has a second caller on the lineup checker's card
+whose reading is a separate question with its own measurement.
+
+Measured against the plate it replaces, rendered side by side: **164.5px → 78.6
+at 390** and **227.9 → 121** from `sm` up, which is the handoff's 165 → 79 and
+228 → 121 to the pixel. The league's name goes **103.5px → 189.4** of the 234
+`Dynasty Warehouse` wants at 390 — a gain of 85.9 against the handoff's 86 —
+and is unclipped at 317.8 of 318 from 640 up. It applies to a **closed** card
+too, which is the one part of this pass that is not about the open one.
+
+**`CardRule` gained `shrink-0`** for the one reader that now stands something
+beside it: a 1px hairline left shrinkable on a flex main axis is the first thing
+to give under pressure, and it would go without a trace. On the two league
+cards it is the only child of a column flex and the declaration is a no-op.
+
+#### Verified
+
+Rendered through a temporary `/preview` route against the real `TradeCard`,
+`useActiveCard` and `PageShell`, the real tokens and the real Tailwind build —
+the method the console-card, shares, rack and timeline passes established, since
+no database is reachable from where this was built — then driven over CDP at
+**390, 640, 768 and 1280 in both schemes** and deleted. The mechanics are the
+ones this file records: `--no-proxy-server`, `localhost` rather than
+`127.0.0.1`, a phone viewport from `Emulation.setDeviceMetricsOverride` with
+`mobile: true`, `data-theme` rather than `prefers-color-scheme`,
+`--disable-features=OverlayScrollbar`, the
+`--blink-settings=availablePointerTypes=4,…` flags without which every
+`pointer-fine:` rule on this card is inert, a **client-component** harness, and
+a CDP client over Node's own `WebSocket` since Playwright is not in this
+project's `node_modules`. The fixtures are four trades: a six-for-two with two
+picks and a FAAB leg, a one-for-one, a three-way with a side that took nothing
+back, and one with no league row and no date.
+
+Every arm landed. The open two-sided card is **one** window with two equal bays
+at a 10px inset, one `<Scanlines />` for both, and the groove absolute on the
+boundary; the rule row carries `["Dynasty","Managed"]` at `--billet-accent` in
+dark and its light counterpart in light, and no settings strip is drawn. The
+track is the 108px arm at 390 and 640 and the 78px arm at 768 and 1280, with the
+header and the asset rows turning with it. Every bay figure computes
+`--figure-well-bg` at a 5px radius under `--figure-well-shadow`, and the names
+read `J. Chase` / `A. St. Brown` / `K. Williams` below `md` and whole above it,
+with `Denver` whole at both.
+
+**The constancy claim holds**: a six-for-two and a one-for-one both park at
+**253.3px** at 390, which is the property the fixed height exists for. Against a
+baseline taken by disabling the two gates in place, the parked header goes
+**415.5px → 253.3 at 390** and **268.3 → 207.3 at 1280**.
+
+The three-way draws three windows on the 78px arm with nothing clipped; the
+league-less, undated card draws no settings strip, keeps the rule as the lone
+child of its row, and reads `Undated` on the billet's face with **no well**. The
+**closed** card is untouched — two windows, the settings strip, both give
+tracks, no fixed heights, the two-column grid — but for the date ledge, which is
+the one change that reaches it.
+
+At every width and in both schemes: `document.documentElement.scrollWidth` equal
+to or under the viewport, **zero unclipped elements past it**, exactly one
+`<h1>`, nothing clipped inside a card but the deliberately long fixture league
+name at 390, and **no console output of any kind**. 2,060 unit tests pass;
+`lint`, `typecheck` and `build` are clean.
+
+**Not verified against real data**, which is the gap to close first: every
+number above is a fixture. Four things a render here cannot check — how much of
+the panel's room the 162px actually buys on a real card, since the fixture's
+expanded half is an error line rather than a twelve-team solve; whether a real
+board's display names sit in a 313.6px bay at 768 as the fixture's does, which
+is the whole of what the `md` threshold is set against; whether the corpus holds
+a two-bare-`QB` league, which is what decides whether the third tag on the rule
+row ever renders; and how often a three-way actually appears on this board,
+which is what decides whether the arm kept out of the exchange window is a case
+or a guard.
+
 ## Comping a player
 
 `/comps` was the one tool the rack named and the app did not have. It is a
@@ -7625,7 +7884,7 @@ and the production boot refuses to start without `DATABASE_URL`**, where
 Every arm landed. The wordmark draws at **every** width on every route,
 including 390 with controls. (**Superseded below 390 on the two pages that
 publish controls** — unfolding the Browse pair took 38px of that row back; see
-The wordmark yields to the controls again, below, for the measurement.) The readout reads `LINEUPS` / `MGR` at 390 and
+The wordmark yields to the controls again, below, for the measurement.) The readout reads `LINEUPS` / `MANAGER` at 390 and
 `LINEUP CHECKER` / `MANAGER` from 640, and renders **nothing** on `/tools`. The
 rack is **one row at every width** on all four routes, 54px at 390 and 65.1 (or
 62 without a track) at `md`, with `documentElement.scrollWidth` equal to the
@@ -7874,6 +8133,188 @@ what they are as the two legends were; whether the 9.4px of slack at 390 on
 whole margin the wordmark's gate is set against; and whether the 32px cap is
 comfortable in the hand rather than merely consistent with the tool key beside
 it, which is the one open question no measurement here can close.
+
+### The slack moved behind the controls, and the tray became a part
+
+Three changes to the rack, from a design handoff: below `md` the page's Browse
+keys stop being pushed to the right edge and follow the readout they sit beside;
+`/manager`'s readout spells `Manager` at every width instead of falling back to
+`Mgr`; and the tool tray is regrouped into three bays and remade out of billet.
+Nothing on the wire moved — no route, no query, no contract type, no payload
+field, no migration.
+
+**The first two are the same measurement seen twice.** The rack read
+`brand · groove · readout ……… caps · tray` below `md`, and the reason was one
+`mr-auto` on the left-hand cluster: with the tray's own margin gated at
+`md:ml-auto`, the cluster's margin was the only one live on a phone, and it
+pushed *both* control groups to the right edge. So the readout naming the tool
+sat at one end of the row and the two caps that act on the page it names sat at
+the other, with all the slack in between — where `md` has read
+`readout · caps ……… tray` since the rack landed.
+
+**The margin is the tray's now, at every width, and that is why the cluster's
+own argument could be answered rather than overruled.** That comment said the
+margin could not sit on any one of brand, groove or readout because which of
+them is last depends on the route — `/logs` has no readout, `/tools` has neither
+readout nor groove — and it is right about those three. It is also exactly the
+reason the margin *can* be the tray's: the tray is unconditionally last, so
+there is no conditional to be wrong about. The theme pad took an `ml-auto` of
+its own on the same terms, being the last thing in the row on the one route that
+renders no tray; the two are mutually exclusive by construction, so there is
+still exactly one auto margin per row at every width.
+
+**Nothing changed width, so the rack's measured 390px fit is untouched** — only
+where the row spends what it has left over. Verified: at 390 the gap from the
+readout to the caps is the pill's own 9px column gap to the tenth of a pixel,
+and the whole of the slack is between the caps and the tray.
+
+**`Manager` costs exactly what `Lineups` costs, and that is the finding the
+second change turns on.** The handoff argues it from a character count — seven
+against seven, and `Lineups` already sits in the tightest row either control
+page produces. Measured, the two are identical: **10.5px of slack at 390 on
+both**, against the ~9.4 the wordmark's gate was set from. So `short: "Mgr"`
+came off the registry and the readout's existing two-span branch falls through
+to `text` with no component change. `Tool.short` keeps one reader and stays in
+the type: `Lineup Checker` is fourteen characters and wants ~65px the row does
+not have, and the only way to pay for it is dropping the wordmark below 390,
+which is a worse trade than a name that page's own billet eyebrow already
+abbreviates the same way.
+
+#### The tray is a part, and its groups are holes
+
+The tray was a `--key-bg` panel with flat rows — a *surface* with a list on it,
+five tools of equal weight in one column, with no way to say that two of them
+answer a question about your account and two read the whole crawled corpus. It
+is billet stock now with a bay cut into its face per group and a brushed key
+seated in each: three holes in one part, where three runs of rows on one panel
+would be one list with rules across it.
+
+**`Tool.group` is one field rather than three arrays, and it is read as a *run*
+rather than as a key.** The tray cuts a bay wherever the value changes down the
+list, so the registry's own order is what puts a tool in a bay and nothing
+sorts — which is what keeps the tray and the `/tools` grid, which renders the
+same list in the same order and draws no bays at all, from disagreeing about
+where a tool lives. An entry out of step with its neighbours opens a bay of its
+own rather than being teleported into a matching one elsewhere in the tray,
+which is the honest reading of a list whose order is also its meaning. The
+registry is reordered to match — Manager, Lineup Checker, Pick Tracker, Comps,
+Trades — and the grid follows, which the handoff names as intended.
+
+**The bays carry `role="group"`, and a plain wrapper would have cost the menu
+its own items.** A `role="menu"` owns `menuitem`s, and an intervening generic
+box breaks that ownership. `group` is one of the roles a menu may own and is
+also the honest one: a bay *is* a group, and it is the whole of what this pass
+added, so a reader who cannot see the three holes is told about them rather than
+handed a flat list. Deliberately unlabelled — the design gives a bay no visible
+name either, and inventing one here would be a claim it does not make.
+
+**Five tokens, and the key face is one of them because of a measurement.** The
+handoff's table says the rows are a `--key-metal` face and its own legibility
+revision says the faces were darkened and the vertical brush taken off, which
+is not the same surface. The revision is right and the number says why: solid
+`--billet-name` on `--key-metal`'s top stop is **3.53:1**, under the floor a
+legend owes, and lost in the brush besides. `--rack-tray-key-bg` is that family
+with the brush off and the stops darkened — 5.25:1 at the top stop, and
+7.7–10.6:1 across the band a `--fs-11` legend in a 9px-padded row actually
+occupies. The riser is `--key-shadow` unchanged, which is already exactly the
+three layers the design drew, so a key here is this face in the console's own
+standard travel rather than a second kind of key.
+
+**The handoff's own figure for the lit row is measured at the wrong band, and
+the row passes anyway.** It reports the lit ink clearing the floor on `#31474b`,
+which is the face's 60% stop; at the *top* stop the same ink is 3.82:1. Neither
+is the number that matters — a row padded 9px puts its cap-height ink between
+roughly 32% and 65% of its own height, where `--readout-text` measures
+**5.4–8.7:1**. That is the same error `--billet-label` records from the other
+direction, and it is why every figure above is quoted against the band the ink
+lands on rather than against a stop.
+
+`--rack-tray-shadow` is `--standing-strip-shadow`'s chamfer under a heavier
+cast, spelled whole because a shadow list is atomic — a caller appending a cast
+to that token would *replace* the chamfer rather than add to it, which is the
+trap `CONSOLE_BILLET_FACE` exists beside `CONSOLE_BILLET` for. `--rack-tray-bay-bg`
+is the face's gradient *inverted*, the recess cue `--billet-well-bg` already
+runs on, and cut deeper than that well because what sits in it is a part rather
+than a reading. Every light half is derived: the chamfer inverts and its casts
+go slate, the bay stays a recess by darkening against a near-white face, and the
+lit face is **lightened** where the dark one is darkened, since the ink inverts
+with it — its stops are chosen so `--readout-text` clears 4.5:1 on *every* band
+including the bottom one (4.66–6.0:1), because the light scheme has no
+`--readout-text-glow` to carry a thin reading the way the dark one does.
+
+**The theme row is stamped on the bare billet face rather than seated in a
+bay**, which is now what says it is not navigation: it is the one row in the
+tray that is not a key in a hole. It is still the one row that does not dismiss
+the tray, and its two inks are the billet's own label-and-reading pair.
+
+`CONSOLE_BILLET_FACE` joined the `features/shared` barrel for this — a second
+reader outside that folder, on the line `CONSOLE_KEY` and `ManagerPlate` moved
+on.
+
+#### Verified
+
+Driven over CDP against `next dev` with no `DATABASE_URL` — the boot hook skips
+migrations and the loops log their refusals, which is the server coming up
+healthy against nothing — at 360, 375, 390, 412, 768 and 1280 in both schemes on
+`/manager`, `/lineupchecker`, `/trades` and `/tools`. The mechanics are the ones
+this file records: `--no-proxy-server`, `localhost` rather than `127.0.0.1`, a
+phone viewport from `Emulation.setDeviceMetricsOverride` with `mobile: true`,
+`data-theme` rather than `prefers-color-scheme`, the
+`--blink-settings=availablePointerTypes=4,…` flags, and a CDP client over Node's
+own `WebSocket` since Playwright is not installed here. **One mechanic is this
+pass's own and it cost a run:** a fixed `--remote-debugging-port` is answered by
+a previous Chrome that has not finished dying, so the new process silently fails
+to bind and the run drives the *old* profile — which put a light-scheme render
+under a `theme: "dark"` request. A fresh port per run is the fix, and writing
+`localStorage` as well as the attribute is the other half, since `ThemeToggle`
+re-applies the stored value in a layout effect.
+
+Every arm landed. The row reads `brand groove readout browse tray` at every
+width on both control pages, one row at every one (all five objects on a shared
+vertical centre), with **exactly one object absorbing the slack and it is the
+tray** — 10.5px at 390, 113px at 768, 512px at 1280 on `/manager`. The gap from
+the readout to the caps is the container's own column gap to within 0.6px at
+every width (9px below `md`, 16 above). `/manager`'s readout reads `MANAGER` and
+`/lineupchecker`'s `LINEUPS`; the wordmark draws at 390 and up on both and is
+dropped below it, which is `wordmarkFace` unchanged. Slack at 360/375/390/412 is
+67.1 / 82.1 / 10.5 / 32.5px on both pages — the two jumps being the wordmark's
+gate — and nothing overflows the pill's padding box at any of them.
+
+The tray: **244 × three bays** at radius 14 / padding 6, each bay radius 11 /
+padding 5 / gap 5 with **12px of bare billet between them**, holding
+`Manager + Lineup Checker | Pick Tracker | Comps + Trades`. Rows are radius 7,
+padding 9/11, weight 500, tracking 0.11em of their own 12.54px — 1.379px,
+measured. Exactly one lit row, it is Manager, and it carries the accent rim, the
+halo and the lamp while no other row carries any of them; the lit and unlit
+faces resolve to different gradients in both schemes. `BilletFinish` draws its
+two overlays, the tray clips, and the whole thing sits inside the viewport at
+390 (x=124, right=368). The menu owns three groups holding 2/1/2 menuitems with
+**zero** orphaned items and exactly one `aria-current="page"`.
+
+Behaviour is unchanged and was driven with real input: the key opens and reports
+`aria-expanded`, Escape closes and returns focus to it, a `pointerdown` outside
+closes, a navigation row closes, and **the theme row flips the theme and leaves
+the tray open**. `/tools` still renders no `<nav>`, its theme pad carries the
+auto margin (180.4px) and sits flush right, and its grid reads
+`Manager | Lineup Checker | Pick Tracker | Comps | Trades`.
+
+At every width and in both schemes: `document.documentElement.scrollWidth` no
+greater than the viewport, **zero** elements painted past it, exactly one `<h1>`,
+one `<nav>` where a tray renders, and **no console output of any kind** beyond
+the dev server's own React-DevTools and HMR lines. 2,060 unit tests pass;
+`lint`, `typecheck` and `build` are clean.
+
+**Not verified against real data**, which is the gap to close first: the pages
+behind the rack could not load a league from here, so what was driven is the
+rack over an error state. Three things a render cannot check — whether the
+10.5px of slack at 390 survives the next entry in `tools.ts`, which is the whole
+margin both the wordmark's gate and this pass's readout change are set against;
+whether three bays read as three *groups* to somebody who has not been told what
+the grouping is, rather than as a list with wider gaps; and whether the light
+bay reads as a recess on a real page, where its floor and the near-white key
+faces it holds are within a few percent of each other at their bottom stops —
+the same closeness `--billet-well-bg` already lives with one part over, and the
+one thing a contrast figure cannot answer.
 
 ### The rank is the reading, and the denominator is the config window's
 
@@ -8276,6 +8717,12 @@ a hover, so on a coarse pointer it is a composited plane per card with nothing t
 spend it on. The `<li>`'s `perspective` went with it.
 
 #### The rack's wordmark, and the short tool names
+
+**`Mgr` is gone since** — see The slack moved behind the controls, and the tray
+became a part, above, where the phone row is remeasured and `/manager` turns out
+to cost exactly what `/lineupchecker` does. The rule below is unchanged and
+`Lineups` is what still lives by it; what this section says about *`/manager`'s*
+width is the part that no longer holds.
 
 `Tool.short` is new — `Mgr` and `Lineups` — and it lives in the registry rather
 than being truncated in `ToolsMenu`, because a short name is a fact about the
@@ -11515,6 +11962,229 @@ above; the 390 pass now has **no horizontal page overflow** (`main.scrollWidth
 `Emulation.setDeviceMetricsOverride` rather than `--window-size`, which headless
 Chrome clamps to a ~485px minimum — a `--window-size=390` run silently lays out
 at 485 and crops. The route was deleted afterwards.
+
+## The console says when it is reading
+
+Every loading state in this app was a word or an em dash. `/trades` printed
+`Reading the board…`; a manager card's rank windows, the lineup checker's four
+tiles, its counts well and its win dial all printed `—` until their read landed.
+None of it looked like the machine was doing anything — and the em dash is worse
+than merely quiet, because it is already this app's spelling of *no answer at
+all*, so a window waiting on a request and a window whose metric has nothing to
+rank said the identical thing. `features/shared/ui/bubbling-flask.tsx` is the
+app's own flask mark with fluid in it, bubbling, at five sizes. Applied from a
+design handoff. **Nothing on the wire moved** — no route, no query, no contract
+type, no payload field, no migration — but two hooks gained a field, and that is
+the substantive half of the pass rather than a detail.
+
+**It is a vessel rather than a rotating arc, and `lab-anim` is why that
+matters.** Every animated element carries the app's one reduced-motion hook, so
+under `prefers-reduced-motion: reduce` the whole thing stops and leaves a static
+glass mark with fluid in it — a legitimate resting state. An arc that cannot
+rotate says nothing.
+
+### A flask must never be left bubbling behind a failed read
+
+The handoff states this as a rule and says it "falls out of the current
+structure as long as the flask lives inside the `loading` branch". That is true
+of `/trades`, whose error arm replaces the loading arm whole. It is **false on
+both other pages**, and the flag the handoff names (`entry == null`) is the
+thing that makes it false — because on this codebase that null is three states,
+not one.
+
+- **The read is still running.** The flask's case.
+- **The read failed and stopped.** `useManagerLineups` gets one retry and then
+  swallows the failure; `useLineupCheck` has no retry at all. Both resolve to
+  null and stay there, by design — a lineup is an enhancement beside a list, so
+  it degrades rather than replacing the page. Read off the payload, this is
+  indistinguishable from the first, which was harmless while both drew an em
+  dash and is exactly the forbidden state once one of them draws an indicator.
+- **The read landed and does not answer for this league.** `getManagerLeagues`
+  lists a league the manager was *chopped* out of (`FIELDED_A_TEAM_SQL`) where
+  the lineups query answers only for one they hold a roster in
+  (`HOLDS_A_ROSTER_SQL`), so that card's summary is null against a payload that
+  landed perfectly, and always will be. The lineup checker has the same shape:
+  the page already draws four em dashes on a league the check answered nothing
+  for.
+
+So `pending` is a field on both hooks rather than a derivation at the call site,
+and it is **a fact about the page rather than about a league** — which is the
+second half of why it could not be read off `summary` beside it. It is threaded
+to `LeagueCard` and `LineupCheckCard` as a prop, and the em dash keeps every one
+of the other two states.
+
+**Both hooks track the failure by subject rather than by a boolean**, so a later
+question is pending again: a reader whose read failed and who then changed
+manager, season or bay would otherwise find a page that never claimed to be
+reading again. And **both clear it during render** rather than in the effect
+that starts the next attempt — `setState` in an effect body is the cascading
+render `react-hooks/set-state-in-effect` exists to stop, where adjusting state
+for a changed input during render is the pattern both files already use to blank
+their payload. The lint rule caught the first spelling, which is the rule
+working.
+
+### The defs are the document's, and a page that forgets them fails quietly
+
+SVG defs are document-global, so the twelve flasks a loading page can hold
+reference **one** set of four gradients and one clip. `FlaskDefs` is
+`LineupMarkDefs`' arrangement exactly, and it is mounted per page for that
+component's reason — but *where* on the page is this pass's own finding, and it
+is different on all three:
+
+- `/trades` mounts it **above the ternary**, because that page's two loading
+  states are in two exclusive branches: the first page's indicator replaces the
+  board, and the load-more note lives inside the board it replaces. In either
+  branch, the other draws a vessel whose fill and fluid resolve to nothing.
+- `/lineupchecker` mounts it **at the page root**, not beside the list the way
+  `LineupMarkDefs` is: the counts well and the win dial are in the header, which
+  is outside the branch the list is one arm of.
+- `/manager` mounts it beside the list, which is where all four of its flasks
+  are.
+
+The failure mode is worth knowing rather than discovering: a page that mounts a
+flask without the defs draws an **empty** flask, which reads as dim rather than
+as broken.
+
+### The bubbles are the one thing that is a function of size
+
+Radii are viewBox units, so they do not scale with the rendered size — a value
+that reads at 88px is an invisible speck at 24. The floor is **6px on screen for
+the largest bubble**, and `bubblesFor` bands on it: four bubbles at 60px and up,
+three from 28, two below. That is the rule rather than the handoff's table, and
+the difference showed immediately — the 32px flask at the trades board's foot is
+not one of the three sizes the design names, and the prototype gave it a set of
+its own whose largest bubble renders at **5.07px**, under the floor the same
+document states. It takes the well set, at 7.73px.
+
+**`transform-box: fill-box`, `transform-origin: center` and `backwards` are all
+load-bearing**, and the handoff says so at length: without the first two,
+`scale()` on an SVG `<circle>` is applied about the viewBox origin and the bubble
+translates diagonally out of the vessel to be removed by the clip — it renders,
+at full opacity, off the flask. Without the third, a delayed bubble sits bright
+and static in the fluid for the length of its delay.
+
+**`phase` is this pass's own addition and it is what stops a row pulsing in
+lockstep.** The handoff varies durations and delays per instance by hand; a
+component cannot, and four rank windows mounting in one frame would otherwise
+run the identical animation from the identical instant and read as one four-part
+widget. It is an integer the caller already has — a map index — shifted by 0.37s
+and **wrapped modulo each bubble's own duration**, so a late phase is a shifted
+cycle rather than a long initial wait. It never needs to be unique across the
+page, only across a group a reader sees at once.
+
+### The light half, which the handoff does not cover
+
+The bundle is dark-mode and says so, naming a light counterpart as the thing
+needed "before this ships to a theme-toggled build". This is one, so it is
+derived and measured on the rule the rest of `globals.css` is written by.
+
+**The alpha is what could not carry over.** The quiet rim is
+`rgba(0,255,229,0.7)` in dark, which measures 7.25–7.68:1 there; the same alpha
+over the six light surfaces a well flask lands on measures **1.94–3.22:1**,
+under the 3:1 a graphical element owes. `--flask-rim-quiet` is a solid
+`#14706a` in light instead, 3.32:1 on the darkest billet well and 5.51:1 on the
+page. The glass tint and both speculars turn over — on a pale ground a highlight
+is invisible and what reads is the shadow the near wall casts — and the casts go
+slate rather than black, on `--rack-cast`'s rule.
+
+**The fluid, the bubbles and the meniscus deliberately do not appear in either
+token block.** They are the mark's own material rather than a surface a theme
+decides: a flask of dark teal liquid is the same object on white paper. That is
+also the answer to the one measurement the handoff asks for and could not take —
+a white bubble on a pale liquid is the failure the dark ramp exists to avoid,
+and it cannot happen here because the ramp does not turn over. Measured: the
+bubble is **5.44:1** on the fluid's middle and **14.39:1** on its base, in both
+themes.
+
+### What did not change
+
+The attention strip's four reason bays keep their em dash, per the handoff — a
+flask at ~22px beside a `--fs-9` label is a teal speck rather than an
+instrument, and the counts well's flask two rows up already speaks for the
+strip. The rail count (`Reading…`) is unchanged for its own reason: it is a
+*count*, and a flask there would be a second indicator on one row. `Proj rec`
+keeps its em dash too, which is not an omission — that figure is `—` both while
+pending and when the week has nothing projected, so it is an absence rather than
+a wait.
+
+**`MetricCell`'s state union is untouched**, deliberately and on the handoff's
+own warning: `needsAttention` and `attentionByReason` read `alert` alone, so
+folding a fifth state in would risk a pending tile counting as attention and
+sending a league to the top of the page for a read that has not landed. The
+flask is a second question asked beside the cell rather than a fifth answer
+inside it.
+
+**The three path constants moved to `features/shared` and `FlaskMark` imports
+them**, which is the opposite direction from the one the handoff suggests and
+the only one the layering allows: `features/tools` may read `features/shared`
+and the reverse would invert it. One spelling either way, which is the point —
+the loading flask cuts a clip path from the vessel, and a mark that had drifted
+from it would be a rim around a shape it no longer holds.
+
+**`StampedCount` took a node rather than a string**, and `centred` is what that
+cost. A count is type on a baseline, which is what its row is aligned on; a
+count that has not landed is a *drawn object*, and an object has no baseline
+worth aligning a label to. A boolean rather than a `className`, because a second
+`self-*` utility in one class attribute is settled by Tailwind's emit order
+rather than by the caller.
+
+**And the load-more live region is rendered whether or not it says anything**,
+which is what it always was — an empty `<p>` that gained its text. A region
+added to the document in the same frame as its content is unreliably announced.
+
+#### Verified
+
+Rendered through a temporary `/preview` route against the real `TradesLoading`,
+`LeagueCard`, `LineupCheckCard`, `WeekSummary`, `BubblingFlask` and `FlaskDefs`,
+the real tokens and the real Tailwind build — the method the console-card,
+shares, rack and timeline passes established, since no database is reachable
+from where this was built — then driven over CDP at 1280 and 390 in both schemes
+and deleted. The mechanics are the ones this file records: `--no-proxy-server`,
+`localhost` rather than `127.0.0.1`, a phone viewport from
+`Emulation.setDeviceMetricsOverride`, `data-theme` rather than
+`prefers-color-scheme`, the `--blink-settings=availablePointerTypes=4,…` flags,
+a **client-component** harness, and a CDP client over Node's own `WebSocket`
+since Playwright is not installed here.
+
+Every arm landed. Twelve flasks on the page against **one** `linearGradient#fl-glass`
+and **one** `clipPath#fl-vessel`, at every width and in both schemes — the
+one-defs-per-document claim end to end. The loud rim resolves `rgb(0,255,229)`
+at 1.4 and the quiet one `rgba(0,255,229,0.7)` at 1.5 in dark, against
+`rgb(11,109,99)` and `rgb(20,112,106)` in light, with the casts turning from
+black to slate and the halo from cyan to teal — the tokens inverting rather than
+dimming. Every bubble computes `transform-box: fill-box`, an origin at its own
+centre and a `backwards` fill. Largest rendered bubble per size: **6.00** (24),
+**7.25** (30), **7.73** (32), **8.22** (34), **11.73** (88) — every set at or
+above the floor, including the one the prototype would have put at 5.07. The
+sweep bar measures **73.91 of 176 = 42.0%** running `fl-sweep`.
+
+**The distinction the pass exists for was driven separately and is exact.** The
+pending manager card draws **4 flasks named `Loading rank` at 34px and 0 em
+dashes**; the card whose payload landed and cannot be ranked draws **0 flasks
+and 4 em dashes**. The pending checker card draws 4 flasks named `Checking` at
+30px; the unanswered one draws none. The counts well's 24px flask computes
+`align-self: center` in its baseline-aligned bay and the dial's 34px one sits in
+the lit window, against `3–1` / `2 / 3` / `75.0%` on the landed header beside it.
+
+Under `prefers-reduced-motion: reduce` the bubbles', the fluid's and the sweep's
+`animation-name` all compute to `none` with the bubble still at opacity 1 —
+`lab-anim` doing its job, and the static resting state the vessel was chosen
+for. At every width and in both schemes: `document.documentElement.scrollWidth`
+equal to or under the viewport, **zero** unclipped elements past it, exactly one
+`<h1>`, and no console output but the dev server's own React-DevTools and HMR
+lines. 2,060 unit tests pass; `lint`, `typecheck` and `build` are clean.
+
+**Not verified against real data**, which is the gap to close first: every
+number above is a fixture, and four things a render here cannot check. Whether a
+flask actually *appears* on a real page or whether these reads land too fast to
+see one — which is the question that decides if the 88px indicator was worth
+building and the only one the first real load can answer. How a hundred cards'
+worth of flasks read at once on a 113-league account, and what four hundred
+animating SVGs cost against the `pointer-fine:` budget the cards are already
+gated by. Whether the failed-read path is reachable often enough for the
+`pending` split to be exercised rather than merely correct. And whether the
+light half reads as intended beside real content, since every surface it was
+measured against is a token rather than a page.
 
 ## Theme
 

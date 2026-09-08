@@ -228,6 +228,74 @@ describe("crawlerPressureConfig", () => {
     assert.equal(config.highConcurrency, 2);
   });
 
+  test("a normal width above the crawler's own maximum is capped at it", () => {
+    // The bug this pins: the guard may narrow the crawler and must never widen
+    // it, and `CRAWLER_MEMORY_NORMAL_CONCURRENCY` was the one width read with
+    // no ceiling over it. Against a `CRAWL_CONCURRENCY` of 4 a configured 99
+    // is 99 leagues in flight on the dyno this guard exists to keep alive,
+    // with nothing on screen saying so — the reduced levels would read as
+    // correct, since they clamp to whatever `normal` claimed to be.
+    const config = prodConfig({ [CRAWLER_NORMAL_CONCURRENCY_VAR]: "99" });
+    assert.equal(config.normalConcurrency, MAX);
+    assert.equal(config.throttledConcurrency, 2);
+    assert.equal(config.highConcurrency, 1);
+  });
+
+  test("every level is capped by the maximum, however the three are written", () => {
+    // All three oversized: the ceiling is `CRAWL_CONCURRENCY` and the ordering
+    // is still `high <= throttled <= normal`, so nothing here reaches 99.
+    const all = prodConfig({
+      [CRAWLER_NORMAL_CONCURRENCY_VAR]: "99",
+      [CRAWLER_THROTTLED_CONCURRENCY_VAR]: "99",
+      [CRAWLER_HIGH_CONCURRENCY_VAR]: "99",
+    });
+    assert.equal(all.normalConcurrency, MAX);
+    assert.equal(all.throttledConcurrency, MAX);
+    assert.equal(all.highConcurrency, MAX);
+
+    // A narrowed normal is the ceiling the other two then take, which is the
+    // review's own second case: 3 / 99 / 99 is 3 / 3 / 3.
+    const narrowed = prodConfig({
+      [CRAWLER_NORMAL_CONCURRENCY_VAR]: "3",
+      [CRAWLER_THROTTLED_CONCURRENCY_VAR]: "99",
+      [CRAWLER_HIGH_CONCURRENCY_VAR]: "99",
+    });
+    assert.equal(narrowed.normalConcurrency, 3);
+    assert.equal(narrowed.throttledConcurrency, 3);
+    assert.equal(narrowed.highConcurrency, 3);
+  });
+
+  test("the cap holds for any crawler maximum, not just the shipped one", () => {
+    const wide = crawlerPressureConfig({
+      maxConcurrency: 6,
+      env: { [CRAWLER_NORMAL_CONCURRENCY_VAR]: "50" },
+      production: true,
+    });
+    assert.equal(wide.normalConcurrency, 6);
+    assert.equal(wide.throttledConcurrency, 3);
+    assert.equal(wide.highConcurrency, 1);
+
+    const narrow = crawlerPressureConfig({
+      maxConcurrency: 1,
+      env: {
+        [CRAWLER_NORMAL_CONCURRENCY_VAR]: "50",
+        [CRAWLER_THROTTLED_CONCURRENCY_VAR]: "50",
+      },
+      production: true,
+    });
+    assert.equal(narrow.normalConcurrency, 1);
+    assert.equal(narrow.throttledConcurrency, 1);
+    assert.equal(narrow.highConcurrency, 1);
+  });
+
+  test("an oversized width is capped in silence, not discarded as junk", () => {
+    // It is a legible number the guard simply will not honour past its ceiling
+    // — unlike an unordered *threshold* set, which is discarded whole because a
+    // half-normalised set is a configuration nobody wrote.
+    const config = prodConfig({ [CRAWLER_NORMAL_CONCURRENCY_VAR]: "99" });
+    assert.equal(config.notice, null);
+  });
+
   test("a decimal width is junk, not something to round", () => {
     const config = prodConfig({ [CRAWLER_THROTTLED_CONCURRENCY_VAR]: "2.5" });
     assert.equal(config.throttledConcurrency, 2);

@@ -545,6 +545,60 @@ export function ReadingPlate({
 }
 
 /**
+ * The date, as a **milled billet**: the day stamped on its face, the minute
+ * dropped into a well cut in the same part.
+ *
+ * **It is where the league's name gets its width back.** The date used to be a
+ * {@link ReadingPlate} — one pill, one line, one ink — and it was the widest
+ * object in the billet row after the league's own name, which is what pays for
+ * it: `Dynasty Warehouse` got 129px of the 234 it wants at 390, and 228px of a
+ * 1120px desktop card went to a date. **A plate carrying two readings on a line
+ * pays for the second in width; a billet pays for it in height**, and height is
+ * the one thing nothing on this row is competing for. That is
+ * {@link PlateBay}'s own argument, taken one part further out.
+ *
+ * It is a *billet* rather than a taller plate because {@link LeagueBillet} is
+ * beside it: the two are then parts cut from one piece of stock, where a plate
+ * opposite a billet reads as two objects that happen to share a row.
+ *
+ * **The minute is the reading, which is why it is the one in the well.** The
+ * day is the coarse half — a reader of a newest-first board already knows
+ * roughly where they are — and the minute is what says where in today's run of
+ * trades this trade sits. See `TradeDate`, whose own note is where that came
+ * from.
+ *
+ * A new export rather than a `well` arm on {@link ReadingPlate}: that component
+ * has a second caller on the lineup checker's card, and whether *its* reading
+ * wants a well is a separate question with its own measurement.
+ *
+ * `items-end` so the day sits over the well's right edge rather than centred
+ * above it — the part is hung off the row's own right end, and a ragged left is
+ * what says the two lines are one reading rather than a stack of two.
+ */
+export function DateBillet({
+  day,
+  minute,
+}: {
+  day: ReactNode;
+  /** Null where there is no minute to state — no well is drawn at all. */
+  minute?: ReactNode;
+}) {
+  return (
+    <span className="relative ml-auto inline-flex shrink-0 flex-col items-end gap-0.5 overflow-hidden rounded-[0.625rem] bg-[image:var(--billet-bg)] px-[7px] pb-1.5 pt-[5px] shadow-[var(--standing-strip-shadow)] sm:gap-[3px] sm:rounded-xl sm:px-[9px] sm:pb-[7px] sm:pt-1.5">
+      <BilletFinish />
+      <span className="relative whitespace-nowrap font-mono text-[length:var(--fs-9)] uppercase tracking-[0.14em] text-[color:var(--billet-label)] [text-shadow:var(--standing-label-shadow)] sm:text-[length:var(--fs-10)]">
+        {day}
+      </span>
+      {minute != null && (
+        <span className="relative whitespace-nowrap rounded-[5px] bg-[image:var(--billet-well-bg)] px-1.5 py-px font-mono text-[length:var(--fs-11)] tabular-nums text-[color:var(--billet-figure)] shadow-[var(--standing-well-shadow)] [text-shadow:var(--standing-engrave)] sm:px-[7px] sm:text-[length:var(--fs-12-5)]">
+          {minute}
+        </span>
+      )}
+    </span>
+  );
+}
+
+/**
  * One bay of a reading plate: a stamped label **over** its figure — **and
  * nothing draws one any more**, along with {@link ReadingPlate}'s `tight` arm,
  * which existed for it.
@@ -679,12 +733,19 @@ export function PlateDivider({ stretch = false }: { stretch?: boolean } = {}) {
  * hover states here are written against. The trade card was the exception that
  * "drew no rule" — it had no disclosure to open — and it has one now: it opens
  * onto the league the trade happened in.
+ *
+ * **`shrink-0` is for the one reader that stands something beside it.** The
+ * trade card's open header puts the league's format tags on this row, so the
+ * rule is a flex item on a main axis with something else on it — and a 1px
+ * hairline left shrinkable is the first thing to give under pressure, which it
+ * would do without a trace. On the two league cards it is the only child of a
+ * column flex and the declaration is a no-op.
  */
 export function CardRule() {
   return (
     <span
       aria-hidden
-      className="relative block h-px w-9 bg-gradient-to-r from-active/50 to-transparent transition-[width] duration-[450ms] group-hover/card:w-[5.75rem] group-hover/card:from-active/90 group-data-[lit]/card:w-[5.75rem] group-data-[lit]/card:from-active/90 pointer-fine:[transform:translateZ(36px)]"
+      className="relative block h-px w-9 shrink-0 bg-gradient-to-r from-active/50 to-transparent transition-[width] duration-[450ms] group-hover/card:w-[5.75rem] group-hover/card:from-active/90 group-data-[lit]/card:w-[5.75rem] group-data-[lit]/card:from-active/90 pointer-fine:[transform:translateZ(36px)]"
     />
   );
 }

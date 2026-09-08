@@ -1,4 +1,4 @@
-import { MilledHairline, Scanlines, StampedCount } from "@/features/shared";
+import { BubblingFlask, MilledHairline, Scanlines, StampedCount } from "@/features/shared";
 
 import {
   formatProjectedRecord,
@@ -108,13 +108,22 @@ export function WeekSummary({
           label="Need a look"
           tone={lit ? "var(--error)" : undefined}
           live
+          // The figure is a drawn object while the check runs, and the bay is
+          // aligned on a baseline it does not have — see `StampedCount`.
+          centred={pending}
           title={
             pending
               ? undefined
               : `${attention} of ${of} league${of === 1 ? "" : "s"} checked need a look`
           }
         >
-          {pending ? "—" : `${attention} / ${of}`}
+          {/* 24px: this bay is a label and a figure on one line, and the flask
+              stands in for the figure rather than beside it. */}
+          {pending ? (
+            <BubblingFlask size={24} label="Checking" />
+          ) : (
+            `${attention} / ${of}`
+          )}
         </StampedCount>
       </div>
 
@@ -159,17 +168,30 @@ export function WeekSummary({
           {/* The lit window at the centre, so the arc can be read exactly. */}
           <div className="absolute inset-[0.6875rem] flex items-center justify-center overflow-hidden rounded-full border border-black/85 bg-[image:var(--readout-bg)] shadow-[var(--readout-shadow)] lg:inset-3.5">
             <Scanlines />
-            {/* Six characters step down one size at both mounts — see the
-                module note for the chord this was measured against. */}
-            <span
-              className={`relative font-display font-semibold leading-none tracking-[-0.02em] tabular-nums text-readout [text-shadow:var(--figure-engrave),0_0_20px_var(--accent-glow)] lg:[text-shadow:var(--figure-engrave),0_0_22px_var(--accent-glow)] ${
-                pct.length > 5
-                  ? "text-[length:var(--fs-13)] lg:text-[length:var(--fs-17)]"
-                  : "text-[length:var(--fs-17)] lg:text-[length:var(--fs-21)]"
-              }`}
-            >
-              {pct}
-            </span>
+            {/* The window holds the figure, or the flask while the check is
+                still reading for it. The arc behind is already an empty track
+                at `winPct === null` and the pointer already does not render, so
+                the dial reads as an instrument warming up rather than as one
+                parked at zero — which is what an em dash in here could not say.
+
+                **`phase` puts it off the counts well's own flask**, two inches
+                away on the same header: two flasks a reader sees at once must
+                not bubble together. */}
+            {pending ? (
+              <BubblingFlask size={34} phase={1} label="Checking" />
+            ) : (
+              /* Six characters step down one size at both mounts — see the
+                 module note for the chord this was measured against. */
+              <span
+                className={`relative font-display font-semibold leading-none tracking-[-0.02em] tabular-nums text-readout [text-shadow:var(--figure-engrave),0_0_20px_var(--accent-glow)] lg:[text-shadow:var(--figure-engrave),0_0_22px_var(--accent-glow)] ${
+                  pct.length > 5
+                    ? "text-[length:var(--fs-13)] lg:text-[length:var(--fs-17)]"
+                    : "text-[length:var(--fs-17)] lg:text-[length:var(--fs-21)]"
+                }`}
+              >
+                {pct}
+              </span>
+            )}
           </div>
         </dd>
       </dl>

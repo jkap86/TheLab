@@ -8,7 +8,7 @@ import type {
   ManagerLeague,
   TradeValueBasis,
 } from "@/shared/contract";
-import type { ActiveCard } from "@/features/shared";
+import { BubblingFlask, type ActiveCard } from "@/features/shared";
 
 import type { TradesData } from "../trades-data";
 import { TradeCard } from "./trade-card";
@@ -205,13 +205,43 @@ export function TradesList({
         // watch; the note under it only appears while a page is actually in
         // flight.
         hasMore && (
-          <div ref={setSentinel} className="pt-8 text-center">
-            <p
+          // **The sentinel renders whenever there is more**, exactly as it did:
+          // the observer needs a node to watch, and gating the *div* on
+          // `loadingMore` would leave nothing to trip the next page. Only the
+          // note inside it is conditional, which is what it always was — the
+          // flask simply replaces the empty string beside the words.
+          <div ref={setSentinel} className="pt-8">
+            {/* **The live region is rendered whether or not it says anything**,
+                which is what it always was — an empty `<p>` that gained its
+                text. A region added to the document in the same frame as its
+                content is unreliably announced, so the box stays and the
+                contents swap. It has no height while empty. */}
+            <div
+              role="status"
               aria-live="polite"
-              className="font-mono text-[length:var(--fs-11)] uppercase tracking-[0.16em] text-foreground/60"
+              className="flex items-center justify-center gap-3"
             >
-              {loadingMore ? "Loading more trades…" : ""}
-            </p>
+              {loadingMore ? (
+                <>
+                  {/* Decoration: the copy beside it is the announcement, and a
+                      named flask would be the same news read twice. 32px is not
+                      one of the three sizes the design names, so it takes the
+                      well's bubble set by size band rather than a set of its
+                      own — see `BubblingFlask`, where the floor that decides
+                      it is. */}
+                  <BubblingFlask size={32} label={null} />
+                  <p className="m-0 font-mono text-[length:var(--fs-11)] uppercase tracking-[0.16em] text-foreground/60">
+                    Loading more trades
+                    <span
+                      className="lab-anim"
+                      style={{ animation: "fl-ellipsis 1.4s ease-in-out infinite" }}
+                    >
+                      …
+                    </span>
+                  </p>
+                </>
+              ) : null}
+            </div>
           </div>
         )
       )}

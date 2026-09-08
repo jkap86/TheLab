@@ -3,7 +3,11 @@
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 
-import { ThemeToggle } from "@/features/shared";
+import {
+  BilletFinish,
+  CONSOLE_BILLET_FACE,
+  ThemeToggle,
+} from "@/features/shared";
 
 export type ToolsMenuLink = {
   /** The route the key lights on — `tool.href`, not the resolved `href`. */
@@ -23,6 +27,17 @@ export type ToolsMenuLink = {
    * vocabularies on one screen.
    */
   short?: string;
+  /**
+   * Which bay this row sits in — `Tool.group`, carried across unchanged.
+   *
+   * It is read as a **run** rather than as a key: the tray cuts a bay wherever
+   * the value changes down the list, so the registry's own order is what puts a
+   * tool in a bay and nothing here sorts. An entry out of step with its
+   * neighbours therefore opens a bay of its own rather than being teleported
+   * into a matching one elsewhere in the tray, which is the honest reading of a
+   * list whose order is also its meaning.
+   */
+  group: number;
 };
 
 /**
@@ -49,11 +64,33 @@ export type ToolsMenuLink = {
  * the page's own content. That is also why the tray no longer carries a
  * `/tools` entry of its own: the brand link already goes there.
  *
+ * **The tray is a milled part, and its groups are bays.** It was a `--key-bg`
+ * panel with flat rows, which is a *surface* with a list on it: five tools of
+ * equal weight in one column, and no way to say that two of them answer a
+ * question about your account and two read the whole crawled corpus. It is
+ * billet stock now with a bay cut into its face per group and a brushed key
+ * seated in each — three holes in one part, which read as three groups where
+ * three runs of rows on one panel read as one list with rules across it.
+ *
+ * A bay is a run of equal `group` down the registry, never a bucket things are
+ * sorted into: see {@link ToolsMenuLink.group}. The `/tools` grid renders the
+ * same list in the same order and draws no bays at all, which is what keeps the
+ * two from disagreeing about where a tool lives.
+ *
+ * **The legends are set for reading rather than for finish**, which was an
+ * explicit revision to this design and is the reason the key face is a token of
+ * its own rather than `--key-metal`: on that face solid `--billet-name`
+ * measures 3.53:1 and the word is lost in the vertical brush besides. The brush
+ * comes off, the stops darken, and the tracking drops 0.16em to 0.11em at
+ * weight 500 — the console's stamped-on-metal grammar rather than its
+ * etched-label one. See `--rack-tray-key-bg`, where the measurement is.
+ *
  * **The theme control lives in the tray**, as its last row under a milled
- * hairline. It is the one row that is not navigation, which is what the
- * hairline says; it is also the one row that does **not** dismiss the tray. The
+ * hairline — and **on the bare billet face rather than in a bay**, which is now
+ * what says it is not navigation: it is the one row in the tray that is not a
+ * key in a hole. It is also the one row that does **not** dismiss the tray. The
  * others navigate, so closing is right for them, where a toggle is something
- * the reader may want to watch land — and the tray is now where it lives.
+ * the reader may want to watch land.
  *
  * A native `<dialog>` is deliberately not used here, where the league filters
  * and the columns picker both do: those are modal, and a nav menu that trapped
@@ -97,29 +134,83 @@ export function ToolsMenu({
     };
   }, [open]);
 
-  const row =
-    "flex w-full items-center justify-between gap-3 rounded-[0.625rem] border px-3 py-2.5 " +
-    "font-mono text-[length:var(--fs-11)] uppercase tracking-[0.16em] " +
-    "transition-[color,background-color] duration-150 " +
+  // **One bay per run of equal `group`.** A reduce rather than a `groupBy`,
+  // because the field is a run and not a key — see {@link ToolsMenuLink.group}.
+  // Nothing sorts, so the tray cannot come to disagree with the `/tools` grid,
+  // which renders the same registry in the same order and draws no bays at all.
+  const bays = links.reduce<ToolsMenuLink[][]>((acc, link) => {
+    const bay = acc.at(-1);
+    if (bay && bay[0].group === link.group) bay.push(link);
+    else acc.push([link]);
+    return acc;
+  }, []);
+
+  // A tool key's geometry and travel, carrying **no colour and no surface** —
+  // `CONSOLE_KEY_PILL_SHELL`'s rule, and load-bearing here because the lit row
+  // and the unlit one differ in border, face, ink and shadow at once. Appending
+  // `border-active/45` to a string that already says `border-foreground/10` is a
+  // coin flip decided by Tailwind's emit order rather than by the class
+  // attribute, and a lit row that lost its rim would be the visible half of it.
+  //
+  // The travel is spelled here rather than taken from `CONSOLE_KEY_BLOCK`, which
+  // is the same idea at a different radius, padding and tracking: composing
+  // against it would be that same flip on three more axes.
+  //
+  // **The tracking is 0.11em at weight 500**, where every other key in the rack
+  // is 0.16em at the inherited weight. That is the legibility half of this tray:
+  // the legends sit on brushed metal rather than on a flat panel, and 0.16em is
+  // a finish on a label where this is a word to be read.
+  const toolRow =
+    "relative flex w-full items-center justify-between gap-3 rounded-[0.4375rem] border " +
+    "px-[0.6875rem] py-[0.5625rem] font-mono text-[length:var(--fs-11)] font-medium uppercase " +
+    "tracking-[0.11em] transition-[transform,box-shadow,color] duration-150 " +
+    "active:translate-y-0.5 active:shadow-[var(--key-shadow-pressed)] " +
     "focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-active/60";
+  // A key seated in a bay: the brushless face, the console's standard riser, and
+  // ink stamped into metal rather than lit on glass — `--billet-name` with
+  // `--billet-name-shadow`, which is what the rest of the console's machined
+  // faces already carry.
+  //
+  // **There is no hover *fill*.** It used to be `hover:bg-foreground/[0.04]`,
+  // which cannot paint at all now: a background colour sits *under* a background
+  // image, and this face is an opaque gradient. The hover is the ink alone,
+  // which is the same move the rack's own keys make.
   const unlitRow =
-    "border-transparent text-foreground/60 hover:bg-foreground/[0.04] hover:text-readout";
+    "border-foreground/10 bg-[image:var(--rack-tray-key-bg)] text-[var(--billet-name)] " +
+    "[text-shadow:var(--billet-name-shadow)] shadow-[var(--key-shadow)] hover:text-readout";
+  // The row naming the page you are on: the same key, teal-cast, with the accent
+  // rim and a halo composed onto the riser. Composed **whole** in one
+  // `shadow-[…]`, since a shadow list is atomic and a second utility beside the
+  // first would replace the riser rather than add the halo to it.
+  const litRow =
+    "border-active/45 bg-[image:var(--rack-tray-key-lit-bg)] text-readout " +
+    "[text-shadow:var(--readout-text-glow)] " +
+    "shadow-[var(--key-shadow),0_0_18px_-6px_var(--accent-glow)]";
 
   return (
     <nav
       ref={nav}
       aria-label="Tools"
       // The deep channel a single raised key travels in — `CONSOLE_TRACK`,
-      // plus the `relative` the tray positions against. It sits at the right
-      // end of the rack: last in the row below `md`, and `md:ml-auto` above it,
-      // where it takes the slack the theme pad used to.
+      // plus the `relative` the tray positions against.
+      //
+      // **It sits at the right end of the rack and carries the row's one auto
+      // margin, at every width.** The margin was `md:ml-auto`, and below `md`
+      // the rack leant on an `mr-auto` over on the brand cluster to push this
+      // right — which pushed the *Browse keys* right along with it, since they
+      // sit between the two. That put the readout at one end of the row and the
+      // caps that act on the page it names at the other. This element is the one
+      // thing in the row that is last on every route, so an unconditional
+      // `ml-auto` here is the whole of what that cluster's margin was doing, and
+      // the Browse keys stay beside the readout where `md` has always had them.
+      // See `app-rack.tsx`, where the trade is written out.
       //
       // 3px of channel below `md` against 4 above, which is the same 2px the
       // brand's bezel gave up one end of the row and for the same reason: the
       // phone rack is carrying two Browse caps it did not carry before. The
       // key inside keeps its 32px, so what narrows is the surround rather than
       // the target.
-      className="relative flex shrink-0 items-center rounded-full bg-[image:var(--key-bg)] p-[0.1875rem] shadow-[var(--track-shadow)] md:order-6 md:ml-auto md:p-1"
+      className="relative ml-auto flex shrink-0 items-center rounded-full bg-[image:var(--key-bg)] p-[0.1875rem] shadow-[var(--track-shadow)] md:order-6 md:p-1"
     >
       <button
         ref={trigger}
@@ -151,85 +242,128 @@ export function ToolsMenu({
       </button>
 
       {open && (
-        // A shallow tray of block keys: `CONSOLE_WELL`'s surface with a cast
-        // shadow added, which is why the classes are spelled out rather than
-        // composed — a second `shadow-[…]` utility beside the constant's own
-        // would be a coin flip over which one Tailwind emitted last.
+        // The tray, milled out of billet stock.
+        //
+        // It was `CONSOLE_WELL`'s surface with a cast added and flat rows on it
+        // — a *panel* with a list — and it is a solid part with a bay cut into
+        // its face per group and a brushed key seated in each. The grouping is
+        // what that buys: three holes in one part read as three groups, where
+        // three runs of rows on one panel read as one list with rules across it.
+        //
+        // `CONSOLE_BILLET_FACE` rather than `CONSOLE_BILLET`, because the
+        // chamfer here is `--rack-tray-shadow` — a shadow list is atomic, so the
+        // face is the half that composes and the constant carrying
+        // `--billet-shadow` is the half that does not. `BilletFinish` is the
+        // grain and the raking specular, which are children rather than a second
+        // background for `Scanlines`' reason: CSS cannot spell a second
+        // background on an element that already has one.
         //
         // **`right-0`, at both widths.** The trigger is the rightmost object in
-        // the pill now, and a tray hung from its left edge runs ~90px off the
-        // screen at 390.
+        // the pill, and a tray hung from its left edge runs ~90px off the screen
+        // at 390.
         <div
           role="menu"
           aria-label="Tools"
-          className="absolute right-0 top-full z-50 mt-2.5 min-w-[14.875rem] rounded-[0.875rem] border border-foreground/8 bg-[image:var(--key-bg)] p-1.5 shadow-[var(--well-shadow),0_24px_44px_-20px_#000]"
+          className={`${CONSOLE_BILLET_FACE} absolute right-0 top-full z-50 mt-2.5 min-w-[15.25rem] rounded-[0.875rem] p-1.5 shadow-[var(--rack-tray-shadow)]`}
         >
-          {links.map((link) => {
-            const isCurrent = link.base === currentBase;
-            return (
-              <Link
-                key={link.base}
-                role="menuitem"
-                href={link.href}
-                aria-current={isCurrent ? "page" : undefined}
-                // Closing on click is not redundant with the route change: the
-                // current page's own entry navigates nowhere, so nothing else
-                // would dismiss it.
-                onClick={() => setOpen(false)}
-                className={`${row} mt-0.5 first:mt-0 ${
-                  isCurrent
-                    ? "border-foreground/10 bg-[image:var(--key-bg)] text-readout shadow-[var(--key-shadow)] [text-shadow:var(--readout-text-glow)]"
-                    : unlitRow
-                }`}
-              >
-                {link.text}
-                {/* The lamp beside the page you are on. It says the same thing
-                    the rack's tool-name readout does, for the case where the
-                    open tray covers that readout and the two are read
-                    together. */}
-                {isCurrent && (
-                  <span
-                    aria-hidden
-                    className="size-[0.4375rem] shrink-0 rounded-full bg-active shadow-[0_0_10px_var(--accent-glow)]"
-                  />
-                )}
-              </Link>
-            );
-          })}
+          <BilletFinish />
+
+          {bays.map((bay, index) => (
+            // A bay: one group's hole. 12px of bare billet between them, which
+            // is what makes the grouping read at all — at a smaller gap the
+            // three collapse back into one list. `relative` puts it over the
+            // finish's two overlays; keyed on the group rather than the index,
+            // since the run is what the bay *is*.
+            //
+            // **`role="group"`, which the bays need and a plain wrapper would
+            // have cost.** A `role="menu"` owns `menuitem`s, and an
+            // intervening generic box breaks that ownership — so the rows
+            // would be three divs' worth of children rather than the menu's
+            // own. `group` is one of the roles a menu may own, and it is also
+            // the honest one: a bay *is* a group, and it is the whole of what
+            // this pass added, so a reader who cannot see the three holes is
+            // told about them rather than being handed a flat list. Deliberately
+            // unlabelled — the design gives a bay no visible name either, and
+            // inventing one here would be a claim it does not make.
+            <div
+              key={bay[0].group}
+              role="group"
+              className={`relative flex flex-col gap-[0.3125rem] rounded-[0.6875rem] bg-[image:var(--rack-tray-bay-bg)] p-[0.3125rem] shadow-[var(--rack-tray-bay-shadow)] ${
+                index > 0 ? "mt-3" : ""
+              }`}
+            >
+              {bay.map((link) => {
+                const isCurrent = link.base === currentBase;
+                return (
+                  <Link
+                    key={link.base}
+                    role="menuitem"
+                    href={link.href}
+                    aria-current={isCurrent ? "page" : undefined}
+                    // Closing on click is not redundant with the route change:
+                    // the current page's own entry navigates nowhere, so nothing
+                    // else would dismiss it.
+                    onClick={() => setOpen(false)}
+                    className={`${toolRow} ${isCurrent ? litRow : unlitRow}`}
+                  >
+                    {link.text}
+                    {/* The lamp beside the page you are on. It says the same
+                        thing the rack's tool-name readout does, for the case
+                        where the open tray covers that readout and the two are
+                        read together. */}
+                    {isCurrent && (
+                      <span
+                        aria-hidden
+                        className="size-[0.4375rem] shrink-0 rounded-full bg-active shadow-[0_0_10px_var(--accent-glow)]"
+                      />
+                    )}
+                  </Link>
+                );
+              })}
+            </div>
+          ))}
 
           {/* What separates the navigation from the one row that is not it. */}
           <span
             aria-hidden
-            className="mx-1 my-1.5 block h-px bg-[var(--milled-hairline)] shadow-[var(--milled-hairline-highlight)]"
+            className="relative mx-1 mb-[0.4375rem] mt-2 block h-px bg-[var(--milled-hairline)] shadow-[var(--milled-hairline-highlight)]"
           />
 
           {/*
-            The theme row. `ThemeToggle` renders both faces and lets
-            `globals.css` show the one that matches, which is exactly what a row
-            reading "the theme a press switches *to*" needs — so it takes this
-            row's chrome through `className` and is otherwise untouched.
+            The theme row, **stamped on the bare billet face rather than seated
+            in a bay**. That is the whole of what says it is not navigation: the
+            hairline separates it, and being the one row that is not a key in a
+            hole is what keeps it from reading as a sixth tool.
+
+            `ThemeToggle` renders both faces and lets `globals.css` show the one
+            that matches, which is exactly what a row reading "the theme a press
+            switches *to*" needs — so it takes this row's chrome through
+            `className` and is otherwise untouched.
 
             **The word `Theme` is rendered here rather than by the toggle**, and
-            that is what leaves the component alone: the row wants a label on
-            the left of a `justify-between` row, which the two-faces-in-one-span
+            that is what leaves the component alone: the row wants a label on the
+            left of a `justify-between` row, which the two-faces-in-one-span
             structure cannot express. It is `aria-hidden`, because each face
             already carries the full sentence that names the button; a visible
             "Theme" would only prepend a token to it.
 
-            It deliberately does **not** dismiss the tray — see the module note.
+            The two inks are the billet's own pair — a label and the reading it
+            names, a step apart — where the rest of this tray is ink on a key.
+            It deliberately does **not** dismiss the tray; see the module note.
           */}
           <ThemeToggle
-            className={`group ${row} ${unlitRow} bg-transparent`}
-            leadingLabel={
-              <span aria-hidden className="group-hover:text-readout">
-                Theme
-              </span>
+            className={
+              "group relative flex w-full items-center justify-between gap-3 rounded-lg " +
+              "px-[0.6875rem] py-[0.4375rem] font-mono text-[length:var(--fs-11)] uppercase " +
+              "tracking-[0.16em] text-[var(--billet-label)] " +
+              "[text-shadow:var(--billet-name-shadow)] transition-[color] duration-150 " +
+              "hover:text-[var(--billet-name)] " +
+              "focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-active/60"
             }
-            // The reading is a step brighter than the label naming it, which
-            // is the console's own grammar for a value beside its caption —
-            // and it lights with the row rather than staying pinned, which is
-            // what the `group` above is for.
-            faceClassName="text-foreground/80 group-hover:text-readout"
+            leadingLabel={<span aria-hidden>Theme</span>}
+            // The reading is a step brighter than the label naming it, which is
+            // the console's own grammar for a value beside its caption.
+            faceClassName="text-[var(--billet-name)]"
             labelClassName=""
           />
         </div>

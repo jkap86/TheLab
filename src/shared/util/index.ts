@@ -7,6 +7,8 @@ export {
 export { errorMessage } from "./errors";
 export { easternDate } from "./et-date";
 export { startBackgroundLoop } from "./background-loop";
+export { BOOT_STAGGER_MS } from "./boot-stagger";
+export type { StaggeredLoop } from "./boot-stagger";
 export type { BackgroundLoopHandle } from "./background-loop";
 export { loopSwitch } from "./loop-switch";
 export {

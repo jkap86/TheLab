@@ -12,6 +12,7 @@ export { apiFetch, isAbortError } from "./api";
 export { Avatar } from "./avatar";
 export {
   CONSOLE_BILLET,
+  CONSOLE_BILLET_FACE,
   CONSOLE_CARD,
   CONSOLE_CARD_SHELL,
   CONSOLE_CHIP,
@@ -62,7 +63,13 @@ export {
 } from "./trade-freshness";
 export type { TradeDataStamp } from "./trade-freshness";
 export { KtcBoardKeys } from "./ui/ktc-board-keys";
-export { formatInstantDate, formatInstantTime, ordinal, ordinalParts } from "./format";
+export {
+  formatInstantDate,
+  formatInstantTime,
+  ordinal,
+  ordinalParts,
+  shortName,
+} from "./format";
 // The rank ramp and its two readings. The trades board joined the manager
 // card as a reader when its asset values gained a place in their own league:
 // a bar and a hue drawn from one rank on two pages must come off one module.
@@ -188,6 +195,7 @@ export {
   CardBilletRow,
   CardPlateRow,
   CardRule,
+  DateBillet,
   GameChip,
   LeagueBillet,
   LeaguePlate,
@@ -205,6 +213,19 @@ export {
   StandingBay,
   StandingStrip,
 } from "./ui/card-plate";
+// What the console shows while it is reading: the app's own flask mark,
+// bubbling. Three features draw it — `/trades`, the manager card's rank
+// windows and the lineup checker's tiles and header — which is the line
+// `CONSOLE_KEY` and `ManagerPlate` moved on, and the three path constants are
+// declared there rather than in `features/tools` beside the static mark for
+// the same reason: that folder may read this one and not the reverse.
+export {
+  BubblingFlask,
+  FlaskDefs,
+  FLASK_FLUID,
+  FLASK_LIP,
+  FLASK_VESSEL,
+} from "./ui/bubbling-flask";
 export { ConsoleGround } from "./ui/console-ground";
 // The parts an expanded card's browser is built from — a billet carrying a
 // ledge and a sheet of glass, the channel a row is cut in it, and the drawer a
@@ -255,5 +276,12 @@ export {
 export { LeagueTeams } from "./ui/league-teams";
 // What game a league is playing, as one lit window — read by the manager card
 // and the trade card, which is what brought it here from `features/manager`.
-export { LeagueChipRail, LeagueConfigWindow } from "./ui/league-config-window";
+// `LeagueFormatTags` is that strip's format group alone — what the trade
+// card's open header keeps once the panel below it states the scale and the
+// lineup by construction. Read from the strip's own rules, never re-derived.
+export {
+  LeagueChipRail,
+  LeagueConfigWindow,
+  LeagueFormatTags,
+} from "./ui/league-config-window";
 export { PageShell } from "./ui/page-shell";

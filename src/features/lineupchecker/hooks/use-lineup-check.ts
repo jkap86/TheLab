@@ -38,6 +38,20 @@ export type LineupCheckState = {
   /** The week's answer, or null before it lands. */
   payload: ManagerLineupCheckPayload | null;
   /**
+   * The read is in flight, or about to be — which is **not** the same question
+   * as `payload === null` and is the reason this is a field rather than a
+   * derivation at the call site.
+   *
+   * A failed read resolves to null and stays there: the check is an enhancement
+   * beside the list, so it degrades silently, and there is no retry. Read off
+   * the payload alone, "we are still reading" and "we tried and could not"
+   * therefore say the identical thing — which was harmless while both drew an
+   * em dash and is not once one of them draws a *loading indicator*. A flask
+   * left bubbling behind a request that already failed is the one thing this
+   * page's loading states must never do, so the two are told apart here.
+   */
+  pending: boolean;
+  /**
    * Re-read one league and merge it into what is on screen.
    *
    * Stable across renders, deliberately: a card captures this in a press
@@ -54,6 +68,15 @@ export function useLineupCheck(
   ready: boolean,
 ): LineupCheckState {
   const [payload, setPayload] = useState<ManagerLineupCheckPayload | null>(null);
+  /**
+   * The read that failed, by subject, so a *later* subject is pending again.
+   *
+   * A boolean would latch the page into "not loading" for the rest of the
+   * session: a reader who stepped a week while the network was down would find
+   * every tile on an em dash with nothing on screen ever claiming to be reading
+   * again. Keyed by subject it clears itself the moment the question changes.
+   */
+  const [failedSubject, setFailedSubject] = useState<string | null>(null);
   const inFlight = useRef<AbortController | null>(null);
   /**
    * One controller per league, not one for all of them: two cards re-read
@@ -87,6 +110,12 @@ export function useLineupCheck(
   if (renderedSubject !== subject) {
     setRenderedSubject(subject);
     setPayload(null);
+    // The new subject has not failed — it has not been asked yet. Cleared here
+    // rather than in the effect below because a `setState` in an effect body is
+    // the cascading render the lint rule exists to stop, where adjusting state
+    // during render for a changed input is the pattern React documents and the
+    // one the line above already uses.
+    setFailedSubject(null);
   }
 
   useEffect(() => {
@@ -111,12 +140,18 @@ export function useLineupCheck(
     void (async () => {
       try {
         const res = await fetch(url, { signal: controller.signal });
-        if (!res.ok) return;
+        if (!res.ok) {
+          setFailedSubject(subject);
+          return;
+        }
         const body = (await res.json()) as ManagerLineupCheckPayload;
         setPayload(body);
       } catch (err: unknown) {
         if (isAbortError(err)) return;
-        // Degraded, not broken — see the hook note.
+        // Degraded, not broken — see the hook note. What the page is told is
+        // that it has stopped reading, which is a different claim from having
+        // nothing to show and is what takes the flask off the tiles.
+        setFailedSubject(subject);
       }
     })();
 
@@ -128,7 +163,7 @@ export function useLineupCheck(
       for (const pending of pendingRereads.values()) pending.abort();
       pendingRereads.clear();
     };
-  }, [username, season, week, ready]);
+  }, [username, season, week, ready, subject]);
 
   /**
    * Re-read one league against the answer already on screen.
@@ -194,5 +229,11 @@ export function useLineupCheck(
     })();
   }, []);
 
-  return { payload, reread };
+  return {
+    payload,
+    // Not `payload === null`: a read that failed is not one that is still
+    // running. See {@link LineupCheckState.pending}.
+    pending: payload === null && failedSubject !== subject,
+    reread,
+  };
 }

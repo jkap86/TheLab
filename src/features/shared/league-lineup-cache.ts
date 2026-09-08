@@ -21,8 +21,9 @@ import type { LeagueLineupPayload } from "@/shared/contract";
  * - **And it must not outlive it for ever.** A reader who opens forty cards
  *   would otherwise retain forty twelve-team solves — which is the batched
  *   payload's own failure, arrived at one press at a time. {@link MAX_ENTRIES}
- *   is the bound, and it is enforced against *unsubscribed* entries only: an
- *   answer being rendered is never evicted out from under its card.
+ *   is the bound, and it is enforced *over* the unsubscribed entries rather
+ *   than over the store: an answer being rendered is never evicted out from
+ *   under its card, and never counted against the cache either.
  *
  * **A stale response cannot overwrite a current one, by construction.** The key
  * is the whole question — league, season, manager, column, narrowing — so a
@@ -42,8 +43,13 @@ import type { LeagueLineupPayload } from "@/shared/contract";
  * A twelve-team entry is tens of kilobytes parsed — the batched payload's ~5MB
  * was a hundred of them — so a handful is a bound a phone can carry and enough
  * that walking back through the cards a reader has been comparing costs
- * nothing. Entries with a live subscriber are never counted out; this bounds
- * what is kept *for later*.
+ * nothing.
+ *
+ * **It counts the entries nothing is reading**, which is the unit {@link trim}
+ * enforces it in: an entry with a live subscriber is a card on screen rather
+ * than a cache, so it is neither evicted nor counted against this. The store
+ * therefore holds up to this many *plus* whatever is open, and an open card
+ * costs the cache nothing.
  */
 export const MAX_ENTRIES = 8;
 
@@ -75,7 +81,17 @@ type Entry = {
   load: LeagueLineupLoader | null;
   /** Bumped by {@link invalidateLeagueLineups}; a response for an older run is dropped. */
   run: number;
-  /** Last read or write, for the eviction order. */
+  /**
+   * When this entry was last created, written or read — as a sequence number
+   * rather than a clock. It is the eviction order and nothing else.
+   *
+   * **A counter, because ties are the common case and a clock has none of the
+   * resolution to break them.** Several cards mount in one frame and settle in
+   * one microtask drain, so a millisecond timestamp hands a whole batch the
+   * same key and the order among them falls to whatever the sort does with
+   * equal ones. A sequence number is exactly what a least-recently-used order
+   * needs, and it cannot go backwards.
+   */
   at: number;
 };
 
@@ -86,10 +102,15 @@ type Entry = {
  * the other's answer.
  */
 const STORE_KEY = Symbol.for("thelab.leagueLineupCache");
+const CLOCK_KEY = Symbol.for("thelab.leagueLineupCache.clock");
 const scope = globalThis as typeof globalThis & {
   [STORE_KEY]?: Map<string, Entry>;
+  [CLOCK_KEY]?: number;
 };
 const entries = (): Map<string, Entry> => (scope[STORE_KEY] ??= new Map());
+
+/** The next {@link Entry.at}. On `globalThis` for the store's own reason. */
+const touch = (): number => (scope[CLOCK_KEY] = (scope[CLOCK_KEY] ?? 0) + 1);
 
 /** What a key reads right now — {@link IDLE} for one nothing has asked about. */
 export function peekLeagueLineup(key: string): LeagueLineupState {
@@ -98,19 +119,36 @@ export function peekLeagueLineup(key: string): LeagueLineupState {
 
 function publish(entry: Entry, state: LeagueLineupState): void {
   entry.state = state;
-  entry.at = Date.now();
+  entry.at = touch();
   for (const listener of [...entry.listeners]) listener();
 }
 
 /**
- * Evict resolved entries nothing is reading, oldest first, until the store is
- * inside its bound.
+ * Evict resolved entries nothing is reading, oldest first, until at most
+ * {@link MAX_ENTRIES} of them are kept.
  *
  * **Subscribed entries are skipped rather than counted**: they are on screen,
  * and dropping one would blank a card that is being looked at and re-fetch it
  * on the next render. So the bound is a bound on what is kept *for later*, and
  * a reader with more cards open than {@link MAX_ENTRIES} simply holds them all
  * — which is a page they can see rather than a cache they cannot.
+ *
+ * **The overflow is counted over the droppable entries, not over the map**, and
+ * that is the one line here that is silent when wrong. Counted over the map, a
+ * card left open pays for itself twice: it is exempt from eviction *and* it
+ * takes one of the eight slots, so one open league and eight closed ones evict
+ * a closed one to reach a total of nine — a reader who opened a card is handed
+ * a smaller cache than a reader who did not. Every card open takes another,
+ * until a page with eight cards open caches nothing at all and every re-open
+ * pays a round trip. Counted over the droppable set, an open card costs the
+ * cache nothing and the bound means what {@link MAX_ENTRIES} says it means.
+ *
+ * The ceiling is still finite, and it is `MAX_ENTRIES + the cards on screen`:
+ * subscribed entries can push the map past the bound while they are being read
+ * and every one of them is released by the component that holds it, at which
+ * point it joins the droppable set and this trims for it. That is the same
+ * trade the paragraph above makes — a bound on what is kept for later, never on
+ * what a reader is looking at.
  */
 function trim(): void {
   const map = entries();
@@ -118,7 +156,7 @@ function trim(): void {
   const droppable = [...map.entries()]
     .filter(([, entry]) => entry.listeners.size === 0)
     .sort((a, b) => a[1].at - b[1].at);
-  let over = map.size - MAX_ENTRIES;
+  let over = droppable.length - MAX_ENTRIES;
   for (const [key] of droppable) {
     if (over <= 0) break;
     map.delete(key);
@@ -193,14 +231,14 @@ export function acquireLeagueLineup(
       controller: null,
       load: null,
       run: 0,
-      at: Date.now(),
+      at: touch(),
     };
     map.set(key, entry);
   }
   const held = entry;
   held.listeners.add(onChange);
   held.load = load;
-  held.at = Date.now();
+  held.at = touch();
 
   // Nothing has answered and nothing is asking. A *failed* entry is
   // deliberately not retried here: the two hooks that read this latch `enabled`
@@ -218,6 +256,13 @@ export function acquireLeagueLineup(
       map.delete(key);
       return;
     }
+    // **Touched on the way out, because it was in use until this instant.**
+    // `at` is otherwise the last *write*, so an entry read for ten minutes and
+    // one written ten minutes ago and never looked at again sort identically —
+    // and the card a reader has just closed, being the one most likely to be
+    // re-opened, is then the first thing evicted. A subscribed entry is being
+    // read for as long as it is subscribed; this is where that ends.
+    held.at = touch();
     trim();
   };
 }

@@ -4,6 +4,7 @@ import { memo, type MouseEvent } from "react";
 
 import type { LineupCheckLeague, ManagerLeague } from "@/shared/contract";
 import {
+  BubblingFlask,
   CardBilletRow,
   CardRule,
   CONSOLE_CARD_SHELL,
@@ -126,6 +127,7 @@ import { WeekPanes } from "./week-panes";
 export const LineupCheckCard = memo(function LineupCheckCard({
   league,
   entry,
+  pending = false,
   onSynced,
   open,
   lit,
@@ -134,6 +136,18 @@ export const LineupCheckCard = memo(function LineupCheckCard({
   league: ManagerLeague;
   /** This league's week, once the check lands. Undefined while it is in flight. */
   entry?: LineupCheckLeague | null;
+  /**
+   * The account's check has not answered yet — so a tile with no figure is one
+   * that is *waiting* rather than one with nothing to say.
+   *
+   * The page's own state and not this card's, because `entry` cannot tell the
+   * two apart: it is null while the read is in flight and null permanently for
+   * a league the check answers nothing for, which is a case this page already
+   * draws four em dashes on. A read that failed is a third, and it is why this
+   * comes off the hook's `pending` rather than off `check === null` — see
+   * `LineupCheckState.pending`.
+   */
+  pending?: boolean;
   /** Re-read this league after its sync key changed something. Forwarded only. */
   onSynced?: (leagueId: string) => void;
   /** Whether the disclosure is open — the page's, not the element's own. */
@@ -278,10 +292,12 @@ export const LineupCheckCard = memo(function LineupCheckCard({
               tile sets the numeral alone and its unit under it, so nothing has
               to fit `2 to move` into ~72px on one line. See `MetricCell`. */}
           <div className="relative mt-2.5 grid grid-cols-4 gap-1.5 sm:gap-2 pointer-fine:[transform:translateZ(22px)]">
-            <MetricTile label="Vs optimal" cell={gap} />
-            <MetricTile label="Kickoff" cell={kickoff} />
-            <MetricTile label="Superflex" cell={superflex} />
-            <MetricTile label="Roster" cell={roster} />
+            {/* `phase` is which of the four this is, so a row of flasks does
+                not bubble in lockstep — see `BubblingFlask`. */}
+            <MetricTile label="Vs optimal" cell={gap} pending={pending} phase={0} />
+            <MetricTile label="Kickoff" cell={kickoff} pending={pending} phase={1} />
+            <MetricTile label="Superflex" cell={superflex} pending={pending} phase={2} />
+            <MetricTile label="Roster" cell={roster} pending={pending} phase={3} />
           </div>
         </summary>
 
@@ -507,7 +523,19 @@ const AGAINST: Record<WeekGame["against"], string> = {
  * place of the numeral, which is why `cell.text` survives as the mark's
  * `sr-only` name and why the unit line still prints beneath it on a phone.
  */
-function MetricTile({ label, cell }: { label: string; cell: MetricCell }) {
+function MetricTile({
+  label,
+  cell,
+  pending = false,
+  phase = 0,
+}: {
+  label: string;
+  cell: MetricCell;
+  /** The check has not answered — see {@link LineupCheckCard}'s own prop. */
+  pending?: boolean;
+  /** Which of the row's four tiles this is, so they do not bubble together. */
+  phase?: number;
+}) {
   // **Two treatments where the state union has four**, and the difference is
   // deliberate. `alert` and `count` are both *figures* — a number the reader
   // is being handed — so they are struck the same way, in the red the page
@@ -553,7 +581,23 @@ function MetricTile({ label, cell }: { label: string; cell: MetricCell }) {
           takes two pixels less above it than a figure does: it is 40px against
           the figure's 28 and eats most of the slack the old 24px pip left. */}
       <div className={`relative mt-auto ${cell.state === "clear" ? "pt-1.5" : "pt-2"}`}>
-        {cell.state === "clear" ? (
+        {/* **The flask takes the wait and the em dash keeps the absence.**
+            `none` is two states that used to print the same character — the
+            check has not answered yet, and the check answered and this league
+            has nothing to say (a best-ball league's gap, a week with no
+            published kickoffs). The first is now drawn as work in progress and
+            the second keeps the dash, which is the app's spelling of *no
+            answer at all*.
+
+            **The state union is untouched**, deliberately: `needsAttention` and
+            `attentionByReason` read `alert` alone, so folding a fifth state
+            into `MetricCell` would put a pending tile at risk of counting as
+            attention — a league sent to the top of the page for a read that has
+            not landed. This is a second question asked beside the cell rather
+            than a fifth answer inside it. */}
+        {pending && cell.state === "none" ? (
+          <BubblingFlask size={30} phase={phase} label="Checking" />
+        ) : cell.state === "clear" ? (
           <CheckMark text={cell.text} title={cell.title} />
         ) : (
           <p
