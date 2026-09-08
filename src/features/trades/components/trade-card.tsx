@@ -94,27 +94,47 @@ import type { TradeCardView } from "../trades-data";
  * the four decorative layers in the one span that clips, the gutter, the tilt
  * and its flattening, and the focus ring. What differs is what the card holds.
  *
- * **Four things depart from that card, and each is a measurement rather than a
+ * **Three things depart from that card, and each is a measurement rather than a
  * preference.**
  *
- * 1. **This card parks like the other two, and its header is what that costs
- *    it.** It used to do neither — no freeze and no park — because a manager
- *    card's frozen part is ~210px where this summary carries both hauls in
- *    full, measured 413px, and pinning that under the rack covers the top half
- *    of the viewport. What made it park anyway is that the *list* stands down
- *    now: there is no longer a page scrolling behind an open card for a tall
- *    header to be a poor trade against, and a board where one card behaved
- *    differently from the other two would be a drift with nothing on screen
- *    saying which tool a reader was in.
+ * 1. **This card parks like the other two, and the open header is a shorter
+ *    reading of the same hauls — which is what pays for it.** It used to park
+ *    with the header it wears closed: both hauls in full, measured 413px of
+ *    which the two windows were ~279, so at a 900px viewport the panel got
+ *    ~376px against a league card's ~565, and at 800 the room fell under
+ *    `MIN_PARKED` and the *shell* scrolled instead. That is the documented
+ *    fallback rather than a failure, but this was the only card that reached
+ *    it on an ordinary laptop. The alternative was flagged here rather than
+ *    taken — condense the hauls while parked — and it has since been taken.
  *
- *    The cost is real and is the one open decision in this pass. At a 900px
- *    viewport the panel gets ~376px against a league card's ~565; at 800 the
- *    room falls under `MIN_PARKED` and the **shell** scrolls rather than a pane
- *    being clipped away — which is the documented fallback rather than a
- *    failure, but it is the only card that reaches it on an ordinary laptop.
- *    The alternative the handoff names is to condense the hauls to a line each
- *    while parked; that is a change to what the card *says* rather than to how
- *    it is sized, so it is flagged rather than taken here.
+ *    **What went is the redundant half and the tall half, and nothing that
+ *    names an asset.** The give track went because a give line is the other
+ *    side's take line, and the redundancy this card's own note argues for is
+ *    paid for by a board where a card is read in passing; parked, there is no
+ *    list to read it among and the other window is beside it. The meters and
+ *    the notes went because each is a whole second grid row or the widest
+ *    thing on a line, and the panel below the seam names every one of those
+ *    players again with its position beside it. The disclosure row went
+ *    because it is the affordance that says the card opens, and it is spent
+ *    once open. Every asset keeps its **name and its figure**, which are the
+ *    two things a haul is read for. Measured: 413px → 240.
+ *
+ *    **The 78px list is what that 240 is protecting**, and it is a fixed
+ *    `height` for that reason rather than a `max-height` — see `AssetTrack`.
+ *    A header that grew with the trade would put the panel's cap back on the
+ *    trade's contents: one height on a one-for-one and another on a six-for-
+ *    two, with `MIN_PARKED` reachable again on the fat ones and nothing on
+ *    screen saying which card was which. Constant is the property; three rows
+ *    is what it happens to hold.
+ *
+ *    The condensing is **render-gated on `open`**, which is the prop this card
+ *    already has, threaded down as `condensed`. Not a new prop, which would
+ *    drop the `memo` for every row on the board — and not a `group-open/card:`
+ *    variant either, which would have to carry the list's height, its
+ *    overflow, its two paddings and its gap as five overrides against the
+ *    closed card's own. `open` is true for the whole collapse, exactly as
+ *    `[open]` is, so the header expands back at the moment the card shuts
+ *    rather than under the animation.
  * 2. **The summary is `shrink-0`, never `flex-1`.** On the manager card
  *    `flex-1` is what makes a card fill its grid row; here the `<details>` is a
  *    column flex container, so `flex: 1 1 0%` shrinks the summary *below its
@@ -372,11 +392,26 @@ export const TradeCard = memo(function TradeCard({
                 trade={trade}
                 side={side}
                 view={view}
+                condensed={open}
               />
             ))}
           </div>
 
-          <DisclosureHint />
+          {/* **Not drawn while the card is open**, and it is the second of the
+              two removals that shorten the parked header. It is the affordance
+              that says the card opens; once open it is spent, and it is a row
+              of its own — a word, a hairline and a chevron — rather than
+              something hung off a line already there.
+
+              No affordance is lost with it: the `<summary>` is the control and
+              carries the disclosure's semantics itself, so the row was never
+              more than a label. What *is* lost is a visual cue, and the lit
+              border and the halo are what say the card is open in its
+              absence — see the note in the handoff, which flags this as worth
+              a designer's look and names keeping the rotated chevron alone at
+              the header's right edge as the cheapest fix if it reads as
+              un-closable. */}
+          {!open && <DisclosureHint />}
         </summary>
 
         {/* The league itself, on the manager card's own arrangement: a capped
@@ -399,6 +434,11 @@ export const TradeCard = memo(function TradeCard({
 
 /**
  * The row under the hauls that says the card opens, and onto what.
+ *
+ * **The closed card's alone**, since the parked header was condensed: it is
+ * the press's own affordance, so once the press has been made it is a row of
+ * chrome standing between the hauls and the seam. See departure 1 above, and
+ * the gate at its call site.
  *
  * **A word rather than a bare chevron**, because what is behind this
  * disclosure is not more of the trade — it is the league, solved. A chevron
@@ -587,27 +627,55 @@ function TradeDate({ at }: { at: number | null }) {
   );
 }
 
-/** One roster's half: who they are, what it is worth, what came in and out. */
+/**
+ * One roster's half: who they are, what it is worth, what came in and out.
+ *
+ * **Condensed, this window is the take track alone at a fixed height**, which
+ * is the whole of what shortens the parked header — see `TradeCard`'s note on
+ * departure 1. The give track and the rule above it are not drawn, the padding
+ * and the header's own margin come in by two pixels each, and the list becomes
+ * a 78px scroller. Everything the window *says* about the haul it keeps: the
+ * manager, the unit, the total, and every asset's name and figure.
+ */
 function SideColumn({
   trade,
   side,
   view,
   lens,
+  condensed,
 }: {
   trade: Trade;
   side: TradeSide;
   view: TradeCardView;
   lens: ValueLens;
+  /** The card is open — see `AssetTrack` for what the word buys. */
+  condensed: boolean;
 }) {
   const manager = side.user_id ? view.managers[side.user_id] : undefined;
   const received = receivedBundle(side);
   const given = givenBundle(trade, side);
 
   return (
-    <section className={`${CONSOLE_WINDOW} min-w-0 rounded-[0.6875rem] px-[15px] pb-[15px] pt-3.5`}>
+    <section
+      className={
+        `${CONSOLE_WINDOW} min-w-0 rounded-[0.6875rem] px-[15px] ` +
+        // Two pixels off each of the vertical insets, which is four of the
+        // ~173 this window sheds. Written as two whole strings rather than a
+        // base plus an override: `pt-3.5` and `pt-3` are two base utilities of
+        // the same specificity, so which one won would be Tailwind's emit
+        // order rather than the ternary — the trap `CONSOLE_CARD_SHELL` and
+        // `CONSOLE_KEY_PILL` are both split to keep a part out of.
+        (condensed ? "pb-[13px] pt-3" : "pb-[15px] pt-3.5")
+      }
+    >
       <Scanlines />
 
-      <header className="relative mb-[13px] flex min-w-0 items-baseline gap-2.5">
+      <header
+        className={
+          "relative flex min-w-0 items-baseline gap-2.5 " +
+          (condensed ? "mb-2.5" : "mb-[13px]")
+        }
+      >
         <span className="min-w-0 truncate font-mono text-[length:var(--fs-12)] uppercase tracking-[0.12em] text-readout">
           {/* Sleeper lets a display name go missing and leaves orphan rosters
               with no owner at all, so the roster number is the fallback — a
@@ -668,8 +736,23 @@ function SideColumn({
         side={side}
         view={view}
         lens={lens}
+        condensed={condensed}
       />
-      {given && (
+      {/* **The give track and the rule above it are the parked header's
+          largest single saving, and dropping them costs a two-sided card
+          nothing it does not say twice.** A give line *is* the other side's
+          take line — the redundancy this card's note argues for, and which is
+          paid for on a board where a card is read in passing among a hundred
+          others. Parked, there is no list to read it among: the other window
+          is beside it, filling half the screen, and its take track states the
+          same assets. So what a screen-reader user hears on a parked card is
+          each asset once rather than twice, which is the reading a sighted one
+          gets too.
+
+          A three-way trade is unaffected either way: `givenBundle` answers
+          null for one, so those cards have always drawn the take column
+          alone. */}
+      {given && !condensed && (
         <>
           <span
             aria-hidden
@@ -682,6 +765,7 @@ function SideColumn({
             side={side}
             view={view}
             lens={lens}
+            condensed={condensed}
           />
         </>
       )}
@@ -704,6 +788,38 @@ function SideColumn({
  * take line; colouring both would draw every asset on a two-sided card twice,
  * in two places, in the same hue — and the card would stop reading take-first,
  * which is the one thing its redundancy is paid for by.
+ *
+ * **Condensed, the track is a 78px scroller and the lines lose their notes.**
+ * Three things go and each is the widest or the tallest thing on a line: the
+ * meter, which takes a second grid row; the position and team; and a pick's
+ * origin. What every line keeps is its name and its figure, which are the two
+ * things the card is read for — and the panel below the seam names every one
+ * of those players again, in a table, with its position beside it.
+ *
+ * **78px is a fixed `height`, never a `max-height`, and the fixedness is the
+ * whole point of it.** A `max-height` would let a one-for-one trade shrink the
+ * header, which puts the panel's cap back on the trade's contents: the header
+ * would be one height on a small trade and another on a fat one, `MIN_PARKED`
+ * would be reachable again on the fat ones, and the thing this condensing
+ * exists to remove would be back with nothing on screen saying so. Measured,
+ * a one-for-one and a six-for-two both park at 247.9px.
+ *
+ * **What 78 actually holds is two rows and most of a third**, and the handoff's
+ * own arithmetic for it is wrong in a way worth writing down rather than
+ * quietly fixing. It reasons from a ~19px row; a row is `--fs-13` at
+ * `line-height: normal`, which in IBM Plex Mono is **22.8px** at the 1.16 type
+ * scale and 22.2 at 1.14 — so three rows and their two gaps are 82.5px, not
+ * 78, and at 78 the third row is clipped at 84%. The prototype sets the same
+ * font-size and the same `normal`, so it draws exactly this; the number is the
+ * drawn design and the sentence beside it is the part that does not hold. It
+ * is kept because a clipped row is the strongest thing on the card that says
+ * the list scrolls, and because the property the number is load-bearing for is
+ * that it does not move. Flagged for the designer: 82px is what "three rows
+ * whole" costs, and it is one literal.
+ *
+ * The 7px right padding is the scrollbar's gutter, so a five-figure value's
+ * last digit clears the thumb — the same measurement the standings glass makes
+ * at 11px and the roster glass at 9.
  */
 function AssetTrack({
   direction,
@@ -712,6 +828,7 @@ function AssetTrack({
   side,
   view,
   lens,
+  condensed,
 }: {
   direction: "in" | "out";
   bundle: TradeBundle;
@@ -719,15 +836,24 @@ function AssetTrack({
   side: TradeSide;
   view: TradeCardView;
   lens: ValueLens;
+  /**
+   * The card is open, so draw the parked header's shorter reading. Derived
+   * from `TradeCard`'s own `open` rather than being a second piece of state,
+   * and named for what it *does* here: at this depth "open" would be a
+   * question about something three components up, where "condensed" is the
+   * rule these lines are drawn by.
+   */
+  condensed: boolean;
 }) {
   const inbound = direction === "in";
   // Two rows per line on the take track: the line itself, and a meter under the
   // figure. `items-baseline` on a two-row grid would align the meter to the
   // text baseline of a row it is not on, so the alignment moves onto the cells
-  // that need it.
-  const row = `grid grid-cols-[11px_minmax(0,1fr)_auto] gap-x-2 gap-y-[5px] text-[length:var(--fs-13)] ${
-    inbound ? "text-readout-line" : "text-readout-muted"
-  }`;
+  // that need it. Condensed there is no meter, so there is no second row for a
+  // `gap-y` to open.
+  const row = `grid grid-cols-[11px_minmax(0,1fr)_auto] gap-x-2 text-[length:var(--fs-13)] ${
+    condensed ? "" : "gap-y-[5px] "
+  }${inbound ? "text-readout-line" : "text-readout-muted"}`;
   const signTone = inbound ? "text-active" : "text-readout-muted";
   const sign = inbound ? "+" : "−";
 
@@ -743,7 +869,19 @@ function AssetTrack({
   }
 
   return (
-    <ul className="relative m-0 flex list-none flex-col gap-[9px] p-0">
+    <ul
+      className={
+        // Two whole strings rather than a base plus overrides: `p-0` beside a
+        // `pr-*` is the shorthand-against-longhand coin flip this repo has
+        // recorded at three other grains, and `gap-[9px]` beside `gap-[7px]`
+        // is the same flip on one axis over. `.lab-scroll-glass` is the
+        // console's own glass scrollbar — see `globals.css`; it is not
+        // restyled here.
+        condensed
+          ? "lab-scroll-glass relative m-0 flex h-[78px] list-none flex-col gap-[7px] overflow-x-hidden overflow-y-auto pb-0 pl-0 pr-[7px] pt-0"
+          : "relative m-0 flex list-none flex-col gap-[9px] p-0"
+      }
+    >
       {bundle.players.map((id) => {
         const player = view.players[id];
         return (
@@ -756,7 +894,7 @@ function AssetTrack({
                   searchable token when the stored players map is behind
                   Sleeper's. */}
               {player?.name ?? id}
-              {inbound && player?.position && (
+              {inbound && !condensed && player?.position && (
                 <span className="ml-[7px] font-mono text-[length:var(--fs-10)] uppercase tracking-[0.14em] text-readout-label">
                   {player.position}
                   {player.team ? ` · ${player.team}` : ""}
@@ -766,6 +904,7 @@ function AssetTrack({
             <AssetFigure
               price={assetPrice(trade.league_id, id, view.assetValues, lens)}
               lit={inbound}
+              condensed={condensed}
             />
           </li>
         );
@@ -804,7 +943,7 @@ function AssetTrack({
             </span>
             <span className="truncate">
               {pickLabel(pick, slot)}
-              {inbound && origin !== null && (
+              {inbound && !condensed && origin !== null && (
                 <span className="ml-[7px] font-mono text-[length:var(--fs-10)] uppercase tracking-[0.14em] text-readout-label">
                   {/* Named as a *person*: "from" points at who traded it away,
                       where the side header prefers whatever the manager is
@@ -816,6 +955,7 @@ function AssetTrack({
             <AssetFigure
               price={assetPrice(trade.league_id, pick, view.assetValues, lens)}
               lit={inbound}
+              condensed={condensed}
             />
           </li>
         );
@@ -832,7 +972,7 @@ function AssetTrack({
           {/* A dash rather than a number, permanently and on every basis: FAAB
               is a league's own currency, and neither a market, a draft board
               nor a projection prices one. */}
-          <AssetFigure price={null} lit={inbound} />
+          <AssetFigure price={null} lit={inbound} condensed={condensed} />
         </li>
       )}
     </ul>
@@ -860,14 +1000,22 @@ function AssetTrack({
  * An unpriced asset is an em dash with no track under it at all: a meter under
  * a dash would be a zero-width bar, and a zero-width bar is exactly the reading
  * "worst in the league" that the dash is there to avoid making.
+ *
+ * **Condensed, the colour stays and the meter goes**, which is the same split
+ * one grain finer: the hue costs the line nothing, where the meter is a whole
+ * second grid row per asset and is what makes a line 24px rather than 19. The
+ * standing it says is still on the line, in the ink.
  */
 function AssetFigure({
   price,
   lit,
+  condensed,
 }: {
   price: { value: number; rank: MetricRank | null } | null;
   /** The take track. A give line carries the figure and nothing else. */
   lit: boolean;
+  /** The card is open — the meter is not drawn. See `AssetTrack`. */
+  condensed: boolean;
 }) {
   const rank = lit ? (price?.rank ?? null) : null;
   const percentile = rankPercentile(rank);
@@ -895,7 +1043,7 @@ function AssetFigure({
           {formatAssetValue(price?.value ?? null)}
         </span>
       </span>
-      {rank !== null && (
+      {!condensed && rank !== null && (
         // The meter spans the name and figure columns rather than sitting under
         // the figure alone: at a phone's width a figure column is four
         // characters wide, and a bar that narrow reads as a tick rather than as

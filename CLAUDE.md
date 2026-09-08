@@ -4923,6 +4923,145 @@ on a board with no virtualizer stays inside iOS Safari's per-tab GPU budget, whi
 is the one thing the `pointer-fine:` gate is there for and the one thing no
 desktop render can exercise.
 
+
+### The parked header condenses to the take track
+
+`trade-card.tsx` has recorded the tall open header as "the one open decision in
+this pass" since the card learned to park, and named the alternative it did not
+take: condense the hauls while parked. This is that change, taken. The card's
+frozen summary went from **565.8px to 247.9px** on a six-for-two fixture, and
+the panel's cap from below `MIN_PARKED` — where the *shell* scrolls — to 553px
+at a 900px viewport. Applied from a design handoff, its `1c`. **Nothing on the
+wire moved**: no route, no query, no contract type, no payload field, no
+migration, and no token or surface added. The diff is one file.
+
+**The closed card is untouched, and that is most of the point.** Resting in a
+list it still carries both hauls in full, both tracks, the meters, the notes and
+the disclosure row — the redundancy this card's own note argues for, which is
+paid for by a board where a card is read in passing among a hundred others.
+
+**Two things go while the card is open, and both are the redundant half rather
+than the informative one.** The **give track** goes because a give line *is* the
+other side's take line: parked, there is no list to read the card among and the
+other window is beside it filling half the screen, so the reading a screen-reader
+user gets is each asset once, which is the reading a sighted one gets too. The
+**disclosure row** goes because it is the affordance that says the card opens,
+and once open it is spent. Two more things go inside the track — the **meters**,
+each a whole second grid row, and the **notes** (position, team, pick origin),
+the widest thing on a line — and the panel below the seam names every one of
+those players again with its position beside it. What every line keeps is its
+**name and its figure**, which are the two things a haul is read for.
+
+**The 78px list is a fixed `height`, and the fixedness is what it is for.** A
+`max-height` would let a one-for-one trade shrink the header, which puts the
+panel's cap back on the trade's contents: one height on a small trade and
+another on a fat one, with `MIN_PARKED` reachable again on the fat ones and
+nothing on screen saying which card was which. Verified: **a one-for-one and a
+six-for-two both park at 247.92px to the hundredth.**
+
+**The handoff's own arithmetic for 78 does not hold, and the number is kept
+anyway.** It reasons from a ~19px row; a row is `--fs-13` at `line-height:
+normal`, which in IBM Plex Mono measures **22.82px** at the 1.16 type scale and
+22.22 at 1.14 — so three rows and their two gaps are 82.5px, and at 78 the third
+is clipped at 84%. The prototype sets the same font-size and the same `normal`,
+so it draws exactly what the code does; what is wrong is the sentence, not the
+drawing. It is kept because a clipped row is the strongest thing on the card
+that says the list scrolls, and because the property the number is load-bearing
+for is that it does not move. `AssetTrack`'s doc carries the corrected figures
+and names 82px as what "three rows whole" would cost.
+
+**It is render-gated on `open`, threaded down as `condensed`.** Not a new prop,
+which would drop the `memo` for every row on a board that appends a hundred at a
+time — and not a `group-open/card:` variant either, which would have to carry
+the list's height, its overflow, its two paddings and its gap as five overrides
+against the closed card's own. `open` is true for the whole collapse, exactly as
+`[open]` is, so the header expands back at the moment the card shuts rather than
+under the animation. `condensed` rather than `open` at the three leaves because
+at that depth "open" is a question about something three components up, where
+"condensed" is the rule those lines are drawn by.
+
+**Every two-state class is two whole strings rather than a base plus an
+override.** `pt-3.5` against `pt-3`, `mb-[13px]` against `mb-2.5`, `p-0` beside a
+`pr-[7px]`, `gap-[9px]` against `gap-[7px]` — each pair is two base utilities of
+the same specificity, decided by Tailwind's emit order rather than by the
+ternary. It is the trap `CONSOLE_CARD_SHELL` and `CONSOLE_KEY_PILL` are both
+split to keep a part out of, and the symptom here would be a window silently
+laid out at the closed card's padding.
+
+#### Verified
+
+Rendered through a temporary `/preview` route against the real `TradeCard`,
+`useActiveCard` and `PageShell`, the real tokens and the real Tailwind build —
+the method the console-card, shares, rack and timeline passes established, since
+no database is reachable from where this was built — then driven over CDP at
+1280×900 and 390×844 in both schemes and deleted. The mechanics are the ones
+this file records: `--no-proxy-server`, `localhost` rather than `127.0.0.1`, a
+phone viewport from `Emulation.setDeviceMetricsOverride`, `data-theme` rather
+than `prefers-color-scheme`, the `--blink-settings=availablePointerTypes=4,…`
+flags, a **client-component** harness, and a CDP client over Node's own
+`WebSocket` since Playwright is not installed here. One mechanic is this pass's
+own and it cost a run: **this Chrome draws overlay scrollbars by default**, so
+`offsetWidth - clientWidth` is 0 and a "scrollbar drag" dispatched at the list's
+right edge is really a click on the content — `--disable-features=OverlayScrollbar`
+is what gives the 10px gutter the test needs. The fixtures are four trades: a
+six-for-two with two picks and a FAAB leg, a one-for-one, a three-way, and one
+with an orphan side that took nothing back.
+
+Every arm landed. The **closed** card is unchanged to the pixel — window
+`pt 14 / pb 15`, header `mb 13`, lists `gap 9px` and `overflow: visible`, eight
+meters, two dividers and the disclosure row. **Open**, the window is `pt 12 /
+pb 13`, the header `mb 10`, and the list computes `height: 78px`,
+`overflow-y: auto`, `padding-right: 7px`, `row-gap: 7px` with
+`scrollHeight 200 / clientHeight 78` — it scrolls — and zero meters, zero
+dividers, no chevron.
+
+**The constancy claim**: `t-fat` 247.92, `t-thin` 247.92; caps 553px against a
+900px viewport, where before the change the same two would have been 235px
+(floored to 320, shell scrolling) and 498. Every card parked at exactly the
+freeze line, 81.
+
+**The two interactions the handoff asks be checked, both driven with real
+input.** A wheel over the list scrolls it (`scrollTop` 0 → 60) and the card
+stays open. A `mousePressed` / `mouseMoved` × 2 / `mouseReleased` on the 10px
+classic scrollbar moves the list and **leaves the card open** — Chrome does not
+dispatch a `click` to the element for a scrollbar interaction. A click on a row
+still toggles the card, which is the whole summary's existing behaviour and
+unchanged. On touch at 390, a four-step drag inside the list scrolled it
+(`scrollTop` 27–29) with `scrollY` at 0 and the card still open: the gesture
+does not fight the parked shell.
+
+At every width and in both schemes: `document.documentElement.scrollWidth` equal
+to the viewport, **zero unclipped elements past it**, exactly one `<h1>`, and no
+console output but the dev server's own React-DevTools and HMR lines. 1,844 unit
+tests pass; `lint`, `typecheck` and `build` are clean.
+
+**Two findings reported rather than patched, both the handoff's own open
+questions.**
+
+- **A three-way at 390 still reaches `MIN_PARKED`.** The header is three
+  stacked windows — 558.8px, cap floored at 320 with the shell scrolling. It is
+  better than it was and it is now *predictable*: the three windows measure
+  147.67px each whatever the hauls hold, which is the "constant ~2×135px rather
+  than a function of three hauls' contents" the handoff asks for (measured
+  ~2×148). At 1280 the same card parks at 410.2 with a 391px cap, clear of the
+  floor. The handoff names an explicit cap on the header as the remaining fix
+  for this one case; it is a designer's call and is not taken here.
+- **With the chevron gone the lit border and the halo are the only cue that the
+  open card closes.** The `<summary>` still carries the disclosure's semantics,
+  so nothing is lost to a screen reader; what is lost is visual, and the handoff
+  flags it and names keeping the rotated chevron alone at the header's right
+  edge as the cheapest fix. Rendered, the parked card is the only lit thing on a
+  page that has stood down, and Escape and Back both close it — but nothing says
+  so in words.
+
+**Not verified against real data**, which is the gap to close first: every
+number above is a fixture. Three things a render here cannot check — whether a
+real board's modal trade is the three assets the 78px is sized for; whether the
+scrollbar drag behaves the same in Firefox and Safari, which is where a
+scrollbar press is likeliest to reach the DOM; and how a parked card reads on a
+real hundred-row board where the panel below the seam is a twelve-team solve
+rather than an error line.
+
 ## Comping a player
 
 `/comps` was the one tool the rack named and the app did not have. It is a
@@ -9437,15 +9576,19 @@ longer a page scrolling behind an open card for a tall header to be a poor trade
 against, and a board where one card behaved differently from the other two would
 be the drift this change exists to remove.
 
-**The cost is real and is the one open decision.** Measured against the
-arithmetic: the panel gets 556px at a 1080 viewport and 376 at 900, and at 800
-and below the room falls under `MIN_PARKED` and the **shell** scrolls. That is
-the documented fallback rather than a failure — driven at a 520px viewport the
-panel held exactly 320, the shell scrolled and the page did not — but it is the
-only card that reaches it on an ordinary laptop. The handoff names the
-alternative: condense the hauls to a line each while parked. That is a change to
-what the card *says* rather than to how it is sized, and the handoff calls it a
-product call, so it is flagged here with the numbers rather than taken.
+**The cost was real and was the one open decision — and it has since been
+taken.** Measured against the arithmetic at the time: the panel got 556px at a
+1080 viewport and 376 at 900, and at 800 and below the room fell under
+`MIN_PARKED` and the **shell** scrolled. That is the documented fallback rather
+than a failure — driven at a 520px viewport the panel held exactly 320, the
+shell scrolled and the page did not — but it was the only card that reached it
+on an ordinary laptop. The alternative the handoff named, condensing the hauls
+while parked, is a change to what the card *says* rather than to how it is
+sized, so it was flagged here with the numbers rather than taken. **See The
+parked header condenses to the take track, under The trades board**, which is
+where it was taken: the open header is the take track alone at a fixed height,
+248px whatever the trade holds, and no two-sided card reaches the floor on a
+laptop any more.
 
 The board's own half of the change is that **the sentinel is not rendered while a
 card is parked**: every row but the open one is `display: none` and the page does
