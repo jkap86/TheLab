@@ -11211,3 +11211,181 @@ not two different drawings. The `.ico`'s own 16 and 32 entries were extracted an
 read at 8× and both hold the flask's neck, lip and fluid line. The metadata
 strip was checked the only way worth checking it: the same 512 render before and
 after hashes to the same SHA-256.
+
+## The performance pass
+
+A review of the whole app for CPU, memory and wire cost, and the fixes it
+produced. **No feature moved**: no route, no query shape, no contract type, no
+payload field, no migration, and nothing on screen changed except where a page
+stopped blanking itself. What follows is what was wrong, because each of these
+is the kind of cost that renders perfectly while being paid.
+
+**No leaks were found, and that is worth writing down.** Every in-process cache
+is bounded or TTL'd and evicts a rejected read; every listener, observer and
+timer in the client has a cleanup; closed cards unmount their panels. The costs
+were all of the other kind — work redone, rows rewritten, bytes reshipped.
+
+### Every page shipped the manager console
+
+`package.json` declared no `sideEffects`, so the bundler could not drop a
+barrel's unused half: every page imports `features/shared`, and every page
+therefore carried the lineup solver, both dialogs and the shares drawers.
+`"sideEffects": ["**/*.css"]` is the whole fix — the only side-effect imports in
+`src` are stylesheets, which is what makes it safe. Measured, gzip, per route:
+
+| route | before | after |
+|---|---|---|
+| `/tools` | 46KB | 15KB |
+| `/picktracker` | 50KB | 15KB |
+| `/logs` | 49KB | 17KB |
+| `/comps` | 55KB | 23KB |
+| `/lineupchecker` | 62KB | 50KB |
+| `/trades` | 66KB | 54KB |
+| `/manager` | 66KB | 66KB |
+
+`/manager` is unchanged because it is the page that actually uses all of it,
+which is the check that this dropped only what a route does not import. The
+166KB of framework chunks is React's and the router's, not the app's.
+
+### The reads that were redone per request
+
+**`getNflState` was a Sleeper round trip on every request of five routes** and
+every `/api/trades` page — a limiter slot each time, and on a Sleeper hiccup the
+full retry ladder before the fallback. It is memoized for 60 seconds on
+`memoize-nfl-state.ts`, promise-cached so concurrent callers share one flight
+and evicting a rejection so the next caller retries. The helper is a pure
+sibling of `state.ts` because that module imports the client and cannot load
+under Node's runner.
+
+**`getManagerDraftAdp` and `getManagerLeagueRosters` were uncached aggregates**
+run fresh by the lineups route, every trade-card open and every History press.
+`shared/manager/read-cache.ts` memoizes both — the reason it reverses this
+file's "in-process read caches are deliberately not ported" is written in its
+own header — and `invalidateTradeCaches` drops them through the `userIds` it
+already receives on every persist.
+
+**`scoreStatLine` re-materialised the whole scoring blob per player.** Sleeper
+writes its entire scoring template, so a ~150-key `Object.entries` ran once per
+player per roster — 35–40k times per lineups request. `compileScoring` filters
+it once and caches the result in a `WeakMap` keyed on the settings object, so
+every existing caller benefits with no signature change. `ros-lineups` got the
+same treatment for the three slot derivations it was recomputing per roster.
+
+### The writes that rewrote unchanged rows
+
+**The KTC snapshot was an unconditional `DO UPDATE` on ~870 rows every fifteen
+minutes**, so an unchanged board wrote a new tuple version for every row — about
+84k dead tuples a day on a table 870 rows big. `HISTORY_ON_CONFLICT` now carries
+an `IS DISTINCT FROM` guard over its six value columns. Verified against a
+throwaway Postgres 16: an identical re-upsert is `INSERT 0 0` with `xmin`
+unchanged, nulls included, and a real change still writes. **The `ktc_values`
+upsert is deliberately left unconditional** — its `updated_at` is what
+`boardState.fresh` and the page's "KTC scraped · 6m ago" readout read, so
+skipping unchanged rows there would mislabel the scrape.
+
+**Completed drafts were re-fetched and rewritten on every sync.** A `complete`
+draft is immutable, and the crawler was spending 15–30 Sleeper requests and
+thousands of dead tuples a minute re-storing boards that cannot change.
+`getStoredCompleteDraftIds` reads which are already stored whole — `status =
+'complete'` **and** at least one stored pick, the second clause keeping a draft
+whose pick fetch failed retryable — and `fetchLeagueGraph` skips them. The pick
+delete is already scoped to the drafts in the payload, which is what makes the
+skip safe.
+
+**And that eviction was the trades board's ADP cache.** `persistLeagueGraph`
+named the season on every persist, dropping the season-wide capital board that
+every `/api/trades` page rebuilds; at up to 30 crawler persists a minute the
+"15-minute" cache lived seconds. It is `wroteDraftPicks` now, and the flag is a
+**separate field from `season`** rather than a null season, because `season`
+narrows three other forgets and nulling it would widen them to every season for
+those readers. With completed drafts skipped, an ordinary refresh writes no
+picks at all, so the eviction fires only when an ADP genuinely moved.
+
+### The pool budget did not add up
+
+Ten connections, against a worst case of seven parked lock sessions plus
+eighteen persist transactions plus every route's reads. A `connect` that queues
+past five seconds is caught as a *league* failure, so the symptom was stale
+pages rather than a pool error. `DEFAULT_MANAGER_SYNC_LIMIT` 3 → 2,
+`DEFAULT_LEAGUE_REFRESH_LIMIT` 3 → 1 and `LEAGUE_FETCH_CONCURRENCY` 6 → 2 put
+parked sessions at ≤ 4 and the transient set inside what is left; every doc
+comment that stated the old arithmetic was rewritten, and a test now reads the
+three constants off their sources and asserts the sum. The two admission
+limiters stay **separate**, per the refresh limiter's own note. The cost is a
+cold 113-league sync running about 1.5× slower.
+
+### What a page redid on every render
+
+**`/manager` blanked all 113 cards to change one tile.** Any bay edit — a KTC
+market, a QB board, a position or slot narrowing — changed the lineups hook's
+subject, which nulled the payload and refetched ~5MB. Ranks are filed under
+`lineupColumnKey`, which encodes all four axes, so a bay edit asks for a key the
+held payload simply does not carry: that column reads an em dash until the
+answer lands and every other column keeps its number. Only a **manager or season
+change** blanks now, because those are the ones a stale answer would be *wrong*
+about rather than merely old.
+
+**The shares drawers were reconciled while closed.** The `opened` latch keeps
+them mounted, and inline handlers meant all 471 or 719 rows re-rendered on every
+NDJSON chunk, filter press and card toggle. `ShareRow` is `memo`'d and takes
+values rather than closures — a `chosen` set keyed by the row's *slot*, which is
+the distinction `subjectKey` and `subjectSlot` already draw. `CollapseTray`
+creates its `ResizeObserver` only while open, where 719 of them were watching
+empty divs for the page's life.
+
+**The filters dialog ran its cross-tab on every parent render, closed**, because
+inline `probe` arrows defeated the rail's memo; on `/trades` that walked the
+whole traded corpus per render. The probes are `useCallback`'d and both dialogs
+are `memo`'d.
+
+**A trades basis flip re-rendered 100–400 whole cards** to change one figure per
+asset. `ValueLensContext` is provided once by the list and read where the
+figures are, so `TradeCard`'s memo holds and only the two side columns re-render
+— without the per-card storage subscription the props-over-hooks decision was
+avoiding.
+
+**Smaller, same shape:** the NDJSON reader re-split the whole buffer per chunk
+(quadratic over the 519KB result line); a refresh stream replaced every league
+object twice, so `reuse-unchanged.ts` keeps the previous object where a league
+is unchanged; the logs table formatted dates per row per keystroke over up to
+5,000 rows, now formatted once in `toLogRow` with module-level formatters and a
+`memo`'d row; comps rebuilt its handlers per render so a weight drag reconciled
+the page every frame; the lineup checker's four header folds ran unmemoised per
+progress line; the ROS span fanned all 18 weeks at once and now folds each week
+in at a concurrency of 4; the picktracker stringified each board once per
+subscriber.
+
+### The per-card filter came back ungated
+
+`LeagueBillet` applied `drop-shadow` unconditionally on all three cards — the
+per-card filter buffer this file's own iOS-crash analysis counted and put behind
+`pointer-fine:`, reintroduced when the billet replaced the engraved title. It
+and the lineup checker's two tile filters are gated again, and the glint's
+`blur(1px)` is gone: up to ~450 blurred animating SVGs on a healthy 113-league
+page.
+
+### Verified
+
+`npm run check` is clean — 1,913 unit tests (up from 1,821), `lint`,
+`typecheck` — and `npm run build` succeeds. The bundle table above is measured
+from the build's own client-reference manifests, before and after. The KTC
+conflict clause was run against a throwaway Postgres 16 cluster; the two new
+statements in `persist.ts` were not, since no database is reachable from where
+this was built, and they are written against the DDL and pinned textually by
+`crawl-writes.test.ts` on `sql.test.ts`' terms.
+
+**Not verified against real data**, which is the gap to close first: every
+figure above is either a build measurement or an arithmetic one. Four things a
+green suite cannot check — what the read caches actually save on a live
+113-league account, whether the narrower pool budget slows a cold sync more than
+the 1.5× estimated, whether the drawers still *feel* different at 719 rows, and
+whether skipping completed drafts leaves any board stale that a reader would
+notice.
+
+**Deliberately not taken.** `content-visibility` on the trades board's cards —
+the `<li>` would need padding for the billet's 16–18px overhang or every card
+clips, and the active-card machinery already sets `display: none` on every other
+row while parked, so it wants a render to confirm rather than an argument. The
+timeline scrub still rebuilds its two pricing Maps per `back` change. And the
+`/api/user/[username]/lineups` payload still ships every team of every league;
+what changed is that a bay edit no longer re-downloads it with the page blank.

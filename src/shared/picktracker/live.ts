@@ -36,8 +36,25 @@ import { toPicktrackerPayload } from "./payload";
 import { retrackPlaceholderDraft, trackPlaceholderDraft } from "./track";
 import type { PicktrackerContext } from "./track";
 
-/** What a subscriber is handed. */
-export type RoomListener = (message: PicktrackerStreamMessage) => void;
+/**
+ * What a subscriber is handed: a message's kind, and the message serialised
+ * **once for the room** rather than once per reader.
+ *
+ * A twelve-viewer room used to hand the same object to twelve `send`s and each
+ * ran its own `JSON.stringify` over a board that is the whole pick list —
+ * twelve serialisations of one string per pick. The kind rides beside it
+ * because a stream's back-pressure rule is per kind (a board may be dropped, a
+ * transition never) and reading it back out of the JSON would be a parse per
+ * frame per reader.
+ */
+export type RoomFrame = { type: PicktrackerStreamMessage["type"]; json: string };
+
+export type RoomListener = (frame: RoomFrame) => void;
+
+/** Serialise a message once, for every reader it is about to reach. */
+export function toRoomFrame(message: PicktrackerStreamMessage): RoomFrame {
+  return { type: message.type, json: JSON.stringify(message) };
+}
 
 type Room = {
   leagueId: string;
@@ -66,8 +83,13 @@ type Room = {
   failures: number;
   /** Whether the readers have already been told the board stopped moving. */
   toldStale: boolean;
-  /** Replayed to a joiner, so the twelfth reader does not stare at nothing. */
+  /** The last board, as a payload — a failed tick reschedules on its status. */
   last: PicktrackerPayload;
+  /**
+   * `last` as the frame sent for it, serialised once: replayed to a joiner so
+   * the twelfth reader does not stare at nothing, and fanned out on change.
+   */
+  frame: RoomFrame;
   /** Armed when the last reader leaves — see {@link scheduleTeardown}. */
   linger: ReturnType<typeof setTimeout> | null;
 };
@@ -114,7 +136,7 @@ const { rooms, openings } = registry;
 
 /** A room's first read failed — the caller has a status to answer with. */
 export type JoinResult =
-  | { ok: true; payload: PicktrackerPayload; leave: () => void }
+  | { ok: true; frame: RoomFrame; leave: () => void }
   | { ok: false; status: 404 | 502; error: string };
 
 /**
@@ -190,6 +212,7 @@ async function openRoom(
       failures: 0,
       toldStale: false,
       last: payload,
+      frame: toRoomFrame({ type: "board", payload }),
       linger: null,
     };
     rooms.set(leagueId, room);
@@ -224,7 +247,7 @@ function rejoin(room: Room, listener: RoomListener): JoinResult {
     room.linger = null;
   }
   room.subscribers.add(listener);
-  return { ok: true, payload: room.last, leave: leaver(room, listener) };
+  return { ok: true, frame: room.frame, leave: leaver(room, listener) };
 }
 
 /** The idempotent departure, closed over one subscriber. */
@@ -337,7 +360,7 @@ async function tick(room: Room) {
         // A note beside a usable board, never an `error` — the reader keeps
         // what they have. Reporting this as terminal would close the stream on
         // a blip and blank a board that is merely a minute behind.
-        emit(room, { type: "stale", error: result.error });
+        emit(room, toRoomFrame({ type: "stale", error: result.error }));
       }
       schedule(room, room.last.draft_status);
       return;
@@ -364,7 +387,8 @@ async function tick(room: Room) {
     if (signature !== room.signature) {
       room.signature = signature;
       room.last = toPicktrackerPayload(result);
-      emit(room, { type: "board", payload: room.last });
+      room.frame = toRoomFrame({ type: "board", payload: room.last });
+      emit(room, room.frame);
     }
 
     schedule(room, result.draft_status);
@@ -380,10 +404,10 @@ async function tick(room: Room) {
  * other readers down with it — a closed stream whose `enqueue` throws is the
  * ordinary way this happens, and its own `leave` may not have run yet.
  */
-function emit(room: Room, message: PicktrackerStreamMessage) {
+function emit(room: Room, frame: RoomFrame) {
   for (const listener of [...room.subscribers]) {
     try {
-      listener(message);
+      listener(frame);
     } catch {
       room.subscribers.delete(listener);
     }

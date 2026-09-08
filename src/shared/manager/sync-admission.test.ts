@@ -1,6 +1,9 @@
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 import { describe, test } from "node:test";
 
+import { leagueRefreshConcurrency } from "./league-refresh-admission.ts";
 import {
   createManagerSyncAdmission,
   managerSyncConcurrency,
@@ -41,15 +44,17 @@ describe("managerSyncConcurrency", () => {
   test("defaults to a share of the pool", () => {
     // A share rather than a number of its own: a manager sync holds a Postgres
     // session for its whole duration, so what bounds it honestly is how much of
-    // the pool one request may hold — three of the default ten.
-    assert.equal(managerSyncConcurrency({}), 3);
+    // the pool one request may hold — two of the default ten, so that with the
+    // other two parkers (a refresh press, the crawl) at most four sessions sit
+    // across Sleeper waits. See "the connection budget" below for the sum.
+    assert.equal(managerSyncConcurrency({}), 2);
   });
 
   test("reads a positive integer override", () => {
     // Within the share it is honoured exactly, which is what the knob is for:
     // an operator asking for *less* sync concurrency gets less.
-    assert.equal(managerSyncConcurrency({ MANAGER_SYNC_LIMIT: " 2 " }), 2);
-    assert.equal(managerSyncConcurrency({ MANAGER_SYNC_LIMIT: "3" }), 3);
+    assert.equal(managerSyncConcurrency({ MANAGER_SYNC_LIMIT: " 1 " }), 1);
+    assert.equal(managerSyncConcurrency({ MANAGER_SYNC_LIMIT: "2" }), 2);
   });
 
   test("the override is a request, not a grant", () => {
@@ -59,8 +64,8 @@ describe("managerSyncConcurrency", () => {
     // variable meant to prevent it, with nothing failing to say so. Each sync
     // holds an advisory-lock session across a whole Sleeper fan-out, so the
     // ceiling is what one request may hold and nothing above it.
-    for (const value of ["4", "10", "100", "1000000"]) {
-      assert.equal(managerSyncConcurrency({ MANAGER_SYNC_LIMIT: value }), 3, value);
+    for (const value of ["3", "4", "10", "100", "1000000"]) {
+      assert.equal(managerSyncConcurrency({ MANAGER_SYNC_LIMIT: value }), 2, value);
     }
   });
 
@@ -71,7 +76,7 @@ describe("managerSyncConcurrency", () => {
     for (const value of [undefined, "1", "3", "9", "500"]) {
       const limit = managerSyncConcurrency({ MANAGER_SYNC_LIMIT: value });
       assert.ok(limit >= 1, `${value}: admits nobody`);
-      assert.ok(limit <= 3, `${value}: ${limit} over the ceiling`);
+      assert.ok(limit <= 2, `${value}: ${limit} over the ceiling`);
     }
   });
 
@@ -80,7 +85,7 @@ describe("managerSyncConcurrency", () => {
     // question with no good answer — and a zero or a negative would be an
     // admission that admits nobody, which is an outage rather than a bound.
     for (const value of ["", "  ", "lots", "0", "-2", "1.5", "2.9", "NaN", "Infinity"]) {
-      assert.equal(managerSyncConcurrency({ MANAGER_SYNC_LIMIT: value }), 3, value);
+      assert.equal(managerSyncConcurrency({ MANAGER_SYNC_LIMIT: value }), 2, value);
     }
   });
 
@@ -88,18 +93,77 @@ describe("managerSyncConcurrency", () => {
     // What the boot-time warning is written from: the clamp is only worth
     // announcing where the two differ.
     const asked = managerSyncLimit({ MANAGER_SYNC_LIMIT: "20" });
-    assert.deepEqual(asked, { requested: 20, ceiling: 3, limit: 3 });
+    assert.deepEqual(asked, { requested: 20, ceiling: 2, limit: 2 });
     assert.deepEqual(managerSyncLimit({ MANAGER_SYNC_LIMIT: "junk" }), {
       requested: null,
-      ceiling: 3,
-      limit: 3,
+      ceiling: 2,
+      limit: 2,
     });
   });
 
   test("ignores the retired cold-sync knob", () => {
     // `MANAGER_COLD_SYNC_LIMIT` bounded a strict subset of this, so honouring it
     // here would silently re-scope whatever it was set to.
-    assert.equal(managerSyncConcurrency({ MANAGER_COLD_SYNC_LIMIT: "40" }), 3);
+    assert.equal(managerSyncConcurrency({ MANAGER_COLD_SYNC_LIMIT: "40" }), 2);
+  });
+});
+
+describe("the connection budget", () => {
+  /**
+   * The four shares of the pool, read off their sources.
+   *
+   * Two are functions this runner can call; the other two live in modules that
+   * import `@/shared/db` and `pg`, which Node's runner cannot resolve, so they
+   * are read as text — `crawl-writes.test.ts`'s bargain, for its reason: these
+   * are constants that nothing *fails* on. Seven parked sessions against a pool
+   * of ten typechecked, committed, and surfaced as stale pages.
+   */
+  const source = (file: string) =>
+    readFileSync(join(process.cwd(), "src/shared", file), "utf8");
+  const constant = (file: string, name: string): number => {
+    const match = source(file).match(new RegExp(`const ${name} = (\\d+);`));
+    assert.ok(match, `${name} should be a literal in ${file}`);
+    return Number(match[1]);
+  };
+
+  const poolMax = constant("db/pool.ts", "DEFAULT_POOL_MAX");
+  const leagueFetch = constant("manager/sync.ts", "LEAGUE_FETCH_CONCURRENCY");
+  const crawl = constant("manager/crawl.ts", "CRAWL_CONCURRENCY");
+  const managerSyncs = managerSyncConcurrency({});
+  const presses = leagueRefreshConcurrency({});
+  /** Sessions held on an advisory lock across a Sleeper wait: the crawl parks one. */
+  const parked = managerSyncs + presses + 1;
+  /** What is left for every transaction and every route's reads. */
+  const free = poolMax - parked;
+
+  test("parked sessions leave more of the pool free than they hold", () => {
+    // The failure this budget was rewritten around: seven of ten parked across
+    // upstream waits left three for twenty-two transient transactions, and a
+    // `pool.connect()` that queued past its bound surfaced as a league failure.
+    assert.ok(parked <= poolMax / 2, `${parked} parked of ${poolMax}`);
+    assert.ok(free >= 6, `${free} free of ${poolMax}`);
+  });
+
+  test("no single parker's own transactions can fill what is free", () => {
+    // Each parker persists beside its parked session; if any one of them alone
+    // could take every free connection, its own persists would queue behind
+    // its own lock. The three parkers' bursts still time-share the free set
+    // between them — that is deliberate, since a persist is a short transaction
+    // where a parked session is an upstream wait.
+    assert.ok(managerSyncs * leagueFetch <= free, "manager syncs' persists");
+    assert.ok(crawl <= free, "the crawl's persists");
+    assert.ok(presses <= free, "a press's persist");
+  });
+
+  test("the sum stated in the doc comments is the sum in the code", () => {
+    // The numbers `LEAGUE_FETCH_CONCURRENCY`, `DEFAULT_MANAGER_SYNC_LIMIT`,
+    // `DEFAULT_LEAGUE_REFRESH_LIMIT`, `CRAWL_CONCURRENCY` and `DEFAULT_POOL_MAX`
+    // each spell out in prose. An edit to one of them has to come here and say
+    // what the new arithmetic is.
+    assert.deepEqual(
+      { poolMax, managerSyncs, presses, leagueFetch, crawl, parked, free },
+      { poolMax: 10, managerSyncs: 2, presses: 1, leagueFetch: 2, crawl: 4, parked: 4, free: 6 },
+    );
   });
 });
 

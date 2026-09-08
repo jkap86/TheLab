@@ -187,6 +187,10 @@ async function refreshLeagueLocked(
   });
 
   // One token for the whole press, so the ~11 requests below read one instant.
+  // It busts the CDN for what is fetched and widens nothing: a draft already
+  // stored `complete` with its board is skipped by `syncLeagueGraphs` on this
+  // path exactly as on the crawler's — a finished board cannot have changed a
+  // moment ago, whoever pressed.
   const fresh = cacheBustToken();
 
   let league;

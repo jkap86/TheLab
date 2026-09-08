@@ -36,6 +36,12 @@ export function memoizeManagerLookup(
     if (hit && now() - hit.at < ttlMs) return hit.value;
 
     const value = lookup(usernameOrId);
+    // Deleted before it is set, because `Map.set` on an existing key keeps its
+    // original insertion position: an expired entry refreshed in place would
+    // still be the "oldest" key below and the next insertion past the bound
+    // would evict the answer just fetched. Delete-then-set moves it to the
+    // back of the line, which is what "insertion-ordered" is being read as.
+    entries.delete(key);
     entries.set(key, { at: now(), value });
     // A rejected lookup must not be served to the next caller as this one's
     // failure; dropping it here is what makes a 502 immediately retryable.

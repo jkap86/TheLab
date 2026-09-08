@@ -1,5 +1,7 @@
 "use client";
 
+import { useMemo } from "react";
+
 import type { ManagerLeague } from "@/shared/contract";
 import type { FilterRule } from "../league-filters";
 
@@ -77,6 +79,16 @@ export function RuleBay({
   leagues: readonly ManagerLeague[];
   match: (league: ManagerLeague, rule: FilterRule) => boolean;
 }) {
+  // What each rule *alone* leaves — folded once per draft rather than once per
+  // render. `rules` is a slice of the draft and `match` a module function, so
+  // this holds across the parent's renders while the dialog is closed, where
+  // a walk over every league per rule per render was the cost being paid for
+  // numbers nobody could see.
+  const counts = useMemo(
+    () => rules.map((rule) => leagues.filter((l) => match(l, rule)).length),
+    [leagues, rules, match],
+  );
+
   return (
     // A shallow tray, not a card: the rows inside it are recessed slots and a
     // lit number, and those only read as mounted if the thing holding them is
@@ -117,7 +129,7 @@ export function RuleBay({
             step={step}
             fallback={newRule.value}
             extraKey={unlistedKey(keyOptions, rule.key)}
-            count={leagues.filter((l) => match(l, rule)).length}
+            count={counts[i]}
             onChange={(next) =>
               onChange(rules.map((r, j) => (j === i ? next : r)))
             }

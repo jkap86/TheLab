@@ -18,6 +18,7 @@ export {
   clearTradeEnrichmentCaches,
   lookupKtcMarkets,
   lookupSeasonAdp,
+  lookupSeasonTradeLeagues,
   lookupLeagueMarkets,
   lookupPlayers,
 } from "./enrich";

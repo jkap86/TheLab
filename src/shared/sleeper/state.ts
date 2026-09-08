@@ -1,4 +1,5 @@
 import { sleeperGet, sleeperUrl } from "./client";
+import { memoizeNflState } from "./memoize-nfl-state";
 import type { SleeperNflState } from "./types/sleeper.types";
 
 /**
@@ -16,10 +17,28 @@ import type { SleeperNflState } from "./types/sleeper.types";
  */
 export const DEFAULT_SEASON = "2026";
 
+function fetchNflState(): Promise<SleeperNflState | null> {
+  return sleeperGet<SleeperNflState | null>(sleeperUrl("state", "nfl"), null);
+}
+
+/**
+ * Cached on `globalThis` for the reason the Sleeper limiter is — a per-bundle
+ * copy would ask Sleeper once per route rather than once per process. The
+ * memo's whole state is its closure, so the closure is what is shared.
+ */
+const MEMO_KEY = Symbol.for("thelab.sleeper.nfl-state");
+const globalScope = globalThis as typeof globalThis & {
+  [MEMO_KEY]?: ReturnType<typeof memoizeNflState>;
+};
+const memoized = (globalScope[MEMO_KEY] ??= memoizeNflState(fetchNflState));
+
 /**
  * Current NFL state. In the offseason `week` is 0 and `season_type` is "off";
  * during the season `week` tracks the current NFL week.
+ *
+ * Memoized for a minute (`memoize-nfl-state`): five routes read it per request
+ * and three loops per tick, and none of them wants a fresher answer than that.
  */
 export function getNflState(): Promise<SleeperNflState | null> {
-  return sleeperGet<SleeperNflState | null>(sleeperUrl("state", "nfl"), null);
+  return memoized();
 }

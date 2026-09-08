@@ -7,12 +7,12 @@ import {
   withTransaction,
 } from "@/shared/db";
 import { ensurePlayersFresh, getMatchablePlayers } from "@/shared/players";
-import type { MatchablePlayer } from "@/shared/players";
 import { errorMessage } from "@/shared/util";
 
 import { fetchKtcRankings } from "./client";
 import { recordDailySnapshot } from "./history";
-import { resolveSleeperIds } from "./match";
+import { indexMatchablePlayers, resolveSleeperIds } from "./match";
+import type { MatchIndex } from "./match";
 import { int } from "./parse";
 import { validateKtcBoard } from "./validate";
 import type { KtcFormat } from "./types";
@@ -68,7 +68,7 @@ export async function syncKtcValues(
   options: { force?: boolean } = {},
 ): Promise<KtcSyncSummary> {
   const summary = await withAdvisoryLock(LOCK_KEYS.ktcValues, async () => {
-    const matchable = lazyMatchablePlayers();
+    const matchable = lazyMatchIndex();
     const boards: KtcBoardSyncSummary[] = [];
     for (const format of KTC_FORMATS) {
       boards.push(await syncBoard(format, options.force ?? false, matchable));
@@ -80,19 +80,22 @@ export async function syncKtcValues(
 }
 
 /**
- * The Sleeper players the matcher indexes, read at most once per run and only
- * if a board actually writes.
+ * The matcher's index over the Sleeper players, built at most once per run and
+ * only if a board actually writes.
  *
  * Lazy on both counts and neither is a micro-optimisation: the table is ~12k
  * rows, both formats resolve against the *same* copy of it (only KTC's ids are
  * per-board), and the common tick is two boards found fresh and nothing to
- * match at all. A refresh of the players map is attempted first and is
- * **best-effort** — a stale players table still matches nearly everything,
- * where letting its failure propagate would stop KTC values updating over a
- * dependency they only lean on.
+ * match at all. **What is memoized is the indexed form, not the rows** — the
+ * read was already shared between the two formats, but each
+ * `resolveSleeperIds` call was indexing the 12k rows again, so a tick that
+ * wrote both boards built the same two maps twice. A refresh of the players
+ * map is attempted first and is **best-effort** — a stale players table still
+ * matches nearly everything, where letting its failure propagate would stop
+ * KTC values updating over a dependency they only lean on.
  */
-function lazyMatchablePlayers(): () => Promise<MatchablePlayer[]> {
-  let pending: Promise<MatchablePlayer[]> | null = null;
+function lazyMatchIndex(): () => Promise<MatchIndex> {
+  let pending: Promise<MatchIndex> | null = null;
   return () => {
     pending ??= (async () => {
       try {
@@ -103,7 +106,7 @@ function lazyMatchablePlayers(): () => Promise<MatchablePlayer[]> {
           errorMessage(error),
         );
       }
-      return getMatchablePlayers();
+      return indexMatchablePlayers(await getMatchablePlayers());
     })();
     return pending;
   };
@@ -131,7 +134,7 @@ async function boardState(
 async function syncBoard(
   format: KtcFormat,
   force: boolean,
-  matchable: () => Promise<MatchablePlayer[]>,
+  matchable: () => Promise<MatchIndex>,
 ): Promise<KtcBoardSyncSummary> {
   try {
     const { priced, fresh } = await boardState(format);
@@ -189,6 +192,14 @@ async function syncBoard(
       // match be *corrected* rather than frozen in place. A run that resolves
       // nothing (an empty players table) does clear the column — which is the
       // honest reading of "nothing here can vouch for these ids".
+      //
+      // **Deliberately unconditional, unlike the history snapshot's upsert.**
+      // `updated_at = now()` is the scrape clock: `boardState.fresh` gates the
+      // next tick on it and the page's "KTC scraped · 6m ago" readout prints
+      // it, so a `WHERE ... IS DISTINCT FROM` here would leave an unchanged
+      // board reading as never re-scraped — stale on the page and re-fetched
+      // every tick. The churn is `./history`'s to remove, where nothing reads
+      // a timestamp.
       await bulkInsert(client, {
         table: "ktc_values",
         columns: [

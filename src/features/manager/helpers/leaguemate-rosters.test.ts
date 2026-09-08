@@ -13,6 +13,7 @@ import {
   modeRolls,
   playerModeCounts,
   rosterIndex,
+  rosterMatcher,
 } from "./leaguemate-rosters.ts";
 
 /** Only the field the folds read; the rest is the card's business. */
@@ -254,5 +255,48 @@ describe("rosterIndex", () => {
     // An orphan team has nobody to index it under.
     assert.equal(index.has("null"), false);
     assert.equal(index.size, 2);
+  });
+});
+
+describe("rosterMatcher", () => {
+  test("matches a name on that person's board, case-insensitively", () => {
+    const matches = rosterMatcher(LEAGUES, ROSTERS, NAMES);
+    // The needle arrives lower-cased, as the drawer hands it over.
+    assert.equal(matches(MATE, "bow"), true);
+    assert.equal(matches(MATE, "achane"), true);
+    // Chase is the manager's, not the mate's.
+    assert.equal(matches(MATE, "chase"), false);
+    assert.equal(matches(ME, "chase"), true);
+  });
+
+  test("an id with no stored name is a token, not a searchable name", () => {
+    const matches = rosterMatcher(LEAGUES, ROSTERS, {});
+    assert.equal(matches(MATE, "bow"), false);
+    // Nor does the raw id match: the chip draws it, the search does not read it.
+    assert.equal(matches(MATE, "p2"), false);
+  });
+
+  test("a person with no roster in the counted set matches nothing", () => {
+    const matches = rosterMatcher(LEAGUES, ROSTERS, NAMES);
+    assert.equal(matches("nobody", "bow"), false);
+  });
+
+  test("the index is built on the first call, not on construction", () => {
+    // A rosters map that counts how often it is walked: constructing the
+    // matcher must not touch it, and two calls must walk it once.
+    let walks = 0;
+    const counted = new Proxy(ROSTERS, {
+      get(target, key, receiver) {
+        walks++;
+        return Reflect.get(target, key, receiver);
+      },
+    });
+    const matches = rosterMatcher(LEAGUES, counted, NAMES);
+    assert.equal(walks, 0);
+    matches(MATE, "bow");
+    const afterFirst = walks;
+    assert.ok(afterFirst > 0);
+    matches(MATE, "achane");
+    assert.equal(walks, afterFirst);
   });
 });

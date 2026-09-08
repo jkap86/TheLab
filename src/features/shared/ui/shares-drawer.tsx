@@ -2,15 +2,19 @@
 
 import {
   Fragment,
+  memo,
   type ReactNode,
+  useCallback,
+  useDeferredValue,
   useEffect,
   useId,
+  useLayoutEffect,
   useMemo,
   useRef,
   useState,
 } from "react";
 
-import type { Subject, SubjectKind } from "../league-subjects";
+import { subjectSlot, type Subject, type SubjectKind } from "../league-subjects";
 import {
   MAX_SHARES_COLUMNS,
   mergeSharesColumns,
@@ -246,7 +250,16 @@ const CELL_TEXT: Record<SharesColumnId, string> = {
   bench: "text-[length:var(--fs-11)]",
 };
 
-/** A row with its folded percentages, ready to be sorted and drawn. */
+/**
+ * A row with its folded percentages, ready to be sorted and drawn.
+ *
+ * **Built once per row list, not once per keystroke.** It is what every row
+ * component is handed, so its identity is what `ShareRow`'s memo compares —
+ * a fresh one per search would re-render four hundred rows to narrow to ten.
+ * The two derived strings are here for the same reason: lower-casing a name
+ * and spelling a slot are per-row costs the search and the selection would
+ * otherwise pay per render.
+ */
 type Prepared = {
   row: SharesDrawerRow;
   /** {@link SharesDrawerRow.held} as a share of the counted leagues. */
@@ -254,7 +267,17 @@ type Prepared = {
   /** The same, for the two week columns. Zero where the row has no figure. */
   startPct: number;
   benchPct: number;
+  /** The name, lower-cased once, for the search. */
+  search: string;
+  /** `subjectSlot` of this row, for the selection — see `chosen`. */
+  slot: string;
 };
+
+// One collator for the name tiebreak rather than `localeCompare` per
+// comparison, which re-resolves the locale each call — a sort over several
+// hundred rows is thousands of them, on every keystroke. Same default locale,
+// same ordering.
+const NAME_ORDER = new Intl.Collator();
 
 export function SharesDrawer({
   open,
@@ -281,7 +304,7 @@ export function SharesDrawer({
   filters,
   filtersActive,
   onClearFilters,
-  selected,
+  chosen,
   onToggle,
 }: {
   open: boolean;
@@ -364,14 +387,16 @@ export function SharesDrawer({
    */
   selectedStrip?: ((row: SharesDrawerRow) => ReactNode) | null;
   /**
-   * What the search field matches, where a row's own name is not the whole of
-   * it.
+   * What the search field matches **beyond** a row's own name.
    *
-   * The leaguemate panel matches a typed name against the players a person
-   * rosters as well as against the person — which is what makes its placeholder
-   * honest. It is an override rather than a field on the row because it is only
-   * ever asked with a needle in hand: a per-row index built eagerly would be
-   * work every reader pays and only a typing one uses.
+   * The drawer always matches the name itself, off a copy lower-cased once per
+   * row list, and asks this only for a row the name did not answer — so a
+   * caller covers what the name is not, never the name again. The leaguemate
+   * panel matches a typed name against the players a person rosters, which is
+   * what makes its placeholder honest. It is an override rather than a field
+   * on the row because it is only ever asked with a needle in hand: a per-row
+   * index built eagerly would be work every reader pays and only a typing one
+   * uses. The needle arrives trimmed and lower-cased.
    */
   matchRow?: ((row: SharesDrawerRow, needle: string) => boolean) | null;
   loading: boolean;
@@ -404,16 +429,20 @@ export function SharesDrawer({
   filtersActive?: boolean;
   onClearFilters?: () => void;
   /**
-   * Whether this row is picked — **a `subjectSlot` question, never a
-   * `subjectKey` one.**
+   * Which rows are picked, as a set of **`subjectSlot`s — never `subjectKey`s.**
    *
-   * The subject handed over carries no mode, because the row does not know one:
-   * a row is one narrowing whatever reading it is on. A caller comparing full
-   * keys would have a row drop out of its own selected state the moment its
-   * mode moved off the resting one, which on the players panel takes the mode
-   * track down with it — the control deleting itself on first use.
+   * A row is one narrowing whatever reading it is on, so it is looked up by its
+   * slot: a caller keying the set by full keys would have a row drop out of its
+   * own selected state the moment its mode moved off the resting one, which on
+   * the players panel takes the mode track down with it — the control deleting
+   * itself on first use.
+   *
+   * A set rather than a predicate, because the drawer asks it per row per
+   * render and a row's `selected` has to be a value its memo can compare: with
+   * a predicate the drawer could not tell a re-render that changed nothing
+   * from one that flipped a row, and would have to re-render all of them.
    */
-  selected: (subject: Subject) => boolean;
+  chosen: ReadonlySet<string>;
   onToggle: (subject: Subject) => void;
 }) {
   const ref = useRef<HTMLDialogElement>(null);
@@ -466,34 +495,43 @@ export function SharesDrawer({
     onClose();
   };
 
-  const needle = query.trim().toLowerCase();
-  const shown = useMemo(() => {
-    // The name is what a search means unless a panel says otherwise, and only
-    // a panel that says otherwise pays for it — see `matchRow`.
-    const kept = needle
-      ? rows.filter((r) =>
-          matchRow
-            ? matchRow(r, needle)
-            : r.name.toLowerCase().includes(needle),
-        )
-      : rows;
+  // **The search runs on the deferred value**, so a keystroke paints the field
+  // at once and the filter-and-sort over several hundred rows lands a frame
+  // later — the input is never blocked on the list it narrows.
+  const deferredQuery = useDeferredValue(query);
+  const needle = deferredQuery.trim().toLowerCase();
 
+  // Per row list, never per keystroke — see `Prepared`.
+  const prepared = useMemo<Prepared[]>(() => {
     const share = (n: number | null | undefined) =>
       leagueCount > 0 && n != null ? Math.round((n / leagueCount) * 100) : 0;
-
-    const prepared: Prepared[] = kept.map((row) => ({
+    return rows.map((row) => ({
       row,
       pct: share(row.held),
       startPct: share(row.started),
       benchPct: share(row.benched),
+      search: row.name.toLowerCase(),
+      slot: subjectSlot({ kind, id: row.id }),
     }));
+  }, [rows, leagueCount, kind]);
+
+  const shown = useMemo(() => {
+    // The name is what a search means for every panel; a panel whose rows
+    // answer to more than that is asked only for the rows the name did not
+    // match — see `matchRow`. **Copied before the sort**: `prepared` is shared
+    // with every other render, and `sort` is in place.
+    const kept = needle
+      ? prepared.filter(
+          (p) => p.search.includes(needle) || (matchRow?.(p.row, needle) ?? false),
+        )
+      : [...prepared];
 
     if (sortKey === "name") {
-      return prepared.sort((a, b) => a.row.name.localeCompare(b.row.name));
+      return kept.sort((a, b) => NAME_ORDER.compare(a.row.name, b.row.name));
     }
 
     const ascending = SORT_ASCENDING[sortKey];
-    return prepared.sort((a, b) => {
+    return kept.sort((a, b) => {
       const wa = weightOf(sortKey, a);
       const wb = weightOf(sortKey, b);
       // **A row with no value for the sorted metric sorts last**, in either
@@ -505,9 +543,24 @@ export function SharesDrawer({
       } else if (wa !== wb) {
         return ascending ? wa - wb : wb - wa;
       }
-      return a.row.name.localeCompare(b.row.name);
+      return NAME_ORDER.compare(a.row.name, b.row.name);
     });
-  }, [rows, needle, leagueCount, sortKey, matchRow]);
+  }, [prepared, needle, sortKey, matchRow]);
+
+  // **The row's press is one stable callback for the whole list**, reading the
+  // caller's `onToggle` off a ref rather than closing over it. Every row is
+  // `memo`'d on its props, and a callback that changed identity whenever the
+  // page above re-rendered — a stream chunk, a card toggle — would re-render
+  // all of them to change nothing. The ref is written in a layout effect so a
+  // press can never reach a callback from a render that has been superseded.
+  const latestToggle = useRef(onToggle);
+  useLayoutEffect(() => {
+    latestToggle.current = onToggle;
+  });
+  const toggleRow = useCallback(
+    (id: string) => latestToggle.current({ kind, id }),
+    [kind],
+  );
 
   // A narrowed list scrolled halfway down reads as an empty one.
   useEffect(() => {
@@ -776,18 +829,34 @@ export function SharesDrawer({
               )
             ) : (
               <ul className="m-0 flex list-none flex-col gap-1.5 p-0">
-                {shown.map((prepared) => (
-                  <ShareRow
-                    key={prepared.row.key}
-                    prepared={prepared}
-                    cols={cols}
-                    leagueCount={leagueCount}
-                    selected={selected({ kind, id: prepared.row.id })}
-                    onSelect={() => onToggle({ kind, id: prepared.row.id })}
-                    disclosure={disclosure ?? null}
-                    selectedStrip={selectedStrip ?? null}
-                  />
-                ))}
+                {/* **A row is handed values, not closures.** `selected` and
+                    `expanded` are booleans the drawer resolves here, and the
+                    strip and the tray arrive already rendered — `null` for
+                    every row that is not picked or open, which is nearly all
+                    of them. So a press on one row, or a chunk of the stream
+                    above, changes the props of the one or two rows it is
+                    about and `memo` bails the rest out. The two disclosure
+                    callbacks are the caller's own, and stable on their side. */}
+                {shown.map((prepared) => {
+                  const { row } = prepared;
+                  const picked = chosen.has(prepared.slot);
+                  const expanded = disclosure?.expanded(row.id) ?? false;
+                  return (
+                    <ShareRow
+                      key={row.key}
+                      prepared={prepared}
+                      cols={cols}
+                      leagueCount={leagueCount}
+                      selected={picked}
+                      onSelect={toggleRow}
+                      expanded={expanded}
+                      onDisclose={disclosure?.onToggle ?? null}
+                      discloseLabel={disclosure?.label ?? null}
+                      tray={expanded && disclosure ? disclosure.render(row) : null}
+                      strip={picked && selectedStrip ? selectedStrip(row) : null}
+                    />
+                  );
+                })}
               </ul>
             )}
           </div>
@@ -1126,26 +1195,45 @@ function Message({ children }: { children: ReactNode }) {
  * width — and nothing is lost by that either, because the Columns strip in the
  * deck above names the same three in the same order, and the Sort track says
  * which one the list is ordered by.
+ *
+ * **`memo`'d, and every prop is a value or a stable callback.** The drawer
+ * stays mounted once opened and the page above it re-renders on every stream
+ * chunk, filter press and card toggle; without the memo that was several
+ * hundred rows of ~30 nodes each reconciled to draw exactly what they drew.
+ * What makes the memo hold is on the drawer's side: `prepared` is per row
+ * list, `selected`/`expanded` are booleans, `onSelect` reads through a ref,
+ * and the strip and the tray arrive rendered — `null` unless this row is the
+ * one picked or open.
  */
-function ShareRow({
+const ShareRow = memo(function ShareRow({
   prepared,
   cols,
   leagueCount,
   selected,
   onSelect,
-  disclosure,
-  selectedStrip,
+  expanded,
+  onDisclose,
+  discloseLabel,
+  tray,
+  strip,
 }: {
   prepared: Prepared;
   cols: readonly SharesColumnId[];
   leagueCount: number;
   selected: boolean;
-  onSelect: () => void;
-  disclosure: SharesDrawerDisclosure | null;
-  selectedStrip: ((row: SharesDrawerRow) => ReactNode) | null;
+  onSelect: (id: string) => void;
+  expanded: boolean;
+  /** Null where the panel has no disclosure — which is also what says so. */
+  onDisclose: ((id: string) => void) | null;
+  discloseLabel: SharesDrawerDisclosure["label"] | null;
+  /** The open row's contents, or null — see the drawer's row map. */
+  tray: ReactNode;
+  /** The picked row's strip, or null. */
+  strip: ReactNode;
 }) {
   const { row } = prepared;
-  const open = disclosure?.expanded(row.id) ?? false;
+  const open = expanded;
+  const disclosure = onDisclose !== null;
   // Picked, or holding something picked inside it — see `SharesDrawerRow.lit`.
   const on = selected || Boolean(row.lit);
 
@@ -1177,7 +1265,7 @@ function ShareRow({
       >
         <button
           type="button"
-          onClick={onSelect}
+          onClick={() => onSelect(row.id)}
           aria-pressed={selected}
           className={`flex w-full min-w-0 flex-1 flex-wrap items-center gap-2 rounded-xl py-2 pl-[0.6875rem] text-left focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-active/60 @md:flex-nowrap ${
             disclosure ? "pr-1" : "pr-[0.6875rem]"
@@ -1221,12 +1309,12 @@ function ShareRow({
           ))}
         </button>
 
-        {disclosure && (
+        {onDisclose && (
           <button
             type="button"
             aria-expanded={open}
-            aria-label={disclosure.label(row, open)}
-            onClick={() => disclosure.onToggle(row.id)}
+            aria-label={discloseLabel?.(row, open)}
+            onClick={() => onDisclose(row.id)}
             // **A 44px target on a coarse pointer**, and a 24×28 key above
             // `@md` where the row is one line and the pointer is a mouse. The
             // top margin is what centres the small key on that single line
@@ -1245,22 +1333,22 @@ function ShareRow({
       {/* The strip a picked row grows, and the tray an opened one does. Both
           are inside the `<li>` so they carry the row's own lit border with
           them — a control that narrows *this* row belongs to it. */}
-      {selected && selectedStrip?.(row)}
+      {strip}
 
-      {/* **Rendered for the row that is open, and for no other.** A
-          `CollapseTray` keeps its children mounted while shut — which is right
-          for the one tray in a deck and wrong for one per row: on an account
-          with several hundred leaguemates it is several hundred folds of every
-          stored roster and a `ResizeObserver` apiece, all to draw nothing.
-          The cost is that a closing tray is empty while it collapses, which is
-          the direction nobody watches; the opening one still measures, because
-          the children are in the commit that flips `open`. */}
-      {disclosure && (
-        <CollapseTray open={open}>{open ? disclosure.render(row) : null}</CollapseTray>
-      )}
+      {/* **Rendered for the row that is open, and for no other** — the drawer's
+          row map hands a shut row `null`. A `CollapseTray` keeps its children
+          mounted while shut, which is right for the one tray in a deck and
+          wrong for one per row: on an account with several hundred
+          leaguemates it is several hundred folds of every stored roster, all
+          to draw nothing. (The tray creates its `ResizeObserver` only while
+          open, for the same count.) The cost is that a closing tray is empty
+          while it collapses, which is the direction nobody watches; the
+          opening one still measures, because the children are in the commit
+          that flips `open`. */}
+      {disclosure && <CollapseTray open={open}>{tray}</CollapseTray>}
     </li>
   );
-}
+});
 
 /**
  * The badge: a lit bezel with a position, an initial or an avatar in it.

@@ -38,6 +38,10 @@ function isPlayerId(id: string): boolean {
   return Boolean(id) && id !== "0";
 }
 
+// One collator for the tiebreak rather than `localeCompare` per comparison —
+// `shares.ts`'s reason: the sort is thousands of them over one payload.
+const NAME_ORDER = new Intl.Collator();
+
 /** One player on one leaguemate's rosters, and how much of the shared set holds him. */
 export type LeaguematePlayer = {
   player_id: string;
@@ -144,7 +148,7 @@ export function leaguematePlayers(
     });
   }
 
-  out.sort((a, b) => b.held - a.held || a.name.localeCompare(b.name));
+  out.sort((a, b) => b.held - a.held || NAME_ORDER.compare(a.name, b.name));
   return { league_count: leagueCount, players: out };
 }
 
@@ -297,4 +301,47 @@ export function rosterIndex(
     }
   }
   return index;
+}
+
+/**
+ * The search over those boards: does a person roster somebody whose name
+ * contains the needle?
+ *
+ * **Both halves of what it reads are built on the first call, not on
+ * construction.** {@link rosterIndex} is the one derivation a reader who never
+ * types does not use, and the lower-cased names beside it are the same kind of
+ * cost — two thousand `toLowerCase`s — so neither is paid until a needle
+ * arrives. Built once per payload thereafter: the alternative, lower-casing
+ * every rostered name per leaguemate per keystroke, is forty thousand of them
+ * a character. The needle is the caller's to lower-case, because the drawer
+ * already does that once per query.
+ *
+ * A closure rather than a memo inside the drawer, so the laziness is a fact
+ * about this function and not about what a component may reassign during
+ * render.
+ */
+export function rosterMatcher(
+  leagues: readonly ManagerLeague[],
+  rosters: Record<string, readonly LeagueRosterEntry[]>,
+  players: Record<string, PlayerSummary>,
+): (userId: string, needle: string) => boolean {
+  let index: Map<string, Set<string>> | null = null;
+  let names: Map<string, string> | null = null;
+  return (userId, needle) => {
+    index ??= rosterIndex(leagues, rosters);
+    const held = index.get(userId);
+    if (!held) return false;
+    if (!names) {
+      names = new Map();
+      for (const [id, player] of Object.entries(players)) {
+        names.set(id, player.name.toLowerCase());
+      }
+    }
+    for (const id of held) {
+      // An id with no stored name matches nothing, which is what the drawer's
+      // chip already draws for it — a token rather than a searchable name.
+      if (names.get(id)?.includes(needle)) return true;
+    }
+    return false;
+  };
 }

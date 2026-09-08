@@ -38,18 +38,24 @@ export const LEAGUE_REFRESH_LIMIT_VAR = "LEAGUE_REFRESH_LIMIT";
 /**
  * The most presses one process runs at once, however it is asked.
  *
- * Three, on `DEFAULT_MANAGER_SYNC_LIMIT`'s argument and deliberately the same
- * number: a press is not one query but a Postgres session held for the whole
- * operation — the advisory lock — plus the writes the graph needs, so what
- * bounds it honestly is how much of the pool one request may hold. A third of
- * the default ten, with the rest left for the work these presses are doing and
- * for every other route.
+ * One, on `DEFAULT_MANAGER_SYNC_LIMIT`'s argument: a press is not one query but
+ * a Postgres session held for the whole operation — the advisory lock — plus
+ * the writes the graph needs, so what bounds it honestly is how much of the
+ * pool one request may hold. This path's share of the default ten is one
+ * parked session and one transaction, beside the manager syncs' two and the
+ * crawl's one — ≤ 4 parked in all, the rest left for the work every parker is
+ * doing and for every other route (`LEAGUE_FETCH_CONCURRENCY` carries the sum).
+ * It was three, the same as the manager bound, and the two together with the
+ * crawl parked seven of ten across Sleeper waits.
  *
- * That it equals the manager-sync bound is a coincidence of the same reasoning
- * rather than a coupling: both are a third of `DEFAULT_POOL_MAX`, and both move
- * if that does.
+ * One is enough because a press is a reader pressing a key: it arrives in ones
+ * and twos, the second press on one league is already answered `fresh` by the
+ * gate's race arm, and a shed press is told so and pressed again. It is *not*
+ * a coupling to the manager bound — both are shares of `DEFAULT_POOL_MAX` and
+ * both move if that does, but they are different weights and the header above
+ * is why they are not one number.
  */
-const DEFAULT_LEAGUE_REFRESH_LIMIT = 3;
+const DEFAULT_LEAGUE_REFRESH_LIMIT = 1;
 
 /**
  * Read {@link LEAGUE_REFRESH_LIMIT_VAR}.
@@ -83,7 +89,7 @@ export function leagueRefreshConcurrency(
 /**
  * Cached on `globalThis`, the rule every semaphore in this app follows: a route
  * bundle carrying its own copy of this module gets its own counter, and nothing
- * in the process can tell. Two copies of a cap of three is a cap of six.
+ * in the process can tell. Two copies of a cap of one is a cap of two.
  */
 const globalForRefresh = globalThis as unknown as {
   leagueRefreshAdmission?: Limiter;

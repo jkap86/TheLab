@@ -33,6 +33,13 @@ import { type ReactNode, useLayoutEffect, useRef } from "react";
  * `min-h-0` is kept for the reason it is on every list tray in this folder:
  * `min-height: auto` is a content-based floor that would pin a collapsed flex
  * item at its open height the moment this is laid out in a column.
+ *
+ * **The observer exists only while the tray is open.** A shut tray is `0px`
+ * whatever its contents measure, so there is nothing for it to keep true — and
+ * the leaguemate panel mounts one of these per row, so an observer created
+ * unconditionally was several hundred of them watching empty divs for the life
+ * of the page. The shell stays mounted while shut, which is what the close
+ * animation needs; only the measuring goes.
  */
 export function CollapseTray({
   id,
@@ -60,8 +67,12 @@ export function CollapseTray({
     const shell = shellRef.current;
     const tray = trayRef.current;
     if (!shell || !tray) return;
+    if (!open) {
+      shell.style.height = "0px";
+      return;
+    }
     const apply = () => {
-      shell.style.height = open ? `${tray.offsetHeight}px` : "0px";
+      shell.style.height = `${tray.offsetHeight}px`;
     };
     apply();
     const observer = new ResizeObserver(apply);

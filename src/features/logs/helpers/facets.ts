@@ -13,7 +13,38 @@ import { deriveVisit } from "./derive-visit.ts";
 export type LogRow = VisitorLogEntry & {
   tool: string;
   subject: string | null;
+  /**
+   * The stamp as the table prints it, and the two fields lower-cased for the
+   * search, both derived once here.
+   *
+   * **Per row of the fetched window, not per render.** The window is capped at
+   * `VISITOR_LOG_CAP` (5,000) and the table re-renders on every keystroke, so a
+   * `toLocaleTimeString` with an options bag — which cannot use V8's cached
+   * default formatter and builds an `Intl.DateTimeFormat` per call — and two
+   * `toLowerCase`es per row ran five thousand times a letter. Formatted once on
+   * arrival they cost nothing again.
+   */
+  date: string;
+  time: string;
+  routeLc: string;
+  ipLc: string;
 };
+
+// Module-level, for the reason above: constructing a formatter is the expensive
+// half, and these two are the whole vocabulary the table prints.
+//
+// No locale argument, deliberately: the ported original hardcodes "en-US" for a
+// page only its author reads, and the rows are rendered after a fetch, so there
+// is no server render for a locale difference to mismatch against. The clock is
+// pinned to 24 hours all the same — a meridiem is a fifth token in a column that
+// gets a third of 390px, and it wrapped onto a line of its own.
+const DATE_FORMAT = new Intl.DateTimeFormat(undefined, { dateStyle: "short" });
+const TIME_FORMAT = new Intl.DateTimeFormat(undefined, {
+  hour: "2-digit",
+  minute: "2-digit",
+  second: "2-digit",
+  hourCycle: "h23",
+});
 
 export const FACET_KEYS = ["tool", "subject", "ip"] as const;
 export type FacetKey = (typeof FACET_KEYS)[number];
@@ -30,10 +61,17 @@ export const NO_FILTERS: LogFilters = {
 export const hasFilters = (filters: LogFilters): boolean =>
   FACET_KEYS.some((key) => filters[key] !== "");
 
-export const toLogRow = (entry: VisitorLogEntry): LogRow => ({
-  ...entry,
-  ...deriveVisit(entry.route),
-});
+export const toLogRow = (entry: VisitorLogEntry): LogRow => {
+  const when = new Date(entry.seen_at);
+  return {
+    ...entry,
+    ...deriveVisit(entry.route),
+    date: DATE_FORMAT.format(when),
+    time: TIME_FORMAT.format(when),
+    routeLc: entry.route.toLowerCase(),
+    ipLc: entry.ip?.toLowerCase() ?? "",
+  };
+};
 
 /** What a row answers for one facet, or null where it has no answer. */
 function valueOf(row: LogRow, key: FacetKey): string | null {
@@ -65,12 +103,15 @@ export function matches(
   });
 }
 
-/** Free-text search across everything a row shows. */
+/**
+ * Free-text search across everything a row shows.
+ *
+ * Reads the lower-cased copies `toLogRow` made, so a keystroke compares rather
+ * than re-lower-casing both fields of every row in the window.
+ */
 export function matchesQuery(row: LogRow, needle: string): boolean {
   if (!needle) return true;
-  return [row.route, row.ip].some((field) =>
-    field?.toLowerCase().includes(needle),
-  );
+  return row.routeLc.includes(needle) || row.ipLc.includes(needle);
 }
 
 /**

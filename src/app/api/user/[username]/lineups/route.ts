@@ -25,8 +25,8 @@ import {
 } from "@/shared/ktc/columns";
 import type { KtcVariant } from "@/shared/ktc/columns";
 import {
-  getManagerDraftAdp,
-  getManagerLeagueRosters,
+  lookupManagerDraftAdp,
+  lookupManagerLeagueRows,
   solveLeagueEntry,
 } from "@/shared/manager";
 import type {
@@ -156,9 +156,13 @@ export async function GET(
   const season = requested?.season ?? (await getActiveSeason());
 
   try {
+    // Both memoized in `manager/read-cache` — the rows for a minute, the
+    // capital corpus for fifteen — and both evicted by the persist that
+    // changes them, which is what lets the memo outlive a sync safely where
+    // the browser cache below could not.
     const [leagues, adp] = await Promise.all([
-      getManagerLeagueRosters(userId, season),
-      getManagerDraftAdp(userId, season),
+      lookupManagerLeagueRows(userId, season),
+      lookupManagerDraftAdp(userId, season),
     ]);
 
     if (leagues.length === 0) {
@@ -274,6 +278,10 @@ export async function GET(
       ktc: ktc.stamps,
       leagues: solved,
     };
+    // No `Cache-Control` here on purpose: the client re-fetches this exact URL
+    // the moment a cold sync completes, and a browser cache would answer it
+    // with the pre-sync payload — the server memo has no such problem, since
+    // the persist that wrote the new rosters is what evicts it.
     return NextResponse.json(payload);
   } catch (error) {
     console.error(`[lineups] failed for ${username} ${season}:`, error);

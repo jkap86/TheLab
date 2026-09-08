@@ -17,8 +17,12 @@ describe("leagueRefreshLimit", () => {
     assert.equal(limit.limit, limit.ceiling);
   });
 
-  test("a smaller request is honoured", () => {
-    assert.equal(leagueRefreshLimit(env("1")).limit, 1);
+  test("a request at or under the ceiling is honoured", () => {
+    // The ceiling is one, so there is no smaller positive integer to ask for;
+    // what the knob still does is record the request and grant it exactly.
+    const limit = leagueRefreshLimit(env("1"));
+    assert.equal(limit.requested, 1);
+    assert.equal(limit.limit, 1);
   });
 
   test("the variable requests a bound and cannot raise one", () => {
@@ -40,7 +44,10 @@ describe("leagueRefreshLimit", () => {
   });
 
   test("whitespace around a real number is tolerated", () => {
-    assert.equal(leagueRefreshLimit(env(" 2 ")).limit, 2);
+    // Read as the number it is, then clamped like any other request.
+    const limit = leagueRefreshLimit(env(" 2 "));
+    assert.equal(limit.requested, 2);
+    assert.equal(limit.limit, limit.ceiling);
   });
 
   test("the concurrency is the clamped limit, never the request", () => {
@@ -51,7 +58,9 @@ describe("leagueRefreshLimit", () => {
   test("the bound leaves room in the pool for the work it admits", () => {
     // A press holds a Postgres session (the advisory lock) across the Sleeper
     // fan-out *and* needs connections for the writes. A ceiling at or near the
-    // pool size is a deadlock rather than a throughput setting.
-    assert.ok(leagueRefreshLimit(env()).ceiling <= 3);
+    // pool size is a deadlock rather than a throughput setting — and one is the
+    // share this path gets of the pool's budget, beside the manager syncs' two
+    // and the crawl's one; `sync-admission.test.ts` pins the sum.
+    assert.equal(leagueRefreshLimit(env()).ceiling, 1);
   });
 });

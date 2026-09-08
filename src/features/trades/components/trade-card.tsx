@@ -10,14 +10,12 @@ import {
 } from "react";
 
 import type {
-  KtcBoardChoice,
   LineupColumn,
   ManagerLeague,
   ManagerLineupsPayload,
   MetricRank,
   Trade,
   TradeSide,
-  TradeValueBasis,
 } from "@/shared/contract";
 import { resolveKtcFormat } from "@/shared/ktc/board-choice";
 import { pickSlotKey } from "@/shared/trades/pick-slots";
@@ -63,6 +61,7 @@ import {
 } from "../exchange";
 import { pickLabel, pickOriginRoster } from "../pick-display";
 import type { TradeCardView } from "../trades-data";
+import { useValueLensChoice } from "./value-lens-context";
 
 /**
  * One trade, as a housing with a lit window per participating roster.
@@ -162,7 +161,15 @@ import type { TradeCardView } from "../trades-data";
  * shared by that page's trades. **`season` and `username` follow the same rule
  * and are props for the same reason** — `useStoredAccount()` inside the card
  * would subscribe every one of hundreds of rows to the same value, which is why
- * `basis` and `board` are already passed down rather than read here.
+ * the value basis and the KeepTradeCut market are read from the store once, in
+ * `TradesHome`, rather than here. **They are no longer props of this card
+ * either**: as props, a flip of either dropped this memo for every loaded row
+ * and re-rendered whole cards to change one figure per asset. They ride
+ * `ValueLensProvider` from the list and are read exactly where a figure is
+ * computed (`SideColumn`) and where the open half's subject needs the market
+ * (`TradeLeague`), so a flip re-renders those and nothing else — see
+ * `value-lens-context` for why a context read is not the per-card store
+ * subscription the rule above avoids.
  *
  * See `trades-data` for why a page's own maps are the right ones to read.
  */
@@ -170,8 +177,6 @@ export const TradeCard = memo(function TradeCard({
   trade,
   league,
   view,
-  basis,
-  board,
   teamsColumn,
   season,
   username,
@@ -183,17 +188,15 @@ export const TradeCard = memo(function TradeCard({
   /** Null before the leagues request lands, or if it failed. */
   league: ManagerLeague | null;
   view: TradeCardView;
-  /** Which of the three bases every figure on the board is on — `ValuePanel`. */
-  basis: TradeValueBasis;
   /**
-   * The reader's KeepTradeCut market choice — see `useKtcBoard`.
+   * What the expanded half's standings pane reads — see `TradeLeague`.
    *
-   * **The card's *asset* figures alone.** What the league behind the disclosure
-   * is priced on is `teamsColumn`'s, which is a different question with its own
-   * control on that pane's own ledge — see `TradeLeague`.
+   * A prop rather than a hook, where the value basis and the KeepTradeCut
+   * market are a context read: this is one column threaded from the page, and
+   * both alternatives — a store subscription per card, or a second context —
+   * cost more than passing it. The card's *asset* figures are priced on the
+   * reader's own market, which is a different question with its own control.
    */
-  board: KtcBoardChoice;
-  /** What the expanded half's standings pane reads — see `TradeLeague`. */
   teamsColumn: LineupColumn;
   /**
    * The season this board answers, which the expanded half is solved and
@@ -223,16 +226,10 @@ export const TradeCard = memo(function TradeCard({
   lit: boolean;
   onToggle: (id: string, event: MouseEvent<HTMLElement>) => void;
 }) {
-  // Resolved here rather than on the server, because the payload carries every
-  // basis and both markets and only this card knows which league it is — see
-  // `asset-value`. A league whose row has not arrived reads as `auto`'s
-  // non-dynasty case, which prices nothing wrongly: both markets are on the
-  // wire, and the one it lands on is corrected the moment the leagues request
-  // answers.
-  const lens: ValueLens = {
-    basis,
-    format: resolveKtcFormat(board, leagueType(league)),
-  };
+  // The league's own type, read once here and handed to both side columns,
+  // which resolve the reader's market against it — see `SideColumn`. Null
+  // until the leagues request lands.
+  const type = leagueType(league);
 
   return (
     // The `perspective` makes each `<li>` its own stacking context, so a card
@@ -405,11 +402,11 @@ export const TradeCard = memo(function TradeCard({
           <div className="relative mt-3.5 grid gap-4 sm:grid-cols-2 pointer-fine:[transform:translateZ(22px)]">
             {trade.sides.map((side) => (
               <SideColumn
-                lens={lens}
                 key={side.roster_id}
                 trade={trade}
                 side={side}
                 view={view}
+                leagueType={type}
                 condensed={open}
               />
             ))}
@@ -696,16 +693,32 @@ function SideColumn({
   trade,
   side,
   view,
-  lens,
+  leagueType,
   condensed,
 }: {
   trade: Trade;
   side: TradeSide;
   view: TradeCardView;
-  lens: ValueLens;
+  /** The league's Sleeper `settings.type`, or null before its row arrives. */
+  leagueType: number | null;
   /** The card is open — see `AssetTrack` for what the word buys. */
   condensed: boolean;
 }) {
+  // The reader's basis and market land here — the consumer that computes a
+  // figure — rather than on the card, so a flip of either re-renders these two
+  // windows and not the memo'd card around them. See `value-lens-context`.
+  //
+  // The format is resolved here rather than on the server, because the payload
+  // carries every basis and both markets and only this card knows which league
+  // it is — see `asset-value`. A league whose row has not arrived reads as
+  // `auto`'s non-dynasty case, which prices nothing wrongly: both markets are
+  // on the wire, and the one it lands on is corrected the moment the leagues
+  // request answers.
+  const { basis, board } = useValueLensChoice();
+  const lens: ValueLens = {
+    basis,
+    format: resolveKtcFormat(board, leagueType),
+  };
   const manager = side.user_id ? view.managers[side.user_id] : undefined;
   const received = receivedBundle(side);
   const given = givenBundle(trade, side);

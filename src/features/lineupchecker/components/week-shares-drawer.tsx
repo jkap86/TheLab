@@ -1,10 +1,10 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 
 import {
   SharesDrawer,
-  subjectKey,
+  subjectSlot,
   type LeagueSubjects,
   type SharesDrawerRow,
   type Subject,
@@ -97,8 +97,11 @@ export function WeekSharesDrawer({
     [shares],
   );
 
+  // Keyed by slot, on `SharesDrawer.chosen`'s rule. Neither week kind carries
+  // a mode, so the slot and the key agree here — and the slot is the spelling
+  // the drawer looks a row up by.
   const chosen = useMemo(
-    () => new Set(subjects.subjects.map(subjectKey)),
+    () => new Set(subjects.subjects.map(subjectSlot)),
     [subjects],
   );
 
@@ -139,6 +142,19 @@ export function WeekSharesDrawer({
     setCombo(null);
     onClose();
   };
+
+  // Pressing the selected row clears the narrowing; pressing any other row
+  // selects it *and* opens its decisions. Stable on its two inputs so the
+  // drawer is not handed a fresh one per render of the page above.
+  const toggle = useCallback(
+    (s: Subject) => {
+      const already = chosen.has(subjectSlot(s));
+      onToggle(s);
+      setCombo(null);
+      setDetail(already ? null : s.id);
+    },
+    [chosen, onToggle],
+  );
 
   return (
     <SharesDrawer
@@ -191,15 +207,8 @@ export function WeekSharesDrawer({
             }
           : null
       }
-      selected={(s) => chosen.has(subjectKey(s))}
-      onToggle={(s) => {
-        // Pressing the selected row clears the narrowing; pressing any other
-        // row selects it *and* opens its decisions.
-        const already = chosen.has(subjectKey(s));
-        onToggle(s);
-        setCombo(null);
-        setDetail(already ? null : s.id);
-      }}
+      chosen={chosen}
+      onToggle={toggle}
     />
   );
 }

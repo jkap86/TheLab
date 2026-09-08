@@ -1,12 +1,20 @@
-import type { KtcFormat, PlayerSummary } from "@/shared/contract";
+import type { KtcFormat, ManagerLeague, PlayerSummary } from "@/shared/contract";
 import { getKtcBoards } from "@/shared/ktc";
 import type { KtcBoards } from "@/shared/ktc";
-import { getSeasonDraftAdp } from "@/shared/manager";
-import type { DraftAdpBoards } from "@/shared/manager";
+import {
+  createReadMemo,
+  createStaleWhileRevalidateMemo,
+  getSeasonDraftAdp,
+} from "@/shared/manager";
+import type {
+  DraftAdpBoards,
+  ReadMemo,
+  StaleWhileRevalidateMemo,
+} from "@/shared/manager";
 import { getPlayersByIds } from "@/shared/players";
 
 import { BoundedCache, cachedLookup } from "./cache";
-import { getTradeLeagueMarkets } from "./queries";
+import { getSeasonTradeLeagues, getTradeLeagueMarkets } from "./queries";
 import type { TradeLeagueMarket } from "./queries";
 
 /**
@@ -119,7 +127,8 @@ export async function lookupKtcMarkets(): Promise<
 }
 
 /**
- * How long the season's draft-capital board is reused.
+ * How long the season's draft-capital board is reused before a rebuild runs
+ * behind it.
  *
  * The population behind it is completed drafts, which arrive a handful at a
  * time over a preseason and never after: what this window is sized against is a
@@ -130,39 +139,92 @@ export async function lookupKtcMarkets(): Promise<
  */
 const SEASON_ADP_TTL_MS = 15 * 60 * 1000;
 
-type SeasonAdpEntry = { at: number; boards: Promise<DraftAdpBoards> };
+/**
+ * The least time between two rebuilds of one season's board.
+ *
+ * A league persist marks the board stale (see {@link forgetSeasonAdp}) and the
+ * crawler persists up to thirty leagues a minute, so without this a rebuild
+ * would follow every one of them and the aggregate would run every couple of
+ * seconds for readers who cannot see the difference. A minute bounds how old a
+ * stale answer can be; a persist landing mid-rebuild is carried by the memo's
+ * own mark counting rather than by a second read.
+ */
+const SEASON_ADP_REVALIDATE_MS = 60 * 1000;
+
+/**
+ * How long the season's traded-league list is reused. Which leagues have a
+ * trade at all changes only when a sync writes a league's first one, and every
+ * league write evicts this outright — see {@link forgetSeasonTradeLeagues} for
+ * why that one is an eviction where the board above takes a stale mark.
+ */
+const SEASON_LEAGUES_TTL_MS = 5 * 60 * 1000;
 
 /**
  * Cached on `globalThis` rather than in module scope, for `board-read`'s and
  * `ros-read`'s reason: a per-bundle copy would re-run the aggregate once per
  * route rather than once per process. Keyed by season, since a board is asked
- * for one season at a time but a stale bookmark can name another.
+ * for one season at a time but a stale bookmark can name another. The memo
+ * shapes are `shared/manager/read-cache`'s, which is where their rules are
+ * tested with the reader and the clock injected.
  */
-const SEASON_ADP_KEY = Symbol.for("thelab.trades.seasonAdp");
+const SEASON_ADP_KEY = Symbol.for("thelab.trades.seasonAdpBoard");
+const SEASON_LEAGUES_KEY = Symbol.for("thelab.trades.seasonLeagues");
 const globalScope = globalThis as typeof globalThis & {
-  [SEASON_ADP_KEY]?: Map<string, SeasonAdpEntry>;
+  [SEASON_ADP_KEY]?: StaleWhileRevalidateMemo<DraftAdpBoards>;
+  [SEASON_LEAGUES_KEY]?: ReadMemo<ManagerLeague[]>;
 };
 
+const seasonAdpMemo = (): StaleWhileRevalidateMemo<DraftAdpBoards> =>
+  (globalScope[SEASON_ADP_KEY] ??= createStaleWhileRevalidateMemo({
+    ttlMs: SEASON_ADP_TTL_MS,
+    revalidateMs: SEASON_ADP_REVALIDATE_MS,
+    onRebuildError: (season, error) =>
+      console.warn(
+        `[trades] draft capital rebuild failed for ${season}; serving the previous board:`,
+        error,
+      ),
+  }));
+
+const seasonLeaguesMemo = (): ReadMemo<ManagerLeague[]> =>
+  (globalScope[SEASON_LEAGUES_KEY] ??= createReadMemo({
+    // A handful of seasons is every season there is; the bound is against a
+    // stale bookmark naming one that is not.
+    max: 8,
+    ttlMs: SEASON_LEAGUES_TTL_MS,
+  }));
+
 /**
- * The season's two ADP populations, from cache where it is fresh.
+ * The season's two ADP populations, from cache — **stale included**.
  *
- * **A failed read is evicted, never cached** — the `memoize-manager-lookup`
- * rule, which every memo in this app follows: a database blip remembered for
- * fifteen minutes is an outage extended by exactly the mechanism meant to
- * absorb one, and this read has a caller that degrades to an unpriced basis.
+ * This used to be evicted by every league persist, and the crawler persists up
+ * to thirty leagues a minute, so every page of trades re-ran a season-wide
+ * aggregate to answer with a board that had not measurably moved. A persist now
+ * *marks* the board stale instead: the stale board keeps answering while one
+ * rebuild runs behind it, at most once a minute, and a rebuild that rejects
+ * keeps the board rather than caching the failure — a population that moves a
+ * handful of drafts per preseason is better a minute old than absent, which is
+ * what the capital basis degrades to otherwise. Only a *cold* read that fails
+ * is evicted, on the `memoize-manager-lookup` rule every memo here follows:
+ * there is nothing older to serve, and a blip remembered for fifteen minutes is
+ * an outage extended by the mechanism meant to absorb one.
  */
 export function lookupSeasonAdp(season: string): Promise<DraftAdpBoards> {
-  const entries = (globalScope[SEASON_ADP_KEY] ??= new Map());
-  const cached = entries.get(season);
-  if (cached && Date.now() - cached.at < SEASON_ADP_TTL_MS) return cached.boards;
+  return seasonAdpMemo().read(season, () => getSeasonDraftAdp(season));
+}
 
-  const entry: SeasonAdpEntry = { at: Date.now(), boards: getSeasonDraftAdp(season) };
-  entries.set(season, entry);
-  entry.boards.catch(() => {
-    // Only our own entry — a newer read may already be underway.
-    if (entries.get(season) === entry) entries.delete(season);
-  });
-  return entry.boards;
+/**
+ * Every league with a trade on the season's board, from cache where it is
+ * fresh.
+ *
+ * `/api/trades/leagues` re-read and re-serialised every traded league's three
+ * JSONB blobs for every reader, to answer a list that changes only when a
+ * league's first trade is written — and that write evicts this. A failed read
+ * is evicted rather than cached, on the rule above.
+ */
+export function lookupSeasonTradeLeagues(
+  season: string,
+): Promise<ManagerLeague[]> {
+  return seasonLeaguesMemo().read(season, () => getSeasonTradeLeagues(season));
 }
 
 /**
@@ -184,12 +246,16 @@ export function forgetTradeLeagueMarkets(leagueIds: readonly string[]): number {
 }
 
 /**
- * Forget a season's draft-capital board.
+ * Mark a season's draft-capital board stale — or, with no season to name, drop
+ * every board.
  *
  * A league sync writes `drafts` and `draft_picks`, which is the population this
  * aggregate is taken over — so a draft finishing changes the board, and the
  * fifteen-minute window it would otherwise sit behind is exactly the wait this
- * exists to skip after an explicit sync.
+ * exists to skip after an explicit sync. **A mark rather than a deletion**: the
+ * board keeps answering while one rebuild runs behind it, for the reason
+ * {@link lookupSeasonAdp} gives. Answers 1 for a board that was there to mark,
+ * which is the count the invalidation's log line reports.
  *
  * **The players cache is deliberately not touched here or anywhere else.** It
  * stands in front of Sleeper's global NFL map, which no league sync writes; a
@@ -198,14 +264,27 @@ export function forgetTradeLeagueMarkets(leagueIds: readonly string[]): number {
  * sync into a cold board for the next reader.
  */
 export function forgetSeasonAdp(season: string | null): number {
-  const entries = globalScope[SEASON_ADP_KEY];
-  if (!entries) return 0;
-  if (season === null) {
-    const size = entries.size;
-    entries.clear();
-    return size;
-  }
-  return entries.delete(season) ? 1 : 0;
+  const memo = globalScope[SEASON_ADP_KEY];
+  if (!memo) return 0;
+  if (season === null) return memo.clear();
+  return memo.markStale(season) ? 1 : 0;
+}
+
+/**
+ * Forget the season's traded-league list, because a league's rows were just
+ * written and the write may have been that league's first trade.
+ *
+ * An eviction rather than a stale mark — the opposite call from the board
+ * above, for a reader-facing reason: the list is what every card names its
+ * league from, so a reader who opens the board straight after syncing a league
+ * would otherwise see that league as a bare id for up to a minute. The cost is
+ * that the first reader after any persist reads the list cold, which is one
+ * bounded read of a few hundred rows rather than a season-wide aggregate.
+ */
+export function forgetSeasonTradeLeagues(season: string | null): number {
+  const memo = globalScope[SEASON_LEAGUES_KEY];
+  if (!memo) return 0;
+  return memo.forget((key) => season === null || key === season);
 }
 
 /** For tests, and for a sync that has just replaced what this holds. */
@@ -213,4 +292,5 @@ export function clearTradeEnrichmentCaches(): void {
   playersCache.clear();
   leagueMarketCache.clear();
   globalScope[SEASON_ADP_KEY]?.clear();
+  globalScope[SEASON_LEAGUES_KEY]?.clear();
 }

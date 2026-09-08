@@ -1,5 +1,7 @@
 "use client";
 
+import { useSyncExternalStore } from "react";
+
 // With the `.ts`, unlike `ktc-board.ts` and like `shares-columns.ts`: this
 // module is tested under Node's own runner, which resolves the file it is given
 // rather than the alias graph — the same reason those two differ from each
@@ -92,15 +94,40 @@ export function markTradeDataSynced(): void {
   writeLocal(STORAGE_KEY, String(Date.now()));
 }
 
+// Never notifies: what this subscribes to is hydration itself, which happens
+// once and is not a store that can change again.
+const subscribeNever = (): (() => void) => () => {};
+const hydrated = () => true;
+const notHydrated = () => false;
+
 /**
- * The stamp this device's trade requests should carry.
+ * The stamp this device's trade requests should carry, and whether it is the
+ * *answer* yet.
  *
- * Null on the server and on the first client render, which `local-store`
- * documents and which is right here: the first render's request is the plain
- * cacheable one, and a stored stamp swaps in after hydration — one extra fetch,
- * once, for a reader who has synced. No `useMemo`, because the value is a
- * string and `useSyncExternalStore` already compares by identity.
+ * `useLocalValue` reads null on the server and on the hydration render, so a
+ * device that has ever synced folds to `NO_TRADE_STAMP` for one render and to
+ * its real stamp on the next. The stamp joins both trade reads' subjects, so
+ * left ungated that first render starts two requests, and the re-render one
+ * render later aborts and restarts both — the server having already begun both
+ * queries. `resolved` is false for exactly that one render, and the two hooks
+ * wait it out rather than spending a round trip they are about to throw away.
+ *
+ * It is a second `useSyncExternalStore` rather than an "unread" state on
+ * `useLocalValue`, because null there already means "nothing stored" for every
+ * other caller and widening it would put a third state in front of all of them.
+ *
+ * No `useMemo` on the stamp itself: the value is a string, and the object this
+ * returns is read field-by-field into effect deps rather than compared whole.
  */
-export function useTradeDataStamp(): TradeDataStamp {
-  return parseTradeDataStamp(useLocalValue(STORAGE_KEY));
+export function useTradeDataStamp(): {
+  stamp: TradeDataStamp;
+  resolved: boolean;
+} {
+  const stamp = parseTradeDataStamp(useLocalValue(STORAGE_KEY));
+  const resolved = useSyncExternalStore(
+    subscribeNever,
+    hydrated,
+    notHydrated,
+  );
+  return { stamp, resolved };
 }

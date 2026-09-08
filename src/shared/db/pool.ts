@@ -32,10 +32,23 @@ const globalForPool = globalThis as unknown as { pgPool?: Pool };
  * How many connections this process may hold.
  *
  * TheLabX derives this and the three timeouts below from a request-deadline
- * budget shared by every route, a background worker and a crawler. This app has
- * one database-backed route and no loops, so they are constants — the numbers
- * that budget produced for a small managed plan. The crawler port is what makes
- * a derivation earn its place again; the call sites do not move when it does.
+ * budget shared by every route, a background worker and a crawler. Here they
+ * are constants — the numbers that budget produced for a small managed plan —
+ * and the crawler port did not make a derivation earn its place: the loops
+ * bound themselves, and this number is what they are bounded *against*.
+ *
+ * **The budget, since four constants are shares of it and none of them can see
+ * the others.** A session parked on an advisory lock across a Sleeper fan-out
+ * is the expensive kind of connection — held for the whole of an upstream wait
+ * — and there are at most four: `DEFAULT_MANAGER_SYNC_LIMIT` (2) manager syncs,
+ * `DEFAULT_LEAGUE_REFRESH_LIMIT` (1) refresh press or history load, and the
+ * crawl's one lock. The other six carry every transaction — each parker's
+ * per-league persists (2 × `LEAGUE_FETCH_CONCURRENCY` (2), 1, and
+ * `CRAWL_CONCURRENCY` (4)) and every route's reads — which are short and
+ * time-share them. When the parked sessions were seven of ten, a
+ * `pool.connect()` that queued past {@link CONNECTION_TIMEOUT_MS} surfaced in
+ * the sync as a *league* failure and on the page as staleness, naming the pool
+ * nowhere. Move this number and those four move with it.
  */
 const DEFAULT_POOL_MAX = 10;
 

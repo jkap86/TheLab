@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { memo, useRef, useState } from "react";
 
 import type {
   LineupColumn,
@@ -30,6 +30,28 @@ import {
 } from "../lineup-columns";
 import { ColumnAxes, ColumnPanel, columnSetting } from "./column-panel";
 import { Scanlines } from "./card-plate";
+
+type ColumnsDialogProps = {
+  /** The chosen columns, already in canonical order — see `useLineupColumns`. */
+  columns: readonly LineupColumn[];
+  /** Which markets answered and when each was scraped; empty when none could. */
+  ktc: ManagerLineupsPayload["ktc"];
+  /**
+   * The starting seats this account's leagues actually run — `slotsInHand` over
+   * the caller's own league list, in canonical order.
+   *
+   * **The offered vocabulary, not the whole one**: a key for a seat no league
+   * starts is a narrowing that could never seat anybody, which is the rule the
+   * position axis's list already lives by. Empty is a real state — an account
+   * whose leagues have no `roster_positions` stored yet — and the track is
+   * omitted entirely there rather than drawn as a lone `All`, which is a switch
+   * with one detent. That is not the fluctuation the always-mounted rule
+   * forbids: the vocabulary is a prop and cannot move under a press.
+   */
+  slots?: readonly LineupSlot[];
+  /** The trigger's shape — see `LeagueFiltersDialog`, which is shaped the same way. */
+  triggerClassName?: string;
+};
 
 /**
  * The column picker: a trigger key and a native `<dialog>`, which is the whole
@@ -185,33 +207,19 @@ import { Scanlines } from "./card-plate";
  * the thing that would otherwise have been copied is six switch tracks in one
  * housing: a switch that stopped travelling in one of two spellings is a panel
  * nobody can see is broken, which is the rule `SwitchTrack` itself exists for.
+ *
+ * **`memo`'d, on `LeagueFiltersDialog`'s terms**: it is mounted on a page
+ * that re-renders on every line of a leagues stream, and its own render
+ * derives the rack, the vocabulary and every track's state from props that
+ * do not move between those lines. See {@link columnsDialogPropsEqual} for
+ * the one prop compared by value.
  */
-export function LineupColumnsDialog({
+export const LineupColumnsDialog = memo(function LineupColumnsDialog({
   columns,
   ktc,
   slots = [],
   triggerClassName = `${CONSOLE_KEY_PILL} inline-flex items-center border-foreground/10 bg-[image:var(--key-bg)] text-foreground/80 shadow-[var(--key-shadow)] hover:text-readout`,
-}: {
-  /** The chosen columns, already in canonical order — see `useLineupColumns`. */
-  columns: readonly LineupColumn[];
-  /** Which markets answered and when each was scraped; empty when none could. */
-  ktc: ManagerLineupsPayload["ktc"];
-  /**
-   * The starting seats this account's leagues actually run — `slotsInHand` over
-   * the caller's own league list, in canonical order.
-   *
-   * **The offered vocabulary, not the whole one**: a key for a seat no league
-   * starts is a narrowing that could never seat anybody, which is the rule the
-   * position axis's list already lives by. Empty is a real state — an account
-   * whose leagues have no `roster_positions` stored yet — and the track is
-   * omitted entirely there rather than drawn as a lone `All`, which is a switch
-   * with one detent. That is not the fluctuation the always-mounted rule
-   * forbids: the vocabulary is a prop and cannot move under a press.
-   */
-  slots?: readonly LineupSlot[];
-  /** The trigger's shape — see `LeagueFiltersDialog`, which is shaped the same way. */
-  triggerClassName?: string;
-}) {
+}: ColumnsDialogProps) {
   const ref = useRef<HTMLDialogElement>(null);
   /**
    * Which bay is being edited.
@@ -448,6 +456,29 @@ export function LineupColumnsDialog({
         />
       </ColumnPanel>
     </>
+  );
+}, columnsDialogPropsEqual);
+
+/**
+ * `memo`'s comparison, and the one prop it reads by value.
+ *
+ * Every prop is identity-stable at its call site — the columns are the store's
+ * memo, the slots a `useMemo`, the trigger a constant — except `ktc`, which
+ * a caller can spell `lineups?.ktc ?? []`: a fresh empty literal every render
+ * until the lineups land, and the whole page renders once per line of the
+ * leagues stream. Two empty boards are the same board, so that case is
+ * answered by length rather than by identity; a board with rows in it is still
+ * compared by identity, since the payload it came off is stable.
+ */
+function columnsDialogPropsEqual(
+  prev: Readonly<ColumnsDialogProps>,
+  next: Readonly<ColumnsDialogProps>,
+): boolean {
+  return (
+    prev.columns === next.columns &&
+    prev.slots === next.slots &&
+    prev.triggerClassName === next.triggerClassName &&
+    (prev.ktc === next.ktc || (prev.ktc.length === 0 && next.ktc.length === 0))
   );
 }
 

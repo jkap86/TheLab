@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 
 import type {
   ManagerLeague,
@@ -117,6 +117,10 @@ export function PlayerSharesDrawer({
   // and the key's own badge is what says so when the tray is shut.
   const [filters, setFilters] = useState<PlayerFilterState>(NO_PLAYER_FILTERS);
   const [trayOpen, setTrayOpen] = useState(false);
+  // Stable, so the drawer under them is handed the same props on every render
+  // of the page above — which re-renders this on every stream chunk.
+  const clearFilters = useCallback(() => setFilters(NO_PLAYER_FILTERS), []);
+  const toggleTray = useCallback(() => setTrayOpen((v) => !v), []);
 
   const shares = useMemo(
     () =>
@@ -215,7 +219,7 @@ export function PlayerSharesDrawer({
       onRetry={read.retry}
       emptyMessage="No players rostered in these leagues yet."
       filtersActive={active > 0}
-      onClearFilters={() => setFilters(NO_PLAYER_FILTERS)}
+      onClearFilters={clearFilters}
       filters={
         <PlayerFilters
           players={players}
@@ -224,10 +228,10 @@ export function PlayerSharesDrawer({
           ageBounds={ageBounds}
           classBounds={classBounds}
           open={trayOpen}
-          onToggleOpen={() => setTrayOpen((v) => !v)}
+          onToggleOpen={toggleTray}
         />
       }
-      selected={(subject) => chosen.has(subjectSlot(subject))}
+      chosen={chosen}
       onToggle={onToggle}
       selectedStrip={(row) => (
         <PlayerModeTrack

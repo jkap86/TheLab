@@ -73,6 +73,24 @@ export type {
   LeagueChain,
   ManagerLeagueRow,
 } from "./queries";
+// The memos in front of the two reads above that three routes share, and the
+// two memo shapes they are built from — exported because `shared/trades`
+// builds its own season-wide memos on the same shapes.
+export {
+  MANAGER_DRAFT_ADP_TTL_MS,
+  MANAGER_LEAGUE_ROWS_TTL_MS,
+  createReadMemo,
+  createStaleWhileRevalidateMemo,
+  forgetManagerReads,
+  lookupManagerDraftAdp,
+  lookupManagerLeagueRows,
+} from "./read-cache";
+export type {
+  ReadMemo,
+  ReadMemoOptions,
+  StaleWhileRevalidateMemo,
+  StaleWhileRevalidateOptions,
+} from "./read-cache";
 export { solveLeagueLineup } from "./ros-lineups";
 export type { RosLineupLeague } from "./ros-lineups";
 export {

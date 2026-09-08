@@ -1,5 +1,7 @@
 "use client";
 
+import { memo } from "react";
+
 import { Scanlines } from "@/features/shared";
 
 import type { LogRow } from "../helpers/facets";
@@ -87,18 +89,22 @@ export function LogsTable({ rows }: { rows: readonly LogRow[] }) {
   );
 }
 
-function Row({ row }: { row: LogRow }) {
-  // No locale argument, deliberately: the ported original hardcodes "en-US" for
-  // a page only its author reads. The rows are rendered after a fetch, so there
-  // is no server render for a locale difference to mismatch against. The clock
-  // is pinned to 24 hours all the same — a meridiem is a fifth token in a column
-  // that gets a third of 390px, and it wrapped onto a line of its own.
-  const when = new Date(row.seen_at);
-  const time = when.toLocaleTimeString(undefined, { hourCycle: "h23" });
+/**
+ * One visit.
+ *
+ * **`memo`, and the stamp is read rather than formatted** — see `LogRow`'s own
+ * note. The window holds up to `VISITOR_LOG_CAP` rows and the page hands the
+ * table a new array on every keystroke, so an unmemoised row re-rendered five
+ * thousand times a letter to print fields that had not moved. `row` is the
+ * object the fetch built, so it is reference-stable across a narrowing and the
+ * memo holds for every row that survives it.
+ */
+const Row = memo(function Row({ row }: { row: LogRow }) {
+  const time = row.time;
   return (
     <tr className="border-b border-foreground/8 last:border-b-0">
       <td className={`${CELL} font-mono text-[length:var(--fs-11)] text-readout-muted`}>
-        {when.toLocaleDateString()}
+        {row.date}
         <br />
         <span className="text-readout-line">{time}</span>
       </td>
@@ -118,7 +124,7 @@ function Row({ row }: { row: LogRow }) {
       </td>
     </tr>
   );
-}
+});
 
 /** An absent value. `aria-hidden` with a word behind it, so it is not read as "dash". */
 function Dash() {

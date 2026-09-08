@@ -116,9 +116,13 @@ const EMPTY = EMPTY_PAGES;
 export function useTrades(
   request: TradeRequest,
   key: string,
-  options: { limit?: number } = {},
+  options: { limit?: number; enabled?: boolean } = {},
 ): TradesState {
-  const { limit } = options;
+  // `enabled` is false only while this device's sync stamp is still unread —
+  // one render, on a device that has ever synced (see `useTradeDataStamp`).
+  // The stamp is part of `key`, so fetching then is a first page the very next
+  // render aborts and reissues, with the server already committed to the query.
+  const { limit, enabled = true } = options;
   const [state, setState] = useState<Pages>(EMPTY);
   const [loading, setLoading] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
@@ -177,6 +181,7 @@ export function useTrades(
   }
 
   useEffect(() => {
+    if (!enabled) return;
     inFlight.current?.abort();
     const controller = new AbortController();
     inFlight.current = controller;
@@ -212,7 +217,7 @@ export function useTrades(
     // `key` is the subject; `request` is read through the ref so that rebuilding
     // an identical request object cannot restart the board. `attempt` is the
     // retry, which asks the same subject again.
-  }, [key, limit, attempt]);
+  }, [key, limit, attempt, enabled]);
 
   /**
    * Fetch the next page from the cursor the board is holding.

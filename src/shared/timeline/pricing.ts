@@ -6,7 +6,7 @@ import type {
 } from "@/shared/contract";
 import { getKtcBoards, isSuperflexLineup, ktcBoardValue } from "@/shared/ktc";
 import { resolveKtcFormat } from "@/shared/ktc/board-choice";
-import { getManagerDraftAdp, leaguePickBoard, pickValue } from "@/shared/manager";
+import { leaguePickBoard, lookupManagerDraftAdp, pickValue } from "@/shared/manager";
 import type { DraftPickAsset, ManagerLeagueRow } from "@/shared/manager";
 import { getRosProjections, restOfSeasonStart } from "@/shared/projections";
 import type { RosProjections } from "@/shared/projections";
@@ -182,7 +182,9 @@ async function readAdp(
 ) {
   if (managerUserId === null) return new Map<string, never>();
   try {
-    const boards = await getManagerDraftAdp(managerUserId, season);
+    // The lineups route's own memo of `getManagerDraftAdp`: a rail opens under
+    // a card that already priced its present off this aggregate.
+    const boards = await lookupManagerDraftAdp(managerUserId, season);
     return superflex ? boards.superflex : boards.standard;
   } catch (error) {
     console.warn(`[timeline] ADP unavailable for ${season}:`, error);

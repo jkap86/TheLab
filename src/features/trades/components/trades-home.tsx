@@ -75,8 +75,12 @@ export function TradesHome({
   // reader who has just synced is not answered out of a browser cache filled
   // before they did — see `features/shared/trade-freshness` for why the two
   // routes keep their cache headers and this rides the URL instead.
-  const stamp = useTradeDataStamp();
-  const { leagues, byId, error: leaguesError } = useTradeLeagues(season, stamp);
+  const { stamp, resolved: stampResolved } = useTradeDataStamp();
+  const { leagues, byId, error: leaguesError } = useTradeLeagues(
+    season,
+    stamp,
+    stampResolved,
+  );
 
   const [leagueFilters, setLeagueFilters] = useState(DEFAULT_LEAGUE_FILTERS);
   const [filters, setFilters] = useState<TradeFilters>(DEFAULT_TRADE_FILTERS);
@@ -144,7 +148,7 @@ export function TradesHome({
     retry,
     error,
     loadMoreError,
-  } = useTrades(request, requestKey);
+  } = useTrades(request, requestKey, { enabled: stampResolved });
 
   // Names come off whatever the board has loaded; a facet can name a player no
   // loaded page does, which is why the panel merges its own `names` in. The id

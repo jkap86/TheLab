@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import type {
   KtcBoardChoice,
@@ -141,11 +141,15 @@ function useSharesResource<T>(
   // lint rule is there to stop. It is also redundant: a read that has been asked
   // for and has neither answered nor failed *is* the loading state, and deriving
   // it means the flag cannot be left true by a path that forgot to clear it.
-  return {
-    ...state,
-    loading: enabled && Boolean(season) && !state.data && !state.error,
-    retry,
-  };
+  //
+  // Memoised because the object is a prop: both drawers take it whole, and a
+  // fresh one per render of the page would re-render every row they hold on
+  // every stream chunk and card toggle, with nothing in it having moved.
+  const loading = enabled && Boolean(season) && !state.data && !state.error;
+  return useMemo(
+    () => ({ data: state.data, error: state.error, loading, retry }),
+    [state, loading, retry],
+  );
 }
 
 /**

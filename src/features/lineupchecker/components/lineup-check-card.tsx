@@ -673,10 +673,17 @@ function MetricTile({ label, cell }: { label: string; cell: MetricCell }) {
  * `text-transparent` is Tailwind's `color`, which is what a browser with no
  * `background-clip: text` falls back to painting — so the fill is spelled as
  * well, and a glyph is never invisible on a browser that ignores the clip.
+ *
+ * **The extrusion rides `pointer-fine:`**, on the card's own per-device
+ * budget: a `filter` is a compositor buffer per element, and this is up to
+ * four per card on a page with no virtualizer — the same per-card filter
+ * buffer the league card's title is gated for, and the same iOS Safari tab
+ * kill behind it. A coarse pointer gets the red ramp clipped to the glyphs,
+ * without the cast.
  */
 const STRUCK_FIGURE =
   "bg-[image:var(--alert-face)] bg-clip-text text-transparent " +
-  "[-webkit-text-fill-color:transparent] [filter:var(--alert-depth)]";
+  "[-webkit-text-fill-color:transparent] pointer-fine:[filter:var(--alert-depth)]";
 
 /**
  * The mark's face gradient, declared once for the whole page.
@@ -799,7 +806,9 @@ function CheckMark({ text, title }: { text: string; title: string }) {
         fill="none"
         aria-hidden
         focusable="false"
-        className="h-[31px] w-[36px] [filter:var(--mark-glow)] sm:h-10 sm:w-[46px]"
+        // The bloom is a `filter`, gated with the struck figure's for the same
+        // per-device reason: a cleared page is four of these a card.
+        className="h-[31px] w-[36px] sm:h-10 sm:w-[46px] pointer-fine:[filter:var(--mark-glow)]"
       >
         <g fill="none" strokeLinecap="round" strokeLinejoin="round">
           {/* Back to front. The token is set as a CSS property rather than as
@@ -833,16 +842,24 @@ function CheckMark({ text, title }: { text: string; title: string }) {
               after the run — so the mark needs no state either side of it.
               `.lab-anim` is the app's one reduced-motion hook, and the
               animation is set inline because that rule's `!important` is
-              written for exactly this. */}
+              written for exactly this.
+
+              **No `blur()` on it.** A filter under an animation is a
+              compositor buffer re-rasterised per frame, and a cleared page
+              runs up to four of these a card at once on mount — ~450 blurred
+              animating SVGs on a 113-league page. The softness the blur bought
+              is approximated by a slightly wider stroke at less than full
+              `stroke-opacity`: that property is not one the keyframes animate,
+              so it composes with their opacity ramp rather than fighting it. */}
           <path
             className="lab-anim"
             d={MARK_RIDGE_PATH}
             stroke="#ffffff"
-            strokeWidth={4}
+            strokeWidth={4.6}
+            strokeOpacity={0.72}
             strokeDasharray="12 60"
             style={{
               animation: "mark-glint 1.15s cubic-bezier(0.3,0.7,0.3,1) 0.35s 1 both",
-              filter: "blur(1px)",
             }}
           />
         </g>

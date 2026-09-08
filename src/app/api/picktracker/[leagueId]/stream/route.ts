@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 
 import type { ApiErrorPayload, PicktrackerStreamMessage } from "@/shared/contract";
 import { joinRoom } from "@/shared/picktracker";
+import type { RoomListener } from "@/shared/picktracker";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -83,23 +84,26 @@ export async function GET(
         }
       };
       /**
-       * Deliver one message, dropping a *board* the consumer is not draining.
+       * Deliver one frame, dropping a *board* the consumer is not draining.
        *
        * Every board is self-sufficient — the whole list, never a delta — so the
        * newest supersedes any the socket refused, and dropping one costs the
        * reader nothing once they start reading again. A transition is never
        * dropped: a `stale` or a terminal `error` lost behind a full buffer is
        * the one message whose absence changes what the reader believes.
+       *
+       * The frame arrives already serialised — once per room, not once per
+       * stream (see `RoomFrame`) — so this writes the string and parses nothing.
        */
-      const send = (message: PicktrackerStreamMessage) => {
+      const send: RoomListener = (frame) => {
         const stalled =
           controller.desiredSize !== null && controller.desiredSize <= 0;
-        if (stalled && message.type === "board") {
+        if (stalled && frame.type === "board") {
           if ((unread += 1) >= MAX_UNREAD) finish();
           return;
         }
         unread = 0;
-        write(`data: ${JSON.stringify(message)}\n\n`);
+        write(`data: ${frame.json}\n\n`);
       };
 
       /** Idempotent on every path: leave the room, stop the beat, close once. */
@@ -151,7 +155,11 @@ export async function GET(
         // never work would otherwise be retried forever, a second apart, by
         // every tab that opened it. The client closes on this message; the
         // status cannot ride the response, because the headers are long gone.
-        send({ type: "error", error: joined.error });
+        //
+        // Serialised here rather than by the room: this message is this
+        // stream's own and no room exists to have serialised it.
+        const message: PicktrackerStreamMessage = { type: "error", error: joined.error };
+        send({ type: message.type, json: JSON.stringify(message) });
         finish();
         return;
       }
@@ -167,7 +175,7 @@ export async function GET(
 
       // The board as it stands, immediately: a joiner must not stare at nothing
       // until the room's next tick, which on a `pre_draft` league is a minute.
-      send({ type: "board", payload: joined.payload });
+      send(joined.frame);
 
       // **The heartbeat is not decoration.** An SSE comment keeps a proxy's
       // idle timeout from cutting a stream that is correctly silent — the room

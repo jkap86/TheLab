@@ -102,15 +102,22 @@ export const MANAGER_SYNC_LIMIT_VAR = "MANAGER_SYNC_LIMIT";
  * `ADVISORY_LOCK_WAIT_MS` is a share of the request deadline. A manager sync is
  * not one query, it is a Postgres session held for the whole operation (the
  * advisory lock) *plus* the reads and writes each league needs, so what bounds
- * it honestly is how much of the pool a single request may hold. Three of the
- * default ten: the held lock connections are a third of the pool and the rest
- * is left for the work those syncs are running, and for every other route.
+ * it honestly is how much of the pool a single request may hold. Two of the
+ * default ten: with a refresh press's one parked session and the crawl's one
+ * lock, that is ≤ 4 sessions parked across Sleeper waits, and the other six
+ * are what every transaction — these syncs' own `LEAGUE_FETCH_CONCURRENCY`
+ * persists, the crawl's, a press's, and every route's reads — runs on. At
+ * three (and six-wide persists) the parked sessions were seven of ten and the
+ * transient demand queued past the pool's five-second connect bound, which
+ * surfaced as league failures and stale pages rather than as anything naming
+ * the pool. See `LEAGUE_FETCH_CONCURRENCY` for the whole sum.
  *
  * TheLabX derives this from a database budget that also sizes the pool; here
- * both are constants, and this one is the third that has to move if
- * `DEFAULT_POOL_MAX` does.
+ * both are constants, and this one is among the four that have to move if
+ * `DEFAULT_POOL_MAX` does — the others are the two named above and the
+ * crawl's `CRAWL_CONCURRENCY`.
  */
-const DEFAULT_MANAGER_SYNC_LIMIT = 3;
+const DEFAULT_MANAGER_SYNC_LIMIT = 2;
 
 /** What was asked for, what the ceiling is, and what will be used. */
 export type ManagerSyncLimit = {
@@ -200,8 +207,8 @@ export function createManagerSyncAdmission(limit: number): ManagerSyncAdmission 
   return {
     reserve(key, { dedupe }) {
       // Checked before the permit is taken, so a duplicate never occupies one:
-      // asked the other way round, two tabs on one manager would spend two of
-      // three permits to do one manager's work.
+      // asked the other way round, two tabs on one manager would spend both
+      // permits to do one manager's work.
       if (dedupe && inFlight.has(key)) return { ok: false, reason: "duplicate" };
 
       const permit = limiter.tryAcquire();
@@ -240,9 +247,11 @@ export function createManagerSyncAdmission(limit: number): ManagerSyncAdmission 
  *
  * The pool's rule, for the pool's reason: a route bundle that gets its own copy
  * of this module gets its own semaphore and its own idea of how many syncs are
- * running, and nothing in the process can tell. Two copies of a cap of three is
- * a cap of six, which is most of the pool — exactly the failure the cap exists
- * to prevent, arrived at by module duplication rather than by traffic.
+ * running, and nothing in the process can tell. Two copies of a cap of two is
+ * a cap of four parked sessions from this path alone, which with the other two
+ * parkers is the six connections everything else runs on — exactly the failure
+ * the cap exists to prevent, arrived at by module duplication rather than by
+ * traffic.
  */
 const globalForAdmission = globalThis as unknown as {
   managerSyncAdmission?: ManagerSyncAdmission;

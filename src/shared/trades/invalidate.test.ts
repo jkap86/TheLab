@@ -159,15 +159,33 @@ describe("invalidateTradeCaches, as it is written", () => {
   // make a search of the whole file match its own explanation.
   const source = withoutComments(read("src/shared/trades/invalidate.ts"));
 
-  test("it forgets the four league-scoped reads and the circles", () => {
+  test("it forgets the league-scoped reads, the circles and the members' pages", () => {
     for (const call of [
       "forgetTradeLeagueReads",
       "forgetTradeLeagueMarkets",
+      "forgetSeasonTradeLeagues",
       "forgetSeasonAdp",
       "forgetTradeCircles",
+      "forgetManagerReads",
     ]) {
       assert.ok(source.includes(`${call}(`), `${call} should be called`);
     }
+  });
+
+  test("the traded-league list goes on any league write, and only on one", () => {
+    // A persist can be a league's first trade, and a caller with only a season
+    // — or only members — has written no league row.
+    assert.match(
+      source,
+      /if \(leagueIds\.length > 0\) dropped \+= forgetSeasonTradeLeagues\(season\)/,
+    );
+  });
+
+  test("the members' own memos are forgotten with the membership the write named", () => {
+    // `shared/manager/read-cache` is keyed by user and season, and the league's
+    // stored membership is the set whose rows and capital corpus this write
+    // moved — the same list the circles are pruned by.
+    assert.match(source, /forgetManagerReads\(userIds, season\)/);
   });
 
   test("it never clears a cache wholesale", () => {
@@ -194,10 +212,15 @@ describe("invalidateTradeCaches, as it is written", () => {
     );
   });
 
-  test("the season gates the capital board and nothing else", () => {
+  test("the season and the pick flag both gate the capital board", () => {
     // A caller that cannot name a season must not have the whole board dropped
-    // out from under every other reader.
-    assert.match(source, /if \(season !== null\) dropped \+= forgetSeasonAdp\(season\)/);
+    // out from under every other reader — and one that names a season but wrote
+    // no picks cannot have moved it either, which is the case the crawler is
+    // every minute.
+    assert.match(
+      source,
+      /if \(season !== null && wroteDraftPicks\) dropped \+= forgetSeasonAdp\(season\)/,
+    );
   });
 });
 
@@ -227,6 +250,25 @@ describe("where the invalidation is called from", () => {
     assert.match(fn, /leagueIds: \[g\.league\.league_id\]/);
     assert.match(fn, /season: g\.league\.season/);
     assert.match(fn, /userIds: g\.users\.map\(\(u\) => u\.user_id\)/);
+  });
+
+  test("the season is always named and the capital board is gated apart", () => {
+    // The two are separate fields because `season` narrows three other
+    // forgets: spelling "this write moved no ADP" as a null season would widen
+    // the circle and manager-read evictions to *every* season for these
+    // readers. A refresh that skipped its completed drafts writes no picks, and
+    // that is the case this keeps off the season's capital board.
+    const fn = persist.slice(persist.indexOf("export async function persistLeagueGraph("));
+    assert.match(fn, /wroteDraftPicks: wrotePicks/);
+    assert.ok(
+      !/season: wrotePicks/.test(fn),
+      "the season must not be nulled to spare the capital board",
+    );
+    assert.match(
+      withoutComments(read("src/shared/trades/invalidate.ts")),
+      /if \(season !== null && wroteDraftPicks\) dropped \+= forgetSeasonAdp\(season\)/,
+      "only a write that replaced picks touches the capital board",
+    );
   });
 
   test("the two league-row writers invalidate too", () => {

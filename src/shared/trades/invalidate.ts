@@ -1,5 +1,11 @@
+import { forgetManagerReads } from "@/shared/manager";
+
 import { forgetTradeCircles } from "./circle";
-import { forgetSeasonAdp, forgetTradeLeagueMarkets } from "./enrich";
+import {
+  forgetSeasonAdp,
+  forgetSeasonTradeLeagues,
+  forgetTradeLeagueMarkets,
+} from "./enrich";
 import { forgetTradeLeagueReads } from "./queries";
 
 /**
@@ -29,6 +35,16 @@ import { forgetTradeLeagueReads } from "./queries";
  * - **It is one function, so a write does not have to know the shape of four
  *   caches.** The rule the task of adding a fifth should follow: give the cache
  *   a `forget…` of its own, keyed the way it is keyed, and name it here.
+ *
+ * **Two of what it forgets are the manager page's, not the board's.**
+ * `forgetManagerReads` drops `shared/manager/read-cache`'s memos — the rows the
+ * lineups route solves and the capital corpus it prices on — for the league's
+ * members. They are named here rather than from an invalidation of their own
+ * because this is the one function every league writer already calls, and a
+ * second one is exactly the "cache that nothing dropped" this file opens with.
+ * "Forget" is one word for two treatments: the season's capital board takes a
+ * *stale mark* and keeps answering while it rebuilds, where everything else is
+ * evicted — see `forgetSeasonAdp` for why.
  *
  * **What is deliberately not invalidated**, each for the same reason: it did
  * not change.
@@ -67,6 +83,20 @@ export type TradeCacheInvalidation = {
    */
   userIds?: readonly string[];
   /**
+   * Whether this write replaced any draft's picks, which is the only thing a
+   * league sync does that can move the season's draft-capital board.
+   *
+   * **A separate field rather than a null `season`**, because `season` narrows
+   * three other evictions: passing null to spare the capital board would widen
+   * the circle and manager-read forgets to *every* season for those readers.
+   * The routine refresh writes no picks at all now — a completed draft is
+   * skipped at fetch time — so this is false for almost every crawl tick, and
+   * that is what keeps the board it guards from being rebuilt per `/api/trades`
+   * page. Defaults true: a caller that has not thought about it gets the old,
+   * safe behaviour.
+   */
+  wroteDraftPicks?: boolean;
+  /**
    * Why, for the log line. A sentence fragment: "league graph synced",
    * "league tombstoned".
    */
@@ -85,16 +115,30 @@ export type TradeCacheInvalidation = {
 export function invalidateTradeCaches(
   invalidation: TradeCacheInvalidation,
 ): void {
-  const { leagueIds = [], season = null, userIds = [], reason } = invalidation;
+  const {
+    leagueIds = [],
+    season = null,
+    userIds = [],
+    wroteDraftPicks = true,
+    reason,
+  } = invalidation;
   if (leagueIds.length === 0 && userIds.length === 0 && season === null) return;
 
   let dropped = forgetTradeLeagueReads(leagueIds, userIds);
   dropped += forgetTradeLeagueMarkets(leagueIds);
-  // A league sync writes `drafts` and `draft_picks`, which is the population the
-  // season's capital board is aggregated over.
-  if (season !== null) dropped += forgetSeasonAdp(season);
+  // Any league write can be that league's first trade — the one event that
+  // changes which leagues the season's board names at all.
+  if (leagueIds.length > 0) dropped += forgetSeasonTradeLeagues(season);
+  // A league sync that wrote picks moved the population the season's capital
+  // board is aggregated over. One that wrote none cannot have, and marking the
+  // board stale for it is what made a 15-minute cache live seconds under the
+  // crawler — see `wroteDraftPicks`.
+  if (season !== null && wroteDraftPicks) dropped += forgetSeasonAdp(season);
   // Membership moved, so "my leagues" and "my leaguemates" moved with it.
   dropped += forgetTradeCircles(userIds, season);
+  // And the members' own pages moved: the rows the lineups route solves are
+  // this league's rosters, and its drafts sit in each member's capital corpus.
+  dropped += forgetManagerReads(userIds, season);
 
   // Quiet by default: the crawler runs this once a minute per batch, and a line
   // per league would drown an operator's log to report a map deletion. Only a

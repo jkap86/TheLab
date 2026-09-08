@@ -22,6 +22,7 @@ import {
 import { fetchLeagueGraph, type GraphWeeks } from "./graph";
 import { leagueGraphWeeks, type SyncClock } from "./graph-weeks";
 import {
+  getStoredCompleteDraftIds,
   getStoredMaxMatchupWeekByLeague,
   getStoredMaxWeekByLeague,
   persistLeagueGraph,
@@ -103,11 +104,29 @@ export {
 export type { ManagerSyncState, SyncGate, SyncGateReason } from "./sync-freshness";
 
 /**
- * Leagues fetched+persisted at once. Power users have 100+ leagues; fanning out
- * all of them at once overwhelms the connection and Sleeper, which is what
- * caused the request queue to blow past axios' timeout budget.
+ * Leagues fetched+persisted at once by one manager sync. Power users have 100+
+ * leagues; fanning out all of them at once overwhelms the connection and
+ * Sleeper, which is what caused the request queue to blow past axios' timeout
+ * budget.
+ *
+ * **Two, and the number is the pool's.** Each league in flight opens its own
+ * transaction to persist, so this is how many pool connections one sync holds
+ * *transiently* on top of the one it parks on its advisory lock for the whole
+ * run. The parked sessions are what the budget is arranged around — the
+ * manager syncs' (`DEFAULT_MANAGER_SYNC_LIMIT`, 2), a refresh press's
+ * (`DEFAULT_LEAGUE_REFRESH_LIMIT`, 1) and the crawl's one lock, ≤ 4 of the
+ * default ten — leaving six for every transaction those sessions and every
+ * route run. At six wide, two admitted syncs alone were twelve transient
+ * transactions behind seven parked sessions, and a `pool.connect()` that queued
+ * past its five-second bound surfaced below as a *league* failure and a stale
+ * page. Two wide, the transient demand (2×2 here, 1 for a press, 4 for the
+ * crawl) time-shares the six rather than queueing past the bound.
+ *
+ * Sleeper is not the bottleneck it looks like: `fetchLeagueGraph` fans each
+ * league's children eight wide, so two leagues keep sixteen of the limiter's
+ * slots busy, which is most of what six were getting through it.
  */
-export const LEAGUE_FETCH_CONCURRENCY = 6;
+export const LEAGUE_FETCH_CONCURRENCY = 2;
 
 /**
  * Leagues probed per sync to find out whether they were deleted.
@@ -184,6 +203,11 @@ export async function getSyncClock(): Promise<SyncClock> {
  * weeks. They fill up independently — every league stored before matchups
  * existed has transactions through the current week and no matchups at all — so
  * one shared gate would open the window past a whole unfetched season.
+ *
+ * Completed drafts are gated the same way, one grain down: a draft stored
+ * `complete` with its board is never re-read — see `fetchLeagueGraph`'s
+ * `completeDraftIds`. This is the one place that gate is read, so the crawler,
+ * the manager sync, a refresh press and a history load all get it for free.
  */
 export async function syncLeagueGraphs(
   leagues: SleeperLeague[],
@@ -204,10 +228,17 @@ export async function syncLeagueGraphs(
   const total = leagues.length;
 
   const leagueIds = leagues.map((l) => l.league_id);
-  const [storedMaxWeek, storedMaxMatchupWeek] = await Promise.all([
-    getStoredMaxWeekByLeague(leagueIds),
-    getStoredMaxMatchupWeekByLeague(leagueIds),
-  ]);
+  // Three reads of what is already stored whole, before any Sleeper request:
+  // the week each week-keyed collection reaches, and the drafts whose boards
+  // are final. All three narrow the fetch, and the third is read here — the
+  // one path every caller takes, the `fresh` press included — so that no
+  // caller can be the one that re-reads a completed draft.
+  const [storedMaxWeek, storedMaxMatchupWeek, completeDraftIds] =
+    await Promise.all([
+      getStoredMaxWeekByLeague(leagueIds),
+      getStoredMaxMatchupWeekByLeague(leagueIds),
+      getStoredCompleteDraftIds(leagueIds),
+    ]);
   const weeksFor = (league: SleeperLeague): GraphWeeks =>
     leagueGraphWeeks(league.season, clock, {
       transactions: storedMaxWeek.get(league.league_id),
@@ -226,7 +257,10 @@ export async function syncLeagueGraphs(
 
   await mapWithConcurrency(leagues, concurrency, async (league) => {
     try {
-      const graph = await fetchLeagueGraph(league, weeksFor(league), { fresh });
+      const graph = await fetchLeagueGraph(league, weeksFor(league), {
+        fresh,
+        completeDraftIds,
+      });
       const persisted = await persistLeagueGraph(graph);
       counts.rosters += graph.rosters.length;
       counts.leagueUsers += graph.users.length;

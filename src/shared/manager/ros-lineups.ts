@@ -58,6 +58,45 @@ export type RosLineupLeague = {
  */
 const ADP_TIEBREAK = 1e-7;
 
+/** What a league's lineup shape contributes to every one of its rosters' solves. */
+type LeagueShape = {
+  teams: number;
+  pool: number;
+  slots: string[];
+  unknown: string[];
+};
+
+/**
+ * Keyed on the `roster_positions` array itself, because `rankLeagueLineups`
+ * builds one `RosLineupLeague` per roster and every one carries the league
+ * row's own array reference — so twelve solves of one league derive the pool,
+ * the recognised slots and the unknown set once rather than twelve times.
+ * Weak, so the entry goes with the row. A null lineup has nothing to key on
+ * and is derived inline, which for an empty array costs nothing.
+ */
+const shapes = new WeakMap<readonly string[], LeagueShape>();
+
+function leagueShape(
+  teams: number,
+  rosterPositions: readonly string[] | null,
+): LeagueShape {
+  const hit = rosterPositions ? shapes.get(rosterPositions) : undefined;
+  if (hit && hit.teams === teams) return hit;
+
+  const positions = rosterPositions ?? [];
+  const slots = recognisedSlots(positions);
+  const shape: LeagueShape = {
+    teams,
+    pool: leagueAdpPool(teams, rosterPositions),
+    slots,
+    unknown: [
+      ...new Set(startingSlots(positions).filter((slot) => !slots.includes(slot))),
+    ],
+  };
+  if (rosterPositions) shapes.set(rosterPositions, shape);
+  return shape;
+}
+
 /**
  * One league's roster, seated. `projections` may be empty — a past season, or a
  * feed that failed — and then the whole solve runs on draft capital, which is
@@ -83,8 +122,10 @@ export function solveLeagueLineup(
   adp: ReadonlyMap<string, AdpEntry>,
   ktc: ReadonlyMap<string, number> = new Map(),
 ): LeagueLineup {
-  const positions = league.roster_positions ?? [];
-  const pool = leagueAdpPool(league.total_rosters, league.roster_positions);
+  const { pool, slots, unknown } = leagueShape(
+    league.total_rosters,
+    league.roster_positions,
+  );
 
   // Dedup the roster the way `rosterAdpValue` does — Sleeper pads unfilled
   // slots with "" and "0", and a repeated id must not be seated twice.
@@ -119,11 +160,6 @@ export function solveLeagueLineup(
     points: score,
   }));
 
-  const slots = recognisedSlots(positions);
-  const unknown = [
-    ...new Set(startingSlots(positions).filter((slot) => !slots.includes(slot))),
-  ];
-
   const byId = new Map(priced.map((p) => [p.player.player_id, p]));
   const seated = optimalLineup(slots, solverPool);
   const seatedIds = new Set(seated.map((s) => s.player_id).filter(Boolean));
@@ -152,6 +188,8 @@ export function solveLeagueLineup(
     starters,
     bench,
     projected_points: projected,
-    unknown_slots: unknown,
+    // Copied: the cached list is shared by every roster of the league, and a
+    // payload field must not be a handle on the cache.
+    unknown_slots: [...unknown],
   };
 }

@@ -238,6 +238,18 @@ export type PersistLeagueGraphResult = {
   incompleteReasons: string[];
 };
 
+/** What one graph write committed, beyond the rows themselves. */
+type LeagueGraphWrite = {
+  /** The mandatory collections that came back empty and were left as stored. */
+  missing: MandatoryGraphCollection[];
+  /**
+   * Whether any draft's picks were replaced. False for the ordinary refresh,
+   * whose completed drafts were skipped at fetch time — see
+   * {@link persistLeagueGraph} for what turns on it.
+   */
+  wrotePicks: boolean;
+};
+
 /**
  * Persist one league graph inside an open transaction, reporting which
  * mandatory collections came back empty.
@@ -250,7 +262,7 @@ export type PersistLeagueGraphResult = {
 async function writeLeagueGraph(
   client: PoolClient,
   g: LeagueGraph,
-): Promise<MandatoryGraphCollection[]> {
+): Promise<LeagueGraphWrite> {
   const l = g.league;
 
   // A refused replacement is said out loud, because it is otherwise invisible:
@@ -423,7 +435,9 @@ async function writeLeagueGraph(
   // with none is either pre-draft (nothing stored to lose) or a failed fetch
   // (everything to lose), and neither wants its stored picks cleared. Scoping
   // the delete to the drafts present in the payload is what keeps one draft's
-  // failure from emptying another's.
+  // failure from emptying another's — and, since `fetchLeagueGraph` stopped
+  // re-reading drafts already stored `complete`, what keeps a skipped draft's
+  // board intact: it is absent from the payload by design, not by failure.
   const pickedDraftIds = [...new Set(g.draftPicks.map((p) => p.draft_id))];
   if (pickedDraftIds.length > 0) {
     await client.query(
@@ -513,7 +527,7 @@ async function writeLeagueGraph(
   // all. See `shared/trades/participants` for why it is a wholesale rebuild.
   await rebuildTradeParticipants(client, l.league_id);
 
-  return missing;
+  return { missing, wrotePicks: pickedDraftIds.length > 0 };
 }
 
 /**
@@ -545,17 +559,35 @@ async function writeLeagueGraph(
  * written, and `rebuildTradeParticipants` ran over the result. Those are real
  * changes and the caches in front of them are stale for them.
  *
+ * **The season is named only when this write replaced draft picks.** Naming it
+ * is what evicts the season-wide ADP aggregate, which every `/api/trades` page
+ * then rebuilds from scratch — and it was named on *every* persist, so a
+ * crawler ticking through fifteen leagues a minute kept that board permanently
+ * cold. A refresh that wrote no picks cannot have moved an ADP: the aggregate is
+ * taken over `draft_picks` and nothing else this write touches. With completed
+ * drafts skipped at fetch time, a routine refresh writes none, and the eviction
+ * fires only when a draft actually produced new picks. The cost is on the other
+ * argument `season` narrows: a null season forgets the members' circles in
+ * *every* season rather than this one, which is a handful of entries per reader
+ * against a board rebuilt per page.
+ *
  * **It reports rather than returning void**, and the two fields it reports are
  * the distinction the callers turn on — see {@link PersistLeagueGraphResult}.
  */
 export async function persistLeagueGraph(
   g: LeagueGraph,
 ): Promise<PersistLeagueGraphResult> {
-  const missing = await withTransaction((client) => writeLeagueGraph(client, g));
+  const { missing, wrotePicks } = await withTransaction((client) =>
+    writeLeagueGraph(client, g),
+  );
 
   invalidateTradeCaches({
     leagueIds: [g.league.league_id],
     season: g.league.season,
+    // Only a write that actually replaced a draft's picks can have moved the
+    // season's capital board; the ordinary refresh skips completed drafts
+    // entirely. `season` still narrows everything else this forgets.
+    wroteDraftPicks: wrotePicks,
     // The membership as this sync stored it, which is the set whose names and
     // whose circles moved. Empty when the users fetch came back empty — the
     // guarded delete kept the stored rows, so nothing about them changed and
@@ -638,20 +670,42 @@ export function replaceManagerLeagueScope(
  * backfill), which is exactly the state every league is in for `matchups` until
  * a sync has run since they were first stored — reading the transaction gate for
  * both would leave those weeks permanently behind the refresh window.
+ *
+ * **One backward index probe per league, not a `GROUP BY`.** The obvious
+ * `SELECT league_id, max(week) … GROUP BY league_id` reads every stored row of
+ * every league asked for — Postgres has no skip scan, so a hundred-league
+ * account walks its whole transaction and matchup history to learn a hundred
+ * integers, on every sync. Both tables carry an index leading on
+ * `(league_id, week)` (`transactions_league_week_idx`; the matchups primary key
+ * `(league_id, week, roster_id)`), so the correlated subquery below is one
+ * `ORDER BY week DESC LIMIT 1` probe of that index per id in the `unnest`,
+ * which is a handful of pages however long the season. A league with nothing
+ * stored answers null and is dropped, which keeps the "absent means backfill"
+ * contract above.
  */
 async function maxWeekByLeague(
   table: "transactions" | "matchups",
   leagueIds: string[],
 ): Promise<Map<string, number>> {
   if (leagueIds.length === 0) return new Map();
-  const { rows } = await pool.query<{ league_id: string; max_week: number }>(
-    `SELECT league_id, max(week) AS max_week
-       FROM ${table}
-      WHERE league_id = ANY($1::varchar[]) AND week IS NOT NULL
-      GROUP BY league_id`,
+  const { rows } = await pool.query<{
+    league_id: string;
+    max_week: number | null;
+  }>(
+    `SELECT ids.id AS league_id,
+            (SELECT t.week
+               FROM ${table} t
+              WHERE t.league_id = ids.id AND t.week IS NOT NULL
+              ORDER BY t.week DESC
+              LIMIT 1) AS max_week
+       FROM unnest($1::varchar[]) AS ids(id)`,
     [leagueIds],
   );
-  return new Map(rows.map((r) => [r.league_id, Number(r.max_week)]));
+  return new Map(
+    rows
+      .filter((r) => r.max_week !== null)
+      .map((r) => [r.league_id, Number(r.max_week)]),
+  );
 }
 
 /**
@@ -672,4 +726,32 @@ export function getStoredMaxMatchupWeekByLeague(
   leagueIds: string[],
 ): Promise<Map<string, number>> {
   return maxWeekByLeague("matchups", leagueIds);
+}
+
+/**
+ * The drafts, across the given leagues, whose picks need never be fetched
+ * again: stored `complete` **and** with at least one pick row behind them.
+ *
+ * A completed draft is immutable, so this is the gate `fetchLeagueGraph` skips
+ * `getDraftPicks` on — read beside the two max-week maps because it answers the
+ * same question at the draft grain: what is already stored whole. The status
+ * alone is not enough, and the pick clause is the retry: a draft whose row went
+ * in as `complete` while its pick fetch failed into `[]` has no board stored,
+ * and a status gate alone would freeze that absence for good. `EXISTS` rather
+ * than a join, so a draft with a thousand picks costs one index probe on the
+ * `draft_picks` primary key rather than a thousand rows.
+ */
+export async function getStoredCompleteDraftIds(
+  leagueIds: string[],
+): Promise<Set<string>> {
+  if (leagueIds.length === 0) return new Set();
+  const { rows } = await pool.query<{ draft_id: string }>(
+    `SELECT d.draft_id
+       FROM drafts d
+      WHERE d.league_id = ANY($1::varchar[])
+        AND d.status = 'complete'
+        AND EXISTS (SELECT 1 FROM draft_picks p WHERE p.draft_id = d.draft_id)`,
+    [leagueIds],
+  );
+  return new Set(rows.map((r) => r.draft_id));
 }
