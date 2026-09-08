@@ -58,6 +58,19 @@ import {
  * dragged taller — or a phone's URL bar retracting — moves `innerHeight`
  * without moving the summary's box by a pixel, and the observer never fires.
  *
+ * **The header must be at its natural height while the card is open, and that
+ * is a requirement on the caller rather than a preference.** `offset` below is
+ * `panel.offsetTop` — the header's own height — so a header that *grows* into
+ * whatever the panel leaves makes the room a function of the panel's current
+ * size and the measurement says nothing: every panel height is self-consistent,
+ * and around {@link MIN_PARKED} two of them alternate forever (the floor is
+ * applied, the panel grows to it, the room now reads at the floor, the floor is
+ * dropped, the panel falls back, repeat). Driven at 1280x900 on a manager card
+ * opened before its lineups had landed, that was a 60fps strobe between a 107px
+ * panel under a 694px header and a 320px panel under a 481px one. All three
+ * cards therefore pin their `<summary>` while open — `group-open/card:flex-none`
+ * on the two league cards, `shrink-0` on the trades board's, which never grew.
+ *
  * **React is the only writer of the panel's style**, which is the constraint
  * the collapse is arranged around: an inline value written from an event
  * handler is the same channel the render writes through, so a transition
@@ -173,6 +186,11 @@ export function usePanelCap<T extends HTMLElement>(
     // as one distance. Read separately, each is a second number to keep in
     // step with a stylesheet, and getting one wrong overhangs the fold by
     // exactly it.
+    //
+    // **This is only a measurement where the header is at its natural
+    // height** — see the module note. A `flex-1` header inside the card's own
+    // column absorbs the panel's slack, and then `panel.offsetTop` is the
+    // panel's own size read back through the header, which is not information.
     //
     // **Layout metrics, never rects.** This was a subtraction of two
     // `getBoundingClientRect` tops, and that was right for as long as the card
