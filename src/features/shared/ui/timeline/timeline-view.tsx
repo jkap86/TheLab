@@ -81,7 +81,11 @@ export function TimelineView({
     useTimeline(subject, opened);
 
   const moves = timelineMoveCount(payload);
-  const stop = timelineStop(payload, back);
+  // Memoized so the entry below can take it as a dependency and be handed it:
+  // a fresh stop object per render would be a memo that never held, and the
+  // walk would run once here, once in the entry and once in the rosters on
+  // every `input` of the range.
+  const stop = useMemo(() => timelineStop(payload, back), [payload, back]);
   const players = payload?.players ?? EMPTY_PLAYERS;
   const boundaries = useMemo(() => timelineSeasonBoundaries(payload), [payload]);
 
@@ -99,8 +103,11 @@ export function TimelineView({
   // from its own read — so computing it would be a solve of nothing for an
   // answer nobody shows.
   const past = useMemo(
-    () => (stop.back > 0 ? timelineEntry(payload, stop.back, managerRosterId) : null),
-    [payload, stop.back, managerRosterId],
+    () =>
+      stop.back > 0
+        ? timelineEntry(payload, stop.back, managerRosterId, stop)
+        : null,
+    [payload, stop, managerRosterId],
   );
 
   const shown = past ?? entry;

@@ -304,7 +304,7 @@ export function LeaguemateSharesDrawer({
       matchRow={matchRow}
       disclosure={disclosure}
       deckControls={<ScopeTrack scope={scope} onPick={setScope} />}
-      selected={(subject) => chosen.has(subjectSlot(subject))}
+      chosen={chosen}
       onToggle={onToggle}
     />
   );

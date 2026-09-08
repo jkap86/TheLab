@@ -1,6 +1,6 @@
 "use client";
 
-import { type ReactNode, useMemo, useState } from "react";
+import { type ReactNode, useCallback, useMemo, useState } from "react";
 
 import type { CompCriterionId, CompWindowId } from "@/shared/contract";
 import { DEFAULT_K, compsQueryParams } from "@/shared/comps";
@@ -140,16 +140,35 @@ export function CompsHome({
       ? players.payload.subject_season
       : null;
 
-  // An edit is what stops the position preset from firing again.
-  const edit = (next: typeof criteria) => {
-    setCriteriaTouched(true);
-    setCriteria(next);
-  };
-  const reset = () => {
+  const reset = useCallback(() => {
     setCriteriaTouched(false);
     setPresetPosition(position);
     setCriteria(defaultCriteria(position));
-  };
+  }, [position]);
+
+  // Functional updates, so none of the three closes over `criteria` — which is
+  // what lets them stay stable while a drag moves it sixty times a second.
+  const onToggleCriterion = useCallback(
+    (id: CompCriterionId) => {
+      setCriteriaTouched(true);
+      setCriteria((prev) => toggleCriterion(prev, id));
+    },
+    [],
+  );
+  const onToggleWindow = useCallback(
+    (id: CompCriterionId, window: CompWindowId) => {
+      setCriteriaTouched(true);
+      setCriteria((prev) => toggleWindow(prev, id, window));
+    },
+    [],
+  );
+  const onSetWeight = useCallback(
+    (id: CompCriterionId, window: CompWindowId, weight: number) => {
+      setCriteriaTouched(true);
+      setCriteria((prev) => setWeight(prev, id, window, weight));
+    },
+    [],
+  );
 
   // The two clamp each other: raising `from` past `to` pushes `to` up, and
   // lowering `to` past `from` pulls `from` down.
@@ -241,11 +260,9 @@ export function CompsHome({
             sampleCorpus={players.payload?.source === "sample"}
             onReset={reset}
             resettable={criteriaTouched}
-            onToggle={(id: CompCriterionId) => edit(toggleCriterion(criteria, id))}
-            onWindow={(id: CompCriterionId, window: CompWindowId) =>
-              edit(toggleWindow(criteria, id, window))
-            }
-            onWeight={(id, window, weight) => edit(setWeight(criteria, id, window, weight))}
+            onToggle={onToggleCriterion}
+            onWindow={onToggleWindow}
+            onWeight={onSetWeight}
           />
 
           <div className="relative my-7 flex flex-wrap items-center gap-3">

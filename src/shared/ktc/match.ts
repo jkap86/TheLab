@@ -78,8 +78,24 @@ function pickActive(cands: MatchablePlayer[]): MatchablePlayer | null {
   return null;
 }
 
-/** The two lookup indexes the matching tiers below search. */
-function indexPlayers(players: readonly MatchablePlayer[]) {
+/** The two lookup indexes the matching tiers search — see {@link indexMatchablePlayers}. */
+export type MatchIndex = {
+  byNamePos: Map<string, MatchablePlayer[]>;
+  byLastPosYear: Map<string, MatchablePlayer[]>;
+};
+
+/**
+ * Build the lookup indexes over the Sleeper players, once, for however many
+ * boards resolve against them.
+ *
+ * Exported because the sync resolves **two** formats against one 12k-row read,
+ * and with the indexing inside {@link resolveSleeperIds} it was built twice a
+ * tick: the read was deduplicated, the walk over it was not. A caller with one
+ * board to match can still hand `resolveSleeperIds` the rows and let it index.
+ */
+export function indexMatchablePlayers(
+  players: readonly MatchablePlayer[],
+): MatchIndex {
   const byNamePos = new Map<string, MatchablePlayer[]>();
   const byLastPosYear = new Map<string, MatchablePlayer[]>();
 
@@ -127,12 +143,22 @@ function indexPlayers(players: readonly MatchablePlayer[]) {
  *
  * Returns a map of KTC `playerID` -> Sleeper `player_id` for resolved entries
  * only. An empty `sleeperPlayers` yields an empty map (all null).
+ *
+ * `sleeperPlayers` is either the rows or a {@link MatchIndex} already built
+ * over them — the second is how the sync pays for the index once per run
+ * rather than once per format.
  */
 export function resolveSleeperIds(
   ktcPlayers: readonly KtcPlayer[],
-  sleeperPlayers: readonly MatchablePlayer[],
+  sleeperPlayers: readonly MatchablePlayer[] | MatchIndex,
 ): Map<number, string> {
-  const { byNamePos, byLastPosYear } = indexPlayers(sleeperPlayers);
+  // `in` rather than `Array.isArray`: the latter does not narrow a `readonly`
+  // array out of a union, and an array has no `byNamePos` to be mistaken for
+  // an index.
+  const { byNamePos, byLastPosYear } =
+    "byNamePos" in sleeperPlayers
+      ? sleeperPlayers
+      : indexMatchablePlayers(sleeperPlayers);
 
   const out = new Map<number, string>();
   for (const p of ktcPlayers) {

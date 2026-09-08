@@ -61,6 +61,11 @@ function isPlayerId(id: string): boolean {
   return Boolean(id) && id !== "0";
 }
 
+// One collator for the tiebreak rather than `localeCompare` per comparison:
+// the latter re-resolves the locale on every call, and a sort over a few
+// hundred names is thousands of them. Same default locale, same ordering.
+const NAME_ORDER = new Intl.Collator();
+
 export function playerShares(
   leagues: readonly ManagerLeague[],
   rosters: Record<string, readonly string[]>,
@@ -102,7 +107,8 @@ export function playerShares(
   }
 
   shares.sort(
-    (a, b) => b.leagues.length - a.leagues.length || a.name.localeCompare(b.name),
+    (a, b) =>
+      b.leagues.length - a.leagues.length || NAME_ORDER.compare(a.name, b.name),
   );
   return { league_count: leagueCount, players: shares };
 }

@@ -108,6 +108,13 @@ export function CardBilletRow({ children }: { children: ReactNode }) {
  *
  * Everything inside is `relative` to sit above the grain and the specular —
  * `BilletFinish`'s two overlays are absolutely positioned children.
+ *
+ * **The name's `drop-shadow` stack rides `pointer-fine:`**, on the league
+ * card's own per-device budget: a `filter` is a compositor buffer per element,
+ * and this billet is one per card on every card of all three tools — the
+ * per-card filter buffer the old engraved title was already gated for, since a
+ * hundred of them at DPR 3 is what killed the tab on iOS Safari. A coarse
+ * pointer gets the same chrome ramp clipped to the glyphs, without the cast.
  */
 export function LeagueBillet({
   name,
@@ -120,7 +127,7 @@ export function LeagueBillet({
     <span className="relative inline-flex min-w-0 items-center gap-[9px] overflow-hidden rounded-xl bg-[image:var(--billet-bg)] pb-[7px] pl-1.5 pr-[15px] pt-1.5 shadow-[var(--standing-strip-shadow)] sm:gap-3 sm:rounded-[13px] sm:pb-2 sm:pl-[7px] sm:pr-5 sm:pt-[7px]">
       <BilletFinish />
       <LeagueMark name={name} url={avatarUrl} size="lg" />
-      <span className="relative min-w-0 truncate bg-[image:var(--billet-face)] bg-clip-text font-display text-[length:var(--fs-18)] font-semibold uppercase leading-[1.1] tracking-[0.03em] text-transparent [filter:var(--wordmark-depth)] sm:text-[length:var(--fs-24)] sm:leading-[1.05]">
+      <span className="relative min-w-0 truncate bg-[image:var(--billet-face)] bg-clip-text font-display text-[length:var(--fs-18)] font-semibold uppercase leading-[1.1] tracking-[0.03em] text-transparent sm:text-[length:var(--fs-24)] sm:leading-[1.05] pointer-fine:[filter:var(--wordmark-depth)]">
         {name}
       </span>
     </span>

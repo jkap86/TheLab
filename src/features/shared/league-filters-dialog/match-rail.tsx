@@ -1,5 +1,7 @@
 "use client";
 
+import { useMemo } from "react";
+
 import type { ManagerLeague } from "@/shared/contract";
 import { CONSOLE_READOUT, CONSOLE_WELL } from "../console-chrome";
 import {
@@ -32,10 +34,13 @@ export function MatchRail({
   filters: LeagueFilters;
   onChange: (filters: LeagueFilters) => void;
 }) {
-  const active = activeFilters(filters);
+  const active = useMemo(() => activeFilters(filters), [filters]);
   // 0 of 0 is not 0%: an account with no leagues has no share to report.
   const share = total > 0 ? matched.length / total : null;
-  const rows = leagueBreakdown(matched);
+  // Once per survivor set, not per render: `matched` is the dialog's own memo
+  // over the draft, so this holds while the dialog sits closed under a page
+  // rendering once per line of the leagues stream.
+  const rows = useMemo(() => leagueBreakdown(matched), [matched]);
 
   return (
     <div

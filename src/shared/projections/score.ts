@@ -49,6 +49,54 @@ const NOT_SCORABLE = new Set([
 const round = (n: number): number => Math.round(n * 100) / 100;
 
 /**
+ * A league's scoring, reduced to the categories that can score: every key that
+ * survives {@link NOT_SCORABLE} and carries a finite, non-zero weight, in the
+ * settings' own order so a sum over it adds the same terms in the same sequence
+ * as a walk over the settings would.
+ */
+export type CompiledScoring = readonly (readonly [key: string, weight: number])[];
+
+const EMPTY_SCORING: CompiledScoring = [];
+
+/**
+ * Compiled once per settings *object*, because a lineups request scores every
+ * player of every roster in a league — tens of thousands of calls against the
+ * same ~150-key blob — and a league row's `scoring_settings` is one reference
+ * for the whole request. Weak, so a row's table goes with the row. The key is
+ * the object, not its contents: a caller that edits a scoring table in place
+ * after scoring with it must build a new one, which no reader does — the table
+ * is read off a row and never written to.
+ */
+const compiled = new WeakMap<object, CompiledScoring>();
+
+/** {@link scoreStatLine}'s filter over a scoring table, once. */
+export function compileScoring(
+  scoring: Record<string, number> | null | undefined,
+): CompiledScoring {
+  if (!scoring) return EMPTY_SCORING;
+  // A non-object cannot key a WeakMap; it also compiles to nothing, cheaply.
+  if (typeof scoring !== "object") return compile(scoring);
+
+  const hit = compiled.get(scoring);
+  if (hit) return hit;
+  const table = compile(scoring);
+  compiled.set(scoring, table);
+  return table;
+}
+
+function compile(scoring: Record<string, number>): CompiledScoring {
+  const out: [string, number][] = [];
+  for (const [key, weight] of Object.entries(scoring)) {
+    if (NOT_SCORABLE.has(key)) continue;
+    if (typeof weight !== "number" || !Number.isFinite(weight) || weight === 0) {
+      continue;
+    }
+    out.push([key, weight]);
+  }
+  return out;
+}
+
+/**
  * Fantasy points for a stat line under one league's scoring.
  *
  * Driven by the scoring settings rather than the stat line: a category the league
@@ -66,14 +114,21 @@ export function scoreStatLine(
   scoring: Record<string, number> | null | undefined,
 ): number {
   if (!stats || !scoring) return 0;
+  return scoreCompiled(stats, compileScoring(scoring));
+}
+
+/**
+ * {@link scoreStatLine} over a table {@link compileScoring} already reduced —
+ * the same dot product, for a caller holding the table itself.
+ */
+export function scoreCompiled(
+  stats: Record<string, number> | null | undefined,
+  scoring: CompiledScoring,
+): number {
+  if (!stats) return 0;
 
   let total = 0;
-  for (const [key, weight] of Object.entries(scoring)) {
-    if (NOT_SCORABLE.has(key)) continue;
-    if (typeof weight !== "number" || !Number.isFinite(weight) || weight === 0) {
-      continue;
-    }
-
+  for (const [key, weight] of scoring) {
     const value = stats[key];
     if (typeof value !== "number" || !Number.isFinite(value)) continue;
 
@@ -110,20 +165,11 @@ export function unprojectedScoring(
   return scoredKeys(scoring).filter((key) => !have.has(key));
 }
 
-/** A league's live scoring keys, sorted. */
+/** A league's live scoring keys, sorted — the compiled table's own filter. */
 function scoredKeys(
   scoring: Record<string, number> | null | undefined,
 ): string[] {
-  if (!scoring) return [];
-
-  return Object.entries(scoring)
-    .filter(
-      ([key, weight]) =>
-        !NOT_SCORABLE.has(key) &&
-        typeof weight === "number" &&
-        Number.isFinite(weight) &&
-        weight !== 0,
-    )
+  return compileScoring(scoring)
     .map(([key]) => key)
     .sort();
 }

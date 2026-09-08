@@ -332,15 +332,25 @@ function Checker({
   // `seasonSummary` reverses itself on: a reader who has filtered to dynasty is
   // asking about their dynasty week, and the plate is the page's one set of
   // figures.
-  const attention = needsAttention(visible, checked);
-  const reasons = attentionByReason(visible, checked);
-  const summary = weekSummary(visible, checked);
-  // The window's denominator is the leagues *on screen* that the check
-  // answered for, not every league it answered for: narrowed to one league,
-  // `1 of 3` would be a count over a list the reader cannot see.
-  const answered = visible.filter(
-    (league) => checked[league.league_id] !== undefined,
-  ).length;
+  //
+  // One memo for the four, because they move together and only with these two
+  // inputs: the page renders once per line of the leagues stream, and each of
+  // these is a walk over every league's solved lineup — four walks a progress
+  // line, for a header that had not changed.
+  const { attention, reasons, summary, answered } = useMemo(
+    () => ({
+      attention: needsAttention(visible, checked),
+      reasons: attentionByReason(visible, checked),
+      summary: weekSummary(visible, checked),
+      // The window's denominator is the leagues *on screen* that the check
+      // answered for, not every league it answered for: narrowed to one league,
+      // `1 of 3` would be a count over a list the reader cannot see.
+      answered: visible.filter(
+        (league) => checked[league.league_id] !== undefined,
+      ).length,
+    }),
+    [visible, checked],
+  );
 
   const name = user ? user.display_name || user.username : username;
 

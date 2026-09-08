@@ -32,7 +32,12 @@ export type LeagueGraph = {
   users: SleeperLeagueUser[];
   tradedPicks: SleeperTradedPick[];
   drafts: SleeperDraft[];
-  /** Picks across every draft, flattened. */
+  /**
+   * Picks across every draft whose board was fetched this sync, flattened. A
+   * draft already stored `complete` with its picks is skipped — see
+   * {@link fetchLeagueGraph}'s `completeDraftIds` — so its picks are absent
+   * here, and persistence must read that absence as "unchanged", never "none".
+   */
   draftPicks: SleeperDraftPick[];
   /** Roster moves across every fetched week, flattened. */
   transactions: SleeperTransaction[];
@@ -68,6 +73,9 @@ export type GraphWeeks = { transactions: WeekRange; matchups: WeekRange };
  */
 const CHILD_FETCH_CONCURRENCY = 8;
 
+/** The default for a caller that has not asked what is stored: skip nothing. */
+const EMPTY_DRAFT_IDS: ReadonlySet<string> = new Set();
+
 const weeksIn = ({ from, to }: WeekRange): number[] => {
   const weeks: number[] = [];
   for (let w = from; w <= to; w++) weeks.push(w);
@@ -92,11 +100,24 @@ const weeksIn = ({ from, to }: WeekRange): number[] => {
  * one per request, so the ~11 collections are read from a single instant rather
  * than from eleven. Every other caller is the manager sync or the crawler,
  * which want the CDN copy and pass nothing.
+ *
+ * `completeDraftIds` names the drafts whose picks are **not** fetched: the ones
+ * already stored `complete` with a board behind them (`getStoredCompleteDraftIds`).
+ * A completed draft is immutable — a pick is never un-picked and a finished
+ * board never grows — so re-reading it is one Sleeper request per draft per
+ * sync, and a dynasty league carries a startup plus a rookie draft per season,
+ * spent to delete and re-insert rows that cannot have changed. The draft *rows*
+ * are still fetched and upserted: `status` only ever moves forward, and `drafts`
+ * are never deleted. The skip applies to the `fresh` press too — immutable is
+ * immutable, whoever asked.
  */
 export async function fetchLeagueGraph(
   league: SleeperLeague,
   weeks: GraphWeeks,
-  { fresh }: { fresh?: string } = {},
+  {
+    fresh,
+    completeDraftIds = EMPTY_DRAFT_IDS,
+  }: { fresh?: string; completeDraftIds?: ReadonlySet<string> } = {},
 ): Promise<LeagueGraph> {
   const txWeeks = weeks.transactions;
   const matchupWeeks = weeks.matchups;
@@ -137,9 +158,17 @@ export async function fetchLeagueGraph(
   // back against the drafts they came from is exactly what it keeps. A single
   // draft's failure still rejects the whole graph, as before: a partial pick set
   // would be persisted as if it were the draft's whole board.
+  //
+  // Filtered on the *stored* state rather than on the fetched `status`: what
+  // makes a board safe to skip is that its picks are already in Postgres whole,
+  // which the fetched row cannot say. `writeLeagueGraph` scopes its pick delete
+  // to the drafts present in the payload, so a skipped draft's stored picks are
+  // left exactly as they are.
   const draftPicks = (
-    await collectWithConcurrency(drafts, CHILD_FETCH_CONCURRENCY, (d) =>
-      getDraftPicks(d.draft_id, fresh),
+    await collectWithConcurrency(
+      drafts.filter((d) => !completeDraftIds.has(d.draft_id)),
+      CHILD_FETCH_CONCURRENCY,
+      (d) => getDraftPicks(d.draft_id, fresh),
     )
   ).flat();
 

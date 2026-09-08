@@ -1,6 +1,6 @@
 "use client";
 
-import { type ReactNode, useId, useMemo, useState } from "react";
+import { type ReactNode, useDeferredValue, useId, useMemo, useState } from "react";
 
 import {
   CONSOLE_CARD,
@@ -69,7 +69,13 @@ export function LogsHome({
     [payload],
   );
 
-  const needle = query.trim().toLowerCase();
+  // **Deferred**, so a keystroke paints the field before the list re-narrows.
+  // The window is up to `VISITOR_LOG_CAP` rows and every letter re-filters all
+  // of them, re-cross-tabs three facets over them and re-renders the table; at
+  // the cap that is long enough to be felt between keys. React keeps the input
+  // on the typed value and the list one render behind under load.
+  const deferredQuery = useDeferredValue(query);
+  const needle = deferredQuery.trim().toLowerCase();
   const shown = useMemo(
     () => rows.filter((r) => matchesQuery(r, needle) && matches(r, filters)),
     [rows, needle, filters],

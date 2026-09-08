@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useRef, useState } from "react";
+import { memo, useCallback, useMemo, useRef, useState } from "react";
 
 import type { ManagerLeague } from "@/shared/contract";
 import {
@@ -47,8 +47,16 @@ import { RuleBay } from "./rule-bay";
  * The dialog itself is the native element, for the reason the columns picker
  * is: `showModal()` brings the focus trap, the Esc-to-close and the
  * `::backdrop` with it, and no dependency.
+ *
+ * **`memo`'d, because it is mounted closed on pages that render once per line
+ * of a leagues stream.** Its whole body — the three key menus, the survivor
+ * walk, the rails' cross-tab and every rule's count — derives from `leagues`
+ * and the draft, neither of which moves on a progress line; without the memo
+ * each of those lines re-ran the cross-tab behind a panel nobody could see.
+ * Every caller's props are identity-stable (state, a state setter, a memo,
+ * two constants), which is what makes the default comparison enough.
  */
-export function LeagueFiltersDialog({
+export const LeagueFiltersDialog = memo(function LeagueFiltersDialog({
   filters,
   onChange,
   leagues,
@@ -98,6 +106,20 @@ export function LeagueFiltersDialog({
     onChange(draft);
     ref.current?.close();
   };
+
+  // The rails' probes, stable across a render that did not move the draft.
+  // `FilterRail` memoizes its cross-tab on the probe's identity, so an inline
+  // arrow here was a new function per parent render and the memo never held —
+  // the counts were re-walked over every league on every render while the
+  // dialog was closed.
+  const probeType = useCallback(
+    (type: LeagueFilters["type"]) => ({ ...draft, type }),
+    [draft],
+  );
+  const probeBestBall = useCallback(
+    (bestBall: LeagueFilters["bestBall"]) => ({ ...draft, bestBall }),
+    [draft],
+  );
 
   // The three menus are read off the leagues in hand — see `settingKeyOptions`.
   const settingKeys = useMemo(
@@ -210,7 +232,7 @@ export function LeagueFiltersDialog({
                     options={TYPE_OPTIONS}
                     value={draft.type}
                     leagues={leagues}
-                    probe={(type) => ({ ...draft, type })}
+                    probe={probeType}
                     onPick={(type) => setDraft({ ...draft, type })}
                   />
                   <FilterRail
@@ -218,7 +240,7 @@ export function LeagueFiltersDialog({
                     options={BEST_BALL_OPTIONS}
                     value={draft.bestBall}
                     leagues={leagues}
-                    probe={(bestBall) => ({ ...draft, bestBall })}
+                    probe={probeBestBall}
                     onPick={(bestBall) => setDraft({ ...draft, bestBall })}
                   />
                 </div>
@@ -315,4 +337,4 @@ export function LeagueFiltersDialog({
       </dialog>
     </>
   );
-}
+});

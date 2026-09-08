@@ -31,6 +31,10 @@ export type LeaguemateShares = {
   mates: LeaguemateShare[];
 };
 
+// One collator for the tiebreak rather than `localeCompare` per comparison —
+// `shares.ts`'s reason: the sort is thousands of them over one payload.
+const NAME_ORDER = new Intl.Collator();
+
 export function leaguemateShares(
   leagues: readonly ManagerLeague[],
   members: Record<string, readonly string[]>,
@@ -67,7 +71,8 @@ export function leaguemateShares(
   }
 
   mates.sort(
-    (a, b) => b.leagues.length - a.leagues.length || a.name.localeCompare(b.name),
+    (a, b) =>
+      b.leagues.length - a.leagues.length || NAME_ORDER.compare(a.name, b.name),
   );
   return { league_count: leagueCount, mates };
 }

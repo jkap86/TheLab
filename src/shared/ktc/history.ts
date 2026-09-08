@@ -40,12 +40,36 @@ const HISTORY_COLUMNS = [
 /**
  * The per-day series is the same data as `ktc_values`, just older; a re-scrape
  * is authoritative over whatever is already stored for that day.
+ *
+ * **The `WHERE` is what stops the snapshot rewriting the whole board every
+ * tick.** `recordDailySnapshot` runs on every forced 15-minute sync, and an
+ * unconditional `DO UPDATE` gives each of the ~870 rows a new tuple version
+ * whether or not a value moved — dead tuples and WAL for a day that is, on
+ * most ticks, byte-identical to the last write. Skipping the unchanged rows
+ * loses nothing: the six value columns *are* the row (there is no timestamp
+ * here to fall behind — `ktc_values.updated_at` is the scrape clock, and that
+ * upsert deliberately keeps writing; see `./sync`), and a genuine revision
+ * still lands. `IS DISTINCT FROM` rather than `<>` because the columns are
+ * nullable, and `<>` against a null is unknown — which would skip a real
+ * change. `writePlayerHistory` shares the clause and is unaffected: its
+ * `history_synced_at` stamp is a separate statement, so a backfilled day that
+ * matches the snapshot is skipped and the player is still marked synced.
+ *
+ * `bulkInsert` appends this whole string after `ON CONFLICT ` at the end of
+ * the statement, so the `WHERE` lands where Postgres wants it: after the last
+ * `SET` assignment.
  */
 const HISTORY_ON_CONFLICT = `(format, ktc_id, date) DO UPDATE SET
     sf_value = EXCLUDED.sf_value, sf_rank = EXCLUDED.sf_rank,
     sf_position_rank = EXCLUDED.sf_position_rank,
     oneqb_value = EXCLUDED.oneqb_value, oneqb_rank = EXCLUDED.oneqb_rank,
-    oneqb_position_rank = EXCLUDED.oneqb_position_rank`;
+    oneqb_position_rank = EXCLUDED.oneqb_position_rank
+  WHERE (ktc_value_history.sf_value, ktc_value_history.sf_rank,
+         ktc_value_history.sf_position_rank, ktc_value_history.oneqb_value,
+         ktc_value_history.oneqb_rank, ktc_value_history.oneqb_position_rank)
+        IS DISTINCT FROM
+        (EXCLUDED.sf_value, EXCLUDED.sf_rank, EXCLUDED.sf_position_rank,
+         EXCLUDED.oneqb_value, EXCLUDED.oneqb_rank, EXCLUDED.oneqb_position_rank)`;
 
 /**
  * Today's date on KTC's clock. Their series roll over on US Eastern days, so

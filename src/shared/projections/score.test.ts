@@ -1,7 +1,12 @@
 import assert from "node:assert/strict";
 import { describe, test } from "node:test";
 
-import { scoreStatLine, unprojectedScoring } from "./score.ts";
+import {
+  compileScoring,
+  scoreCompiled,
+  scoreStatLine,
+  unprojectedScoring,
+} from "./score.ts";
 
 /**
  * The whole point of scoring a projection ourselves is that Sleeper's `pts_ppr`
@@ -216,5 +221,70 @@ describe("scoreStatLine on a played week", () => {
   test("a missing line or missing settings is zero, not a throw", () => {
     assert.equal(scoreStatLine(null, ppr), 0);
     assert.equal(scoreStatLine({ rec: 4 }, null), 0);
+  });
+});
+
+describe("compileScoring", () => {
+  test("a compiled table scores identically to the settings it came from", () => {
+    // Every line above, both ways round: the compile step is the same filter
+    // and the same summation order, so the two must agree to the digit.
+    const lines: Record<string, number>[] = [
+      receiver,
+      { rush_yd: 50, fum: 0.8, fum_lost: 0.4 },
+      { sack: 2.57, int: 0.8, ff: 0.97, def_td: 0.17, pts_allow_21_27: 1 },
+      { rush_yd: 3 },
+      { rec: "6" as unknown as number },
+      {},
+    ];
+    const settings: Record<string, number>[] = [
+      ppr,
+      { ...ppr, rec: 0.5, bonus_rec_wr: 0.25, pts_ppr: 1 },
+      { rush_yd: 0.1, fum: -1, fum_lost: -2 },
+      { sack: 1, int: 2, def_td: 6, pts_allow_21_27: 1, ff: 0 },
+      { rec: NaN as unknown as number, rush_yd: 0.1 },
+    ];
+    for (const line of lines) {
+      for (const scoring of settings) {
+        assert.equal(
+          scoreCompiled(line, compileScoring(scoring)),
+          scoreStatLine(line, scoring),
+        );
+      }
+    }
+  });
+
+  test("keeps only what can score, in the settings' own order", () => {
+    assert.deepEqual(
+      compileScoring({
+        pts_ppr: 1,
+        rec: 1,
+        bonus_rec_wr: 0,
+        rec_yd: 0.1,
+        fum_lost: NaN as unknown as number,
+        rush_td: 6,
+        adp_dd_ppr: 1,
+      }),
+      [
+        ["rec", 1],
+        ["rec_yd", 0.1],
+        ["rush_td", 6],
+      ],
+    );
+    assert.deepEqual(compileScoring(null), []);
+    assert.deepEqual(compileScoring(undefined), []);
+  });
+
+  test("the same settings object is compiled once", () => {
+    // The whole point: a league row's `scoring_settings` is one reference for
+    // a request that scores it tens of thousands of times, so the table has to
+    // come back by identity rather than being rebuilt per call.
+    const scoring = { ...ppr };
+    const table = compileScoring(scoring);
+    assert.equal(compileScoring(scoring), table);
+    scoreStatLine(receiver, scoring);
+    assert.equal(compileScoring(scoring), table);
+    // Keyed on the object, not its contents — a copy is its own table.
+    assert.notEqual(compileScoring({ ...ppr }), table);
+    assert.deepEqual(compileScoring({ ...ppr }), table);
   });
 });

@@ -2,6 +2,7 @@
 
 import { type ReactNode, useCallback, useMemo, useRef, useState } from "react";
 
+import type { ManagerLineupsPayload } from "@/shared/contract";
 import {
   activeFilterCount,
   DEFAULT_LEAGUE_FILTERS,
@@ -53,6 +54,13 @@ const MODE_WORDS: Record<SubjectMode, string> = {
   taken: "Taken",
   available: "Available",
 };
+
+/**
+ * What the columns dialog is handed before the lineups read lands. Module
+ * scope rather than `?? []` at the call site: a fresh array per render is a
+ * changed prop per render, and this page renders on every stream chunk.
+ */
+const EMPTY_KTC: ManagerLineupsPayload["ktc"] = [];
 
 /**
  * The two Browse keys this page puts in the rack: their legends, and the
@@ -360,6 +368,21 @@ export function LeaguesHome({
     setOpened((prev) => (prev.has(kind) ? prev : new Set(prev).add(kind)));
     setDrawer(kind);
   }, []);
+  // The drawers' three handlers, stable for the page's life: each is a
+  // functional update on a setter and closes over nothing else, and each is a
+  // prop of a drawer that stays mounted and holds several hundred memo'd rows
+  // — an inline arrow here would re-render every one of them on every stream
+  // chunk and card toggle.
+  const closeDrawer = useCallback(() => setDrawer(null), []);
+  const toggleDrawerSubject = useCallback(
+    (s: Subject) => setSubjects((prev) => toggleSubject(prev, s)),
+    [],
+  );
+  const setPlayerMode = useCallback(
+    (playerId: string, mode: SubjectMode) =>
+      setSubjects((prev) => setSubjectMode(prev, "player", playerId, mode)),
+    [],
+  );
 
   // **The two Browse keys, and nothing else.** Filters and Columns came back
   // down onto the plate and the tray under it — see the header below — so the
@@ -559,7 +582,7 @@ export function LeaguesHome({
           <div className="relative mt-3.5 flex items-center justify-end">
             <LineupColumnsDialog
               columns={columns}
-              ktc={lineups?.ktc ?? []}
+              ktc={lineups?.ktc ?? EMPTY_KTC}
               slots={seatsInHand}
               triggerClassName={CONSOLE_KEY}
             />
@@ -786,7 +809,7 @@ export function LeaguesHome({
       {opened.has("player") && (
         <PlayerSharesDrawer
           open={drawer === "player"}
-          onClose={() => setDrawer(null)}
+          onClose={closeDrawer}
           leagues={leagueFiltered}
           leagueTotal={leagues.length}
           filterSummary={leagueNarrowing}
@@ -794,16 +817,14 @@ export function LeaguesHome({
           rosters={leaguemateRosters}
           selfId={user?.user_id ?? null}
           subjects={subjects}
-          onToggle={(s) => setSubjects((prev) => toggleSubject(prev, s))}
-          onMode={(playerId, mode) =>
-            setSubjects((prev) => setSubjectMode(prev, "player", playerId, mode))
-          }
+          onToggle={toggleDrawerSubject}
+          onMode={setPlayerMode}
         />
       )}
       {opened.has("leaguemate") && (
         <LeaguemateSharesDrawer
           open={drawer === "leaguemate"}
-          onClose={() => setDrawer(null)}
+          onClose={closeDrawer}
           leagues={leagueFiltered}
           leagueTotal={leagues.length}
           filterSummary={leagueNarrowing}
@@ -811,7 +832,7 @@ export function LeaguesHome({
           rosters={leaguemateRosters}
           selfId={user?.user_id ?? null}
           subjects={subjects}
-          onToggle={(s) => setSubjects((prev) => toggleSubject(prev, s))}
+          onToggle={toggleDrawerSubject}
         />
       )}
     </div>

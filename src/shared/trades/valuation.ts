@@ -77,25 +77,15 @@ export function readTradeValues(input: TradeValuationInput): {
     // league genuinely is not stored.
     if (!league) continue;
 
-    const capital = capitalLens(league, input.adp, assets.players, input.rosters.get(leagueId));
-    const ros = rosLens(league, input.projections, assets.players, input.rosters.get(leagueId));
+    // One universe per league, read by all four lenses: the population is the
+    // same set whichever basis prices it, and each lens ranks into its own
+    // figures over it.
+    const universe = playerUniverse(assets.players, input.rosters.get(leagueId));
+    const capital = capitalLens(league, input.adp, universe);
+    const ros = rosLens(league, input.projections, universe);
     const ktc: Record<KtcFormat, Lens<TradePickAsset> | null> = {
-      dynasty: ktcLens(
-        leagueId,
-        league,
-        input.markets.dynasty,
-        input.orders,
-        assets,
-        input.rosters.get(leagueId),
-      ),
-      redraft: ktcLens(
-        leagueId,
-        league,
-        input.markets.redraft,
-        input.orders,
-        assets,
-        input.rosters.get(leagueId),
-      ),
+      dynasty: ktcLens(leagueId, league, input.markets.dynasty, input.orders, assets, universe),
+      redraft: ktcLens(leagueId, league, input.markets.redraft, input.orders, assets, universe),
     };
 
     for (const id of assets.players) {
@@ -284,8 +274,7 @@ function playerUniverse(
 function capitalLens(
   league: TradeValuationLeague,
   adp: TradeValuationInput["adp"],
-  traded: ReadonlySet<string>,
-  rostered: readonly string[] | undefined,
+  universe: ReadonlySet<string>,
 ): Lens<string> | null {
   if (league.total_rosters <= 0) return null;
 
@@ -300,9 +289,7 @@ function capitalLens(
     return entry ? adpEntryValue(entry, pool, DEFAULT_STEEPNESS) : null;
   };
 
-  const rank = rankerFor(
-    [...playerUniverse(traded, rostered)].flatMap((id) => priceOf(id) ?? []),
-  );
+  const rank = rankerFor([...universe].flatMap((id) => priceOf(id) ?? []));
   return { price: (id) => priced(priceOf(id), rank) };
 }
 
@@ -324,8 +311,7 @@ function capitalLens(
 function rosLens(
   league: TradeValuationLeague,
   projections: TradeProjectionBoard,
-  traded: ReadonlySet<string>,
-  rostered: readonly string[] | undefined,
+  universe: ReadonlySet<string>,
 ): Lens<string> | null {
   const scoring = league.scoring_settings;
   if (!scoring) return null;
@@ -336,9 +322,7 @@ function rosLens(
     return scoreStatLine(line.stats, scoring);
   };
 
-  const rank = rankerFor(
-    [...playerUniverse(traded, rostered)].flatMap((id) => priceOf(id) ?? []),
-  );
+  const rank = rankerFor([...universe].flatMap((id) => priceOf(id) ?? []));
   return { price: (id) => priced(priceOf(id), rank) };
 }
 
@@ -367,10 +351,14 @@ function ktcLens(
   market: TradeKtcMarket | undefined,
   orders: TradeValuationInput["orders"],
   assets: LeagueAssets,
-  rostered: readonly string[] | undefined,
+  universe: ReadonlySet<string>,
 ): Lens<TradePickAsset> | null {
   if (!market) return null;
   const { superflex, total_rosters } = league;
+  // Once per (league, market): the grid and every page pick's membership test
+  // read the same rounds, and re-deriving them per pick was a walk of the
+  // market's whole key list per pick.
+  const rounds = marketRounds(league, market);
 
   const playerValue = (id: string): number | null =>
     ktcBoardValue(superflex, market.values[id]);
@@ -391,11 +379,11 @@ function ktcLens(
   };
 
   const population: number[] = [];
-  for (const id of playerUniverse(assets.players, rostered)) {
+  for (const id of universe) {
     const value = playerValue(id);
     if (value !== null) population.push(value);
   }
-  for (const cell of pickGrid(league, market)) {
+  for (const cell of pickGrid(league, rounds)) {
     const match = ktcPickPrice(
       market.picks,
       cell,
@@ -408,7 +396,7 @@ function ktcLens(
   // relic of a since-shrunk draft, or a market that has dropped that season
   // since the trade — still ranks against the population it is in.
   for (const pick of assets.picks.values()) {
-    if (inGrid(league, market, pick)) continue;
+    if (inGrid(league, rounds, pick)) continue;
     const value = pickValue(pick);
     if (value !== null) population.push(value);
   }
@@ -428,6 +416,12 @@ function priced(
   return value === null ? null : { value, rank: rank(value) };
 }
 
+type MarketRounds = {
+  cells: { season: string; round: number }[];
+  /** `season|round` of every cell, for the membership test. */
+  keys: ReadonlySet<string>;
+};
+
 /**
  * Every (season, round) the market prices, bounded by this league's own draft
  * depth — the seasons and rounds its pick market actually runs over.
@@ -440,33 +434,33 @@ function priced(
 function marketRounds(
   league: TradeValuationLeague,
   market: TradeKtcMarket,
-): { season: string; round: number }[] {
-  const seen = new Set<string>();
-  const out: { season: string; round: number }[] = [];
+): MarketRounds {
+  const keys = new Set<string>();
+  const cells: { season: string; round: number }[] = [];
   for (const key of Object.keys(market.picks)) {
     const [season, roundText] = key.split("|");
     const round = Number(roundText);
     if (!season || !Number.isInteger(round) || round < 1) continue;
     if (league.draft_rounds !== null && round > league.draft_rounds) continue;
     const cell = `${season}|${round}`;
-    if (seen.has(cell)) continue;
-    seen.add(cell);
-    out.push({ season, round });
+    if (keys.has(cell)) continue;
+    keys.add(cell);
+    cells.push({ season, round });
   }
-  return out;
+  return { cells, keys };
 }
 
 /** The league's whole pick grid, one cell per roster per priced round. */
 function pickGrid(
   league: TradeValuationLeague,
-  market: TradeKtcMarket,
+  rounds: MarketRounds,
 ): { season: string; round: number; roster_id: number }[] {
   // No board to divide, and therefore no grid to lay: the same reading
   // `getTradeLeagueMarkets` gives a `total_rosters` of 0.
   if (league.total_rosters <= 0) return [];
 
   const out: { season: string; round: number; roster_id: number }[] = [];
-  for (const { season, round } of marketRounds(league, market)) {
+  for (const { season, round } of rounds.cells) {
     for (let roster = 1; roster <= league.total_rosters; roster += 1) {
       out.push({ season, round, roster_id: roster });
     }
@@ -477,13 +471,11 @@ function pickGrid(
 /** Whether {@link pickGrid} already holds this pick's own cell. */
 function inGrid(
   league: TradeValuationLeague,
-  market: TradeKtcMarket,
+  rounds: MarketRounds,
   pick: TradePickAsset,
 ): boolean {
   if (pick.roster_id < 1 || pick.roster_id > league.total_rosters) return false;
-  return marketRounds(league, market).some(
-    (cell) => cell.season === pick.season && cell.round === pick.round,
-  );
+  return rounds.keys.has(`${pick.season}|${pick.round}`);
 }
 
 /**

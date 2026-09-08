@@ -1,5 +1,7 @@
 "use client";
 
+import { memo } from "react";
+
 import {
   CONSOLE_CARD,
   CardPlateRow,
@@ -64,7 +66,7 @@ import { CAPTION, LIT, Window } from "./controls";
  * pane, because that is a real outcome and zeroes with nothing above them read
  * as a data problem.
  */
-export function CompCard({
+export const CompCard = memo(function CompCard({
   comp,
   place,
   of,
@@ -175,7 +177,7 @@ export function CompCard({
       </article>
     </li>
   );
-}
+});
 
 /**
  * A positive delta takes the ramp's green end and a negative its red, at a

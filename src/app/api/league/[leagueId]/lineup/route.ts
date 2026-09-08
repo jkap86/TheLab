@@ -10,7 +10,7 @@ import { getKtcBoards, isSuperflexLineup, ktcBoardValue } from "@/shared/ktc";
 import { parseKtcBoardChoice, resolveKtcFormat } from "@/shared/ktc/board-choice";
 import {
   getLeagueLineupRow,
-  getManagerDraftAdp,
+  lookupManagerDraftAdp,
   solveLeagueEntry,
 } from "@/shared/manager";
 import type { KtcPricing, ManagerLeagueRow } from "@/shared/manager";
@@ -190,7 +190,9 @@ async function readAdp(
 ): Promise<ReadonlyMap<string, AdpEntry>> {
   if (managerUserId === null) return new Map();
   try {
-    const boards = await getManagerDraftAdp(managerUserId, season);
+    // The lineups route's own memo of `getManagerDraftAdp`, so a card opened
+    // beside a manager page prices off the aggregate that page already ran.
+    const boards = await lookupManagerDraftAdp(managerUserId, season);
     return superflex ? boards.superflex : boards.standard;
   } catch (error) {
     console.warn(`[league] ADP unavailable for ${season}:`, error);

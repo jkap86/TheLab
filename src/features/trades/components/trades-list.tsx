@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, type RefObject } from "react";
+import { useEffect, useMemo, useState, type RefObject } from "react";
 
 import type {
   KtcBoardChoice,
@@ -11,6 +11,7 @@ import type { ActiveCard } from "@/features/shared";
 
 import type { TradesData } from "../trades-data";
 import { TradeCard } from "./trade-card";
+import { ValueLensProvider, type ValueLensChoice } from "./value-lens-context";
 
 /**
  * The board itself: every loaded trade, newest first, with the next page
@@ -79,10 +80,13 @@ export function TradesList({
   listRef: RefObject<HTMLUListElement | null>;
   leaguesById: Map<string, ManagerLeague>;
   /**
-   * The reader's value basis and KeepTradeCut market, passed down rather than
-   * read from the store inside each card: `TradeCard` is `memo`'d over a list
-   * that can run to hundreds of rows, and a hook inside it would subscribe
-   * every one of them to the same two values.
+   * The reader's value basis and KeepTradeCut market, read from the store once
+   * (in `TradesHome`) rather than inside each card: `TradeCard` is `memo`'d
+   * over a list that can run to hundreds of rows, and a hook inside it would
+   * subscribe every one of them to the same two values. They reach the cards
+   * through `ValueLensProvider` below rather than as card props, so a flip
+   * re-renders the side columns that print a figure and not every card whole —
+   * see `value-lens-context` for why that is not the subscription this avoids.
    */
   basis: TradeValueBasis;
   board: KtcBoardChoice;
@@ -102,6 +106,11 @@ export function TradesList({
   onRetry: () => void;
 }) {
   const [sentinel, setSentinel] = useState<HTMLDivElement | null>(null);
+
+  // Memoised on the two fields, never rebuilt per render: the provider's value
+  // is compared by identity, and a fresh object on every appended page would
+  // re-render every consumer on the board to change nothing.
+  const lens = useMemo<ValueLensChoice>(() => ({ basis, board }), [basis, board]);
 
   useEffect(() => {
     if (!sentinel || !hasMore) return;
@@ -137,21 +146,21 @@ export function TradesList({
         {...card.shellProps}
         className="space-y-[1.875rem] [overflow-anchor:none]"
       >
-        {data.entries.map(({ trade, view }) => (
-          <TradeCard
-            key={trade.transaction_id}
-            trade={trade}
-            league={leaguesById.get(trade.league_id) ?? null}
-            view={view}
-            basis={basis}
-            board={board}
-            season={season}
-            username={username}
-            open={card.isOpen(trade.transaction_id)}
-            lit={card.isLit(trade.transaction_id)}
-            onToggle={card.toggle}
-          />
-        ))}
+        <ValueLensProvider value={lens}>
+          {data.entries.map(({ trade, view }) => (
+            <TradeCard
+              key={trade.transaction_id}
+              trade={trade}
+              league={leaguesById.get(trade.league_id) ?? null}
+              view={view}
+              season={season}
+              username={username}
+              open={card.isOpen(trade.transaction_id)}
+              lit={card.isLit(trade.transaction_id)}
+              onToggle={card.toggle}
+            />
+          ))}
+        </ValueLensProvider>
       </ul>
 
       {/* A failed page, said where it happened and with the one control that

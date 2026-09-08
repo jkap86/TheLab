@@ -56,9 +56,18 @@ export const CRAWL_DISCOVERY_CAP = 15;
 export const CRAWL_MANAGER_TTL_MS = 6 * 60 * 60 * 1000;
 
 /**
- * Leagues fetched+persisted at once by the crawler. Lower than the interactive
- * path's concurrency: this runs forever in the background and should leave both
- * Sleeper's rate budget and the pg pool to real requests.
+ * Leagues fetched+persisted at once by the crawler.
+ *
+ * This runs forever in the background and should leave both Sleeper's rate
+ * budget and the pg pool to real requests, and four is its share of the pool's
+ * budget rather than a number of its own: the tick parks **one** session on its
+ * advisory lock and opens at most this many transactions at once, beside the
+ * manager syncs' two parked sessions × `LEAGUE_FETCH_CONCURRENCY` (2)
+ * transactions and a refresh press's one and one. Parked sessions are ≤ 4 of
+ * the default ten and the transient transactions time-share the other six. It
+ * used to be the lower of the two league concurrencies; since the interactive
+ * path came down to two it is the higher, which is right — a tick is one
+ * session where two admitted syncs are two, so it can afford the wider fan-out.
  */
 export const CRAWL_CONCURRENCY = 4;
 

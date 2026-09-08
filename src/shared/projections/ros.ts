@@ -64,56 +64,108 @@ export type RosWeek = {
 };
 
 /**
- * Sum a span of weekly responses into one board.
+ * A fold in progress: weeks go in as they land, and `finish` sums them once.
  *
- * The summation itself is {@link aggregateWeeklyStats} — linear scoring is what
- * makes summing stats before scoring them exact — and this adds only the two
- * per-row judgements documented above: which rows are real projections, and
- * what identity to carry for ids that never have one.
+ * Exists so `./ros-read` can drop each week's raw response the moment it has
+ * been read — a week is every player in the league with an inlined player
+ * object, and holding all eighteen until the end was the span's peak memory.
+ * What `add` keeps per real row is the stat line and the identity; the rest of
+ * the row is the caller's to let go.
  */
-export function assembleRosProjections(
-  weeks: readonly RosWeek[],
-): RosProjections {
-  const identity = new Map<string, { name: string | null; positions: string[] }>();
-  const teams = new Map<string, { week: number; team: string | null }>();
-  const real: PlayerWeekStats[] = [];
+export type RosFold = {
+  add: (week: RosWeek) => void;
+  /** Sum everything added so far into one board. Call once. */
+  finish: () => RosProjections;
+};
 
-  for (const { week, rows } of weeks) {
+type Identity = { name: string | null; positions: string[] };
+
+const isEmptyIdentity = (i: Identity) => i.name === null && i.positions.length === 0;
+
+/**
+ * Start a fold. **Order-independent by construction**: the weeks may arrive in
+ * any order — a bounded fetch completes them out of sequence — and the board
+ * must be a fact about the response rather than about the order it came in.
+ * So the stat lines are bucketed by week and summed ascending, the identity is
+ * the earliest week's non-empty one, and the team is the latest real week's,
+ * each decided by week number rather than by arrival.
+ */
+export function createRosFold(): RosFold {
+  const identity = new Map<string, Identity & { week: number }>();
+  const teams = new Map<string, { week: number; team: string | null }>();
+  const real = new Map<number, PlayerWeekStats[]>();
+
+  const add = ({ week, rows }: RosWeek) => {
+    let bucket = real.get(week);
+    if (!bucket) {
+      bucket = [];
+      real.set(week, bucket);
+    }
+
     for (const row of rows) {
       const id = row?.player_id;
       if (typeof id !== "string" || id === "") continue;
 
+      // The earliest week's non-empty identity wins; an empty one is replaced
+      // by any non-empty one from any week. Read only where it could change
+      // the answer, which on an ascending arrival is the first row per id.
       const known = identity.get(id);
-      if (!known || (known.name === null && known.positions.length === 0)) {
-        identity.set(id, readPlayerIdentity(row.player));
+      if (!known || isEmptyIdentity(known) || week < known.week) {
+        const next = readPlayerIdentity(row.player);
+        if (!known || !isEmptyIdentity(next)) identity.set(id, { week, ...next });
       }
 
       // A null `game_id` is the feed's spelling of "no game this week"; its
       // `stats` are ADP placeholders, not a projected zero. The predicate lives
       // in `./identity` because `./week` folds the same feed and must agree.
       if (!isRealProjection(row)) continue;
-      real.push({ player_id: id, week, stats: row.stats });
+      bucket.push({ player_id: id, week, stats: row.stats });
 
       const held = teams.get(id);
       if (!held || week >= held.week) {
         teams.set(id, { week, team: row.team ?? null });
       }
     }
-  }
+  };
 
-  const aggregated = aggregateWeeklyStats(real);
+  const finish = (): RosProjections => {
+    const aggregated = aggregateWeeklyStats(
+      [...real.entries()]
+        .sort(([a], [b]) => a - b)
+        .flatMap(([, bucket]) => bucket),
+    );
 
-  const board: RosProjections = {};
-  for (const [id, { name, positions }] of identity) {
-    const line = aggregated[id];
-    board[id] = {
-      player_id: id,
-      stats: line?.stats ?? {},
-      weeks: line?.weeks ?? [],
-      name,
-      positions,
-      team: teams.get(id)?.team ?? null,
-    };
-  }
-  return board;
+    const board: RosProjections = {};
+    for (const [id, { name, positions }] of identity) {
+      const line = aggregated[id];
+      board[id] = {
+        player_id: id,
+        stats: line?.stats ?? {},
+        weeks: line?.weeks ?? [],
+        name,
+        positions,
+        team: teams.get(id)?.team ?? null,
+      };
+    }
+    return board;
+  };
+
+  return { add, finish };
+}
+
+/**
+ * Sum a span of weekly responses into one board.
+ *
+ * The summation itself is {@link aggregateWeeklyStats} — linear scoring is what
+ * makes summing stats before scoring them exact — and this adds only the two
+ * per-row judgements documented above: which rows are real projections, and
+ * what identity to carry for ids that never have one. The whole-span form of
+ * {@link createRosFold}, for a caller that already holds every week.
+ */
+export function assembleRosProjections(
+  weeks: readonly RosWeek[],
+): RosProjections {
+  const fold = createRosFold();
+  for (const week of weeks) fold.add(week);
+  return fold.finish();
 }

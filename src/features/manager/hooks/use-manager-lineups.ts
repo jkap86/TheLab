@@ -81,16 +81,29 @@ export function useManagerLineups(
   /** Which subject has already spent its one retry — see `retryOnce`. */
   const retriedRef = useRef<string | null>(null);
 
-  // Reset during render, the way `useManagerLeagues` does: a subject change
+  // Reset during render, the way `useManagerLeagues` does: a manager change
   // must not paint one frame of the previous manager's lineups.
   const boards = serializeKtcVariants(ktcVariantsOf(columns));
   const adpBoards = serializeAdpBoards(adpBoardsOf(columns));
   const positions = serializePositionSets(positionSetsOf(columns));
   const slots = serializeSlotSets(slotSetsOf(columns));
   const subject = `${username} ${season ?? ""} ${boards} ${adpBoards} ${positions} ${slots}`;
-  const [renderedSubject, setRenderedSubject] = useState(subject);
-  if (renderedSubject !== subject) {
-    setRenderedSubject(subject);
+  /**
+   * The half of the subject a stale answer would be *wrong* about.
+   *
+   * **Only a manager or a season change blanks the payload.** Those name which
+   * data the page is about, so last manager's ranks under this one's name is a
+   * wrong number rather than an old one. A board, an ADP board, a position set
+   * or a slot set is not: every rank is filed under `lineupColumnKey`, which
+   * encodes all four, so a bay edit asks for a key the held payload simply does
+   * not carry and that column reads an em dash until the answer lands. Blanking
+   * for it took all of a hundred-league page's rank windows down for a round
+   * trip — and the request is the whole ~5MB payload — to change one tile.
+   */
+  const identity = `${username} ${season ?? ""}`;
+  const [renderedIdentity, setRenderedIdentity] = useState(identity);
+  if (renderedIdentity !== identity) {
+    setRenderedIdentity(identity);
     setPayload(null);
   }
 

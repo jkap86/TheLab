@@ -47,6 +47,12 @@ export function useTradeLeagues(
    * cached for five minutes.
    */
   stamp = "",
+  /**
+   * Whether `stamp` is the stored answer yet. False for the hydration render on
+   * a device that has ever synced — see `useTradeDataStamp`. Fetching then is a
+   * request the very next render aborts and reissues, so this waits instead.
+   */
+  stampResolved = true,
 ): TradeLeaguesState {
   const [state, setState] = useState<{
     leagues: ManagerLeague[];
@@ -70,6 +76,7 @@ export function useTradeLeagues(
   }
 
   useEffect(() => {
+    if (!stampResolved) return;
     inFlight.current?.abort();
     const controller = new AbortController();
     inFlight.current = controller;
@@ -93,7 +100,7 @@ export function useTradeLeagues(
     })();
 
     return () => controller.abort();
-  }, [season, stamp]);
+  }, [season, stamp, stampResolved]);
 
   // Memoised on the array rather than rebuilt per render: every card in the
   // list reads this map, and a fresh one each render would be a new prop for

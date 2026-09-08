@@ -11,7 +11,7 @@ import type {
 } from "@/shared/contract";
 
 import { timelineRosters, timelineStop } from "./timeline.ts";
-import type { TimelineRoster } from "./timeline.ts";
+import type { TimelineRoster, TimelineStop } from "./timeline.ts";
 
 /**
  * A past roster priced at **what it would be worth today**.
@@ -49,11 +49,16 @@ export function timelineEntry(
   back: number,
   /** Which roster is the reader's own — the card knows, the payload does not. */
   managerRosterId: number | null,
+  /**
+   * The stop `back` names, where the caller has already resolved it. The view
+   * computes it once per render for the rail and the caveat; recomputing it
+   * here would be the same walk a third time on every `input` of the range.
+   */
+  stop: TimelineStop = timelineStop(payload, back),
 ): LeagueLineupEntry | null {
   const timeline = payload?.timeline;
   if (!timeline) return null;
 
-  const stop = timelineStop(payload, back);
   const rosters = timelineRosters(payload, back);
   const pricing = payload?.pricing ?? null;
 
@@ -84,8 +89,8 @@ export function timelineEntry(
   const seasonRosterId = seasonRoster?.roster_id ?? null;
 
   const projections: RosProjections = pricing?.projections ?? {};
-  const adp = new Map<string, AdpEntry>(Object.entries(pricing?.adp ?? {}));
-  const ktc = new Map<string, number>(Object.entries(pricing?.ktc_values ?? {}));
+  const adp = boardMap(pricing?.adp, ADP_MAPS);
+  const ktc = boardMap(pricing?.ktc_values, KTC_MAPS);
 
   const picks = new Map<number, RosterPick[]>();
   const pickValues = new Map<number, number>();
@@ -138,6 +143,35 @@ export function timelineEntry(
 
   return { teams, ranks: solved.ranks };
 }
+
+/**
+ * A price board as the solver reads it, built once per board object.
+ *
+ * The solve wants a `Map` and the wire carries a record, and the two boards
+ * are the union of every player the whole timeline can name — thousands of
+ * entries, rebuilt from scratch on every `back` change, which is every
+ * `input` event of the range while a reader drags it. The record is immutable
+ * once it has arrived (a new payload is a new object), so the Map is remembered
+ * against the record itself: a `WeakMap` rather than a field on the payload,
+ * because nothing this module reads is something it should write to, and the
+ * cache dies with the board it describes. An absent board is an empty Map,
+ * shared, since there is nothing to key on.
+ */
+function boardMap<V>(
+  board: Record<string, V> | null | undefined,
+  cache: WeakMap<object, Map<string, V>>,
+): Map<string, V> {
+  if (!board) return new Map();
+  let map = cache.get(board);
+  if (!map) {
+    map = new Map(Object.entries(board));
+    cache.set(board, map);
+  }
+  return map;
+}
+
+const ADP_MAPS = new WeakMap<object, Map<string, AdpEntry>>();
+const KTC_MAPS = new WeakMap<object, Map<string, number>>();
 
 /**
  * One rewound portfolio, in the shape the card's own `PickRows` draws.

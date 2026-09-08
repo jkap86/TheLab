@@ -22,9 +22,10 @@
 import { LAST_REGULAR_WEEK } from "@/shared/manager";
 import { sleeperDataUrl, sleeperGet } from "@/shared/sleeper";
 import type { SleeperProjection } from "@/shared/sleeper";
+import { collectWithConcurrency } from "@/shared/util";
 
-import { assembleRosProjections } from "./ros";
-import type { RosProjections, RosWeek } from "./ros";
+import { createRosFold } from "./ros";
+import type { RosProjections } from "./ros";
 
 /**
  * How long a folded board answers for. Projections move on injury news, not by
@@ -32,6 +33,20 @@ import type { RosProjections, RosWeek } from "./ros";
  * serving game-day numbers from the morning.
  */
 export const ROS_PROJECTIONS_TTL_MS = 30 * 60 * 1000;
+
+/**
+ * Weeks in flight at once for one span.
+ *
+ * All eighteen at once took eighteen of the process's twenty-four Sleeper
+ * limiter slots (`DEFAULT_SLEEPER_CONCURRENCY`) for the length of a cold read
+ * — one lineups request starving every manager sync and crawl tick behind it —
+ * and held eighteen full responses, each every player in the league with an
+ * inlined player object, until the last one landed. Four bounds both; a cold
+ * span costs a few more round-trips of latency and is cached for half an hour.
+ * `player-seasons/loader/sleeper-source` mirrors this figure for the same
+ * host and the same reason.
+ */
+export const ROS_FETCH_CONCURRENCY = 4;
 
 type RosCacheEntry = {
   key: string;
@@ -53,11 +68,11 @@ const globalScope = globalThis as typeof globalThis & {
 /**
  * The rest-of-season board for a season, from `fromWeek` through week 18.
  *
- * Every week is fetched even when one fails — the shared limiter bounds the
- * burst — and one failure fails the span: a board silently missing week 12
- * would price every roster a game short, which is the same class of lie the
- * graph guards refuse. Callers treat a rejection as "no projections" and fall
- * back rather than rethrowing at the reader.
+ * Every week is fetched even when one fails — {@link ROS_FETCH_CONCURRENCY}
+ * bounds the burst — and one failure fails the span: a board silently missing
+ * week 12 would price every roster a game short, which is the same class of
+ * lie the graph guards refuse. Callers treat a rejection as "no projections"
+ * and fall back rather than rethrowing at the reader.
  */
 export function getRosProjections(
   season: string,
@@ -90,17 +105,20 @@ async function fetchSpan(season: string, first: number): Promise<RosProjections>
   const weeks: number[] = [];
   for (let week = first; week <= LAST_REGULAR_WEEK; week++) weeks.push(week);
 
-  const fetched: RosWeek[] = await Promise.all(
-    weeks.map(async (week) => ({
-      week,
-      // The data host's convention matches the v1 API's: a span with no data is
-      // a null body, folded to an empty week rather than thrown.
-      rows: await sleeperGet<SleeperProjection[]>(
-        `${sleeperDataUrl("projections", "nfl", season, week)}?season_type=regular`,
-        [],
-      ),
-    })),
-  );
+  // Folded as each week lands rather than collected and folded at the end, so
+  // a raw response is dropped as soon as it has been read — see `createRosFold`
+  // for why the result does not depend on the order they land in. The callback
+  // returns nothing on purpose: `collectWithConcurrency` keeps what it returns.
+  const fold = createRosFold();
+  await collectWithConcurrency(weeks, ROS_FETCH_CONCURRENCY, async (week) => {
+    // The data host's convention matches the v1 API's: a span with no data is
+    // a null body, folded to an empty week rather than thrown.
+    const rows = await sleeperGet<SleeperProjection[]>(
+      `${sleeperDataUrl("projections", "nfl", season, week)}?season_type=regular`,
+      [],
+    );
+    fold.add({ week, rows });
+  });
 
-  return assembleRosProjections(fetched);
+  return fold.finish();
 }

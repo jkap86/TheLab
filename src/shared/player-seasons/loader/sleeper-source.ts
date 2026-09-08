@@ -1,4 +1,5 @@
 import { sleeperDataUrl, sleeperGet } from "@/shared/sleeper";
+import { collectWithConcurrency } from "@/shared/util";
 
 import { LAST_REGULAR_WEEK } from "./plan.ts";
 import type { SleeperStatRow, WeekStats } from "./season-line.ts";
@@ -34,17 +35,26 @@ export type SeasonStatSource = (season: number) => Promise<WeekStats[]>;
 
 export const SLEEPER_SOURCE_NAME = "sleeper-season-stats";
 
+/**
+ * Weeks in flight at once — `projections/ros-read`'s `ROS_FETCH_CONCURRENCY`,
+ * spelled here because that barrel is server-only and this file mirrors that
+ * read rather than importing it. Same host, same reason: eighteen at once is
+ * most of the process-wide Sleeper bound spent on one season, and a corpus
+ * load fans out over several seasons in a row.
+ */
+const WEEK_FETCH_CONCURRENCY = 4;
+
 export function sleeperSeasonStats(season: number): Promise<WeekStats[]> {
   const weeks: number[] = [];
   for (let week = 1; week <= LAST_REGULAR_WEEK; week++) weeks.push(week);
 
-  return Promise.all(
-    weeks.map(async (week) => ({
-      week,
-      rows: await sleeperGet<SleeperStatRow[]>(
-        `${sleeperDataUrl("stats", "nfl", season, week)}?season_type=regular`,
-        [],
-      ),
-    })),
-  );
+  // In the input's order whatever order they land in — `collectWithConcurrency`
+  // zips its results back against the items — so the weeks come back ascending.
+  return collectWithConcurrency(weeks, WEEK_FETCH_CONCURRENCY, async (week) => ({
+    week,
+    rows: await sleeperGet<SleeperStatRow[]>(
+      `${sleeperDataUrl("stats", "nfl", season, week)}?season_type=regular`,
+      [],
+    ),
+  }));
 }

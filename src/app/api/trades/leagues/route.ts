@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 
 import type { ApiErrorPayload, TradeLeaguesPayload } from "@/shared/contract";
 import { getActiveSeason, parseRequestedSeason } from "@/shared/season";
-import { getSeasonTradeLeagues } from "@/shared/trades";
+import { lookupSeasonTradeLeagues } from "@/shared/trades";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -16,6 +16,10 @@ export const dynamic = "force-dynamic";
  * would re-send a few hundred leagues' worth of `settings`, `roster_positions`
  * and `scoring_settings` blobs each time. Those blobs are what the filter rules
  * read, so they cannot be trimmed — see `ManagerLeague`.
+ *
+ * Memoized per season in `shared/trades/enrich`, since the same few hundred
+ * rows were being re-read and re-serialised for every reader; a league write
+ * evicts it, so a league's first trade names it on the next read.
  */
 export async function GET(request: Request) {
   const requested = parseRequestedSeason(
@@ -30,7 +34,7 @@ export async function GET(request: Request) {
   try {
     const payload: TradeLeaguesPayload = {
       season,
-      leagues: await getSeasonTradeLeagues(season),
+      leagues: await lookupSeasonTradeLeagues(season),
     };
 
     return NextResponse.json(payload, {
