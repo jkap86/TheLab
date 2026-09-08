@@ -24,6 +24,34 @@ import { isAbortError, useRequestGuard } from "@/features/shared";
  */
 const LINEUPS_RETRY_MS = 4000;
 
+/** What {@link useManagerLineups} answers: the page's ranks, and whether it is
+ * still trying to get them. */
+export type ManagerLineupsState = {
+  /** The page's ranks, or null before they land. */
+  payload: ManagerLineupsPayload | null;
+  /**
+   * The read is in flight, or about to be — which is **not** the same question
+   * as `payload === null`, and is why this is a field rather than a derivation
+   * at the call site.
+   *
+   * Two states share that null. A read still running is one; a read that failed
+   * twice and stopped is the other, and this hook swallows the failure by
+   * design. While both drew an em dash the difference did not show; a *loading
+   * indicator* is a claim, and one left bubbling behind a request that already
+   * gave up is the thing the page's loading states must never do.
+   *
+   * **It is also a fact about the page rather than about a league**, which is
+   * the second half of why it lives here. A rank window cannot ask "has my
+   * league's answer arrived" and get this — `getManagerLeagues` lists a league
+   * the manager was *chopped* out of (`FIELDED_A_TEAM_SQL`) where the lineups
+   * query answers only for one they hold a roster in (`HOLDS_A_ROSTER_SQL`), so
+   * a chopped league's entry is absent from a payload that landed perfectly and
+   * always will be. Read per league, an indicator would run on that card until
+   * the reader left the page.
+   */
+  pending: boolean;
+};
+
 /**
  * Read `GET /api/user/[username]/lineups` — one JSON answer for the whole page,
  * fetched beside the leagues stream rather than through it: the stream's job is
@@ -75,11 +103,19 @@ export function useManagerLineups(
   season: string | null,
   ready: boolean,
   columns: readonly LineupColumn[],
-): ManagerLineupsPayload | null {
+): ManagerLineupsState {
   const [payload, setPayload] = useState<ManagerLineupsPayload | null>(null);
   const inFlight = useRef<AbortController | null>(null);
   /** Which subject has already spent its one retry — see `retryOnce`. */
   const retriedRef = useRef<string | null>(null);
+  /**
+   * The subject whose *second* attempt failed, so nothing more is coming.
+   *
+   * Keyed by subject rather than a boolean so a later question is pending
+   * again: a reader whose read failed twice and then changed manager would
+   * otherwise never see the page claim to be reading again.
+   */
+  const [failedSubject, setFailedSubject] = useState<string | null>(null);
 
   // Reset during render, the way `useManagerLeagues` does: a manager change
   // must not paint one frame of the previous manager's lineups.
@@ -110,6 +146,20 @@ export function useManagerLineups(
   if (renderedIdentity !== identity) {
     setRenderedIdentity(identity);
     setPayload(null);
+  }
+
+  // A subject that has changed has not failed — it has not been asked yet.
+  //
+  // Adjusting state during render for a changed input is the pattern React
+  // documents and the one the identity reset above already uses; doing it in
+  // the effect instead is the cascading render `react-hooks/set-state-in-effect`
+  // exists to stop. It is keyed on the *whole* subject rather than on the
+  // identity, because a bay edit re-fires the request too — so a reader who
+  // forced a board after a failure gets a page that says it is reading again.
+  const [renderedSubject, setRenderedSubject] = useState(subject);
+  if (renderedSubject !== subject) {
+    setRenderedSubject(subject);
+    setFailedSubject(null);
   }
 
   // The reset above runs during render and the effect's cleanup runs after
@@ -149,7 +199,13 @@ export function useManagerLineups(
      */
     let retry: ReturnType<typeof setTimeout> | null = null;
     const retryOnce = () => {
-      if (retriedRef.current === subject) return;
+      if (retriedRef.current === subject) {
+        // The retry is spent, so nothing further is coming for this subject.
+        // What that buys the page is the difference between a rank window that
+        // is waiting and one that has stopped — see `ManagerLineupsState`.
+        setFailedSubject(subject);
+        return;
+      }
       retriedRef.current = subject;
       retry = setTimeout(() => setAttempt((n) => n + 1), LINEUPS_RETRY_MS);
     };
@@ -194,5 +250,11 @@ export function useManagerLineups(
     guard, subject,
   ]);
 
-  return payload;
+  return {
+    payload,
+    // Not `payload === null`: a read that has given up is not one still
+    // running, and a league the payload legitimately omits is neither. See
+    // {@link ManagerLineupsState.pending}.
+    pending: payload === null && failedSubject !== subject,
+  };
 }

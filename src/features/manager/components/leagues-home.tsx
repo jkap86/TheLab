@@ -18,6 +18,7 @@ import {
   BILLET_KEY_CHROME,
   CONSOLE_KEY,
   CONSOLE_METAL_TRACK_SM,
+  FlaskDefs,
   LeagueFiltersDialog,
   LineupColumnsDialog,
   slotsInHand,
@@ -390,7 +391,7 @@ export function LeaguesHome({
     if (settled) invalidateLeagueLineups();
   }, [refreshing]);
 
-  const lineups = useManagerLineups(
+  const { payload: lineups, pending: ranksPending } = useManagerLineups(
     username,
     state.season,
     leagues.length > 0 && !refreshing,
@@ -780,35 +781,47 @@ export function LeaguesHome({
               </div>
             </Plate>
           ) : (
-            // **The gap is the plate row's overhang, not a rhythm.** A league
-            // card's header hangs 13px above the card's own top edge, so the
-            // row has to carry that plus enough breath that one league's name
-            // does not sit on another league's foot. 18px is that overhang
-            // plus 5, and it is `lineupchecker-home.tsx`'s own figure for the
-            // same card — the two pages list the same leagues and a gap that
-            // differed between them would be a drift with nothing on screen
-            // saying which page a reader was on.
-            //
-            // It was 28px while the header was a milled billet, whose overhang
-            // is 20px rather than 13; that number comes back down with the
-            // ledge. The first card's plate has the filter summary's own
-            // margin above it.
-            // **`overflow-anchor: none`**, and it is load-bearing rather than
-            // tidy: opening a card parks it under the rack with a smooth
-            // scroll, and the panel that mounts on the same frame is exactly
-            // what scroll anchoring is built to compensate for — the browser
-            // sees content grow above the viewport's anchor and adjusts
-            // `scrollTop` to keep it still, which lands the card somewhere
-            // arbitrary and looks like the park having missed. Excluding this
-            // subtree is what leaves the park the only thing moving the page.
-            // See `ExpandedPanel`.
-            // **The list is the parked shell.** `shellProps` is a measured
-            // height, the plate's overhang as padding and a scroller that only
-            // ever engages where the panel hit its floor; off it is `{}` and
-            // this is the grid it always was. Which cards stand down is CSS
-            // reading the open disclosure — see `globals.css` — rather than a
-            // prop, so a hundred cards are not re-rendered to hide
-            // ninety-nine of them.
+            <>
+            {/* The flask's gradients and its clip, once for the whole page
+                rather than once per rank window — a hundred cards' worth of
+                windows is a great many copies of four gradients parsed for one
+                identical result. `LineupMarkDefs`' arrangement and its reason,
+                and mounted the same way: here, because this is the one place
+                that knows there is a list of cards at all, and *beside* the
+                list rather than inside it, since a `<ul>` takes `<li>` children
+                and nothing else. See `FlaskDefs`. */}
+            <FlaskDefs />
+            {/* **The gap is the plate row's overhang, not a rhythm.** A league
+                card's header hangs 13px above the card's own top edge, so the
+                row has to carry that plus enough breath that one league's name
+                does not sit on another league's foot. 18px is that overhang
+                plus 5, and it is `lineupchecker-home.tsx`'s own figure for the
+                same card — the two pages list the same leagues and a gap that
+                differed between them would be a drift with nothing on screen
+                saying which page a reader was on.
+
+                It was 28px while the header was a milled billet, whose overhang
+                is 20px rather than 13; that number comes back down with the
+                ledge. The first card's plate has the filter summary's own
+                margin above it.
+
+                **`overflow-anchor: none`**, and it is load-bearing rather than
+                tidy: opening a card parks it under the rack with a smooth
+                scroll, and the panel that mounts on the same frame is exactly
+                what scroll anchoring is built to compensate for — the browser
+                sees content grow above the viewport's anchor and adjusts
+                `scrollTop` to keep it still, which lands the card somewhere
+                arbitrary and looks like the park having missed. Excluding this
+                subtree is what leaves the park the only thing moving the page.
+                See `ExpandedPanel`.
+
+                **The list is the parked shell.** `shellProps` is a measured
+                height, the plate's overhang as padding and a scroller that only
+                ever engages where the panel hit its floor; off it is `{}` and
+                this is the grid it always was. Which cards stand down is CSS
+                reading the open disclosure — see `globals.css` — rather than a
+                prop, so a hundred cards are not re-rendered to hide
+                ninety-nine of them. */}
             <ul
               ref={listRef}
               {...card.shellProps}
@@ -828,6 +841,17 @@ export function LeaguesHome({
                   league={league}
                   columns={columns}
                   summary={lineups?.leagues[league.league_id] ?? null}
+                  // **A fact about the page, not about this league**, and that
+                  // is the whole of why it is threaded rather than read off
+                  // `summary` beside it. A null summary is two states — the
+                  // read has not landed, and the read landed and does not
+                  // answer for this league — and only the first is a window
+                  // that should say it is working. The second is permanent:
+                  // this list carries a league the manager was chopped out of
+                  // and the lineups query answers only for a league they hold
+                  // a roster in, so that card's summary is null for as long as
+                  // the page is open. See `ManagerLineupsState.pending`.
+                  ranksPending={ranksPending}
                   // The three that decide which boards a *past* stop is priced
                   // on. They are the same three the lineups read above was
                   // asked for the present, which is the whole point: a rewound
@@ -852,6 +876,7 @@ export function LeaguesHome({
                 />
               ))}
             </ul>
+            </>
           )}
         </>
       )}

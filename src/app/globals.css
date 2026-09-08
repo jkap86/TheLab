@@ -938,6 +938,58 @@
   --standing-well-shadow: inset 0 3px 6px rgba(0, 0, 0, 0.62),
     inset 0 -1px 0 rgba(255, 255, 255, 0.2);
   --standing-label-shadow: 0 1px 0 rgba(255, 255, 255, 0.12);
+
+  /*
+   * ── The bubbling flask ───────────────────────────────────────────────────
+   *
+   * What the console shows while it is reading — see `bubbling-flask.tsx`.
+   * Everything here is the *vessel*: its rim, the tint on its empty upper body,
+   * the light on its near wall, the shadow it throws and the halo the page-sized
+   * one breathes. The fluid, the bubbles and the meniscus are deliberately
+   * **not** here — those are the mark's own material rather than a surface a
+   * theme decides, and the module carries the argument for why they are the
+   * same four colours on a white page as on a black one.
+   *
+   * The design handoff is a dark-mode bundle and says so; this half is derived
+   * from it and measured, not designed, on the rule the rest of this block is
+   * written by.
+   */
+  /*
+   * A quiet flask's rim. `loud` uses `--accent` itself; this one is the accent
+   * softened, which in dark mode is an alpha and in light mode **cannot be**:
+   * `--accent` at 0.7 over the pale surfaces a well flask lands on measures
+   * 1.94–3.22:1, under the 3:1 a graphical element owes, so the light half is a
+   * solid teal instead (3.3–5.5:1 across every one of them).
+   */
+  --flask-rim-quiet: rgba(0, 255, 229, 0.7);
+  /*
+   * The tint on the empty upper body — the two ends of a three-stop ramp whose
+   * opacities live with the shape in the module. In dark it *lightens* the
+   * vessel, which is what glass does against a black ground; in light it has to
+   * darken one, which is the whole reason these are tokens and not literals.
+   */
+  --flask-glass-lit: #9ffff2;
+  --flask-glass-core: #00ffe5;
+  /*
+   * The light down the near wall, and the fainter one opposite. White on the
+   * dark ground; on the pale one a highlight is invisible, so it turns over
+   * into the shadow that wall casts instead.
+   */
+  --flask-spec: #ffffff;
+  --flask-spec-faint: rgba(255, 255, 255, 0.24);
+  /*
+   * What the glass throws. Two, because the page-sized flask sits on the ground
+   * and a well flask sits in a window an inch across — the second is the first
+   * with the mid-distance layer taken out. Slate rather than black in light, on
+   * `--rack-cast`'s rule: pure black over a near-white page reads as dirt.
+   */
+  --flask-cast-loud: drop-shadow(0 2px 3px rgba(0, 0, 0, 0.55))
+    drop-shadow(0 6px 10px rgba(0, 0, 0, 0.4)) drop-shadow(0 0 14px var(--accent-glow));
+  --flask-cast-quiet: drop-shadow(0 1.5px 2px rgba(0, 0, 0, 0.55))
+    drop-shadow(0 0 9px var(--accent-glow));
+  /* The halo the page-sized flask breathes, `loud` only — a sibling span behind
+     the svg rather than part of it, since a filter cannot pulse on its own. */
+  --flask-halo: radial-gradient(circle, rgba(0, 255, 229, 0.22), transparent 68%);
 }
 
 /*
@@ -1384,6 +1436,30 @@
   --standing-well-shadow: inset 0 3px 6px rgba(15, 23, 42, 0.26),
     inset 0 -1px 0 rgba(255, 255, 255, 0.95);
   --standing-label-shadow: 0 1px 0 rgba(255, 255, 255, 0.9);
+
+  /* ---- The bubbling flask (light) ------------------------------------- */
+
+  /* Derived from the dark values above and measured against every surface a
+     flask lands on, not designed — see the dark block. The rim is solid rather
+     than the accent at 0.7, which measures 1.94–3.22:1 here; at `#14706a` it is
+     3.32:1 on the darkest billet well and 5.51:1 on the page. The glass tint
+     and both speculars turn over: on a pale ground a highlight is invisible and
+     what reads is the shadow the wall casts. The fluid, the bubbles and the
+     meniscus deliberately do not appear here — a flask of dark teal liquid is
+     the same object on white paper, and it is what keeps a white bubble legible
+     (5.44:1 on the fluid's middle, 14.39:1 on its base) rather than the pale-on-
+     pale the dark ramp exists to avoid. */
+  --flask-rim-quiet: #14706a;
+  --flask-glass-lit: #10403b;
+  --flask-glass-core: #0b6d63;
+  --flask-spec: #0f172a;
+  --flask-spec-faint: rgba(15, 23, 42, 0.28);
+  --flask-cast-loud: drop-shadow(0 2px 3px rgba(15, 23, 42, 0.22))
+    drop-shadow(0 6px 10px rgba(15, 23, 42, 0.16))
+    drop-shadow(0 0 14px var(--accent-glow));
+  --flask-cast-quiet: drop-shadow(0 1.5px 2px rgba(15, 23, 42, 0.22))
+    drop-shadow(0 0 9px var(--accent-glow));
+  --flask-halo: radial-gradient(circle, rgba(13, 148, 136, 0.22), transparent 68%);
 }
 
 @theme inline {
@@ -1635,6 +1711,102 @@ html {
   }
   100% {
     box-shadow: 0 0 0 0 transparent;
+  }
+}
+
+/*
+ * ── The bubbling flask ─────────────────────────────────────────────────────
+ *
+ * Five keyframes behind one indicator — see `bubbling-flask.tsx`. Every
+ * element that runs one carries `.lab-anim`, so the reduced-motion rule below
+ * stops all of it at once and leaves a static glass mark with fluid in it,
+ * which is a legitimate resting state. That is the argument for a *vessel*
+ * rather than a rotating arc: an arc that cannot rotate says nothing.
+ */
+
+/*
+ * One bubble's rise, from the fluid's surface into the body, clipped by the
+ * vessel.
+ *
+ * **Full size while opaque.** The scale peak is at 18% and not at 100%, because
+ * a bubble that is still growing while it fades never reads as a bubble — it
+ * reads as a smudge. It is also why the two middle stops restate `scale(1)`:
+ * a `transform` keyframe is the whole transform, so omitting the scale there
+ * would interpolate it back toward the start value.
+ *
+ * `translateY(-6.6px)` is **6.6 viewBox units**, so the rise is proportional at
+ * every rendered size. It stops short of the neck deliberately: a bubble rising
+ * into the taper gets clipped by the wall and reads as a glitch.
+ */
+@keyframes fl-bub {
+  0% {
+    transform: translateY(0) scale(0.4);
+    opacity: 0;
+  }
+  18% {
+    transform: translateY(-1.2px) scale(1);
+    opacity: 1;
+  }
+  72% {
+    transform: translateY(-4.4px) scale(1);
+    opacity: 0.95;
+  }
+  100% {
+    transform: translateY(-6.6px) scale(1);
+    opacity: 0;
+  }
+}
+
+/* The fluid answering the boil — a shallow rock, never a slosh. */
+@keyframes fl-fluid {
+  0%,
+  100% {
+    transform: translate(0, 0);
+  }
+  50% {
+    transform: translate(0.18px, -0.14px);
+  }
+}
+
+/* The halo the glass throws while it is working. The page-sized flask only:
+   a well flask is an inch across and a breathing halo at that size is a
+   flicker rather than a glow. */
+@keyframes fl-glow {
+  0%,
+  100% {
+    opacity: 0.3;
+  }
+  50% {
+    opacity: 0.85;
+  }
+}
+
+/*
+ * The segmented bar sweeping its channel — **indeterminate by construction**,
+ * since nothing on the trades board knows how many trades are coming.
+ *
+ * The bar is 42% of the channel and travels -108% to 196%. A narrower bar over
+ * a longer range leaves the channel visibly empty for part of every cycle, and
+ * an indicator that is blank a third of the time reads as static.
+ */
+@keyframes fl-sweep {
+  0% {
+    transform: translateX(-108%);
+  }
+  100% {
+    transform: translateX(196%);
+  }
+}
+
+/* The ellipsis after `Loading trades`, breathing on its own so the words do
+   not. */
+@keyframes fl-ellipsis {
+  0%,
+  100% {
+    opacity: 0.35;
+  }
+  50% {
+    opacity: 1;
   }
 }
 

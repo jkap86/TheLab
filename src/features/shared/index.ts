@@ -197,6 +197,19 @@ export {
   StandingBay,
   StandingStrip,
 } from "./ui/card-plate";
+// What the console shows while it is reading: the app's own flask mark,
+// bubbling. Three features draw it — `/trades`, the manager card's rank
+// windows and the lineup checker's tiles and header — which is the line
+// `CONSOLE_KEY` and `ManagerPlate` moved on, and the three path constants are
+// declared there rather than in `features/tools` beside the static mark for
+// the same reason: that folder may read this one and not the reverse.
+export {
+  BubblingFlask,
+  FlaskDefs,
+  FLASK_FLUID,
+  FLASK_LIP,
+  FLASK_VESSEL,
+} from "./ui/bubbling-flask";
 export { ConsoleGround } from "./ui/console-ground";
 // The capped inner housing an open card's expanded half is drawn in. It came
 // here from `features/manager` when the trade card became a second reader — the

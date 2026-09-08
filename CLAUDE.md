@@ -11717,6 +11717,229 @@ above; the 390 pass now has **no horizontal page overflow** (`main.scrollWidth
 Chrome clamps to a ~485px minimum — a `--window-size=390` run silently lays out
 at 485 and crops. The route was deleted afterwards.
 
+## The console says when it is reading
+
+Every loading state in this app was a word or an em dash. `/trades` printed
+`Reading the board…`; a manager card's rank windows, the lineup checker's four
+tiles, its counts well and its win dial all printed `—` until their read landed.
+None of it looked like the machine was doing anything — and the em dash is worse
+than merely quiet, because it is already this app's spelling of *no answer at
+all*, so a window waiting on a request and a window whose metric has nothing to
+rank said the identical thing. `features/shared/ui/bubbling-flask.tsx` is the
+app's own flask mark with fluid in it, bubbling, at five sizes. Applied from a
+design handoff. **Nothing on the wire moved** — no route, no query, no contract
+type, no payload field, no migration — but two hooks gained a field, and that is
+the substantive half of the pass rather than a detail.
+
+**It is a vessel rather than a rotating arc, and `lab-anim` is why that
+matters.** Every animated element carries the app's one reduced-motion hook, so
+under `prefers-reduced-motion: reduce` the whole thing stops and leaves a static
+glass mark with fluid in it — a legitimate resting state. An arc that cannot
+rotate says nothing.
+
+### A flask must never be left bubbling behind a failed read
+
+The handoff states this as a rule and says it "falls out of the current
+structure as long as the flask lives inside the `loading` branch". That is true
+of `/trades`, whose error arm replaces the loading arm whole. It is **false on
+both other pages**, and the flag the handoff names (`entry == null`) is the
+thing that makes it false — because on this codebase that null is three states,
+not one.
+
+- **The read is still running.** The flask's case.
+- **The read failed and stopped.** `useManagerLineups` gets one retry and then
+  swallows the failure; `useLineupCheck` has no retry at all. Both resolve to
+  null and stay there, by design — a lineup is an enhancement beside a list, so
+  it degrades rather than replacing the page. Read off the payload, this is
+  indistinguishable from the first, which was harmless while both drew an em
+  dash and is exactly the forbidden state once one of them draws an indicator.
+- **The read landed and does not answer for this league.** `getManagerLeagues`
+  lists a league the manager was *chopped* out of (`FIELDED_A_TEAM_SQL`) where
+  the lineups query answers only for one they hold a roster in
+  (`HOLDS_A_ROSTER_SQL`), so that card's summary is null against a payload that
+  landed perfectly, and always will be. The lineup checker has the same shape:
+  the page already draws four em dashes on a league the check answered nothing
+  for.
+
+So `pending` is a field on both hooks rather than a derivation at the call site,
+and it is **a fact about the page rather than about a league** — which is the
+second half of why it could not be read off `summary` beside it. It is threaded
+to `LeagueCard` and `LineupCheckCard` as a prop, and the em dash keeps every one
+of the other two states.
+
+**Both hooks track the failure by subject rather than by a boolean**, so a later
+question is pending again: a reader whose read failed and who then changed
+manager, season or bay would otherwise find a page that never claimed to be
+reading again. And **both clear it during render** rather than in the effect
+that starts the next attempt — `setState` in an effect body is the cascading
+render `react-hooks/set-state-in-effect` exists to stop, where adjusting state
+for a changed input during render is the pattern both files already use to blank
+their payload. The lint rule caught the first spelling, which is the rule
+working.
+
+### The defs are the document's, and a page that forgets them fails quietly
+
+SVG defs are document-global, so the twelve flasks a loading page can hold
+reference **one** set of four gradients and one clip. `FlaskDefs` is
+`LineupMarkDefs`' arrangement exactly, and it is mounted per page for that
+component's reason — but *where* on the page is this pass's own finding, and it
+is different on all three:
+
+- `/trades` mounts it **above the ternary**, because that page's two loading
+  states are in two exclusive branches: the first page's indicator replaces the
+  board, and the load-more note lives inside the board it replaces. In either
+  branch, the other draws a vessel whose fill and fluid resolve to nothing.
+- `/lineupchecker` mounts it **at the page root**, not beside the list the way
+  `LineupMarkDefs` is: the counts well and the win dial are in the header, which
+  is outside the branch the list is one arm of.
+- `/manager` mounts it beside the list, which is where all four of its flasks
+  are.
+
+The failure mode is worth knowing rather than discovering: a page that mounts a
+flask without the defs draws an **empty** flask, which reads as dim rather than
+as broken.
+
+### The bubbles are the one thing that is a function of size
+
+Radii are viewBox units, so they do not scale with the rendered size — a value
+that reads at 88px is an invisible speck at 24. The floor is **6px on screen for
+the largest bubble**, and `bubblesFor` bands on it: four bubbles at 60px and up,
+three from 28, two below. That is the rule rather than the handoff's table, and
+the difference showed immediately — the 32px flask at the trades board's foot is
+not one of the three sizes the design names, and the prototype gave it a set of
+its own whose largest bubble renders at **5.07px**, under the floor the same
+document states. It takes the well set, at 7.73px.
+
+**`transform-box: fill-box`, `transform-origin: center` and `backwards` are all
+load-bearing**, and the handoff says so at length: without the first two,
+`scale()` on an SVG `<circle>` is applied about the viewBox origin and the bubble
+translates diagonally out of the vessel to be removed by the clip — it renders,
+at full opacity, off the flask. Without the third, a delayed bubble sits bright
+and static in the fluid for the length of its delay.
+
+**`phase` is this pass's own addition and it is what stops a row pulsing in
+lockstep.** The handoff varies durations and delays per instance by hand; a
+component cannot, and four rank windows mounting in one frame would otherwise
+run the identical animation from the identical instant and read as one four-part
+widget. It is an integer the caller already has — a map index — shifted by 0.37s
+and **wrapped modulo each bubble's own duration**, so a late phase is a shifted
+cycle rather than a long initial wait. It never needs to be unique across the
+page, only across a group a reader sees at once.
+
+### The light half, which the handoff does not cover
+
+The bundle is dark-mode and says so, naming a light counterpart as the thing
+needed "before this ships to a theme-toggled build". This is one, so it is
+derived and measured on the rule the rest of `globals.css` is written by.
+
+**The alpha is what could not carry over.** The quiet rim is
+`rgba(0,255,229,0.7)` in dark, which measures 7.25–7.68:1 there; the same alpha
+over the six light surfaces a well flask lands on measures **1.94–3.22:1**,
+under the 3:1 a graphical element owes. `--flask-rim-quiet` is a solid
+`#14706a` in light instead, 3.32:1 on the darkest billet well and 5.51:1 on the
+page. The glass tint and both speculars turn over — on a pale ground a highlight
+is invisible and what reads is the shadow the near wall casts — and the casts go
+slate rather than black, on `--rack-cast`'s rule.
+
+**The fluid, the bubbles and the meniscus deliberately do not appear in either
+token block.** They are the mark's own material rather than a surface a theme
+decides: a flask of dark teal liquid is the same object on white paper. That is
+also the answer to the one measurement the handoff asks for and could not take —
+a white bubble on a pale liquid is the failure the dark ramp exists to avoid,
+and it cannot happen here because the ramp does not turn over. Measured: the
+bubble is **5.44:1** on the fluid's middle and **14.39:1** on its base, in both
+themes.
+
+### What did not change
+
+The attention strip's four reason bays keep their em dash, per the handoff — a
+flask at ~22px beside a `--fs-9` label is a teal speck rather than an
+instrument, and the counts well's flask two rows up already speaks for the
+strip. The rail count (`Reading…`) is unchanged for its own reason: it is a
+*count*, and a flask there would be a second indicator on one row. `Proj rec`
+keeps its em dash too, which is not an omission — that figure is `—` both while
+pending and when the week has nothing projected, so it is an absence rather than
+a wait.
+
+**`MetricCell`'s state union is untouched**, deliberately and on the handoff's
+own warning: `needsAttention` and `attentionByReason` read `alert` alone, so
+folding a fifth state in would risk a pending tile counting as attention and
+sending a league to the top of the page for a read that has not landed. The
+flask is a second question asked beside the cell rather than a fifth answer
+inside it.
+
+**The three path constants moved to `features/shared` and `FlaskMark` imports
+them**, which is the opposite direction from the one the handoff suggests and
+the only one the layering allows: `features/tools` may read `features/shared`
+and the reverse would invert it. One spelling either way, which is the point —
+the loading flask cuts a clip path from the vessel, and a mark that had drifted
+from it would be a rim around a shape it no longer holds.
+
+**`StampedCount` took a node rather than a string**, and `centred` is what that
+cost. A count is type on a baseline, which is what its row is aligned on; a
+count that has not landed is a *drawn object*, and an object has no baseline
+worth aligning a label to. A boolean rather than a `className`, because a second
+`self-*` utility in one class attribute is settled by Tailwind's emit order
+rather than by the caller.
+
+**And the load-more live region is rendered whether or not it says anything**,
+which is what it always was — an empty `<p>` that gained its text. A region
+added to the document in the same frame as its content is unreliably announced.
+
+#### Verified
+
+Rendered through a temporary `/preview` route against the real `TradesLoading`,
+`LeagueCard`, `LineupCheckCard`, `WeekSummary`, `BubblingFlask` and `FlaskDefs`,
+the real tokens and the real Tailwind build — the method the console-card,
+shares, rack and timeline passes established, since no database is reachable
+from where this was built — then driven over CDP at 1280 and 390 in both schemes
+and deleted. The mechanics are the ones this file records: `--no-proxy-server`,
+`localhost` rather than `127.0.0.1`, a phone viewport from
+`Emulation.setDeviceMetricsOverride`, `data-theme` rather than
+`prefers-color-scheme`, the `--blink-settings=availablePointerTypes=4,…` flags,
+a **client-component** harness, and a CDP client over Node's own `WebSocket`
+since Playwright is not installed here.
+
+Every arm landed. Twelve flasks on the page against **one** `linearGradient#fl-glass`
+and **one** `clipPath#fl-vessel`, at every width and in both schemes — the
+one-defs-per-document claim end to end. The loud rim resolves `rgb(0,255,229)`
+at 1.4 and the quiet one `rgba(0,255,229,0.7)` at 1.5 in dark, against
+`rgb(11,109,99)` and `rgb(20,112,106)` in light, with the casts turning from
+black to slate and the halo from cyan to teal — the tokens inverting rather than
+dimming. Every bubble computes `transform-box: fill-box`, an origin at its own
+centre and a `backwards` fill. Largest rendered bubble per size: **6.00** (24),
+**7.25** (30), **7.73** (32), **8.22** (34), **11.73** (88) — every set at or
+above the floor, including the one the prototype would have put at 5.07. The
+sweep bar measures **73.91 of 176 = 42.0%** running `fl-sweep`.
+
+**The distinction the pass exists for was driven separately and is exact.** The
+pending manager card draws **4 flasks named `Loading rank` at 34px and 0 em
+dashes**; the card whose payload landed and cannot be ranked draws **0 flasks
+and 4 em dashes**. The pending checker card draws 4 flasks named `Checking` at
+30px; the unanswered one draws none. The counts well's 24px flask computes
+`align-self: center` in its baseline-aligned bay and the dial's 34px one sits in
+the lit window, against `3–1` / `2 / 3` / `75.0%` on the landed header beside it.
+
+Under `prefers-reduced-motion: reduce` the bubbles', the fluid's and the sweep's
+`animation-name` all compute to `none` with the bubble still at opacity 1 —
+`lab-anim` doing its job, and the static resting state the vessel was chosen
+for. At every width and in both schemes: `document.documentElement.scrollWidth`
+equal to or under the viewport, **zero** unclipped elements past it, exactly one
+`<h1>`, and no console output but the dev server's own React-DevTools and HMR
+lines. 2,060 unit tests pass; `lint`, `typecheck` and `build` are clean.
+
+**Not verified against real data**, which is the gap to close first: every
+number above is a fixture, and four things a render here cannot check. Whether a
+flask actually *appears* on a real page or whether these reads land too fast to
+see one — which is the question that decides if the 88px indicator was worth
+building and the only one the first real load can answer. How a hundred cards'
+worth of flasks read at once on a 113-league account, and what four hundred
+animating SVGs cost against the `pointer-fine:` budget the cards are already
+gated by. Whether the failed-read path is reachable often enough for the
+`pending` split to be exercised rather than merely correct. And whether the
+light half reads as intended beside real content, since every surface it was
+measured against is a token rather than a page.
+
 ## Theme
 
 Two schemes, one set of markup, and `globals.css` is nearly the whole of it:
