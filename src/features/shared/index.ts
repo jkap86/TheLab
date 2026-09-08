@@ -12,6 +12,7 @@ export { apiFetch, isAbortError } from "./api";
 export { Avatar } from "./avatar";
 export {
   CONSOLE_BILLET,
+  CONSOLE_BILLET_FACE,
   CONSOLE_CARD,
   CONSOLE_CARD_SHELL,
   CONSOLE_CHIP,

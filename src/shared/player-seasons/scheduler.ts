@@ -1,4 +1,9 @@
-import { errorMessage, loopSwitch, startBackgroundLoop } from "@/shared/util";
+import {
+  BOOT_STAGGER_MS,
+  errorMessage,
+  loopSwitch,
+  startBackgroundLoop,
+} from "@/shared/util";
 import type { BackgroundLoopHandle } from "@/shared/util";
 import { getNflState } from "@/shared/sleeper";
 
@@ -79,6 +84,10 @@ export function startCompsCorpusScheduler(): BackgroundLoopHandle {
     guardKey: "comps-corpus",
     ...loopSwitch(COMPS_CORPUS_LOAD_VAR),
     cadence: "daily",
+    // Last of the four: it reads the players map the first one writes, and on
+    // the boot where it does anything at all it is the heaviest thing here —
+    // eighteen weeks of Sleeper per missing season. See `BOOT_STAGGER_MS`.
+    initialDelayMs: BOOT_STAGGER_MS.comps,
     tick,
   });
 }

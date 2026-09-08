@@ -175,6 +175,71 @@ describe("the bound", () => {
     assert.ok(peekLeagueLineup(`L${MAX_ENTRIES + 2}`).payload, "the newest stayed");
   });
 
+  test("an open card costs the cache nothing — MAX_ENTRIES cached beside it", async () => {
+    // The bug: the overflow was counted over the whole map, so a subscribed
+    // entry was exempt from eviction *and* took one of the eight slots. One
+    // open league beside eight cached ones evicted a cached one to get the map
+    // to eight — a reader who opened a card was handed a smaller cache than a
+    // reader who did not, and every further open took another slot.
+    const live = deferred();
+    const holdOpen = acquireLeagueLineup("open", live.load, () => {});
+    live.settle();
+    await flush();
+
+    for (let i = 0; i < MAX_ENTRIES; i++) {
+      const source = deferred();
+      const release = acquireLeagueLineup(`C${i}`, source.load, () => {});
+      source.settle();
+      await flush();
+      release();
+    }
+
+    assert.equal(
+      leagueLineupCacheSize(),
+      MAX_ENTRIES + 1,
+      "eight cached answers and the one being read",
+    );
+    assert.ok(peekLeagueLineup("C0").payload, "the oldest cached answer stayed");
+    assert.ok(peekLeagueLineup("open").payload, "and so did the open card's");
+
+    // Released, that entry joins the droppable set and the bound applies to
+    // the nine of them: the oldest cached answer is the one that goes.
+    holdOpen();
+    assert.equal(leagueLineupCacheSize(), MAX_ENTRIES);
+    assert.equal(peekLeagueLineup("C0").payload, null, "the oldest went");
+    assert.ok(
+      peekLeagueLineup(`C${MAX_ENTRIES - 1}`).payload,
+      "the newest cached answer stayed",
+    );
+    assert.ok(peekLeagueLineup("open").payload, "and so did the one just closed");
+  });
+
+  test("an in-flight read is not counted against the bound or dropped by it", async () => {
+    // An unresolved fetch has no subscriber-free existence to bound — it is a
+    // card waiting — and trimming one would abandon a request nothing would
+    // re-issue. It is held by its listener, so it is never in the droppable set.
+    const pending = deferred();
+    const holdOpen = acquireLeagueLineup("pending", pending.load, () => {});
+
+    for (let i = 0; i < MAX_ENTRIES + 2; i++) {
+      const source = deferred();
+      const release = acquireLeagueLineup(`P${i}`, source.load, () => {});
+      source.settle();
+      await flush();
+      release();
+    }
+
+    assert.equal(leagueLineupCacheSize(), MAX_ENTRIES + 1);
+    assert.equal(peekLeagueLineup("pending").loading, true, "still in flight");
+    assert.equal(pending.signals[0]?.aborted, false, "and not aborted");
+
+    // And it still resolves into its own entry when it lands.
+    pending.settle({ ...PAYLOAD, season: "P" });
+    await flush();
+    assert.equal(peekLeagueLineup("pending").payload?.season, "P");
+    holdOpen();
+  });
+
   test("never evicts an answer a card is still reading", async () => {
     // Every one of these is held open, which is a reader with more cards open
     // than the bound — a page they can see rather than a cache they cannot.
