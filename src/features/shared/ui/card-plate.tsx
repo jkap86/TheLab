@@ -1,11 +1,13 @@
-import type { ReactNode } from "react";
+import type { CSSProperties, ReactNode } from "react";
 
 import { Avatar } from "../avatar";
 import {
   CONSOLE_BILLET,
+  CONSOLE_CHIP_RAISED,
   CONSOLE_MILLED_WELL,
   CONSOLE_PLATE,
 } from "../console-chrome";
+import { rampDepth, rampFace } from "../rank-ramp";
 
 /**
  * The plates that straddle a console card's top edge.
@@ -186,7 +188,25 @@ export function LeagueBillet({
  * all. Also superseded is the two-line {@link CardLedge} that carried both —
  * it works, and costs 76px of card before the rule.
  */
-export function StandingStrip({ children }: { children: ReactNode }) {
+export function StandingStrip({
+  children,
+  stretch = false,
+}: {
+  children: ReactNode;
+  /**
+   * The strip has the line to itself at **every** width, so it fills it and its
+   * bays stretch with it — the lineup checker's arrangement, where the settings
+   * strip takes its own line above rather than sharing this one.
+   *
+   * A prop rather than a second component, and rather than the parent reaching
+   * in with `[&>span]:flex-1`: that is one more selector for a later
+   * `flex-none` on the bay to lose an emit-order flip against, which is the
+   * trap the console constants are split to avoid. It goes away the day the
+   * manager card takes the own-line arrangement too, at which point the `sm:`
+   * arms below are dead.
+   */
+  stretch?: boolean;
+}) {
   return (
     <div
       // `items-center`, not `items-stretch`: the *strip* stretches to its
@@ -194,7 +214,9 @@ export function StandingStrip({ children }: { children: ReactNode }) {
       // it keep theirs. Stretched too, a wrapped settings strip beside it would
       // make three 80px wells holding a 16px figure each — a part that grew to
       // fill a hole rather than one machined to a size.
-      className="relative flex w-full shrink-0 items-center justify-between gap-[5px] overflow-hidden rounded-[0.625rem] bg-[image:var(--billet-bg)] px-1.5 py-[5px] shadow-[var(--standing-strip-shadow)] sm:w-auto sm:justify-start"
+      className={`relative flex w-full shrink-0 items-center justify-between gap-[5px] overflow-hidden rounded-[0.625rem] bg-[image:var(--billet-bg)] px-1.5 py-[5px] shadow-[var(--standing-strip-shadow)] ${
+        stretch ? "" : "sm:w-auto sm:justify-start"
+      }`}
     >
       <BilletFinish />
       {children}
@@ -237,26 +259,157 @@ export function StandingBay({
   label,
   tone,
   glow,
+  stretch = false,
   children,
 }: {
   label: string;
-  /** The ramp colour for this field's own percentile. */
-  tone: string;
-  /** The same colour at low alpha, for the figure's halo. */
-  glow: string;
+  /**
+   * The ramp colour for this field's own percentile, engraved.
+   *
+   * **Optional, and its absence hands the figure's ink to the caller** — which
+   * is what a bay carrying something other than an engraved number needs. The
+   * lineup checker's strip is two of those: a polished figure ({@link Polish})
+   * and a row of {@link GameChip}s, both of which clip a gradient to their own
+   * glyphs over a transparent fill, and a `text-shadow` set here would paint
+   * *above* that background and flatten them — the failure `--alert-depth` and
+   * `--wordmark-depth` both record. So the engraving is drawn only where there
+   * is a flat figure to engrave.
+   */
+  tone?: string;
+  /** The same colour at low alpha, for the figure's halo. Absent with `tone`. */
+  glow?: string;
+  /** Fill the strip's line rather than hugging content — see {@link StandingStrip}. */
+  stretch?: boolean;
   children: ReactNode;
 }) {
   return (
-    <span className="relative flex min-w-0 flex-1 items-baseline justify-center gap-1.5 rounded-[0.4375rem] bg-[image:var(--billet-well-bg)] px-2 pb-1 pt-[3px] shadow-[var(--standing-well-shadow)] sm:flex-none">
+    <span
+      className={`relative flex min-w-0 flex-1 items-baseline justify-center gap-1.5 rounded-[0.4375rem] bg-[image:var(--billet-well-bg)] px-2 pb-1 pt-[3px] shadow-[var(--standing-well-shadow)] ${
+        stretch ? "" : "sm:flex-none"
+      }`}
+    >
       <span className="whitespace-nowrap font-mono text-[length:var(--fs-9)] uppercase tracking-[0.12em] text-[color:var(--billet-label)] [text-shadow:var(--standing-label-shadow)]">
         {label}
       </span>
       <span
         className="whitespace-nowrap font-display text-[length:var(--fs-16)] font-semibold leading-[1.1] tracking-[-0.015em] tabular-nums"
-        style={{
-          color: tone,
-          textShadow: `var(--standing-engrave), 0 0 18px ${glow}`,
-        }}
+        style={
+          tone === undefined
+            ? undefined
+            : {
+                color: tone,
+                textShadow: `var(--standing-engrave), 0 0 18px ${glow}`,
+              }
+        }
+      >
+        {children}
+      </span>
+    </span>
+  );
+}
+
+/**
+ * A figure or a letter set as **tinted chrome**: the ramp's own hue clipped to
+ * the glyphs, with the cast behind it.
+ *
+ * One finish, two parts — a {@link StandingBay}'s figure and a
+ * {@link GameChip}'s letter — because a bay reading `+19.3` beside a chip
+ * reading `W` is one reading of one game, and a second spelling of the polish
+ * is how the two would come to be lit differently.
+ *
+ * Three things in it are load-bearing and every one of them is silent when it
+ * is wrong:
+ *
+ * 1. **The cast is a `filter`, never a `text-shadow`.** With
+ *    `background-clip: text` over a transparent fill the element's background
+ *    paints first, so a `text-shadow` paints *above* it and the dark offset
+ *    copies cover the gradient inside the glyph bodies — the figure renders as
+ *    flat ink with a 1px lit rim. See {@link rampDepth}.
+ * 2. **`color: transparent` is spelled as well as `-webkit-text-fill-color`.**
+ *    Tailwind's `text-transparent` is the `color` a browser with no
+ *    `background-clip: text` falls back to painting, so a glyph is never
+ *    invisible on one that ignores the clip.
+ * 3. **The cast rides `pointer-fine:`**, on the league card's per-device
+ *    budget: a `filter` is a compositor buffer per element and this is up to
+ *    three per card on a page with no virtualizer. A variant cannot be spelled
+ *    in a `style`, so the computed value travels through a custom property
+ *    that the gated utility reads.
+ */
+const POLISH =
+  "bg-clip-text text-transparent [-webkit-text-fill-color:transparent] " +
+  "pointer-fine:[filter:var(--polish-depth)]";
+
+/** The two computed halves of the finish, as a style a `pointer-fine:` class reads. */
+function polish(percentile: number | null): CSSProperties {
+  const style: CSSProperties & { "--polish-depth": string } = {
+    backgroundImage: rampFace(percentile),
+    "--polish-depth": rampDepth(percentile),
+  };
+  return style;
+}
+
+/**
+ * A polished figure on a {@link StandingBay}'s own baseline.
+ *
+ * The type is the bay's, because it *is* the bay's figure — the bay simply
+ * cannot draw it, since the ink is a background rather than a colour.
+ */
+export function RampFigure({
+  percentile,
+  children,
+}: {
+  /** 0–100, or null for the neutral — {@link rankColor}'s own argument. */
+  percentile: number | null;
+  children: ReactNode;
+}) {
+  return (
+    <span className={`${POLISH} whitespace-nowrap`} style={polish(percentile)}>
+      {children}
+    </span>
+  );
+}
+
+/**
+ * One game of a week, as a raised chip carrying its result.
+ *
+ * **A chip per game rather than a record.** `2–0` says how the week added up
+ * and cannot say *which* of the two went which way; two chips can, because the
+ * strip's own left-to-right order — the head-to-head's bay, then the median's —
+ * is what says which is which. A split week is therefore a red `L` beside a
+ * green `W` rather than a neutral `1–1`.
+ *
+ * **Each chip takes its own end of the ramp**, so a good result is the same
+ * green here as on every rank window in the app and both ends invert for light
+ * mode together.
+ *
+ * The surface and the letter are two elements and have to be: the chip's face
+ * is a `background-image` and so is the polished glyph's, and one element has
+ * one background. `CONSOLE_CHIP_RAISED` is the chip's own chamfer plus a cast
+ * onto the well it stands in — one atomic list, since a shadow list cannot be
+ * appended to.
+ *
+ * **The letter is `aria-hidden` and the sentence beside it is the reading.** A
+ * bare `W W` announced as "W W" is not one.
+ */
+export function GameChip({
+  percentile,
+  name,
+  children,
+}: {
+  percentile: number;
+  /** The screen reader's sentence: which game, and how it went. */
+  name: string;
+  children: string;
+}) {
+  return (
+    <span
+      className={`${CONSOLE_CHIP_RAISED} relative inline-flex min-w-[1.125rem] justify-center rounded-[0.3125rem] px-1 pb-0.5 pt-px`}
+    >
+      <span className="sr-only">{name}</span>
+      <span
+        aria-hidden
+        className={`${POLISH} font-display text-[length:var(--fs-16)] font-semibold leading-[1.15] tracking-[0.02em]`}
+        style={polish(percentile)}
       >
         {children}
       </span>
@@ -392,7 +545,16 @@ export function ReadingPlate({
 }
 
 /**
- * One bay of a reading plate: a stamped label **over** its figure.
+ * One bay of a reading plate: a stamped label **over** its figure — **and
+ * nothing draws one any more**, along with {@link ReadingPlate}'s `tight` arm,
+ * which existed for it.
+ *
+ * The lineup checker's projected outcome was the only stacked plate, and it is
+ * a {@link StandingStrip} on its own line now: the plate was width the league's
+ * name opposite it was paying for, which is the trade the whole part existed to
+ * make and the one the strip stops making. Kept on `peekActiveSeason`'s terms —
+ * the measurement below is the argument for stacking a reading at all, and is
+ * what a second plate carrying two figures would need.
  *
  * {@link PlateField} is the same two things side by side, and the difference is
  * width against height. A plate carrying one reading has the room to set it on

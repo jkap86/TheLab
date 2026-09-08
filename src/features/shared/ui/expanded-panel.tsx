@@ -24,8 +24,9 @@ import { usePanelCap } from "../use-panel-cap";
  * `box-sizing: border-box`, `overflow-hidden` and the perspective. The clip
  * has nothing to round against any more and is kept anyway — a mid-animation
  * drawer still must not paint over the card's edge. The lineup checker's week
- * view keeps its own `CONSOLE_HOUSING_INSET` block, and `--housing-inset-shadow`
- * with it; only the two readers of this component closed the seam.
+ * view kept its own `CONSOLE_HOUSING_INSET` block until it converged on this
+ * one; both that constant and `--housing-inset-shadow` are noted dead where
+ * they are declared rather than deleted.
  *
  * **It is a component of its own so `league-card.tsx` stays hook-free**, which
  * is that file's own stated design and `LeagueSyncKey`'s precedent one tool
@@ -35,7 +36,7 @@ import { usePanelCap } from "../use-panel-cap";
  * **It lives in `features/shared/ui` because a trade card mounts it too**, on
  * the line `CONSOLE_KEY`, `ManagerPlate`, `LeagueConfigWindow` and
  * `LeagueTeams` all moved on: a second reader, and a sibling feature may not
- * import from `features/manager`.
+ * import from `features/manager`. The lineup checker's week view is the third.
  *
  * **`parked` is gone, and so is the park itself.** This used to scroll its own
  * card under the rack on open and carry a second cap for the trade card, which
@@ -46,12 +47,13 @@ import { usePanelCap } from "../use-panel-cap";
  * second thing moving it.
  *
  * All of the measuring is {@link usePanelCap}, which is a hook rather than part
- * of this component for one reason: the lineup checker's expanded half is a
- * `CONSOLE_HOUSING_INSET` block with its own inset, and a shared component
- * taking a `className` for that difference would put two base `p-*` utilities
- * of the same specificity in one class attribute — settled by Tailwind's emit
- * order rather than by the caller. Each half keeps its own chrome; they share
- * the arithmetic.
+ * of this component for one reason: an expanded half with a different inset
+ * could take the arithmetic without taking this chrome, and a shared component
+ * taking a `className` for the difference would put two base `p-*` utilities of
+ * the same specificity in one class attribute — settled by Tailwind's emit
+ * order rather than by the caller. That was the lineup checker's own half until
+ * it converged here; the seam stays because it is what a fourth shape would
+ * take.
  */
 export function ExpandedPanel({
   children,

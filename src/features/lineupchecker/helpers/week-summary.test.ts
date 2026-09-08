@@ -52,7 +52,7 @@ describe("leagueWeekRecord", () => {
       wins: 1,
       losses: 0,
       ties: 0,
-      games: 1,
+      games: [{ against: "opponent", result: "win" }],
       median: false,
     });
   });
@@ -65,20 +65,94 @@ describe("leagueWeekRecord", () => {
       leagueWeekRecord(
         league({ current_points: 120, opponent_points: 100, median_points: 110 }),
       ),
-      { wins: 2, losses: 0, ties: 0, games: 2, median: true },
+      {
+        wins: 2,
+        losses: 0,
+        ties: 0,
+        games: [
+          { against: "opponent", result: "win" },
+          { against: "median", result: "win" },
+        ],
+        median: true,
+      },
     );
     assert.deepEqual(
       leagueWeekRecord(
         league({ current_points: 120, opponent_points: 130, median_points: 110 }),
       ),
-      { wins: 1, losses: 1, ties: 0, games: 2, median: true },
+      {
+        wins: 1,
+        losses: 1,
+        ties: 0,
+        games: [
+          { against: "opponent", result: "loss" },
+          { against: "median", result: "win" },
+        ],
+        median: true,
+      },
     );
     assert.deepEqual(
       leagueWeekRecord(
         league({ current_points: 100, opponent_points: 130, median_points: 110 }),
       ),
-      { wins: 0, losses: 2, ties: 0, games: 2, median: true },
+      {
+        wins: 0,
+        losses: 2,
+        ties: 0,
+        games: [
+          { against: "opponent", result: "loss" },
+          { against: "median", result: "loss" },
+        ],
+        median: true,
+      },
     );
+  });
+
+  test("the games are ordered head-to-head first, then the median", () => {
+    // The strip reads `Proj` then `Med`, and the chips are what say *which* of
+    // the two went which way — a reading `1–1` cannot make. Order is therefore
+    // part of the answer rather than an accident of the fold.
+    const record = leagueWeekRecord(
+      league({ current_points: 120, opponent_points: 130, median_points: 110 }),
+    );
+    assert.deepEqual(
+      record?.games.map((game) => game.against),
+      ["opponent", "median"],
+    );
+  });
+
+  test("the tally is the games and cannot disagree with them", () => {
+    // Both readings come off one fold, so a strip drawing `L W` and a plate
+    // counting `1–1` are two presentations of one week rather than two counts.
+    for (const [mine, theirs, median] of [
+      [120, 100, 110],
+      [120, 130, 110],
+      [100, 130, 110],
+      [110, 100, 110],
+      [120, 100, null],
+    ] as const) {
+      const record = leagueWeekRecord(
+        league({
+          current_points: mine,
+          opponent_points: theirs,
+          median_points: median,
+        }),
+      );
+      assert.ok(record);
+      assert.equal(
+        record.wins,
+        record.games.filter((game) => game.result === "win").length,
+      );
+      assert.equal(
+        record.losses,
+        record.games.filter((game) => game.result === "loss").length,
+      );
+      assert.equal(
+        record.ties,
+        record.games.filter((game) => game.result === "tie").length,
+      );
+      assert.equal(record.games.length, record.median ? 2 : 1);
+    }
   });
 
   test("a dead heat against the median is a tie, not a loss", () => {
@@ -86,7 +160,16 @@ describe("leagueWeekRecord", () => {
       leagueWeekRecord(
         league({ current_points: 110, opponent_points: 100, median_points: 110 }),
       ),
-      { wins: 1, losses: 0, ties: 1, games: 2, median: true },
+      {
+        wins: 1,
+        losses: 0,
+        ties: 1,
+        games: [
+          { against: "opponent", result: "win" },
+          { against: "median", result: "tie" },
+        ],
+        median: true,
+      },
     );
   });
 

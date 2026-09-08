@@ -27,15 +27,17 @@ import {
  * Sizing an open card's expanded half into the parked shell, and collapsing it
  * again when the card closes.
  *
- * **A hook rather than a component**, which is what lets the two shapes of
- * expanded half share one measurement: `/manager` and `/trades` mount
- * {@link ExpandedPanel}, which is an inner housing with its own inset, and
- * `/lineupchecker` mounts a `CONSOLE_HOUSING_INSET` block with a different one.
- * A component would have had to take a `className` for the difference, and two
- * base `p-*` utilities of the same specificity are settled by Tailwind's emit
- * order rather than the class attribute — the trap `CONSOLE_CARD_SHELL` and
- * `CONSOLE_KEY_PILL` are both split to keep a part out of. So the caller keeps
- * its own chrome and this keeps the arithmetic.
+ * **A hook rather than a component**, which is what let the two shapes of
+ * expanded half share one measurement: `/manager` and `/trades` mounted
+ * {@link ExpandedPanel} and `/lineupchecker` a `CONSOLE_HOUSING_INSET` block
+ * with a different inset. A component would have had to take a `className` for
+ * the difference, and two base `p-*` utilities of the same specificity are
+ * settled by Tailwind's emit order rather than the class attribute — the trap
+ * `CONSOLE_CARD_SHELL` and `CONSOLE_KEY_PILL` are both split to keep a part out
+ * of. **All three mount `ExpandedPanel` now**, since the checker's half
+ * converged on the manager card's; the split stays because it is the seam a
+ * fourth shape would take, and because a component that measures itself is a
+ * component with a hook in it either way.
  *
  * **The room is measured off the shell, not computed from a chain of
  * constants.** While a card is parked the list is a box of known height with
