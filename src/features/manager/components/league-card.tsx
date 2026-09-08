@@ -1,7 +1,7 @@
-import { memo, type MouseEvent } from "react";
+import { memo, useMemo, useState, type MouseEvent } from "react";
 
 import type {
-  LeagueLineupEntry,
+  LeagueLineupSummary,
   LeagueRecord,
   LineupColumn,
   LineupSlot,
@@ -24,6 +24,7 @@ import {
   leagueType,
   LINEUP_METRIC_LABELS,
   ordinal,
+  useLeagueLineup,
   ordinalParts,
   positionsLabel,
   slotsLabel,
@@ -217,9 +218,8 @@ export const LeagueCard = memo(function LeagueCard({
   league,
   columns,
   teamsColumn,
-  ktc,
   slots,
-  entry,
+  summary,
   season,
   username,
   open,
@@ -240,12 +240,16 @@ export const LeagueCard = memo(function LeagueCard({
    * follows the table.
    */
   teamsColumn: LineupColumn;
-  /** Which markets answered and when — the standings picker's foot. */
-  ktc: ManagerLineupsPayload["ktc"];
   /** The starting seats this account's leagues run — that picker's slot track. */
   slots: readonly LineupSlot[];
-  /** This league's solve + ranks, once the batched lineups read lands. */
-  entry?: LeagueLineupEntry | null;
+  /**
+   * This league's ranks, once the batched lineups read lands.
+   *
+   * **Ranks and nothing else**, which is what the batched read now carries: the
+   * teams this card's expanded half browses are fetched for the one league a
+   * reader opens — see {@link LeagueDetail} below and `LeagueLineupSummary`.
+   */
+  summary?: LeagueLineupSummary | null;
   /**
    * What a *past* stop is priced against — the same season and manager the
    * present table was solved on, so the two are one comparison rather than two
@@ -478,7 +482,7 @@ export const LeagueCard = memo(function LeagueCard({
                 key={lineupColumnKey(column)}
                 column={column}
                 league={league}
-                entry={entry}
+                summary={summary}
               />
             ))}
           </div>
@@ -543,42 +547,124 @@ export const LeagueCard = memo(function LeagueCard({
               above the scanlines); the housing has no scanlines, so it is gone.
               `LeagueTeams` carries the `preserve-3d` that reaches its own two
               parts, for the same reason one level down. */}
-          <TimelineView
-            subject={{
-              leagueId: league.league_id,
-              season,
-              username,
-              // **The teams column, where this used to be `board="auto"`.**
-              // That literal was the right answer to the question as it stood:
-              // the rail redraws this card's own team browser, that browser
-              // read `LeagueTeam.totals`, and the route computed those on the
-              // league's own market and QB board whatever any bay had forced —
-              // so `auto` was what kept a past stop and the present table on
-              // one ruler. The browser names its own board now, and the same
-              // argument points the other way: the rail follows *it*.
-              column: teamsColumn,
-            }}
-            entry={entry ?? null}
-            column={teamsColumn}
-            ktc={ktc}
+          <LeagueDetail
+            leagueId={league.league_id}
+            season={season}
+            username={username}
+            teamsColumn={teamsColumn}
             slots={slots}
-            // The reader's own team, so a past stop marks and ranks the same
-            // team the present table does. Read off the payload the table is
-            // drawn from, so the two cannot disagree; null while the lineups
-            // read is in flight, which marks no team rather than the wrong one.
-            managerRosterId={
-              entry?.teams.find((t) => t.is_manager)?.roster_id ?? null
-            }
-          >
-            <p className="m-0 font-mono text-[length:var(--fs-11)] uppercase tracking-[0.16em] text-readout-label">
-              No rosters read for this league yet
-            </p>
-          </TimelineView>
+            open={open}
+          />
         </ExpandedPanel>
       </details>
     </li>
   );
 });
+
+/**
+ * The expanded half's own read: this league's twelve rosters, solved.
+ *
+ * **It is a component so the card above stays hook-free** — that card's own
+ * stated design, and `LeagueSyncKey`'s precedent — and it is the manager page's
+ * half of the split the batched lineups route made. That route answers ranks
+ * for a hundred leagues; the teams a browser renders are one league's, wanted
+ * one league at a time, and this is where they are asked for. It is the trades
+ * board's `TradeLeague` doing the same job over the same hook, and deliberately
+ * so: two cards drawing one league through two reads is how the two would come
+ * to disagree.
+ *
+ * **`opened` is a one-way latch and `open` is the press.** A `<details>` hides
+ * its body rather than unmounting it, so this is mounted for every league on
+ * the account — a hundred of them must cost nothing until a reader opens one.
+ * Once opened, closing must not throw the answer away and re-opening must not
+ * pay for it again; the store behind `useLeagueLineup` keeps it, bounded, so
+ * even a latch released by a re-render costs nothing.
+ *
+ * **The `ktc` stamp comes from this read rather than from the page's.** The
+ * batched payload still carries the markets it priced its ranks on, but the
+ * standings pane's picker is a picker for *this* answer, and its foot should
+ * say when the board this table was priced on was scraped.
+ *
+ * **The three states under the housing are three different sentences**, the
+ * trade card's own rule: a read in flight says so, a failed one says so, and a
+ * league with no stored rosters gets `TimelineView`'s empty child. Collapsing
+ * them would make an ordinary answer look like a fault.
+ */
+function LeagueDetail({
+  leagueId,
+  season,
+  username,
+  teamsColumn,
+  slots,
+  open,
+}: {
+  leagueId: string;
+  season: string | null;
+  username: string;
+  teamsColumn: LineupColumn;
+  slots: readonly LineupSlot[];
+  open: boolean;
+}) {
+  const [opened, setOpened] = useState(open);
+  if (open && !opened) setOpened(true);
+
+  // `useMemo` so the identity is stable across the renders this card takes for
+  // reasons that have nothing to do with its league: the subject is what both
+  // reads below are keyed by, and a fresh object each render is a fresh key.
+  const subject = useMemo(
+    () => ({
+      leagueId,
+      season,
+      username,
+      // **The teams column, where this used to be `board="auto"`.** That
+      // literal was the right answer to the question as it stood: the rail
+      // redraws this card's own team browser, that browser read
+      // `LeagueTeam.totals`, and the route computed those on the league's own
+      // market and QB board whatever any bay had forced — so `auto` was what
+      // kept a past stop and the present table on one ruler. The browser names
+      // its own board now, and the same argument points the other way: the rail
+      // follows *it*.
+      column: teamsColumn,
+    }),
+    [leagueId, season, username, teamsColumn],
+  );
+
+  const { payload, loading, error } = useLeagueLineup(subject, opened);
+  const entry = payload?.entry ?? null;
+
+  return (
+    <TimelineView
+      subject={subject}
+      entry={entry}
+      column={teamsColumn}
+      ktc={payload?.ktc ?? NO_KTC}
+      slots={slots}
+      // The reader's own team, so a past stop marks and ranks the same team the
+      // present table does. Read off the answer the table is drawn from, so the
+      // two cannot disagree; null while the read is in flight, which marks no
+      // team rather than the wrong one.
+      managerRosterId={entry?.teams.find((t) => t.is_manager)?.roster_id ?? null}
+    >
+      {loading ? (
+        <p className="m-0 font-mono text-[length:var(--fs-11)] uppercase tracking-[0.16em] text-readout-label">
+          Reading the league…
+        </p>
+      ) : error !== null ? (
+        <p className="m-0 text-[length:var(--fs-12)] text-error">{error}</p>
+      ) : (
+        <p className="m-0 font-mono text-[length:var(--fs-11)] uppercase tracking-[0.16em] text-readout-label">
+          No rosters read for this league yet
+        </p>
+      )}
+    </TimelineView>
+  );
+}
+
+/**
+ * No market answered — a read in flight, or one whose board could not be. A
+ * shared empty so the pane below is not handed a new array identity per render.
+ */
+const NO_KTC: ManagerLineupsPayload["ktc"] = [];
 
 /** No answer for a field, in the app's own grammar: never a zero. */
 const NO_FIGURE = "—";
@@ -741,13 +827,13 @@ function StandingStripFields({ league }: { league: ManagerLeague }) {
 function RankWindow({
   column,
   league,
-  entry,
+  summary,
 }: {
   column: LineupColumn;
   league: ManagerLeague;
-  entry?: LeagueLineupEntry | null;
+  summary?: LeagueLineupSummary | null;
 }) {
-  const rank = entry?.ranks[lineupColumnKey(column)] ?? null;
+  const rank = summary?.ranks[lineupColumnKey(column)] ?? null;
   const fill = rankFill(rank);
   // Not `fill`: that is 0 for last place *and* for nothing-to-rank, and only
   // the first of those is red. See `rankPercentile`.

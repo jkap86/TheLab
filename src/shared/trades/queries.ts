@@ -626,9 +626,25 @@ export async function getTradeLeagueMarkets(
  */
 const LEAGUE_ROSTERS_TTL_MS = 15 * 60 * 1000;
 
+/**
+ * The population cap, in player ids.
+ *
+ * **The count alone was not a bound on memory here.** Five thousand entries is
+ * the right *count* — a board's loaded pages name that many leagues at the
+ * outside — but an entry is every player rostered in a league, so five thousand
+ * of them is a few million interned strings held for a quarter of an hour on
+ * the strength of a number that says "5000". A million ids is a generous
+ * ceiling against any real board and a real one against a pathological crawl.
+ */
+const MAX_ROSTERED_IDS = 1_000_000;
+
 const leagueRostersCache = new BoundedCache<readonly string[] | null>(
   5000,
   LEAGUE_ROSTERS_TTL_MS,
+  // A league this database has no rosters for is a real answer and weighs
+  // nothing, which is what `?? 0` says: it must still occupy a *slot*, or every
+  // page naming it asks again.
+  { maxWeight: MAX_ROSTERED_IDS, weigh: (ids) => ids?.length ?? 0 },
 );
 
 /**

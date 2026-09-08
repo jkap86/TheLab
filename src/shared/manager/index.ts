@@ -108,7 +108,12 @@ export type {
   RankedRoster,
   RankVariant,
 } from "./league-ranks";
-export { leagueTeamName, pickValue, solveLeagueEntry } from "./league-teams";
+export {
+  leagueTeamName,
+  pickValue,
+  solveLeagueEntry,
+  solveLeagueRanks,
+} from "./league-teams";
 export type {
   KtcPricing,
   KtcVariantPricing,

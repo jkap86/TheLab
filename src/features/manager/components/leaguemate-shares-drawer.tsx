@@ -111,12 +111,27 @@ export function LeaguemateSharesDrawer({
   const [scope, setScope] = useState<RosterScope>("all");
   const [showAll, setShowAll] = useState<ReadonlySet<string>>(new Set());
 
+  /**
+   * The fold, and the rows derived from it.
+   *
+   * **Released while the drawer is shut**, on {@link SharesDrawer}'s own terms
+   * and the players panel's: this component stays mounted for the rest of the
+   * session once either drawer has been opened, and a `useMemo` holds its last
+   * value for as long as it is. On a 113-league account that is seven hundred
+   * odd `LeaguemateShare` objects and as many rows, all of it display work for
+   * a panel nobody is looking at.
+   *
+   * The grid's own narrowing is untouched — that reads the payload's maps
+   * (`rolls` in `leagues-home`) — and every piece of the reader's own state
+   * (the expanded set, the scope, the show-all set) lives above the subtree
+   * being unmounted.
+   */
   const shares = useMemo(
     () =>
-      read.data
+      open && read.data
         ? leaguemateShares(leagues, read.data.members, read.data.users, selfId)
         : null,
-    [leagues, read.data, selfId],
+    [open, leagues, read.data, selfId],
   );
 
   const rosterMap = rosters.data?.rosters ?? null;
@@ -127,8 +142,11 @@ export function LeaguemateSharesDrawer({
   // *collapsed* row has to name the combos held on it without expanding. See
   // `rosterIndex`.
   const index = useMemo(
-    () => (rosterMap ? rosterIndex(leagues, rosterMap) : null),
-    [leagues, rosterMap],
+    // Gated on `open` with the fold above and for its reason: this one is a
+    // pass over *every stored roster* and its two readers — the search and a
+    // collapsed row's subline — are both inside the panel.
+    () => (open && rosterMap ? rosterIndex(leagues, rosterMap) : null),
+    [open, leagues, rosterMap],
   );
 
   // Keyed by slot rather than by key — the rule `subjectSlot` states, and the

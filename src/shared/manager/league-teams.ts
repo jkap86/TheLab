@@ -20,6 +20,7 @@
  */
 
 import type {
+  ColumnRanks,
   LeagueLineupEntry,
   LeagueTeam,
   LineupPosition,
@@ -163,6 +164,127 @@ export function solveLeagueEntry(
    */
   teamTotals: ReadonlySet<string> = new Set(),
 ): LeagueLineupEntry | null {
+  const solved = solveLeague(
+    league,
+    managerUserId,
+    season,
+    projections,
+    adp,
+    ktc,
+    variants,
+    positionSets,
+    adpVariants,
+    slotSets,
+    teamTotals,
+  );
+  if (!solved) return null;
+  const { ranks, rosters, picks } = solved;
+
+  const teams: LeagueTeam[] = rosters.map(
+    ({ roster, lineup, totals, columns }) => ({
+      roster_id: roster.roster_id,
+      name: leagueTeamName(league.users, roster.roster_id, roster.owner_id),
+      // Never `roster.owner_id === managerUserId` unguarded: an orphan roster's
+      // owner is null, and a null manager would mark every one of them.
+      is_manager: managerUserId !== null && roster.owner_id === managerUserId,
+      lineup,
+      // **The ten first and the named columns over them**, which is the order
+      // that makes the spread safe: an un-narrowed column on each league's own
+      // board is keyed by its bare metric id, so it is one of the ten already
+      // and `columns` never carries it — but were it ever to, the value is the
+      // same sum either way. The keyed half is what the request asked for and
+      // is absent otherwise, which is a real state and not a zero.
+      totals: { ...totals, ...columns },
+      picks: picks.get(roster.roster_id) ?? [],
+    }),
+  );
+
+  return { teams, ranks };
+}
+
+/**
+ * The same solve, answering the manager's **ranks alone**.
+ *
+ * **This is what the batched manager route asks for now**, and the difference
+ * is what a collapsed card renders: four ordinals, each of them
+ * `ranks[lineupColumnKey(column)]`. {@link solveLeagueEntry} composes the
+ * *expanded* card's answer on top of the identical arithmetic — the same pick
+ * board, the same twelve solves, the same totals — and a hundred of those
+ * retained at once, serialised and parsed, is the several megabytes the manager
+ * page used to spend to print four hundred ordinals.
+ *
+ * Nothing about the ranking moves. The solves still happen (a rank is a
+ * statement about the other eleven rosters and cannot be made without them);
+ * what does not happen is `leagueTeamName` per roster, the `LeagueTeam` objects,
+ * the totals spread and the pick arrays — and, one layer up, the route holding
+ * every league's teams while it builds the next league's. The solved lineups
+ * fall out of scope with this call rather than with the response.
+ *
+ * `teamTotals` is deliberately not a parameter: a per-roster total is read by a
+ * pane that only an expanded card draws, and a caller that wants one wants
+ * {@link solveLeagueEntry}.
+ *
+ * Null on the same terms as {@link solveLeagueEntry} — a *named* manager who
+ * holds no roster here — so the batched route omits the league exactly as it
+ * always has.
+ */
+export function solveLeagueRanks(
+  league: LineupLeagueRow,
+  managerUserId: string | null,
+  season: string,
+  projections: RosProjections,
+  adp: ReadonlyMap<string, AdpEntry>,
+  ktc: KtcPricing = NO_KTC,
+  variants: readonly KtcVariantPricing[] = [],
+  positionSets: readonly (readonly LineupPosition[])[] = [],
+  adpVariants: readonly AdpVariant[] = [],
+  slotSets: readonly (readonly LineupSlot[])[] = [],
+): ColumnRanks | null {
+  const solved = solveLeague(
+    league,
+    managerUserId,
+    season,
+    projections,
+    adp,
+    ktc,
+    variants,
+    positionSets,
+    adpVariants,
+    slotSets,
+    NO_TEAM_TOTALS,
+  );
+  return solved ? solved.ranks : null;
+}
+
+/** No column asked for a per-roster total — {@link solveLeagueRanks}' state. */
+const NO_TEAM_TOTALS: ReadonlySet<string> = new Set();
+
+/**
+ * The half both entry points share: the pick board, the pick values it implies,
+ * and the ranked solve over both.
+ *
+ * Extracted rather than duplicated because the order in it is load-bearing (the
+ * picks before the ranks — see this module's header) and because a second
+ * spelling of the variant pricing is the one way a forced board's `ktc_picks`
+ * could come to disagree between a card's window and its own expanded table.
+ */
+function solveLeague(
+  league: LineupLeagueRow,
+  managerUserId: string | null,
+  season: string,
+  projections: RosProjections,
+  adp: ReadonlyMap<string, AdpEntry>,
+  ktc: KtcPricing,
+  variants: readonly KtcVariantPricing[],
+  positionSets: readonly (readonly LineupPosition[])[],
+  adpVariants: readonly AdpVariant[],
+  slotSets: readonly (readonly LineupSlot[])[],
+  teamTotals: ReadonlySet<string>,
+): {
+  ranks: ColumnRanks;
+  rosters: ReturnType<typeof rankLeagueLineups>["rosters"];
+  picks: LeaguePickBoard["byRoster"];
+} | null {
   const board = leaguePickBoard(league, season, (pick) =>
     pickValue(ktc, league.total_rosters, pick),
   );
@@ -170,10 +292,9 @@ export function solveLeagueEntry(
 
   const pickValues = new Map<number, number>();
   for (const [rosterId, owned] of picks) {
-    pickValues.set(
-      rosterId,
-      owned.reduce((sum, pick) => sum + (pick.value ?? 0), 0),
-    );
+    let sum = 0;
+    for (const pick of owned) sum += pick.value ?? 0;
+    pickValues.set(rosterId, sum);
   }
 
   const { lineup, ranks, rosters } = rankLeagueLineups(
@@ -197,26 +318,7 @@ export function solveLeagueEntry(
   // own to miss, and answering null there would be refusing to draw a league
   // over the absence of somebody the question never mentioned.
   if (managerUserId !== null && !lineup) return null;
-  const teams: LeagueTeam[] = rosters.map(
-    ({ roster, lineup, totals, columns }) => ({
-      roster_id: roster.roster_id,
-      name: leagueTeamName(league.users, roster.roster_id, roster.owner_id),
-      // Never `roster.owner_id === managerUserId` unguarded: an orphan roster's
-      // owner is null, and a null manager would mark every one of them.
-      is_manager: managerUserId !== null && roster.owner_id === managerUserId,
-      lineup,
-      // **The ten first and the named columns over them**, which is the order
-      // that makes the spread safe: an un-narrowed column on each league's own
-      // board is keyed by its bare metric id, so it is one of the ten already
-      // and `columns` never carries it — but were it ever to, the value is the
-      // same sum either way. The keyed half is what the request asked for and
-      // is absent otherwise, which is a real state and not a zero.
-      totals: { ...totals, ...columns },
-      picks: picks.get(roster.roster_id) ?? [],
-    }),
-  );
-
-  return { teams, ranks };
+  return { ranks, rosters, picks };
 }
 
 /**

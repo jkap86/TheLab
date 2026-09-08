@@ -104,6 +104,105 @@ describe("BoundedCache", () => {
     assert.equal(cache.size, 2);
   });
 
+  test("evicts on weight, not only on count", () => {
+    // Ten slots and a budget of five: the count never bites, and the weight
+    // does. This is the shape a circle cache is in — a handful of readers, one
+    // of whom knows several thousand people.
+    const cache = new BoundedCache<string[]>(10, 60_000, {
+      maxWeight: 5,
+      weigh: (ids) => ids.length,
+    });
+    cache.set("a", ["1", "2", "3"]);
+    cache.set("b", ["4", "5"]);
+    assert.equal(cache.totalWeight, 5);
+
+    cache.set("c", ["6"]);
+    assert.equal(cache.get("a"), undefined, "the oldest went to make room");
+    assert.deepEqual(cache.get("b"), ["4", "5"]);
+    assert.deepEqual(cache.get("c"), ["6"]);
+    assert.equal(cache.totalWeight, 3);
+  });
+
+  test("both bounds apply, and either one alone can bite", () => {
+    const cache = new BoundedCache<string[]>(2, 60_000, {
+      maxWeight: 100,
+      weigh: (ids) => ids.length,
+    });
+    cache.set("a", ["1"]);
+    cache.set("b", ["2"]);
+    cache.set("c", ["3"]);
+    assert.equal(cache.size, 2, "the count bit first, well inside the weight");
+    assert.equal(cache.get("a"), undefined);
+
+    const heavy = new BoundedCache<string[]>(100, 60_000, {
+      maxWeight: 4,
+      weigh: (ids) => ids.length,
+    });
+    heavy.set("a", ["1", "2", "3"]);
+    heavy.set("b", ["4", "5", "6"]);
+    assert.equal(heavy.size, 1, "the weight bit first, well inside the count");
+    assert.equal(heavy.totalWeight, 3);
+  });
+
+  test("an entry heavier than the whole budget is not stored at all", () => {
+    // The pathological case: eviction cannot reach a bound smaller than one
+    // entry, so either the trim never converges or that one value is exempt
+    // from the limit it exceeds — which is the unbounded map the class exists
+    // to not be. It is refused, and its caller pays a recompute.
+    const cache = new BoundedCache<string[]>(10, 60_000, {
+      maxWeight: 3,
+      weigh: (ids) => ids.length,
+    });
+    cache.set("small", ["1"]);
+    cache.set("huge", Array.from({ length: 50 }, (_, i) => String(i)));
+
+    assert.equal(cache.get("huge"), undefined);
+    assert.deepEqual(cache.get("small"), ["1"], "and it cost nobody else");
+    assert.equal(cache.totalWeight, 1);
+  });
+
+  test("replacing a key replaces its weight, never adds to it", () => {
+    // The running total is maintained rather than recomputed, so a write over
+    // an existing key is the one place it can drift — and a drifted total is a
+    // cache that evicts everything or nothing, silently.
+    const cache = new BoundedCache<string[]>(10, 60_000, {
+      maxWeight: 100,
+      weigh: (ids) => ids.length,
+    });
+    cache.set("a", ["1", "2", "3"]);
+    cache.set("a", ["1"]);
+    assert.equal(cache.totalWeight, 1);
+    assert.equal(cache.size, 1);
+
+    cache.delete("a");
+    assert.equal(cache.totalWeight, 0);
+
+    cache.set("b", ["1", "2"]);
+    cache.clear();
+    assert.equal(cache.totalWeight, 0, "and a clear resets it");
+  });
+
+  test("an expired entry gives its weight back", () => {
+    const cache = new BoundedCache<string[]>(10, -1, {
+      maxWeight: 100,
+      weigh: (ids) => ids.length,
+    });
+    cache.set("a", ["1", "2"]);
+    assert.equal(cache.get("a"), undefined);
+    assert.equal(cache.totalWeight, 0, "the read that dropped it un-weighed it");
+  });
+
+  test("a cache with no weight options is the one it always was", () => {
+    // Every caller that predates the weight passes neither option and must be
+    // untouched: an unweighed entry counts 1 and the bound is the count.
+    const cache = new BoundedCache<number>(2, 60_000);
+    cache.set("a", 1);
+    cache.set("b", 2);
+    cache.set("c", 3);
+    assert.equal(cache.size, 2);
+    assert.equal(cache.totalWeight, 2);
+  });
+
   test("partition splits hits from misses", () => {
     const cache = new BoundedCache<number>(10, 60_000);
     cache.set("a", 1);
