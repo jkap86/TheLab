@@ -16,6 +16,7 @@ export {
 } from "./client";
 export {
   getUserLeagues,
+  getUserLeaguesEnumeration,
   getLeague,
   getLeagueRosters,
   getLeagueUsers,
@@ -39,6 +40,8 @@ export {
   DEFAULT_SLEEPER_CONCURRENCY,
 } from "./limiter";
 export type { Limiter, LimiterStats, LimiterWaitOptions } from "./limiter";
+export { classifyUserLeagues } from "./enumeration";
+export type { UserLeaguesEnumeration } from "./enumeration";
 export { isMissingResource } from "./missing";
 export { getAllPlayers } from "./players";
 export { getNflWeekScores } from "./scores";

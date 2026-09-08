@@ -5,7 +5,7 @@ import {
   withBlockingAdvisoryLock,
 } from "@/shared/db";
 import { peekActiveSeason } from "@/shared/season";
-import { getLeague, getNflState, getUserLeagues } from "@/shared/sleeper";
+import { getLeague, getNflState, getUserLeaguesEnumeration } from "@/shared/sleeper";
 import type { SleeperLeague, SleeperNflState } from "@/shared/sleeper";
 import { errorMessage, mapWithConcurrency } from "@/shared/util";
 import type {
@@ -25,7 +25,7 @@ import {
   getStoredMaxMatchupWeekByLeague,
   getStoredMaxWeekByLeague,
   persistLeagueGraph,
-  replaceManagerLeagueOrder,
+  replaceManagerLeagueScope,
 } from "./persist";
 import { getManagerSyncState, getUnlistedManagerLeagueIds } from "./queries";
 import {
@@ -356,11 +356,20 @@ export async function syncManagerLeagues(
  * next sync of that league replaces its rosters without the manager's, and
  * `FIELDED_A_TEAM_SQL` stops matching.
  *
- * **An empty enumeration reconciles nothing.** `sleeperGet` folds a 200-with-null
- * into `[]`, so "no leagues" is what a failed request looks like from here, and
- * it is the one answer that would put every league this manager has into the
- * probe queue. Guarded for {@link replaceManagerLeagueOrder}'s reason and by the
- * same test.
+ * **An empty enumeration used to reconcile nothing**, because `[]` was also what
+ * a failed request looked like from here and it is the one answer that would
+ * put every league this manager has into the probe queue. That ambiguity is
+ * gone: {@link getUserLeaguesEnumeration} only calls a genuine array an answer,
+ * and this is reached only on one — so a confirmed empty list is Sleeper saying
+ * "none", the candidates are real, and {@link UNLISTED_PROBE_LIMIT} is what
+ * bounds them. Refusing to probe there would have left a manager whose only
+ * league was deleted with no path to a tombstone from this signal at all.
+ *
+ * **What it no longer has to do is remove the departures**, which is the other
+ * half of the same change: absence from the enumeration now takes a league out
+ * of the manager's scope directly (see `replaceManagerLeagueScope`), so the
+ * probe answers the one question left — whether the league is gone for
+ * *everybody*.
  *
  * Non-fatal, and reported rather than thrown: what it fixes is a stale row on a
  * page, where what it sits inside is the sync that fills that page in. A probe
@@ -371,8 +380,6 @@ async function reconcileUnlistedLeagues(
   season: string,
   listedIds: readonly string[],
 ): Promise<void> {
-  if (listedIds.length === 0) return;
-
   const candidates = await getUnlistedManagerLeagueIds(
     userId,
     season,
@@ -403,6 +410,28 @@ async function reconcileUnlistedLeagues(
     `[leagues] tombstoned ${goneIds.length} league(s) Sleeper no longer serves ` +
       `for ${userId} (${season}): ${goneIds.join(", ")}.`,
   );
+}
+
+/**
+ * Record that this manager's list was tried and got nowhere: `attempt_at` moves,
+ * `synced_at` does not.
+ *
+ * The enumeration's two failure paths both take it, and both need it. Without a
+ * stamp, a manager Sleeper cannot answer for is re-asked on every single
+ * request — the retry loop `sync-freshness` exists to describe — and with
+ * `synced_at` it would be the opposite lie. It is the same statement a failed
+ * league fan-out already makes, one level up, and it is best-effort: a stamp
+ * that fails must not turn an upstream problem into a second one.
+ */
+async function stampAttempt(userId: string, season: string): Promise<void> {
+  try {
+    await pool.query(MANAGER_SYNC_STAMP_SQL, [userId, season, false]);
+  } catch (error) {
+    console.warn(
+      `[leagues] could not stamp the sync attempt for ${userId}:`,
+      errorMessage(error),
+    );
+  }
 }
 
 async function syncManagerLeaguesLocked(
@@ -446,16 +475,51 @@ async function syncManagerLeaguesLocked(
   // season fetches that season whole rather than stopping at whatever week the
   // current one has reached — see `./graph-weeks`.
   const clock = await getSyncClock();
-  const leagues = await getUserLeagues(userId, season);
+
+  // **The enumeration is the one answer this whole run is built on**, so it is
+  // read in a shape that can say it failed. Both ways of failing stamp the
+  // attempt and change nothing else: the scope keeps whatever it held, the
+  // graphs are not touched, and `synced_at` does not move — which is what makes
+  // the route report the stored list as stale rather than as a finished sync.
+  //
+  // A *transport* failure rethrows after the stamp, because the caller has an
+  // error worth showing and there is nothing to fall back to; an unreadable
+  // body is the quieter case and returns, since Sleeper answered and it is only
+  // this app that could not act on the answer.
+  let enumeration;
+  try {
+    enumeration = await getUserLeaguesEnumeration(userId, season);
+  } catch (error) {
+    await stampAttempt(userId, season);
+    throw error;
+  }
+  if (!enumeration.ok) {
+    console.warn(
+      `[leagues] enumeration for ${userId} (${season}) was unreadable ` +
+        `(${enumeration.reason}); scope and graphs left as they were.`,
+    );
+    await stampAttempt(userId, season);
+    return {
+      season, locked: false, skipped: false, complete: false,
+      total: 0, leagues: 0, partial: 0, failed: 0,
+      ...emptyCounts(),
+    };
+  }
+  const leagues = enumeration.leagues;
 
   const leagueIds = leagues.map((l) => l.league_id);
 
-  // Recorded before the graphs are fetched, and over *every* league Sleeper
-  // listed rather than the ones that synced: the order is what the enumeration
-  // said, and a league whose graph fails this pass is still stored from an
-  // earlier one — dropping it from the ordering would move it to the end of the
-  // list until the next successful sync.
-  await replaceManagerLeagueOrder(userId, season, leagueIds);
+  // **This is the manager's scope, and it is written before a single graph is
+  // fetched.** It is what Sleeper said this manager's leagues are, so a league
+  // they have left stops being theirs on this line rather than whenever some
+  // unrelated sync happens to replace its rosters — which, without a crawler
+  // running, is never. Recorded over *every* league Sleeper listed rather than
+  // the ones that go on to sync: a league whose graph fails this pass is still
+  // stored from an earlier one and is still theirs.
+  //
+  // `[]` reaches here only from a confirmed enumeration, and replaces the scope
+  // with nothing — see `replaceManagerLeagueScope`.
+  await replaceManagerLeagueScope(userId, season, leagueIds);
 
   // Somebody searched this manager, which is the strongest demand signal this
   // app has: these leagues are on a page a person is looking at. It moves them
@@ -502,6 +566,12 @@ async function syncManagerLeaguesLocked(
   // current, however cleanly its transaction committed. Counting only `failed`
   // stamped `synced_at` on it, and the manager was then suppressed for a whole
   // freshness TTL — on the archive tier, forever.
+  //
+  // The enumeration is the precondition rather than a term: a run that could not
+  // read it has already returned above with `complete: false`, so reaching this
+  // line means Sleeper named this manager's leagues and the only question left
+  // is whether their graphs arrived. That is what lets a **confirmed empty**
+  // enumeration complete — nothing was asked for, so nothing was dropped.
   const complete = failed === 0 && partial === 0;
   await pool.query(MANAGER_SYNC_STAMP_SQL, [userId, season, complete]);
 

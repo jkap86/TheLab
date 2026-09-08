@@ -276,6 +276,7 @@ export function SharesDrawer({
   matchRow,
   loading,
   error,
+  onRetry,
   emptyMessage,
   filters,
   filtersActive,
@@ -375,6 +376,18 @@ export function SharesDrawer({
   matchRow?: ((row: SharesDrawerRow, needle: string) => boolean) | null;
   loading: boolean;
   error: string | null;
+  /**
+   * Ask for this panel's read again.
+   *
+   * **The error state is otherwise a dead end**, and that is a property of the
+   * hook behind it rather than of this component: the read is latched on the
+   * drawer having been opened once, so closing and reopening changes no
+   * dependency and re-runs nothing. Without a key here a panel that failed on a
+   * blip stayed failed until the reader changed manager, season or board — or
+   * reloaded. Optional, so a caller with nothing to retry simply draws the
+   * message.
+   */
+  onRetry?: (() => void) | null;
   /** What to say when there is genuinely nothing, as opposed to nothing matching. */
   emptyMessage: string;
   /**
@@ -709,12 +722,26 @@ export function SharesDrawer({
             ) : loading ? (
               <Message>Reading {noun}…</Message>
             ) : error ? (
-              <p
-                role="alert"
-                className="m-0 py-6 font-mono text-[length:var(--fs-13)] text-error"
-              >
-                {error}
-              </p>
+              // The key sits beside the message rather than under it, on the
+              // "No … match these filters" row's own arrangement below: a
+              // failure a reader can undo reads as a state, not as an ending.
+              <div className="flex flex-wrap items-center justify-between gap-3 py-6 pr-3">
+                <p
+                  role="alert"
+                  className="m-0 font-mono text-[length:var(--fs-13)] text-error"
+                >
+                  {error}
+                </p>
+                {onRetry ? (
+                  <button
+                    type="button"
+                    onClick={onRetry}
+                    className={`${CONSOLE_KEY_PILL} border-foreground/10 bg-[image:var(--key-bg)] text-foreground/80 shadow-[var(--key-shadow)] hover:text-readout`}
+                  >
+                    Retry
+                  </button>
+                ) : null}
+              </div>
             ) : shown.length === 0 ? (
               // Two different claims, and the second is the reader's to undo.
               //

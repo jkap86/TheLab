@@ -145,6 +145,8 @@ export { THEME_BOOT_SCRIPT } from "./theme";
 // why it takes the timeline's own subject.
 export { useLeagueLineup } from "./use-league-lineup";
 export type { LeagueLineupState } from "./use-league-lineup";
+export { createRequestGuard, useRequestGuard } from "./request-guard";
+export type { RequestGuard, RequestTicket } from "./request-guard";
 export { useManagerLeagues } from "./use-manager-leagues";
 export type { ManagerLeaguesState } from "./use-manager-leagues";
 export { ThemeToggle } from "./theme-toggle";

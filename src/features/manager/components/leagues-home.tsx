@@ -128,7 +128,24 @@ export function LeaguesHome({
   heading: ReactNode;
 }) {
   const state = useManagerLeagues(username, season);
-  const { user, leagues, progress, refreshing, error, refreshError } = state;
+  const { user, leagues, progress, refreshing, error, refreshError, stale } =
+    state;
+  /**
+   * The leagues on screen are cache and nothing is coming to replace them.
+   *
+   * **This is the state the page had no way of admitting to.** The route serves
+   * stored leagues without refreshing whenever the sync is throttled, deduped,
+   * shed for want of an admission permit, or held by another caller's advisory
+   * lock — and the hook now also lands here when a stream is cut before its
+   * closing result. Every one of those looked identical to a refresh that had
+   * just completed: no spinner, no error, no note, a list that might be minutes
+   * or days old.
+   *
+   * Not drawn beside a `refreshError`, which says the same thing with a reason
+   * attached, and not over an empty list, where "showing cached league data" is
+   * a claim about data that is not there.
+   */
+  const showStale = stale && !refreshing && !refreshError && leagues.length > 0;
   // **Read off the unfiltered list, both of them.** `cold` decides whether the
   // page is a progress bar, and the gate below decides whether the lineups are
   // fetched at all; taken off the filtered list, a selection that matches
@@ -196,14 +213,14 @@ export function LeaguesHome({
     opened.has("leaguemate") || opened.has("player"),
   );
 
-  const narrowing =
-    activeFilterCount(filters) > 0 || subjects.subjects.length > 0;
+  const filtersActive = activeFilterCount(filters) > 0;
+  const subjectsActive = subjects.subjects.length > 0;
+  const narrowing = filtersActive || subjectsActive;
   // **The league filters only** — never the subject selection. A drawer's
   // readout says what population its shares are counted over, and the subjects
   // are picked *in* the drawers: naming them there would have the panel
   // describe a narrowing it is the source of.
-  const leagueNarrowing =
-    activeFilterCount(filters) > 0 ? filterSummary(filters) : null;
+  const leagueNarrowing = filtersActive ? filterSummary(filters) : null;
 
   // **The two narrowings are two passes and the order is the cheap one.** A
   // league rejected on its type never has its roster walked — and the drawers
@@ -367,6 +384,51 @@ export function LeaguesHome({
    * rather than an edge.
    */
   const listRef = useRef<HTMLUListElement | null>(null);
+  /**
+   * What to say, and what to offer, when the grid narrows to nothing.
+   *
+   * **Which narrowing emptied it is the whole question**, and the page used to
+   * answer it one way whatever the truth was. Two things narrow this grid — the
+   * league rules and the subjects picked in the drawers — and they are undone by
+   * two different controls, so a message naming the wrong one comes with a key
+   * that does nothing: `Clear filters` over filters already at their defaults
+   * leaves the reader looking at the same empty page, with the token tray above
+   * it as the only clue and nothing pointing at it.
+   *
+   * It never renders with neither active — a page with nothing narrowing and no
+   * visible leagues has no unfiltered leagues either, which is the arm above.
+   */
+  const emptyState = useMemo(() => {
+    if (filtersActive && subjectsActive) {
+      return {
+        message: "No leagues match the current filters and selection.",
+        summary: filterSummary(filters),
+        action: "Clear all",
+        clear: () => {
+          setFilters(DEFAULT_LEAGUE_FILTERS);
+          setSubjects(NO_SUBJECTS);
+        },
+      };
+    }
+    if (subjectsActive) {
+      return {
+        message: "No leagues match this selection.",
+        // The tokens are named in the tray above rather than restated here: the
+        // filter summary is a sentence nothing else on the page carries, where
+        // a subject is a chip the reader can already see.
+        summary: null,
+        action: "Clear selection",
+        clear: () => setSubjects(NO_SUBJECTS),
+      };
+    }
+    return {
+      message: "No leagues match these filters.",
+      summary: filterSummary(filters),
+      action: "Clear filters",
+      clear: () => setFilters(DEFAULT_LEAGUE_FILTERS),
+    };
+  }, [filters, filtersActive, subjectsActive]);
+
   const ids = useMemo(() => visible.map((l) => l.league_id), [visible]);
   const card = useActiveCard({ param: "league", ids, listRef });
 
@@ -565,6 +627,33 @@ export function LeaguesHome({
               </span>
             </p>
           )}
+          {/* The quieter half of the same idea: nothing failed loudly, but the
+              refresh did not land either, so the list below is stored data of
+              unknown age. Drawn in the readout's own ink rather than the error
+              tone — it is a fact about freshness, not a fault. */}
+          {showStale && (
+            <p
+              role="status"
+              className={`relative mb-6 inline-flex items-center gap-3 rounded-full border border-foreground/8 bg-[image:var(--key-bg)] py-2 pl-2.5 pr-5 shadow-[var(--plate-shadow)] ${card.chromeClass}`}
+            >
+              <span className="relative inline-flex items-center gap-2.5 overflow-hidden rounded-full border border-black/85 bg-[image:var(--readout-bg)] px-3.5 py-1.5 shadow-[var(--readout-shadow)]">
+                <span
+                  aria-hidden
+                  className="pointer-events-none absolute inset-0 bg-[image:var(--readout-scanlines)]"
+                />
+                <span
+                  aria-hidden
+                  className="relative size-[0.4375rem] rounded-full bg-readout-label"
+                />
+                <span className="relative font-mono text-[length:var(--fs-13)] text-readout-line">
+                  Showing cached league data
+                </span>
+              </span>
+              <span className="font-mono text-[length:var(--fs-11)] uppercase tracking-[0.16em] text-foreground/60">
+                Refresh may be incomplete
+              </span>
+            </p>
+          )}
           {/* A failed refresh is a note beside a usable list, never a
               replacement for it: the leagues below are what was stored, and
               they are still worth reading. */}
@@ -585,27 +674,39 @@ export function LeaguesHome({
             </Plate>
           ) : visible.length === 0 ? (
             // A different claim from the one above: that one is about the
-            // manager, this one is about the selection — and it is the reader's
-            // to undo, so it says so.
+            // manager, this one is about the *narrowing* — and it is the
+            // reader's to undo, so it says which narrowing and offers the key
+            // that undoes exactly that one.
+            //
+            // **Three arms, because there are two narrowings.** The grid is
+            // filtered by the league rules *and* by the subjects picked in the
+            // drawers, and this used to blame the first for both: a page
+            // emptied by a player nobody else rosters read "No leagues match
+            // these filters" over a summary that said every league matched,
+            // beside a Clear filters key that cleared filters already at their
+            // defaults and changed nothing. The reader had to work out for
+            // themselves that the token tray above was the thing narrowing.
             <Plate>
               <div className="flex flex-wrap items-center justify-between gap-5">
                 <div>
                   <p className="m-0 font-mono text-[length:var(--fs-13)] text-foreground/72">
-                    No leagues match these filters.
+                    {emptyState.message}
                   </p>
-                  <p className="mt-2 truncate font-mono text-[length:var(--fs-11)] uppercase tracking-[0.16em] text-active">
-                    {filterSummary(filters)}
-                  </p>
+                  {emptyState.summary ? (
+                    <p className="mt-2 truncate font-mono text-[length:var(--fs-11)] uppercase tracking-[0.16em] text-active">
+                      {emptyState.summary}
+                    </p>
+                  ) : null}
                 </div>
                 {/* A real key, from the constant rather than a fourth copy of
                     the stack — a hand-spelled riser is how one of them stops
                     travelling. */}
                 <button
                   type="button"
-                  onClick={() => setFilters(DEFAULT_LEAGUE_FILTERS)}
+                  onClick={emptyState.clear}
                   className={CONSOLE_KEY}
                 >
-                  Clear filters
+                  {emptyState.action}
                 </button>
               </div>
             </Plate>

@@ -399,6 +399,31 @@ export function hasBeenRefreshed(updatedAt: Date | null): boolean {
 }
 
 /**
+ * Mark a manager's league enumeration as confirmed: `$1` user, `$2` season.
+ *
+ * **It names `scope_at` and nothing else**, which is the same protection
+ * {@link MANAGER_SYNC_STAMP_SQL}'s conditional buys one column over, spelled so
+ * there is no branch for a later edit to flatten. The three columns answer three
+ * questions and only this one is about *membership*: `attempt_at` says somebody
+ * tried, `synced_at` says the graph is current, and `scope_at` says Sleeper has
+ * told us which leagues are this manager's — which is true of a run that then
+ * failed to fetch a single graph, and false of one that never got an answer at
+ * all.
+ *
+ * Run inside {@link replaceManagerLeagueScope}'s transaction, with the rows it
+ * describes. A marker committed without them is a page narrowed by an
+ * enumeration nobody made.
+ *
+ * A string constant rather than an inline query, and pinned by a test, for the
+ * reason below it: what it must *not* touch is invisible to a type.
+ */
+export const MANAGER_SCOPE_STAMP_SQL = `
+  INSERT INTO manager_syncs (user_id, season, scope_at)
+  VALUES ($1, $2, now())
+  ON CONFLICT (user_id, season) DO UPDATE
+     SET scope_at = now()`;
+
+/**
  * Record a sync attempt: `$1` user, `$2` season, `$3` whether it completed.
  *
  * `attempt_at` advances unconditionally — that is what the next caller's

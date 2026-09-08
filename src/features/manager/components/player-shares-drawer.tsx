@@ -88,6 +88,8 @@ export function PlayerSharesDrawer({
     data: ManagerPlayersPayload | null;
     loading: boolean;
     error: string | null;
+    /** Ask again after a failure — see `SharesRead.retry`. */
+    retry: () => void;
   };
   /**
    * Every roster in those leagues — what the three mode counts are folded over.
@@ -210,6 +212,7 @@ export function PlayerSharesDrawer({
       filterSummary={filterSummary}
       loading={read.loading}
       error={read.error}
+      onRetry={read.retry}
       emptyMessage="No players rostered in these leagues yet."
       filtersActive={active > 0}
       onClearFilters={() => setFilters(NO_PLAYER_FILTERS)}
