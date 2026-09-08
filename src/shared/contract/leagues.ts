@@ -34,7 +34,15 @@ export type ManagerLeague = {
   status: string;
   total_rosters: number;
   avatar_url: string | null;
-  /** The manager's team name in this league, where they have set one. */
+  /**
+   * What the manager is called in this league: their username, else the team
+   * name they set, else null where the stored member row carries neither —
+   * `leagueTeamName`'s rule, resolved by the query that has both columns.
+   *
+   * The field keeps its name because that is what the stored column is; what
+   * it holds is the label, and a page that draws it is drawing what the
+   * standings row beside it draws.
+   */
   team_name: string | null;
   record: LeagueRecord | null;
   /**

@@ -122,8 +122,9 @@ export type LineupCheckLeague = {
    */
   opponent_optimal_points: number | null;
   /**
-   * What the opponent calls themselves — team name, else the owner's display
-   * name, else `Roster N`, on `leagueTeamName`'s one spelling of that rule.
+   * What the opponent is called — the owner's username, else the team name
+   * they set, else `Roster N`, on `leagueTeamName`'s one spelling of that
+   * rule.
    *
    * Null with the three above, and **never a placeholder**: a pane headed
    * "Opponent" over a roster nobody has been scheduled against yet is the

@@ -287,8 +287,10 @@ export type PickRoster = { roster_id: number; owner_id: string | null };
 /**
  * Identity as `league_users` stores it. An acquired pick's origin is named from
  * `display_name` — a username names a *person*, which is what "from" means —
- * while the teams pane prefers `team_name`, the way Sleeper labels a league's
- * teams; `leagueTeamName` in `league-teams` is that rule's one spelling.
+ * and the teams pane now names a team by the same column, so the two agree by
+ * construction rather than by two rules that happen to land together;
+ * `leagueTeamName` in `league-teams` is that rule's one spelling, and
+ * `team_name` is the fallback it keeps behind the username.
  */
 export type LeagueUserName = {
   user_id: string;
