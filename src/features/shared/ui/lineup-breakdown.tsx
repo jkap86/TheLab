@@ -11,7 +11,11 @@ import type {
 
 // Relative, not through the barrel: this folder's own modules are what a
 // module in it reaches for — the rule the move here brought with it.
-import { CONSOLE_FIGURE_WELL, CONSOLE_ROW_WELL } from "../console-chrome";
+import {
+  CONSOLE_FIGURE_WELL,
+  CONSOLE_PANE_TRACK,
+  CONSOLE_ROW_WELL,
+} from "../console-chrome";
 import { ordinal, shortName } from "../format";
 import { rankColor, rankPercentile, slotPercentile } from "../rank-ramp";
 import { type Lens, lensValue } from "../seat-compare";
@@ -171,9 +175,22 @@ export function lensUnit(lens: Lens): string {
  * The lens keys, as tactile keys in one housing: the resting shadow carries a
  * 3px riser and the pressed one drops to 1px, so the key travels.
  *
- * The housing takes its width from the caller, because the recess it sits in is
- * the caller's — on the roster pane's ledge it shares a track with the `Value
- * in` caption, which is what says the control belongs to that pane.
+ * **It carries its own track now, where the caller used to.** It sat inside the
+ * ledge's recess beside a `Value in` caption, and with the caption gone the
+ * recess held one thing — so the recess is the control rather than a box around
+ * it. That also settles the emit-order question the split would otherwise
+ * raise: the track's `gap-[3px]` and this group's own gap are the same property
+ * at the same specificity, and a caller writing one beside the other is a coin
+ * flip. There is one gap, and it is here.
+ *
+ * The caller owns **only the display arm** (`hidden lg:inline-flex` on the
+ * roster pane, where a ~165px phone pane gets a `<select>` instead), which is
+ * the one thing the track cannot know about itself.
+ *
+ * **24px, sized to its keys rather than to the row.** The ledge is one line
+ * above `lg` and the control shares it with the pane's name; keys that grew
+ * with the row would take that name's width, which is the same measurement the
+ * teams pane's key makes one pane over.
  */
 export function LineupLensKeys({
   lens,
@@ -182,16 +199,14 @@ export function LineupLensKeys({
 }: {
   lens: Lens;
   onChange: (lens: Lens) => void;
+  /** The display arm, and nothing else — see above. */
   className?: string;
 }) {
   return (
     <div
       role="group"
       aria-label="Value lens"
-      // No track of its own: it sits *inside* the ledge's own recess beside the
-      // `Value in` caption, and a channel drawn inside a channel is two cuts
-      // where the design has one.
-      className={`inline-flex gap-[5px] ${className}`}
+      className={`${CONSOLE_PANE_TRACK} h-6 shrink-0 items-center gap-[3px] p-[2px] ${className}`}
     >
       {LENSES.map((option) => (
         <button
@@ -202,7 +217,7 @@ export function LineupLensKeys({
           // An unselected option is bare text *on the track*, not a second
           // key: three raised faces in one channel is a row of buttons, where
           // one raised and the rest flush is a switch showing its position.
-          className={`min-w-0 flex-1 rounded-full border px-3 py-[7px] text-center font-mono text-[length:var(--fs-11)] uppercase tracking-[0.16em] transition-[color,box-shadow] duration-150 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-active/60 ${
+          className={`h-5 shrink-0 rounded-full border px-2.5 text-center font-mono text-[length:var(--fs-10)] uppercase tracking-[0.12em] transition-[color,box-shadow] duration-150 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-active/60 ${
             lens === option
               ? "border-active/45 bg-[image:var(--key-bg)] text-readout shadow-[var(--key-shadow)] [text-shadow:var(--readout-text-glow)]"
               : "border-transparent text-foreground/62 hover:text-readout"
