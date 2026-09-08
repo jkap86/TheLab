@@ -1,3 +1,7 @@
+"use client";
+
+import { memo, type MouseEvent } from "react";
+
 import type { LineupCheckLeague, ManagerLeague } from "@/shared/contract";
 import {
   CardPlateRow,
@@ -13,6 +17,7 @@ import {
   rankColor,
   ReadingPlate,
   Scanlines,
+  usePanelCap,
 } from "@/features/shared";
 
 import {
@@ -55,6 +60,13 @@ import { WeekPanes } from "./week-panes";
  *    `group/bench` and an unnamed `group-open:` would have the bench toggling
  *    the card's transform.
  *
+ * **`memo`'d for `LeagueCard`'s reason**, which is the one thing the driven
+ * disclosure costs: a press is a state change on the page now rather than a
+ * native toggle, so without it every league on the account re-renders to move
+ * two of them. Every prop is stable but `open` and `lit`, which are the two
+ * that are meant to move; `onSynced` is the page's own `useCallback` and
+ * `onToggle` takes the id so it need not close over which card is open.
+ *
  * Hook-free, like `LeagueCard`: the only interaction it owns is the disclosure.
  * `onSynced` is forwarded to `LeagueSyncKey` and never called here, and the
  * week view's seat pick lives inside `WeekPanes` — which is what keeps that
@@ -69,13 +81,25 @@ import { WeekPanes } from "./week-panes";
  * same reason the decorative span exists — an overlaid brush would have to be
  * clipped, and a clip is what collapses the depth below.
  *
- * **The open card's housing freezes under the rack**, which is `LeagueCard`'s
- * own arrangement and has to be the `<summary>`: the `<li>` and the
- * `<details>` are the whole card, taller than the viewport, and sticky on a
- * box that never fits does nothing at all. The summary's containing block is
- * the `<details>`, which is exactly the range the tiles should stay over —
- * it parks at the offset and releases when the card's own bottom edge catches
- * it, so it never outlives its league.
+ * **An open card is the screen**, which is `LeagueCard`'s own arrangement and
+ * carries the same three consequences here. The list stands down around it and
+ * the page stops scrolling (`useActiveCard`), so nothing is sticky — there is
+ * nothing to stick within once the list is one card tall. The disclosure is
+ * driven rather than native, because the page has to change with the toggle.
+ * And the chrome is lit off `data-lit` rather than `[open]`, because the
+ * disclosure stays open for as long as the panel takes to collapse and a card
+ * lit off `[open]` would let go only afterwards. That file carries the
+ * arguments in full; the two cards are one object seen from two tools and a
+ * difference between them here is a drift with nothing on screen saying which
+ * page a reader is on.
+ *
+ * **The expanded half fills the shell and scrolls as one block**, where the
+ * manager card's two panes scroll their own lists. That is the arrangement
+ * `WeekPanes` already asks for rather than a shortcut: its two lineups are read
+ * *across* — a seat row against the seat row opposite, which is why both are
+ * measured to the same height at every width — and two independent scrollers
+ * are exactly what would put them out of step. One scroller keeps the rows
+ * aligned; {@link usePanelCap} is what bounds it.
  *
  * A fourth constraint travels with the card: the depth chrome rides
  * `pointer-fine:`, because one card per league times several composited planes
@@ -84,32 +108,60 @@ import { WeekPanes } from "./week-panes";
  * same card over the same league list.
  */
 
-export function LineupCheckCard({
+export const LineupCheckCard = memo(function LineupCheckCard({
   league,
   entry,
   onSynced,
+  open,
+  lit,
+  onToggle,
 }: {
   league: ManagerLeague;
   /** This league's week, once the check lands. Undefined while it is in flight. */
   entry?: LineupCheckLeague | null;
   /** Re-read this league after its sync key changed something. Forwarded only. */
   onSynced?: (leagueId: string) => void;
+  /** Whether the disclosure is open — the page's, not the element's own. */
+  open: boolean;
+  /** Whether the chrome is lit: open, and not yet collapsing. See the note. */
+  lit: boolean;
+  /** The press. `useActiveCard` drives the disclosure and the list together. */
+  onToggle: (id: string, event: MouseEvent<HTMLElement>) => void;
 }) {
+  // The card is still hook-free in the sense that matters — it owns no state of
+  // its own. This is a measurement of the box below and nothing else; see
+  // `usePanelCap`, which is a hook rather than a wrapper component precisely so
+  // this half can keep its own inset.
+  const { ref: panelRef, style: panelStyle } = usePanelCap<HTMLDivElement>(
+    open,
+    open && !lit,
+  );
+
   const gap = gapCell(entry);
   const kickoff = kickoffCell(entry);
   const superflex = superflexCell(entry);
   const roster = rosterCell(entry);
 
   return (
-    <li className="relative flex pointer-fine:[perspective:2400px] hover:z-10 has-[details[open]]:z-10">
+    // `data-card` is how the close finds this row again once the list is back
+    // around it — see `useActiveCard`.
+    <li
+      data-card={league.league_id}
+      className="relative flex pointer-fine:[perspective:2400px] hover:z-10 has-[details[open]]:z-10"
+    >
       {/* `min-w-0` is what lets the card shrink to a phone. The `<li>` is a
           row flex container, so its item takes `min-width: auto` and refuses
           to go below its own min-content — and the expanded half's two panes
           sit side by side at every width by design, which puts that
           min-content above 390. Without this the card is wider than the
           viewport and the whole page scrolls sideways. */}
-      <details className={`group/card ${CONSOLE_METAL} flex min-w-0 flex-1 flex-col`}>
+      <details
+        open={open}
+        data-lit={lit ? "" : undefined}
+        className={`group/card ${CONSOLE_METAL} flex min-w-0 flex-1 flex-col`}
+      >
         <summary
+          onClick={(event) => onToggle(league.league_id, event)}
           className={
             `lab-card-3d ${CONSOLE_CARD_SHELL} pb-[1.125rem] pt-[1.875rem] flex flex-1 cursor-pointer list-none flex-col font-mono ` +
             // **The gutter is 14px below `sm`**, where the card takes 18px from
@@ -120,18 +172,14 @@ export function LineupCheckCard({
             // `px-*` utilities are decided by Tailwind's emit order — see that
             // constant's note. The manager card made the same measurement.
             "px-3.5 sm:px-[1.125rem] " +
-            // **The open card's housing freezes under the rack**, so the four
-            // tiles stay in view while the panes scroll past — see the note
-            // above the component on why it is the `summary` and nothing else.
-            "group-open/card:sticky group-open/card:top-[var(--card-freeze-top)] group-open/card:z-20 " +
             "pointer-fine:[transform-style:preserve-3d] [transform-origin:center_bottom] " +
             "pointer-fine:[transform:translateZ(0)_rotateX(3deg)] " +
             "pointer-fine:hover:[transform:translateZ(30px)_rotateX(0deg)] " +
-            "pointer-fine:group-open/card:[transform:translateZ(20px)_rotateX(0deg)] " +
+            "pointer-fine:group-data-[lit]/card:[transform:translateZ(20px)_rotateX(0deg)] " +
             "transition-[transform,box-shadow,border-color] duration-[450ms] ease-[cubic-bezier(0.2,0.8,0.2,1)] " +
-            "hover:border-active/45 group-open/card:border-active/45 " +
+            "hover:border-active/45 group-data-[lit]/card:border-active/45 " +
             "pointer-fine:hover:shadow-[var(--housing-shadow),var(--card-lift-hover),var(--card-halo-hover)] " +
-            "pointer-fine:group-open/card:shadow-[var(--housing-shadow),var(--card-lift-hover),var(--card-halo-hover)] " +
+            "pointer-fine:group-data-[lit]/card:shadow-[var(--housing-shadow),var(--card-lift-hover),var(--card-halo-hover)] " +
             "focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-active/60"
           }
         >
@@ -141,9 +189,9 @@ export function LineupCheckCard({
             className="pointer-events-none absolute inset-0 overflow-hidden rounded-[inherit]"
           >
             <span className="lab-anim absolute inset-y-0 left-0 hidden w-[55%] -translate-x-[180%] -skew-x-12 bg-[image:var(--card-sheen)] transition-transform duration-[900ms] ease-out group-hover/card:translate-x-[450%] pointer-fine:block" />
-            <span className="absolute -inset-x-1/4 -bottom-[8%] hidden h-[62%] origin-bottom bg-[image:var(--card-floor)] opacity-40 transition-opacity duration-[450ms] [mask-image:linear-gradient(to_top,#000,transparent_72%)] [transform:perspective(320px)_rotateX(66deg)] group-hover/card:opacity-100 group-open/card:opacity-100 pointer-fine:block" />
-            <span className="absolute -bottom-[45%] left-1/2 h-[85%] w-[120%] -translate-x-1/2 bg-[radial-gradient(closest-side,var(--accent-glow),transparent_75%)] opacity-30 transition-opacity duration-[450ms] group-hover/card:opacity-80 group-open/card:opacity-80" />
-            <span className="absolute inset-x-[18%] top-0 h-px bg-[image:var(--card-edge-light)] opacity-0 transition-opacity duration-[450ms] group-hover/card:opacity-100 group-open/card:opacity-100" />
+            <span className="absolute -inset-x-1/4 -bottom-[8%] hidden h-[62%] origin-bottom bg-[image:var(--card-floor)] opacity-40 transition-opacity duration-[450ms] [mask-image:linear-gradient(to_top,#000,transparent_72%)] [transform:perspective(320px)_rotateX(66deg)] group-hover/card:opacity-100 group-data-[lit]/card:opacity-100 pointer-fine:block" />
+            <span className="absolute -bottom-[45%] left-1/2 h-[85%] w-[120%] -translate-x-1/2 bg-[radial-gradient(closest-side,var(--accent-glow),transparent_75%)] opacity-30 transition-opacity duration-[450ms] group-hover/card:opacity-80 group-data-[lit]/card:opacity-80" />
+            <span className="absolute inset-x-[18%] top-0 h-px bg-[image:var(--card-edge-light)] opacity-0 transition-opacity duration-[450ms] group-hover/card:opacity-100 group-data-[lit]/card:opacity-100" />
           </span>
 
           {/* Outside the clipping layer: the plates straddle the top edge, and
@@ -204,7 +252,19 @@ export function LineupCheckCard({
             seats forced: every seat below is a lit window of its own now, and
             a lit card inside a lit pane reads as glass on glass. This is the
             manager card's bezel-and-windows grammar one plane down. */}
-        <div className={`${CONSOLE_HOUSING_INSET} mt-3 px-3 pb-3 pt-3.5 font-mono sm:px-[1.125rem] sm:pb-[1.125rem] sm:pt-4`}>
+        <div
+          ref={panelRef}
+              style={panelStyle}
+          // **A scroller of its own, sized to the shell.** It fills what the
+          // parked card has left and scrolls its whole self — the sync key, both
+          // lineups and the note under them together — for the reason in the
+          // module note: the two panes are read across each other, and two
+          // scrollers is what would put their rows out of step. `min-h-0` is the
+          // half of that which is silent when missing: a flex item's default
+          // `min-height: auto` refuses to shrink below its content, so the cap
+          // would be a number nothing obeyed.
+          className={`${CONSOLE_HOUSING_INSET} lab-scroll-glass mt-3 min-h-0 overflow-y-auto px-3 pb-3 pt-3.5 font-mono sm:px-[1.125rem] sm:pb-[1.125rem] sm:pt-4`}
+        >
           {/* Above the panes rather than in the summary: a `<summary>` is a
               leaf button to assistive technology, so a control nested in one is
               unreliably reachable and a live region inside it is swallowed into
@@ -238,7 +298,7 @@ export function LineupCheckCard({
       </details>
     </li>
   );
-}
+});
 
 /**
  * The week's projected outcome: this lineup against the one it plays, and —

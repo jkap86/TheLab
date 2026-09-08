@@ -1,61 +1,108 @@
 import assert from "node:assert/strict";
 import { describe, test } from "node:test";
 
-import { panelCap } from "./panel-cap.ts";
+import {
+  FREEZE_TOP_FALLBACK,
+  MIN_PARKED,
+  PLATE_OVERHANG,
+  SHELL_BREATH,
+  freezeTopFrom,
+  panelFit,
+  panelRoom,
+  parkedShell,
+} from "./panel-cap.ts";
 
-/** A manager card's measured shape: ~210px of header plus the panel's margin. */
-const PARKED = { parked: true, panelOffset: 224, freezeTop: 87 } as const;
-
-describe("panelCap — the parked arm", () => {
-  test("is the viewport less the freeze, the header and a little breath", () => {
-    // 1080 − 87 − 224 − 16.
-    assert.equal(panelCap(1080, PARKED), 753);
+describe("freezeTopFrom — the park offset", () => {
+  test("is the rack's underside plus breath plus the plate's overhang", () => {
+    // The `md` rack: 62 + 6 + 13. Against the old token's 87, which is what
+    // measuring rather than compiling it in was for.
+    assert.equal(freezeTopFrom(62), 81);
   });
 
-  test("takes its floor rather than a height nothing fits in", () => {
-    // 600 − 87 − 224 − 16 = 273, which is under the bars a pane stands on.
-    assert.equal(panelCap(600, PARKED), 320);
+  test("follows the rack down to its shorter arms", () => {
+    assert.equal(freezeTopFrom(52), 71);
+    assert.equal(freezeTopFrom(50), 69);
   });
 
-  test("shrinks with a taller header, which is the whole point of measuring one", () => {
-    const tall = { parked: true, panelOffset: 320, freezeTop: 87 } as const;
-    assert.ok(panelCap(1080, tall) < panelCap(1080, PARKED));
+  test("falls back to the token where there is no rack to measure", () => {
+    assert.equal(freezeTopFrom(null), FREEZE_TOP_FALLBACK);
+    assert.equal(freezeTopFrom(Number.NaN), FREEZE_TOP_FALLBACK);
   });
 });
 
-describe("panelCap — the un-parked arm", () => {
-  const UNPARKED = { parked: false } as const;
-
-  test("takes a share of a short viewport", () => {
-    // 700 × 0.7 = 490, against 700 − 120 = 580.
-    assert.equal(panelCap(700, UNPARKED), 490);
-    assert.equal(panelCap(800, UNPARKED), 560);
-    assert.equal(panelCap(900, UNPARKED), 630);
-    assert.equal(panelCap(1080, UNPARKED), 756);
+describe("parkedShell — the box the card stands in", () => {
+  test("starts at the plate's line, not the card's", () => {
+    // The plate hangs above the card's edge and the shell clips, so the shell
+    // opens the overhang early and carries it as padding.
+    assert.equal(parkedShell(900, 81).top, 81 - PLATE_OVERHANG);
   });
 
-  test("leaves a fixed margin on a tall one, where the share would swallow it", () => {
-    // 2000 × 0.7 = 1400 against 2000 − 120 = 1880: the smaller wins.
-    assert.equal(panelCap(2000, UNPARKED), 1400);
+  test("takes the rest of the viewport, less breath", () => {
+    assert.equal(parkedShell(900, 81).height, 900 - 68 - SHELL_BREATH);
+    assert.equal(parkedShell(1080, 81).height, 996);
   });
 
-  test("takes its own floor on a viewport too short for either", () => {
-    assert.equal(panelCap(400, UNPARKED), 460);
+  test("never answers a negative height", () => {
+    assert.equal(parkedShell(40, 81).height, 0);
+  });
+});
+
+describe("panelRoom — what is left under the panel's own top edge", () => {
+  /** A manager card: ~210px of header plus the panel's 14px margin. */
+  const HEADER = 224;
+
+  test("is the shell less the overhang it padded with, less the header", () => {
+    const shell = parkedShell(1080, 81);
+    assert.equal(panelRoom(shell.height, HEADER), 996 - PLATE_OVERHANG - 224);
+  });
+
+  test("shrinks with a taller header, which is the whole point of measuring one", () => {
+    const shell = parkedShell(1080, 81);
+    assert.ok(panelRoom(shell.height, 428) < panelRoom(shell.height, HEADER));
+  });
+
+  test("shrinks with a taller rack, for the same reason", () => {
+    const viewport = 900;
+    const tall = parkedShell(viewport, freezeTopFrom(62));
+    const short = parkedShell(viewport, freezeTopFrom(50));
+    assert.ok(panelRoom(tall.height, HEADER) < panelRoom(short.height, HEADER));
+  });
+});
+
+describe("panelFit — the cap, the floor, and which is which", () => {
+  test("takes the room it was given, and spends no floor doing it", () => {
+    const fit = panelFit(700);
+    assert.deepEqual(fit, { cap: 700, minHeight: 0, floored: false });
   });
 
   /**
-   * The reason this arm exists at all: a trade card's header is roughly twice a
-   * manager card's, and running it through the parked arm subtracts a freeze it
-   * never takes on top of a header it does not hold on screen. At an 800px
-   * viewport that is the floor — a panel with no room for a list.
+   * **The floor is only a floor where the room is under it.** Spent otherwise
+   * it would hold the panel taller than the space it is in, and the collapse
+   * would open with a jump before it moved.
    */
-  test("is not the parked arm's answer for a trade card's header", () => {
-    const asParked = { parked: true, panelOffset: 428, freezeTop: 87 } as const;
-    assert.equal(panelCap(800, asParked), 320);
-    assert.ok(panelCap(800, UNPARKED) > panelCap(800, asParked));
+  test("leaves the panel free to be shorter than the floor's own figure", () => {
+    assert.equal(panelFit(MIN_PARKED + 1).minHeight, 0);
+    assert.equal(panelFit(MIN_PARKED).minHeight, 0);
   });
 
-  test("ignores a header entirely — there is none frozen to subtract", () => {
-    assert.equal(panelCap(900, UNPARKED), panelCap(900, { parked: false }));
+  test("holds the floor where the room is under it, and says the shell scrolls", () => {
+    const fit = panelFit(200);
+    assert.deepEqual(fit, { cap: MIN_PARKED, minHeight: MIN_PARKED, floored: true });
+  });
+
+  /**
+   * The one case a league card does not reach and a trade card does: its
+   * summary carries both hauls in full, measured 413px, so it is the header
+   * that runs the room under the floor on an ordinary laptop rather than the
+   * viewport being cramped.
+   */
+  test("is what a trade card's header reaches on a short viewport", () => {
+    const shell = parkedShell(800, 81);
+    assert.ok(panelFit(panelRoom(shell.height, 427)).floored);
+    assert.ok(!panelFit(panelRoom(shell.height, 224)).floored);
+  });
+
+  test("is a pixel count, so it is one", () => {
+    assert.equal(panelFit(489.99999999999994).cap, 490);
   });
 });

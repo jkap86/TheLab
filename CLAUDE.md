@@ -8663,6 +8663,16 @@ against real per-slot spreads; and how the headshots read at all, since
 rendered as its letter mount.
 ## The card parks, and its drawers come to the reader
 
+**Half superseded — see The active card, below.** The park described here scrolls
+one card under the rack and freezes its header there while the rest of the list
+stays in flow behind it; every card parks now, the list stands down around the
+open one, and the page stops scrolling. What that pass supersedes is the *park*
+and its arithmetic — `panelCap`'s two arms, the sticky summary, and
+`--card-freeze-top`, which is gone. Everything else here still holds and is what
+it is built on: the standing on the settings row, the drawers pinned to the
+roster pane's floor, the panes as fixed-height columns whose glass scrolls, and
+the measurement rules that decide all three.
+
 Four changes to the `/manager` league card, from a design handoff: the standing
 moves off the plate row onto the settings row at every width; opening a card
 parks it under the rack and caps its expanded half to what is left of the
@@ -8891,6 +8901,313 @@ of thousands of pixels tall and the scroll is long; what a real dynasty
 portfolio looks like in a drawer bounded to ~245px, since the fixture holds six
 picks; and whether the mint thumb reads against a real pane's rows, since
 headless Chrome draws overlay scrollbars and reserves no gutter for one.
+
+## The active card: park, lock, deeplink
+
+An open card is **the screen**, on all three tools. Pressing one keeps the smooth
+scroll into place and then locks the list where it lands: the page's header and
+every other card stand down, the active card sits at the top under the rack, its
+expanded half takes the rest of the viewport, and the page itself stops
+scrolling. The open card is a **query param**, so a card is a link. Closing runs
+the open backwards. Applied from a design handoff. Nothing on the wire moved — no
+route, no query, no contract type, no payload field, no migration.
+
+**The problem is a page, not a card.** A league card already scrolled itself
+under the rack, froze its header there and capped its panel; a trade card did
+neither and took a share of the viewport instead. But the rest of the list stayed
+in flow behind whichever was open, so a reader inside a twelve-team browser was
+still scrolling a hundred-league document — and nothing about which card was open
+survived a reload or a link.
+
+**Three tools, one behaviour, one hook.** `useActiveCard` in `features/shared` is
+the whole of it: the park, the lock, the shell's box and the param. What differs
+per page is which param names the card (`?league=` on the two league tools,
+`?trade=` on the board) and how tall the frozen header is. Reimplementing it
+three times is three chances for `/trades` to close a card differently from
+`/manager`, on a change whose entire premise is that the three cards are one
+object seen from three tools.
+
+### The URL is the state, not a copy of it
+
+`useSyncExternalStore` over `popstate` — **and over this module's own writes**,
+which do not fire it, hence the one custom event. The open card is therefore a
+*derived* value: there is no `active` state to keep in step with the address bar,
+so a deeplink, a Back, a Forward and a press are one code path rather than four
+that have to agree. It settles the SSR question by construction too, the server
+snapshot being `null`, which is what the server would have rendered anyway.
+
+**Not `useSearchParams`**, which opts a route into dynamic rendering and wants a
+Suspense boundary around it — a page-level cost for a client-side disclosure.
+What this writes is `history.pushState`/`replaceState`, which the App Router
+supports and which re-run no server render.
+
+**Open is a push, so Back closes.** Close pops the entry when this view is the
+one that pushed it and `replace`s otherwise: a deeplinked card was never pushed,
+and popping it would take the reader off the page. Switching cards `replace`s, or
+Back would walk through every card the reader had looked at.
+
+**The id is validated against the loaded list, and re-validated as it grows.**
+`/manager` and `/lineupchecker` arrive over NDJSON, so an id that matches nothing
+on mount can match a minute later; and a narrowing that removes the open league
+is the same question answered the other way. Both fall out of `ids` being a
+render input rather than something an effect watches — the card closes when its
+id leaves the list rather than parking a shell around nothing.
+
+**`?week=` stopped being state and became the URL.** It was `useState` seeded
+from nothing; making it a link meant either copying the URL into that state on
+mount — a render's worth of the wrong week, and an effect writing state from an
+external system — or reading the URL *as* the state. It reads the URL, through
+the same store. Two rules keep it honest and both are about *not* writing:
+nothing is written on load, because `null` is a real state ("the week the route
+resolves") and a default stamped into the URL would freeze the page on whatever
+week it opened on for anyone who bookmarked it; and it is `replace`, because a
+stepper is a dial rather than a place. It is independent of `?league=` in both
+directions, which falls out of them being two params neither of which reads the
+other.
+
+### The park offset is measured, and the plate is what clears the rack
+
+```
+freezeTop = rack.getBoundingClientRect().bottom + RACK_BREATH + PLATE_OVERHANG
+```
+
+**Measured off the rack rather than compiled in.** The rack is one row at every
+width but not one height — 50, 52 and 62px across its three arms — and a card
+parked against a number the rack has since moved off is either a plate under the
+rack or a gap nobody asked for. `--card-freeze-top` is **gone**, and its history
+is the argument: it was wrong twice and stale once, every time because the rack
+or the card moved and a constant did not. `FREEZE_TOP_FALLBACK` keeps the last
+value for a page with no rack to measure, and carries that history.
+
+**The plate is what has to clear the rack, not the housing**, since the plate is
+what the league's name is on — so the shell opens at the *plate's* line and
+carries the 13px overhang as its own padding. Clipped to the housing's edge
+instead (the shell has `overflow`), every league's name would lose its top third.
+
+**Its own margins go with it**, which is a measurement rather than tidiness:
+every one of these lists carries a rhythm margin above it, and parked that margin
+sits between the `<main>`'s padding and the shell — so the card lands 8px below
+the offset the park scrolled it to and the shell overhangs the fold by the same
+8. Measured: the plate parked at 89 against an 81px offset until that line.
+
+### The cap is a max-height, and the room is measured off the shell
+
+`panelFit` is `max(MIN_PARKED, room)` with the floor **only where the room is
+under it**: spent otherwise it would hold the panel taller than the space it is
+in and make the collapse open with a jump before it moved. Under the floor the
+panel is taller than its room and the **shell** scrolls, which is the behaviour
+the cap replaces and the right thing to fall back to — a capped panel that cannot
+show a row is worse than an uncapped one. `MIN_PARKED` stays 320, the repo's own
+measured figure (a bay, a ledge, two pinned bars), against the prototype's 300.
+
+**A max-height, never a height**: the panel is a flex item of the card's own
+column, so a `height` loses to the flex algorithm and the box silently keeps its
+content size.
+
+**The room is measured off the shell rather than summed from constants.** While a
+card is parked the list is a box of known height with the card inside it, so what
+is left under the panel's top edge is one subtraction of two rects — and being a
+subtraction of two rects it is scroll-invariant, which the arithmetic form is not
+once the shell has to scroll. The arithmetic is still there and still exercised:
+it is what answers during the ~340ms between a press and the park, when there is
+no shell yet, and it is the same number, so the panel does not resize as the list
+stands down around it.
+
+**`panelCap`'s un-parked arm is deleted with the card that used it.**
+`MIN_UNPARKED`, `UNPARKED_SHARE` and `UNPARKED_MARGIN` went with `parked={false}`:
+there is no such thing as an un-parked card now.
+
+### What is a render, and what is not
+
+**Which cards stand down is CSS**, reading the open disclosure —
+`[data-card-shell] > li:not(:has(> details[open]))`. A per-card `hidden` prop
+would drop `TradeCard`'s `memo` for every row on a board that appends a hundred
+at a time, to move two of them.
+
+**The scroll lock and the shell's box are DOM writes**, and the module says why:
+the lock is `documentElement`'s, and the shell's top padding belongs to the
+`<main>` that `PageShell` renders from a *server* component two levels up.
+Threading a prop through that seam for a client-side disclosure is a worse trade
+than reaching for the `<main>` the list is already inside — and the padding, the
+height and the overhang are one measurement, so writing them together is what
+stops them being taken a frame apart. Nothing else writes any of them, so there
+is no render to race.
+
+**Both league cards are `memo`'d now, and that is what the driven disclosure
+costs.** Opening a card used to be a native `<details>` toggle: zero renders,
+whatever the list's length. It is a state change on the page now. Measured on a
+six-card fixture page in a dev build, a press cost **264ms** before and **91ms**
+after — and this page is one card per league on a 113-league account. Every prop
+is stable by construction; `open` and `lit` are the two that are meant to move,
+for the card that opened and the one that closed.
+
+**`lit` is a second question from `open`, and the collapse is why.** The
+disclosure stays open for as long as the panel takes to close, so chrome hung off
+`[open]` would hold its border, halo and edge light through the whole collapse
+and let go afterwards. `data-lit` is what all 26 of those variants read instead,
+so the card lets go *as* the panel closes — its own 450ms transitions running out
+under the 260ms collapse.
+
+### Closing is the open reversed, and two measurements shaped it
+
+**The collapse is a Web Animations object, not a CSS transition.** A transition
+needs its from-value to have been painted, so collapsing with one meant rendering
+the panel frozen at its measured height, waiting a frame for that to land, and
+only then setting zero — three renders, the last gated on a
+`requestAnimationFrame`. Driven, the collapse began **330ms** after the press:
+rAF runs at whatever rate the main thread allows, and the 260ms timer that ends
+the close does not wait for it, so the card sat still and then vanished.
+Keyframes carry their own from-value, so nothing has to be painted first and the
+animation starts in the layout effect of the render that begins it. It keeps the
+rule that made the transition attractive — React stays the only writer of the
+panel's `style`, and an animation runs in its own cascade origin above that
+style, so a re-render mid-collapse cannot clobber it. The from-box is recorded
+**while open** rather than read when the close begins, because by then React has
+already set the panel to zero.
+
+**The collapse begins on the press, not when the URL catches up.** Popping a
+history entry is a same-document traversal Chrome queues as a task: driven,
+`back()` took **220ms** to deliver its `popstate`, against a 260ms collapse. So
+`close()` sets the closing card itself and the render-time branch that watches
+the URL is the *fallback* — for the browser's own Back, and for a narrowing that
+takes the open card off the list. Whichever notices first, the guard is what
+keeps them from being two collapses.
+
+**Closing inside the settle never parks at all.** Cancelling the pending park
+without declaring the settle over is the difference: clearing it would make the
+card park on the very render the collapse begins — the other cards vanish, the
+panel folds, and the whole list comes back, inside a third of a second.
+
+**The page is landed where the card is, then walked back.** Released outright the
+document is at scroll 0 with a hundred cards above the one being read; put back
+at the card's own line first, the smooth scroll to where the reader pressed reads
+as the press undone. The return point is captured only on the press that opens
+from nothing — a switch happens mid-smooth-scroll, and re-reading there would
+replace the row the reader came from with wherever the animation had got to.
+
+### Reduced motion, and the scrollbar
+
+**The park and the collapse are both motion the stylesheet cannot reach.**
+`.lab-anim` clears `transition` and `animation`, which covers every other moving
+thing on a card — but the collapse is a Web Animations object and the park is a
+`scrollTo`, and neither is a CSS property to be cleared. So both ask
+`prefersReducedMotion()` and spend their durations on the answer: an instant
+scroll, no settle to wait out, an instant collapse. Everything else is identical
+— the card still parks, the list still stands down, the URL still changes.
+
+**`scrollbar-gutter: stable` on `html` is new, and it is the lock's doing.** A
+parked card locks the document, which on a platform with classic scrollbars takes
+the bar away and hands its ~15px back to the content — the whole page jumping
+left the instant a card is pressed. Compensating with padding on the `body` is
+the usual answer and is wrong here: the rack is `fixed`, so it is positioned
+against the viewport and would not move with it, and rack and cards would
+disagree by exactly the bar's width for as long as a card was open. Reserving it
+always is the fix that has nothing to keep in step.
+
+### The checker's expanded half scrolls as one block
+
+`/lineupchecker`'s expanded half is a `CONSOLE_HOUSING_INSET` block rather than an
+`ExpandedPanel`, and it now caps and scrolls **as one scroller** where the
+manager card's two panes scroll their own lists. That is the arrangement
+`WeekPanes` already asks for rather than a shortcut: its two lineups are read
+*across* — a seat row against the seat row opposite, which is why both are
+measured to the same height at every width — and two independent scrollers are
+exactly what would put them out of step.
+
+It is what made the sizing a **hook** rather than part of `ExpandedPanel`: the
+two halves have different insets, and a shared component taking a `className` for
+that would put two base `p-*` utilities of the same specificity in one class
+attribute, settled by Tailwind's emit order rather than by the caller — the trap
+`CONSOLE_CARD_SHELL` and `CONSOLE_KEY_PILL` are both split to keep a part out of.
+Each half keeps its own chrome; they share the arithmetic.
+
+### The trade card parks too, and its header is what that costs it
+
+`TradeCard` used to do neither — no freeze, no park — because a manager card's
+frozen part is ~210px where its summary carries both hauls in full, measured
+413px. What made it park anyway is that the *list* stands down now: there is no
+longer a page scrolling behind an open card for a tall header to be a poor trade
+against, and a board where one card behaved differently from the other two would
+be the drift this change exists to remove.
+
+**The cost is real and is the one open decision.** Measured against the
+arithmetic: the panel gets 556px at a 1080 viewport and 376 at 900, and at 800
+and below the room falls under `MIN_PARKED` and the **shell** scrolls. That is
+the documented fallback rather than a failure — driven at a 520px viewport the
+panel held exactly 320, the shell scrolled and the page did not — but it is the
+only card that reaches it on an ordinary laptop. The handoff names the
+alternative: condense the hauls to a line each while parked. That is a change to
+what the card *says* rather than to how it is sized, and the handoff calls it a
+product call, so it is flagged here with the numbers rather than taken.
+
+The board's own half of the change is that **the sentinel is not rendered while a
+card is parked**: every row but the open one is `display: none` and the page does
+not scroll, so the observer would be watching a node with no box, two viewports
+up a list nobody can move. `hasMore` is untouched — the server still says there is
+more, and the walk picks up where it was the moment the card closes.
+
+### Verified
+
+Driven over CDP against `next dev` with no `DATABASE_URL` — the boot hook skips
+migrations and the loops log their refusals, which is the server coming up
+healthy against nothing — through a temporary `/preview` route mounting the
+**real** `LeagueCard`, `LineupCheckCard`, `useActiveCard` and `PageShell` against
+fixture leagues, then deleted. The mechanics are the ones this file records:
+`--no-proxy-server`, `localhost` rather than `127.0.0.1`, a phone viewport from
+`Emulation.setDeviceMetricsOverride`, `data-theme` rather than
+`prefers-color-scheme`, the `--blink-settings=availablePointerTypes=4,…` flags,
+and a **client-component** harness. One is this pass's own:
+`Emulation.setDeviceMetricsOverride` clears emulated media, so a reduced-motion
+check set before the viewport is silently testing nothing.
+
+The park lands to the pixel. `rack.bottom` 62 → `freezeTop` **81**, and the open
+card's own top edge measured **81** — the handoff's figure exactly. `main`'s
+padding-top 68 (81 − 13), the shell's top 68, its height **816** (900 − 68 − 16),
+its padding-top 13, and the panel's bottom edge at **884** against a 900 viewport:
+an exact fit, with `document.documentElement.scrollHeight` equal to the viewport
+— **the page does not scroll**. At 390 the same chain reads 50 → 69 → 69, height
+772, panel bottom 828 of 844. The summary computes `position: relative` at every
+width: nothing is sticky.
+
+Every arm landed. The header, the rule and the foot are `display: none` while
+parked and back after; one card visible of six; `html` and `body` both
+`overflow: hidden` and `visible` again. A **deeplink** (`?league=618420`) landed
+parked with no scroll to do. A press from a scroll of 884 parked at 0 and, on
+close, returned the reader to **884**. Escape, the card's own header and the
+browser's **Back** all collapsed it; **Forward** re-opened it, and closing inside
+the settle never stood the list down (6 cards visible throughout) while a normal
+open after it still parked at 81. The collapse runs 260ms on
+`cubic-bezier(0.4, 0, 0.2, 1)` and now starts **55ms** after the press against
+323 before, with the chrome unlit from its first frame.
+
+The checker card was driven at 1280×900, 1280×700 and 390×844: `cardTop ===
+freezeTop` at all three, the panel's bottom edge exactly 16px off the fold at
+each, and its block scrolling inside itself. The **floor** was driven at a 520px
+viewport: the panel held exactly 320 with `min-height` and `max-height` both at
+it, the shell scrolled, and the page still did not. Under
+`prefers-reduced-motion: reduce` the card parked in 91ms rather than 340, sat at
+81, drew no tilt, and closed with a 0ms collapse.
+
+At every width: `document.documentElement.clientWidth` **1280 in both states** —
+the gutter reserved, so nothing shifts on the lock — zero unclipped elements past
+the viewport, exactly one `<h1>` and one `<nav>`, and no console output of any
+kind. `/manager`, `/lineupchecker`, `/trades` and `/tools` all still render.
+1,746 unit tests pass (14 of them `panel-cap`'s, rewritten around the measured
+offset, the shell's box, the room and the floor); `lint` and `typecheck` are
+clean.
+
+**Not verified against real data**, which is the gap to close first: every number
+above is a fixture. Four things a render here cannot check. The **trade card** was
+not driven at all — its fixtures are a `Trade` plus a `TradeCardView` plus a
+per-league fetch, so its 413px header, its floor and the sentinel's suspension are
+arithmetic and a render guard rather than something measured on screen. The
+**`?week=` seed** reaches the request only once leagues arrive, which they cannot
+here, so the URL→prop wiring is typechecked rather than observed. How the park
+reads on a real **113-league** page, where the document is tens of thousands of
+pixels tall and the memo is doing its work against a real payload. And whether
+`?league=` on a real account survives the NDJSON re-validation as intended — the
+fixture list is complete on the first render, which is the one case the
+re-validation is *not* written for.
 
 ## The identity plate became a billet, and the win rate the hero
 

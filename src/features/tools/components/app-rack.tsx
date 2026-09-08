@@ -156,7 +156,20 @@ export function AppRack() {
     // 24px of ground showing above it, which on a scrolling page was a strip
     // of console nothing ever occupied. `--rack-clear` lost the same 1.5rem on
     // all three arms, so the gap *under* the rack is unchanged.
-    <div className="fixed inset-x-0 top-0 z-50 mx-auto w-full max-w-6xl px-3.5 md:px-4">
+    <div
+      // **Where an open card parks is measured off this box**, and this
+      // attribute is the whole of how it is found. The rack is one row at every
+      // width but not one height — 50, 52 and 62px across its three arms — and
+      // a card parked against a compiled-in number is either a plate under the
+      // rack or a gap nobody asked for. The constant this replaces was wrong
+      // twice for exactly that reason — see `FREEZE_TOP_FALLBACK`, which is
+      // where its history is written down. It is this element
+      // rather than the pill inside it because this one is `fixed`, so its
+      // `bottom` is already a viewport coordinate, and it has no vertical
+      // padding of its own to add. See `measureFreezeTop`.
+      data-app-rack
+      className="fixed inset-x-0 top-0 z-50 mx-auto w-full max-w-6xl px-3.5 md:px-4"
+    >
       {/*
         Below `md` the rack is one pill of its own and above `md` it is this
         row, and rather than render two trees the pill becomes

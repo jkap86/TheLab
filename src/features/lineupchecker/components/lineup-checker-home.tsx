@@ -1,6 +1,12 @@
 "use client";
 
-import { type ReactNode, useCallback, useMemo, useState } from "react";
+import {
+  type ReactNode,
+  useCallback,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 
 import {
   activeFilterCount,
@@ -24,8 +30,16 @@ import {
   type Subject,
   type SubjectRolls,
   useManagerLeagues,
+  useActiveCard,
   usePublishRackControls,
+  useUrlParam,
+  writeQueryParam,
 } from "@/features/shared";
+
+// Deep-imported rather than through the folder's barrel, which reaches the
+// network: this module is pure and this is the one predicate that says what a
+// week is. `week-stepper.tsx` reads `LAST_REGULAR_WEEK` the same way.
+import { isPlausibleWeek } from "@/shared/projections/weeks";
 
 import { useLineupCheck } from "../hooks/use-lineup-check";
 import {
@@ -114,10 +128,41 @@ export function LineupCheckerHome({
   username: string;
   heading: ReactNode;
 }) {
-  // A stepped week, or null to take the one the route resolves. Null is a real
-  // opening state: which week is current is the route's answer, and the week
-  // *shown* is always read back off the payload — see `WeekStepper`.
-  const [week, setWeek] = useState<number | null>(null);
+  /**
+   * **The stepped week is `?week=`, and there is no second copy of it.**
+   *
+   * It was `useState` seeded from nothing; making it a link meant either
+   * copying the URL into that state on mount — which is a render's worth of the
+   * wrong week, and an effect writing state from an external system — or
+   * reading the URL *as* the state. It reads the URL. `useUrlParam` is the same
+   * store `useActiveCard` derives the open card from, so a Back that crosses a
+   * week change moves the page rather than leaving the address bar disagreeing
+   * with the stepper.
+   *
+   * **Null is a real state and is never written.** "The week the route
+   * resolves" is what the page opens on, and the week *shown* is always read
+   * back off the payload — see `WeekStepper`. A default stamped into the URL on
+   * load would freeze this page on whatever week it happened to open on for
+   * anyone who bookmarked it.
+   *
+   * **`replace`, not `push`**, because a stepper is a dial rather than a place:
+   * eighteen presses should not be eighteen entries between the reader and the
+   * page they came from.
+   *
+   * `isPlausibleWeek` rather than the bounds spelled again — it is the
+   * predicate the *route* validates `?week=` with, and one spelling is what
+   * stops a link this page accepts from being one the route refuses.
+   *
+   * It is independent of `?league=` in both directions — stepping the week with
+   * a card open must not close it, and closing a card must not drop the week —
+   * which falls out of them being two params neither of which reads the other.
+   */
+  const rawWeek = Number(useUrlParam("week"));
+  const week = isPlausibleWeek(rawWeek) ? rawWeek : null;
+
+  const stepWeek = useCallback((next: number) => {
+    writeQueryParam("week", String(next));
+  }, []);
 
   return (
     <Checker
@@ -131,7 +176,7 @@ export function LineupCheckerHome({
       username={username}
       heading={heading}
       week={week}
-      onWeek={setWeek}
+      onWeek={stepWeek}
     />
   );
 }
@@ -289,12 +334,30 @@ function Checker({
 
   const name = user ? user.display_name || user.username : username;
 
+  /**
+   * **An open card is the screen, and it is a link** — `?league=<id>`, beside
+   * the `?week=` the stepper writes. The park, the lock and the param are
+   * `useActiveCard`'s; this page owns which rows may be opened and standing its
+   * own header down while one is.
+   *
+   * `ids` is the narrowed list for `LeaguesHome`'s reason: a filter or a subject
+   * that takes the open league off the page closes the card rather than parking
+   * a shell around a league nobody can see, and it is what re-validates a
+   * deeplink as the leagues stream fills in.
+   */
+  const listRef = useRef<HTMLUListElement | null>(null);
+  const ids = useMemo(() => visible.map((l) => l.league_id), [visible]);
+  const card = useActiveCard({ param: "league", ids, listRef });
+
   return (
     <div className="relative">
       {/* The bottom margin is the header's own below `sm`, because the stepper
           row that used to carry it (`my-9`) is `display: none` there and a
-          hidden element's margins collapse with it. */}
-      <header className="relative mb-6 sm:mb-0">
+          hidden element's margins collapse with it.
+
+          It stands down while a card is parked — `display: none` rather than
+          unmounted, so the filters dialog it holds keeps its draft. */}
+      <header className={`relative mb-6 sm:mb-0 ${card.parked ? "hidden" : ""}`}>
         <ManagerPlate
           name={name}
           avatarUrl={user?.avatar_url ?? null}
@@ -403,7 +466,9 @@ function Checker({
           row would be a rule with nothing on its far side. The `Clear filters`
           key that used to stand at its far end is on the plate now, beside the
           key that set the filter in the first place. */}
-      <div className="relative my-6 hidden flex-wrap items-center gap-3 sm:my-9 sm:flex">
+      <div
+        className={`relative my-6 flex-wrap items-center gap-3 sm:my-9 ${card.parked ? "hidden" : "hidden sm:flex"}`}
+      >
         <WeekStepper week={check?.week ?? null} onChange={onWeek} />
         <div
           aria-hidden
@@ -469,13 +534,26 @@ function Checker({
                   is a list of cards at all, and *beside* the list rather than
                   inside it: a `<ul>` takes `<li>` children and nothing else. */}
               <LineupMarkDefs />
-              <ul className="relative m-0 grid list-none grid-cols-1 gap-[1.125rem] p-0">
+              {/* **The list is the parked shell** — see `LeaguesHome`, which
+                  carries the argument, and `useActiveCard`.
+                  `[overflow-anchor:none]` for its reason too: opening a card
+                  grows content above the viewport's anchor and the browser
+                  compensates by moving `scrollTop`, which lands the park
+                  somewhere arbitrary and reads as its having missed. */}
+              <ul
+                ref={listRef}
+                {...card.shellProps}
+                className="relative m-0 grid list-none grid-cols-1 gap-[1.125rem] p-0 [overflow-anchor:none]"
+              >
                 {visible.map((league) => (
                   <LineupCheckCard
                     key={league.league_id}
                     league={league}
                     entry={checked[league.league_id] ?? null}
                     onSynced={reread}
+                    open={card.isOpen(league.league_id)}
+                    lit={card.isLit(league.league_id)}
+                    onToggle={card.toggle}
                   />
                 ))}
               </ul>

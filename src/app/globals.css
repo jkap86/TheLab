@@ -159,44 +159,6 @@
    */
   --rack-cast: 0 18px 40px -18px #000;
 
-  /*
-   * Where an **open** league card's housing parks while its expanded half
-   * scrolls under it — read by `league-card.tsx` and `lineup-check-card.tsx`,
-   * which is the whole of why it is one token: the two cards are one object
-   * seen from two tools, and two spellings of where it parks is the drift the
-   * shared header exists to prevent.
-   *
-   * **It is the plate that has to clear the rack, not the housing**, since the
-   * plate is what the league's name is on: it hangs 13px above the card's own
-   * top edge, so the offset is the rack's height plus that overhang plus a
-   * little breath. 87px is the rack's 62px `md` height plus 13 plus 12.
-   *
-   * The rack's height is spelled here as a number rather than derived:
-   * `calc(var(--rack-clear) - 2.5rem)` reproduces it at `md` and not at the
-   * other two arms, where the shell's own padding is doing something else, and
-   * a derivation that is only right at one breakpoint is worse than a number.
-   *
-   * One value at every width. The card is one per row and its plate hangs the
-   * same 13px on a phone as on a desktop, so a per-arm offset would be three
-   * spellings of one gap — and the two narrower arms have a shorter rack, so
-   * the `md` figure clears there with room to spare.
-   *
-   * **It was 5.875rem while the manager card wore a milled billet ledge**,
-   * whose overhang is 20px rather than 13, and it comes back down with the
-   * ledge. It must not go back to the 4.625rem it carried before that pass:
-   * that number predates the rule above and counts the rack and the breath
-   * alone, which parks the plate's top edge at 61px against a 62px rack — the
-   * name a pixel behind the thing the freeze exists to keep it clear of.
-   *
-   * The 62px in that sum is the rack with no Browse track in it, and both
-   * pages whose cards freeze *do* carry one, which makes their rack 65.1 — so
-   * the plate parks at 74 against 65.1 and clears by 8.9px rather than 13.
-   * Less breath than the rule asks for and still clear, which is what the
-   * freeze is for. Measured rather than assumed, so the next 3px of rack is
-   * known to be the one that would cost it.
-   */
-  --card-freeze-top: 5.4375rem;
-
   /* ---- Instrument chrome (dark) ------------------------------------ */
 
   --panel-bg: radial-gradient(120% 80% at 50% -20%, #16303c 0%, #0b1418 38%, #08090a 72%);
@@ -1312,6 +1274,48 @@
 body {
   background: var(--background);
   color: var(--foreground);
+}
+
+/*
+ * **The gutter is reserved whether or not the page scrolls**, and that is what
+ * keeps an open card from shifting the console sideways as it opens.
+ *
+ * A parked card locks the document (`overflow: hidden` — see `useActiveCard`),
+ * and on a platform with classic scrollbars that takes the bar away and hands
+ * its ~15px back to the content, which reads as the whole page jumping left the
+ * instant a card is pressed. Compensating with padding on the `body` is the
+ * usual answer and is wrong here: the app rack is `fixed`, so it is positioned
+ * against the viewport rather than the body and would not move with it — the
+ * rack and the cards under it would disagree by exactly the bar's width for as
+ * long as a card was open.
+ *
+ * Reserving it always is the fix that has nothing to keep in step: the width a
+ * page lays out in stops depending on how tall its content happens to be. It is
+ * the same argument `.lab-scroll` already makes one grain down, where the
+ * tray's column headers sit outside the scroller and every label landed 11px
+ * left of the readout it named without it.
+ */
+html {
+  scrollbar-gutter: stable;
+}
+
+/*
+ * **The parked shell: an open card is the screen.**
+ *
+ * While a card is parked the list is a box of measured height sitting under the
+ * rack, and every card in it but the open one stands down. `useActiveCard` puts
+ * `data-card-shell` on the list and nothing else; which card survives is read
+ * from the disclosure that is actually open, so there is no second per-card
+ * attribute to keep in step with it — and, on a board that appends a hundred
+ * trade cards at a time, no prop change that would drop `TradeCard`'s memo for
+ * every row rather than for the two that moved.
+ *
+ * It is a rule here rather than an arbitrary variant on the list because it is
+ * a `:not(:has())` over a child, and spelled as a utility that is a class
+ * attribute nobody can read.
+ */
+[data-card-shell] > li:not(:has(> details[open])) {
+  display: none;
 }
 
 /*
