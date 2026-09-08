@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server";
 
-import type { ApiErrorPayload } from "@/shared/contract";
+import type { ApiErrorPayload, LeagueHistoryPayload } from "@/shared/contract";
+import { extendLeagueHistory } from "@/shared/manager";
+import type { LeagueHistoryResult } from "@/shared/manager";
 import {
   parseKtcBoardChoice,
   parseKtcLineupChoice,
@@ -13,8 +15,14 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 /**
- * One league's rosters at any moment from its **oldest stored move** to today,
- * with today's boards to price them against — see `RosterTimelinePayload`.
+ * One league's rosters at any moment its **stored seasons** reach, with today's
+ * boards to price them against — see `RosterTimelinePayload`.
+ *
+ * **It spans the whole chain**: the league asked for, then each earlier season
+ * `previous_league_id` names that this database already holds, each rewound from
+ * its own stored rosters. Where the corpus runs out before the league's first
+ * season does, the payload says so and the `POST` below is how a reader asks for
+ * one more.
  *
  * **It reads stored rows and fetches no league graph**, which keeps it inside
  * the rule its sibling under this prefix is the documented exception to:
@@ -96,6 +104,63 @@ export async function GET(
     const body: ApiErrorPayload = { error: "Failed to load the league's history" };
     return NextResponse.json(body, { status: 500 });
   }
+}
+
+/**
+ * Store the season before the oldest one this database holds for the league —
+ * see {@link extendLeagueHistory}, which is where every bound and every decision
+ * lives. This handler is the wire and nothing else.
+ *
+ * **POST beside a GET that reads, on one resource, and the pairing is the
+ * point.** The GET answers a league's history and is bound by what is stored;
+ * this is how a reader makes there be more of it. Keeping the write on the same
+ * path is what stops the read from quietly becoming one — the rule
+ * `getLeagueTimeline` states, that it reads stored rows and fetches nothing,
+ * survives precisely because extending is a different method rather than a
+ * side-effect of asking.
+ *
+ * **The league id in the path is the card's own**, not the far end of the chain:
+ * the walk to the end happens on the server, since the client learns where the
+ * end is from a payload that may be a minute old and a stale id would name a
+ * season somebody else has since loaded.
+ *
+ * **Every answer but `unknown` is a 200**, `POST /sync`'s own shape decision: a
+ * chain that has genuinely ended, a race and a shed permit are outcomes rather
+ * than failures, and a 4xx for any of them would put a browser-console error
+ * against a league in perfectly good order.
+ */
+export async function POST(
+  _request: Request,
+  { params }: { params: Promise<{ leagueId: string }> },
+) {
+  const { leagueId } = await params;
+
+  try {
+    const result = await extendLeagueHistory(leagueId);
+    if (result.status === "unknown") {
+      const error: ApiErrorPayload = { error: "League not found" };
+      return NextResponse.json(error, { status: 404 });
+    }
+    return NextResponse.json(historyPayload(result));
+  } catch (error) {
+    // `extendLeagueHistory` turns everything Sleeper can do into a status, so
+    // reaching here means the database did not answer — which is not this
+    // league's problem and not something a reader can act on by pressing again.
+    console.error(`[league] history load failed for ${leagueId}:`, error);
+    const body: ApiErrorPayload = { error: "Failed to load the earlier season" };
+    return NextResponse.json(body, { status: 500 });
+  }
+}
+
+/** The union, flattened onto the wire — see {@link LeagueHistoryPayload}. */
+function historyPayload(
+  result: Exclude<LeagueHistoryResult, { status: "unknown" }>,
+): LeagueHistoryPayload {
+  return {
+    league_id: "leagueId" in result ? result.leagueId : null,
+    status: result.status,
+    loaded: result.status === "added" || result.status === "fresh",
+  };
 }
 
 /**

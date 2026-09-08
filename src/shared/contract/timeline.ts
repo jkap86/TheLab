@@ -12,10 +12,17 @@ import type { PlayerSummary } from "./names";
  * the reversal is arithmetic a browser does thousands of times a second. One
  * request buys every stop, so scrubbing costs nothing after it.
  *
+ * **It spans every season of the league this database holds**, newest first,
+ * and each one is a replay of its own — see {@link TimelineSeasonPayload}. The
+ * rail runs them end to end, so scrubbing past the oldest move of one season
+ * lands on the *end* of the one before it.
+ *
  * **An unanswerable timeline is `null`, and its host draws no rail at all.** A
  * league nobody has moved a player in has nothing to rewind, and a league whose
  * rosters are not stored has nothing to rewind *from*. Neither is an error, and
- * neither stops the league being shown as it stands.
+ * neither stops the league being shown as it stands. A league with no moves but
+ * an earlier season still to fetch is deliberately not that case: there is
+ * something to ask for, so there is something to draw.
  *
  * The reconstruction's own two limits ride along and are worth knowing before
  * trusting a stop — see `shared/timeline/rewind`: a draft is not a transaction,
@@ -31,17 +38,27 @@ export type RosterTimelinePayload = {
    * one check rather than three that could disagree.
    */
   timeline: {
+    /** The league asked for — the newest season, and the head of the chain. */
     league_id: string;
-    /** Every roster in the league, in roster-id order. */
-    rosters: TimelineRosterPayload[];
     /**
-     * The league's completed moves, **newest first** — ending with the oldest
-     * one on file.
+     * The league's seasons, **newest first**: the one asked for, then each
+     * earlier one this database holds.
      *
-     * Newest-first is the direction the reversal runs and the order the trades
-     * board is read in; the rail turns it into a left-to-right run of stops.
+     * **A season is a replay of its own**, which is what makes crossing a year
+     * sound rather than a walk that pretends rosters carried over through a
+     * transaction. See `shared/timeline/read` for the argument, and
+     * `features/shared/timeline` for how a stop names the season it is in.
      */
-    events: TimelineEventPayload[];
+    seasons: TimelineSeasonPayload[];
+    /**
+     * The season before the oldest one here, when Sleeper names one and this
+     * database does not hold it — what a `POST` to this route would add.
+     *
+     * **Where our copy of a league stops is a different fact from where the
+     * league began**, and the rail says which: this is what the far end offers
+     * to fetch, and null is what makes the far end final.
+     */
+    earlier_league_id: string | null;
   } | null;
   /**
    * Player ids → name/position/team for everyone the timeline can name — every
@@ -94,7 +111,23 @@ export type RosterTimelinePayload = {
  * is pure precisely so a browser can call it.
  */
 export type TimelinePricingPayload = {
-  /** What `solveLeagueLineup` reads about the league itself. */
+  /**
+   * What `solveLeagueLineup` reads about the league itself — **the newest
+   * season's, at every stop.**
+   *
+   * That is the ruler rather than an approximation, and it is the same argument
+   * the boards above are chosen by. A commissioner can change scoring, add a
+   * flex or grow the league between years; a 2024 roster seated into 2024's
+   * lineup and scored on 2024's rules would be a number on a second ruler, and
+   * comparing it with the card in front of the rail would be exactly the
+   * mistake this payload exists to prevent. So every season's rosters are
+   * seated and scored as they would be *today* — which is the counterfactual the
+   * whole past pane answers.
+   *
+   * What is emphatically **not** shared is the roster sets and the pick cells:
+   * those are facts about a season rather than a ruler to read it against, and
+   * each season carries its own.
+   */
   league: {
     total_rosters: number;
     roster_positions: string[] | null;
@@ -120,12 +153,24 @@ export type TimelinePricingPayload = {
   /** Today's KTC price on **this league's** market and QB board; unpriced absent. */
   ktc_values: Record<string, number>;
   /**
-   * Every cell of the league's pick grid, resolved once — keyed by
+   * Every cell of **every** season's pick grid, resolved once — keyed by
    * `season|round|origin roster`, the key `pickCellKey` writes.
    *
    * Holder-independent by construction, which is what makes a rewound portfolio
    * a lookup rather than a second resolution of the draft order: a stop moves
    * cells between rosters and changes nothing about a cell.
+   *
+   * **One table across the chain, newest season's names winning a collision.**
+   * Two adjacent years enumerate some of the same future picks, and where they
+   * disagree about what to call a cell's origin it is because a roster changed
+   * hands — in which case today's name is the one the rest of the card already
+   * uses. A cell an earlier season names and a later one does not is simply
+   * added.
+   *
+   * **A pick in a season already drafted is priced `null`, and that is right
+   * rather than a gap.** KeepTradeCut prices picks a few seasons out; a 2024
+   * pick is not an asset anybody holds today, it is a player somebody already
+   * has. An em dash is what the card draws, and a number there would be a claim.
    */
   picks: Record<string, TimelinePickCellPayload>;
   /** Which week the projections start from; null when none were read. */
@@ -150,6 +195,34 @@ export type TimelinePickCellPayload = {
   slot: number | null;
   origin_name: string;
   value: number | null;
+};
+
+/**
+ * One season of a league: which league id ran it, its rosters as that year left
+ * them, and its own moves.
+ *
+ * **The rosters are this season's, not the newest season's**, which is the whole
+ * of why the timeline is a list of these. Sleeper freezes a finished league's
+ * `rosters` at that year's end, so an earlier season's replay starts from its own
+ * final state and never mentions the season after it — where one continuous walk
+ * would have to invent the offseason, which no transaction records.
+ */
+export type TimelineSeasonPayload = {
+  league_id: string;
+  /** The year this league ran — `leagues.season`. */
+  season: string;
+  /** Every roster in that season's league, in roster-id order. */
+  rosters: TimelineRosterPayload[];
+  /**
+   * That season's completed moves, **newest first** — ending with the oldest one
+   * on file for it.
+   *
+   * Newest-first is the direction the reversal runs and the order the trades
+   * board is read in; the rail turns it into a left-to-right run of stops.
+   * Ordered **within** the season and never across the chain: two leagues' logs
+   * are two orders, not one.
+   */
+  events: TimelineEventPayload[];
 };
 
 /**
@@ -227,4 +300,32 @@ export type TimelinePickPayload = {
   /** Who took it, and who sent it. Null where Sleeper named neither. */
   owner_id: number | null;
   previous_owner_id: number | null;
+};
+
+/**
+ * What one press of the rail's far-end key did — answered by
+ * `POST /api/league/[leagueId]/timeline`.
+ *
+ * **Every arm is a 200 but `unknown`**, which is `LeagueSyncPayload`'s own shape
+ * decision one route over and is right for the same reason: a chain that has
+ * ended and a season somebody else loaded first are *outcomes*, not failures,
+ * and answering 409 for either would put a red note against a league in
+ * perfectly good order.
+ *
+ * `loaded` is computed on the server rather than left to the client, so the two
+ * things that read it — the note beside the key, and the decision to re-read the
+ * timeline — cannot come to different conclusions about one press.
+ */
+export type LeagueHistoryPayload = {
+  /**
+   * Which league the press acted on: the season added, the one already there,
+   * or the one Sleeper no longer serves. Null where there was nothing to add.
+   */
+  league_id: string | null;
+  status: "added" | "fresh" | "none" | "gone" | "locked" | "failed";
+  /**
+   * Whether the rail is now longer than it was — an added season, or one a
+   * racing caller added while this press waited. Both mean re-read.
+   */
+  loaded: boolean;
 };

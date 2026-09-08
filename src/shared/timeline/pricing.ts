@@ -12,8 +12,11 @@ import { getRosProjections, restOfSeasonStart } from "@/shared/projections";
 import type { RosProjections } from "@/shared/projections";
 import { getNflState } from "@/shared/sleeper";
 
+import type { TimelineSeason } from "./read";
+
 /**
- * Today's boards, narrowed to one league and the players a timeline can name.
+ * Today's boards, narrowed to one league chain and the players a timeline can
+ * name.
  *
  * **This is the lineups route's own pipeline run for a single league**, and
  * that is the point rather than a coincidence: a past roster priced on a
@@ -29,14 +32,15 @@ import { getNflState } from "@/shared/sleeper";
  * turns a wholly unpriced metric into dashes rather than into zeroes.
  */
 export async function readTimelinePricing({
-  league,
+  seasons,
   playerIds,
   managerUserId,
   season,
   board,
   qbBoard,
 }: {
-  league: ManagerLeagueRow;
+  /** The league's seasons, newest first — the first of them is the ruler. */
+  seasons: readonly TimelineSeason[];
   /** Every player the timeline can name — the union, not just today's rosters. */
   playerIds: ReadonlySet<string>;
   /** Whose ADP board this prices against; null skips the capital metrics. */
@@ -59,7 +63,8 @@ export async function readTimelinePricing({
 }): Promise<{
   pricing: TimelinePricingPayload;
   /**
-   * Who holds which pick cell **today** — the grid the rewind starts from.
+   * Who holds which pick cell at the start of each season's replay, by league
+   * id — the grid that season's rewind starts from.
    *
    * It comes back from here rather than being laid again by the caller because
    * it has to be the *same* enumeration the price table is keyed by: a dynasty
@@ -67,46 +72,63 @@ export async function readTimelinePricing({
    * format's is derived from its trades, so a second call with a different grid
    * argument would rewind cells the cards below cannot price.
    */
-  owned: Map<number, DraftPickAsset[]>;
+  owned: Map<string, Map<number, DraftPickAsset[]>>;
 }> {
+  // **The newest season is the ruler**, and every board below is resolved from
+  // it — see `TimelinePricingPayload.league` for why a past season's own scoring
+  // and lineup are deliberately not used to price it.
+  const ruler: ManagerLeagueRow = seasons[0].league;
   // The reader's choice where they made one, the league's own reading
   // otherwise — which is what `auto` means on both axes everywhere else.
   const superflex =
     qbBoard === "auto"
-      ? isSuperflexLineup(league.roster_positions)
+      ? isSuperflexLineup(ruler.roster_positions)
       : qbBoard === "sf";
 
   const [projections, adp, ktc] = await Promise.all([
     readProjections(season),
     readAdp(managerUserId, season, superflex),
-    readKtc(league, board, superflex),
+    readKtc(ruler, board, superflex),
   ]);
 
-  // The pick grid, resolved and priced once. Holder-independent by
-  // construction, which is what makes a rewound portfolio a lookup — see
-  // `PickCell`.
-  const { cells, owned } = leaguePickBoard(league, season, (pick) =>
-    ktc.pickPrice(pick, league.total_rosters),
-  );
+  // One pick table across the chain, resolved and priced per season. Each grid
+  // is that season's own — its horizon, its draft order, its size — because a
+  // slot and the board width it was drawn on are one fact: pricing a slot of 5
+  // from a ten-team year against today's twelve would put it in the wrong third
+  // of its round. Holder-independent by construction, which is what makes a
+  // rewound portfolio a lookup — see `PickCell`.
+  //
+  // **Newest season first, and the first writer of a key wins.** Two adjacent
+  // years enumerate some of the same future picks, and where they disagree about
+  // a cell's origin name it is because a roster changed hands — in which case
+  // today's name is the one the rest of the card already uses.
   const picks: Record<string, TimelinePickCellPayload> = {};
-  for (const [key, cell] of cells) {
-    picks[key] = {
-      slot: cell.slot,
-      origin_name: cell.origin_name,
-      value: cell.value,
-    };
+  const owned = new Map<string, Map<number, DraftPickAsset[]>>();
+  for (const entry of seasons) {
+    const grid = leaguePickBoard(entry.league, entry.season, (pick) =>
+      ktc.pickPrice(pick, entry.league.total_rosters),
+    );
+    owned.set(entry.league.league_id, grid.owned);
+    for (const [key, cell] of grid.cells) {
+      if (key in picks) continue;
+      picks[key] = {
+        slot: cell.slot,
+        origin_name: cell.origin_name,
+        value: cell.value,
+      };
+    }
   }
 
   const pricing: TimelinePricingPayload = {
     league: {
-      total_rosters: league.total_rosters,
-      roster_positions: league.roster_positions,
-      scoring_settings: league.scoring_settings,
+      total_rosters: ruler.total_rosters,
+      roster_positions: ruler.roster_positions,
+      scoring_settings: ruler.scoring_settings,
     },
     projections: trimProjections(
       projections.board,
       playerIds,
-      league.scoring_settings,
+      ruler.scoring_settings,
     ),
     adp: Object.fromEntries(
       [...playerIds].flatMap((id) => {

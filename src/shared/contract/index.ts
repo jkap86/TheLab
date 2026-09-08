@@ -72,11 +72,13 @@ export {
   type TradeValueSources,
 } from "./trades";
 export {
+  type LeagueHistoryPayload,
   type RosterTimelinePayload,
   type TimelinePickCellPayload,
   type TimelinePricingPayload,
   type TimelineProjectionPayload,
   type TimelineRosterPayload,
+  type TimelineSeasonPayload,
   type TimelineHeldPickPayload,
   type TimelineEventPayload,
   type TimelinePickPayload,

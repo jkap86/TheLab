@@ -1145,12 +1145,14 @@ folder's sync half arrived since; see the KeepTradeCut section below.
 
 ## The league's history
 
-An open league card carries a rail over every move the league has on file, and
-dragging it redraws the card's own team browser over the rosters of that
-moment — **priced at today's values**, so a reader can see what a team would be
-worth now if it had stayed as it was. `GET /api/league/[leagueId]/timeline`
-backs it. TheLabX's feature ported, minus its trade anchor, redrawn in this
-app's console vocabulary, and answering a question that repo's version does not.
+An open league card carries a rail over every move the league has on file — **and
+over every earlier season of it this database holds** — and dragging it redraws
+the card's own team browser over the rosters of that moment, **priced at today's
+values**, so a reader can see what a team would be worth now if it had stayed as
+it was. `GET /api/league/[leagueId]/timeline` backs it, and a `POST` to the same
+path is how a reader asks for one more year; see The rail crosses a year, below.
+TheLabX's feature ported, minus its trade anchor, redrawn in this app's console
+vocabulary, and answering a question that repo's version does not.
 
 **It needed no migration**, and that is the schema's doing rather than luck:
 `transactions`, `rosters`, `traded_picks` and `drafts` are exactly what the
@@ -1286,14 +1288,17 @@ the payload for one round trip rather than leaving the old board's prices under
 the new board's name — the cost `useManagerLineups` already pays for the same
 flip and for the same reason.
 
-**The far end is this league id's log and no further, which is a real limit
-rather than a shortcut.** A Sleeper league id *is* one season and a dynasty
-chain links seasons through `previous_league_id`, so the obvious extension is to
-keep walking into last year. It is not sound: rosters carry over between seasons
-through no transaction at all, so there is nothing to reverse across the
-boundary and a walk that crossed it would report last season's league as though
-this season's roster had always been on it. The honest far end is the first move
-this league recorded, which is roughly the post-draft roster.
+**The far end was this league id's log and no further** — a limit this file
+argued for at length, on the grounds that a dynasty chain links seasons through
+`previous_league_id` and that walking one is not sound: rosters carry over
+between seasons through no transaction at all, so there is nothing to reverse
+across the boundary and a walk that crossed it would report last season's league
+as though this season's roster had always been on it. **That argument is intact
+and it is an argument against continuing one walk**, not against running a
+second — see The rail crosses a year, below, which is what supersedes this
+paragraph. The far end is now the oldest stop of the oldest season stored, and
+what a season's own oldest stop still means is unchanged: the first move that
+year recorded, which is roughly its post-draft roster.
 
 **Two limits ride along and only one of them is stated to the reader**, which is
 a judgement rather than an omission. A draft is not a transaction, so a stop
@@ -1320,6 +1325,229 @@ index into a list that does not exist yet has to be reconciled when it does,
 where a count back from now is 0 before the request lands and 0 after it. That
 is exactly the "it opens as it always did" promise — at `back` of 0 the view
 renders the card's own entry, untouched.
+
+### The rail crosses a year
+
+The rail stopped at one league id, and this file argued at length that it had to:
+a Sleeper league id *is* one season, rosters carry over between seasons through
+no transaction at all, and a walk that crossed the boundary would report last
+season's league as though this season's roster had always been on it. **The
+argument is right and the conclusion was too narrow.** It is an argument against
+*continuing one walk* — and Sleeper keeps each season as a league of its own,
+with its own `rosters` frozen at that year's end and its own transaction log, so
+last season's replay can start from last season's rosters and never mention this
+one's. Two reconstructions, each honest about its own year, rather than one that
+has to invent an offseason. The rail runs them end to end.
+
+**It needed no migration**, and that is the schema's doing rather than luck:
+`leagues.previous_league_id` has been stored since the league-graph migration and
+nothing had ever read it here except the two SQL fragments that ask whether a
+league is a startup.
+
+**The join between two seasons is a jump, not a move, and every layer says so.**
+The stop on the far side of a boundary is `season-end` — a fourth `kind` beside
+`now`, `after` and `before` — and it carries **no date**, because no move
+produced it: a season's final rosters stood from its last recorded move until the
+league rolled over, and stamping them with that move's date would put a day on a
+state that outlived it by months. The rail cuts a `--groove` notch in its channel
+at each boundary, the readout reads `2025 end` where it would otherwise read a
+date, and the caveat under the panes says the rosters were rewound *from that
+season's final rosters* rather than from today's. Presenting two years as
+adjacent notches would be the same claim the whole reconstruction is arranged to
+avoid, one grain up.
+
+**`back` is a position on the rail and `localBack` is a count within one
+replay**, and keeping them apart is the whole of `timelineStop`. Only the second
+means anything to `rewindRosters`, which is handed one season's rosters and that
+season's own log. A single-season payload is arithmetically unchanged — its
+`localBack` *is* its `back` — which is what makes this additive rather than a
+rewrite of a rail that worked.
+
+**A roster id does not survive a year, so the manager is followed by person.**
+The card knows which roster is the reader's *this* season; in an earlier one that
+id may be somebody else's team or no team at all. `timelineEntry` resolves the
+head season's roster to a `user_id` once and looks that user back up per season,
+so `is_manager` marks the right block and the ranks are the right team's. In the
+head season the card's own answer still stands, which is what keeps an orphaned
+roster — one with no `user_id` at all — markable. A manager who was not in that
+season marks nobody and ranks nothing, which is what `rankLeagueLineups` already
+does with an owner it cannot find.
+
+**Each season names its own rosters, and that reverses the rule one grain
+down.** Within a season the holder is that season's end and cannot be otherwise
+— Sleeper stores no past ownership — but across a chain each league carries its
+own `league_users`, so a manager who left after 2024 still names the team they
+held that year. Naming every season off today's member list would have left their
+teams reading `Roster 7`. It is still `leagueTeamName`'s one spelling, applied to
+each season's own two columns.
+
+**One ruler, and it is the newest season's.** `TimelinePricingPayload.league` —
+the scoring, the lineup and the size a stop is solved against — is the head
+league's at *every* stop, which is the same argument the boards above it are
+chosen by: a commissioner can change scoring, add a flex or grow the league
+between years, and a 2024 roster seated into 2024's lineup and scored on 2024's
+rules would be a number on a second ruler, which is exactly what a rail sitting
+above the present card must not produce. What is emphatically *not* shared is the
+roster sets and the pick cells: those are facts about a season rather than a
+ruler to read it against.
+
+**The pick table is per season and merged, newest names winning.** Each season's
+grid is resolved with its own horizon, its own draft order and **its own
+`total_rosters`**, because a slot and the board width it was drawn on are one
+fact — pricing a slot of 5 from a ten-team year against today's twelve would put
+it in the wrong third of its round. Two adjacent years enumerate some of the same
+future picks, and where they disagree about a cell's origin it is because a
+roster changed hands, in which case today's name is the one the rest of the card
+already uses. **A pick in a season already drafted prices `null`**, which is
+right rather than a gap: KeepTradeCut prices picks a few seasons out, and a 2024
+pick is not an asset anybody holds today — it is a player somebody already has.
+
+**The chain walk is guarded by its path, not just by its depth.** `previous_league_id`
+is a value Sleeper hands out rather than a foreign key this schema enforces, so
+nothing stops a row pointing at itself. A depth bound alone stops the recursion
+running forever and does nothing about what it *produces* — the seeded
+self-referencing league came back as twelve copies of one season, which is a rail
+showing one year a dozen times. `MAX_LEAGUE_CHAIN` is still twelve and is still a
+cycle guard first, and the walk now also refuses a league already on its path.
+`LIVE_LEAGUE_SQL` applies at **every** link rather than only the first: a
+tombstone in the middle of a chain would otherwise let the walk continue past it
+and present two years as adjacent when a year between them is missing.
+
+#### Loading a season nobody has enumerated
+
+The rail can only span what is stored, and nothing in this app had ever followed
+`previous_league_id` to *fetch* a league: the manager sync asks Sleeper which
+leagues an account holds **in a season**, and the crawler discovers through
+`league_users`. So an earlier season is in the database only by the accident of
+that year having been visited by name — which is why the rail would have
+extended for almost nobody. `POST /api/league/[leagueId]/timeline` and
+`shared/manager/league-history.ts` are the other half.
+
+**The bound that keeps it from being an open write endpoint is the chain
+itself.** `refreshLeague` states the rule this had to answer to: "a route that
+fetched arbitrary league ids into the database on request is an open write
+endpoint wearing a refresh button". The id fetched here is never the caller's —
+it is read out of a league *already stored*, from the column Sleeper wrote — so
+the corpus can only grow backwards along chains rooted in leagues it already
+holds, which is a set no request can widen. The league id in the path is the
+card's own and the walk to the far end happens on the server, since the client
+learns where the end is from a payload that may be a minute old.
+
+**There is no cooldown, and that is a decision rather than an omission.** A
+finished season is immutable: once stored it never needs fetching again, so "is
+it already here" is a gate that closes permanently, and a throttle behind it
+would only ever govern retries of a fetch that *failed* — which is a press a
+reader is entitled to make again. What bounds the failing case is the pair every
+press goes through: `leagueRefreshAdmission` (**shared with the manual Sync key
+rather than a limiter of its own** — identical weight, one league graph, and both
+are a reader holding a response open, so they should compete for one budget) and
+a per-league advisory lock, inside which the chain is **re-read**, so two tabs
+pressing together are one fan-out and the second reports `fresh`.
+
+**Every answer but `unknown` is a 200**, `POST /sync`'s own shape decision: a
+chain that has genuinely ended, a race and a shed permit are outcomes rather than
+failures. `loaded` is computed on the server so the note beside the key and the
+decision to re-read cannot disagree about one press — and a **tombstoned** season
+re-reads too, which is the arm worth keeping: nothing was added, but the chain
+now ends one link earlier, so the re-read is what takes the key off a rail that
+can no longer grow. Loading one *back* works because `persistLeagueGraph` clears
+`gone_at`.
+
+**The offer is not on the strip, and that is a width.** At 390 the rail is four
+parts in 335px with nothing to spare, so the key sits under the panes beside the
+caveat — the one place with room for a sentence saying what pressing it will
+cost. It is drawn at the far end (`back >= moves`), which is where a reader is
+when they are asking how much further back it goes, and that test also covers the
+league with **no stored moves at all**, where the far end and the present are the
+same stop: those leagues' earlier seasons are exactly the ones worth fetching,
+and a key reachable only by scrubbing would be unreachable there.
+
+**It names the season it comes *before*, not its own year.** Sleeper's chain is
+consecutive in practice, so subtracting one would usually be right — and
+"usually" is not a thing to print on a control that then loads something else.
+The key reads `Load earlier season` over `Fetch the season before 2025 from
+Sleeper`.
+
+**The re-read counter is deliberately not part of `useTimeline`'s subject key.**
+Loading a season makes the rail longer without changing what it is a rail *of*,
+so blanking the payload for the round trip would collapse the control under the
+reader's finger and send them back to "now" — where a season or market change
+genuinely must blank it, because the old board's prices under the new board's
+name is a wrong number rather than a stale one. The press is also off the house's
+abort lineage, on `useLeagueRefresh`'s terms: it fills shared Postgres state, so
+cancelling it because a card was collapsed would throw away Sleeper budget
+already spent.
+
+#### Verified
+
+**Against a throwaway Postgres 16 cluster**, which is what this pass could do
+that a render cannot: `migrate:up` applied the schema unchanged — the claim above
+that this needed no migration — and a seeded corpus drove the chain read through
+the real `getLeagueChain`, `getLeagueTimeline`, `resolveTimelinePayload` and
+`extendLeagueHistory`. A four-season chain answered three stored seasons and
+offered the fourth; a chain whose middle link is tombstoned stopped at the
+tombstone and offered it; a complete chain (`previous_league_id` of `''`) offered
+nothing; an unknown league answered an empty chain and a null timeline. The
+per-season event grouping is exact — a `failed` waiver excluded, a row with a
+null `status_updated` but a dated `created` included, each league's own log newest
+first. The payload came back with each season's rosters named from **its own**
+member list (`Warriors`, `Warriors 25`, `Warriors 24`) over one head-league
+ruler. `extendLeagueHistory` answered `unknown` for an unstored id and `none` for
+a complete chain without spending a permit, and `failed` on the real chain — the
+admission, the lock and the walk all running, with Sleeper unreachable from the
+sandbox.
+
+**The cycle bug was found by that seed and is the reason it was worth running.**
+A self-referencing `previous_league_id` returned twelve identical links under the
+depth bound alone; with the path guard it returns one, and its timeline is null.
+
+**Rendered through a temporary `/preview` route** against the real `TimelineView`,
+`TimelineRail`, `LeagueTeams`, tokens and Tailwind build, with `window.fetch`
+stubbed to answer from fixtures — the method the console-card, shares, rack and
+timeline passes established — then driven over CDP at 1280 and 390 in both
+schemes and deleted. The mechanics are the ones this file records:
+`--no-proxy-server`, `localhost` rather than `127.0.0.1`, a phone viewport from
+`Emulation.setDeviceMetricsOverride`, `data-theme` rather than
+`prefers-color-scheme`, the `--blink-settings=availablePointerTypes=4,…` flags,
+and a client-component harness. One is this pass's own: the fetch stub is
+installed at module scope guarded on `window` — what a component *draws* must not
+depend on where it runs, but a side effect that only exists in a browser may —
+and it must sit **below** the `let` it touches, or it reads it in its temporal
+dead zone and the page renders the framework's own error screen.
+
+Every arm landed. A two-season fixture (two 2026 moves, one 2025 move) gave a
+rail of **4** with its boundary notch at **25%**, and the four stops read
+`as they stand today` → `after trade` → `before the oldest 2026 move on file` →
+`as the 2025 season ended` → `before the oldest 2025 move on file`. Crossing the
+boundary swapped the rosters wholesale to 2025's own (`Gone Fishing`,
+`Dynasty Warriors`) with **no player of 2026 carried across**, which is the
+soundness claim on screen. The caveats read `reconstructed by undoing every move
+since` inside the head season, `as Sleeper kept it when the 2025 season rolled
+over` at the boundary, and `reconstructed from that season's final rosters by
+undoing every 2025 move since` beyond it. The moment readout read `2025 end` at
+1280 and the phone's `Now` key read `2025 END`. The offer appeared **only** at the
+far end, appeared on the no-moves league beside its `No stored moves to rewind
+through` strip, and did not appear on a complete chain. A press left the rail
+mounted at its own position with the note beside it — the payload not blanked,
+which is what the re-read counter exists for. The strip measured **32px at 1280
+and 30px at 390**, unchanged, so the five-states-one-height rule still holds.
+
+At every width and in both schemes: `document.documentElement.scrollWidth` equal
+to the viewport, **zero** elements past it, exactly one `<h1>`, and **no console
+output of any kind** beyond the dev server's own React-DevTools and HMR lines.
+1,821 unit tests pass (16 more — the season arithmetic, the boundaries, the four
+stop kinds, the per-season rewind, the two caveat readings and the cross-season
+manager join); `lint`, `typecheck` and `build` are clean.
+
+**Not verified against real data**, which is the gap to close first: the corpus
+above is nine seeded leagues and the render's are fixtures. Four things neither
+can check — what a real chain's payload actually weighs, since it is now every
+season's rosters and log rather than one year's; how long the `POST` takes
+against Sleeper for a real league graph, and therefore how long `Loading…` sits
+on screen; whether `previous_league_id` in this corpus is as reliably the
+*immediately preceding* season as the offer's wording assumes; and whether a
+reader reads the boundary notch as a year boundary without being told, which is
+the one question no measurement here can close.
 
 ### What changed against TheLabX
 
@@ -4938,6 +5166,145 @@ twelve-team solve rather than an invented one; and whether opening several cards
 on a board with no virtualizer stays inside iOS Safari's per-tab GPU budget, which
 is the one thing the `pointer-fine:` gate is there for and the one thing no
 desktop render can exercise.
+
+
+### The parked header condenses to the take track
+
+`trade-card.tsx` has recorded the tall open header as "the one open decision in
+this pass" since the card learned to park, and named the alternative it did not
+take: condense the hauls while parked. This is that change, taken. The card's
+frozen summary went from **565.8px to 247.9px** on a six-for-two fixture, and
+the panel's cap from below `MIN_PARKED` — where the *shell* scrolls — to 553px
+at a 900px viewport. Applied from a design handoff, its `1c`. **Nothing on the
+wire moved**: no route, no query, no contract type, no payload field, no
+migration, and no token or surface added. The diff is one file.
+
+**The closed card is untouched, and that is most of the point.** Resting in a
+list it still carries both hauls in full, both tracks, the meters, the notes and
+the disclosure row — the redundancy this card's own note argues for, which is
+paid for by a board where a card is read in passing among a hundred others.
+
+**Two things go while the card is open, and both are the redundant half rather
+than the informative one.** The **give track** goes because a give line *is* the
+other side's take line: parked, there is no list to read the card among and the
+other window is beside it filling half the screen, so the reading a screen-reader
+user gets is each asset once, which is the reading a sighted one gets too. The
+**disclosure row** goes because it is the affordance that says the card opens,
+and once open it is spent. Two more things go inside the track — the **meters**,
+each a whole second grid row, and the **notes** (position, team, pick origin),
+the widest thing on a line — and the panel below the seam names every one of
+those players again with its position beside it. What every line keeps is its
+**name and its figure**, which are the two things a haul is read for.
+
+**The 78px list is a fixed `height`, and the fixedness is what it is for.** A
+`max-height` would let a one-for-one trade shrink the header, which puts the
+panel's cap back on the trade's contents: one height on a small trade and
+another on a fat one, with `MIN_PARKED` reachable again on the fat ones and
+nothing on screen saying which card was which. Verified: **a one-for-one and a
+six-for-two both park at 247.92px to the hundredth.**
+
+**The handoff's own arithmetic for 78 does not hold, and the number is kept
+anyway.** It reasons from a ~19px row; a row is `--fs-13` at `line-height:
+normal`, which in IBM Plex Mono measures **22.82px** at the 1.16 type scale and
+22.22 at 1.14 — so three rows and their two gaps are 82.5px, and at 78 the third
+is clipped at 84%. The prototype sets the same font-size and the same `normal`,
+so it draws exactly what the code does; what is wrong is the sentence, not the
+drawing. It is kept because a clipped row is the strongest thing on the card
+that says the list scrolls, and because the property the number is load-bearing
+for is that it does not move. `AssetTrack`'s doc carries the corrected figures
+and names 82px as what "three rows whole" would cost.
+
+**It is render-gated on `open`, threaded down as `condensed`.** Not a new prop,
+which would drop the `memo` for every row on a board that appends a hundred at a
+time — and not a `group-open/card:` variant either, which would have to carry
+the list's height, its overflow, its two paddings and its gap as five overrides
+against the closed card's own. `open` is true for the whole collapse, exactly as
+`[open]` is, so the header expands back at the moment the card shuts rather than
+under the animation. `condensed` rather than `open` at the three leaves because
+at that depth "open" is a question about something three components up, where
+"condensed" is the rule those lines are drawn by.
+
+**Every two-state class is two whole strings rather than a base plus an
+override.** `pt-3.5` against `pt-3`, `mb-[13px]` against `mb-2.5`, `p-0` beside a
+`pr-[7px]`, `gap-[9px]` against `gap-[7px]` — each pair is two base utilities of
+the same specificity, decided by Tailwind's emit order rather than by the
+ternary. It is the trap `CONSOLE_CARD_SHELL` and `CONSOLE_KEY_PILL` are both
+split to keep a part out of, and the symptom here would be a window silently
+laid out at the closed card's padding.
+
+#### Verified
+
+Rendered through a temporary `/preview` route against the real `TradeCard`,
+`useActiveCard` and `PageShell`, the real tokens and the real Tailwind build —
+the method the console-card, shares, rack and timeline passes established, since
+no database is reachable from where this was built — then driven over CDP at
+1280×900 and 390×844 in both schemes and deleted. The mechanics are the ones
+this file records: `--no-proxy-server`, `localhost` rather than `127.0.0.1`, a
+phone viewport from `Emulation.setDeviceMetricsOverride`, `data-theme` rather
+than `prefers-color-scheme`, the `--blink-settings=availablePointerTypes=4,…`
+flags, a **client-component** harness, and a CDP client over Node's own
+`WebSocket` since Playwright is not installed here. One mechanic is this pass's
+own and it cost a run: **this Chrome draws overlay scrollbars by default**, so
+`offsetWidth - clientWidth` is 0 and a "scrollbar drag" dispatched at the list's
+right edge is really a click on the content — `--disable-features=OverlayScrollbar`
+is what gives the 10px gutter the test needs. The fixtures are four trades: a
+six-for-two with two picks and a FAAB leg, a one-for-one, a three-way, and one
+with an orphan side that took nothing back.
+
+Every arm landed. The **closed** card is unchanged to the pixel — window
+`pt 14 / pb 15`, header `mb 13`, lists `gap 9px` and `overflow: visible`, eight
+meters, two dividers and the disclosure row. **Open**, the window is `pt 12 /
+pb 13`, the header `mb 10`, and the list computes `height: 78px`,
+`overflow-y: auto`, `padding-right: 7px`, `row-gap: 7px` with
+`scrollHeight 200 / clientHeight 78` — it scrolls — and zero meters, zero
+dividers, no chevron.
+
+**The constancy claim**: `t-fat` 247.92, `t-thin` 247.92; caps 553px against a
+900px viewport, where before the change the same two would have been 235px
+(floored to 320, shell scrolling) and 498. Every card parked at exactly the
+freeze line, 81.
+
+**The two interactions the handoff asks be checked, both driven with real
+input.** A wheel over the list scrolls it (`scrollTop` 0 → 60) and the card
+stays open. A `mousePressed` / `mouseMoved` × 2 / `mouseReleased` on the 10px
+classic scrollbar moves the list and **leaves the card open** — Chrome does not
+dispatch a `click` to the element for a scrollbar interaction. A click on a row
+still toggles the card, which is the whole summary's existing behaviour and
+unchanged. On touch at 390, a four-step drag inside the list scrolled it
+(`scrollTop` 27–29) with `scrollY` at 0 and the card still open: the gesture
+does not fight the parked shell.
+
+At every width and in both schemes: `document.documentElement.scrollWidth` equal
+to the viewport, **zero unclipped elements past it**, exactly one `<h1>`, and no
+console output but the dev server's own React-DevTools and HMR lines. 1,844 unit
+tests pass; `lint`, `typecheck` and `build` are clean.
+
+**Two findings reported rather than patched, both the handoff's own open
+questions.**
+
+- **A three-way at 390 still reaches `MIN_PARKED`.** The header is three
+  stacked windows — 558.8px, cap floored at 320 with the shell scrolling. It is
+  better than it was and it is now *predictable*: the three windows measure
+  147.67px each whatever the hauls hold, which is the "constant ~2×135px rather
+  than a function of three hauls' contents" the handoff asks for (measured
+  ~2×148). At 1280 the same card parks at 410.2 with a 391px cap, clear of the
+  floor. The handoff names an explicit cap on the header as the remaining fix
+  for this one case; it is a designer's call and is not taken here.
+- **With the chevron gone the lit border and the halo are the only cue that the
+  open card closes.** The `<summary>` still carries the disclosure's semantics,
+  so nothing is lost to a screen reader; what is lost is visual, and the handoff
+  flags it and names keeping the rotated chevron alone at the header's right
+  edge as the cheapest fix. Rendered, the parked card is the only lit thing on a
+  page that has stood down, and Escape and Back both close it — but nothing says
+  so in words.
+
+**Not verified against real data**, which is the gap to close first: every
+number above is a fixture. Three things a render here cannot check — whether a
+real board's modal trade is the three assets the 78px is sized for; whether the
+scrollbar drag behaves the same in Firefox and Safari, which is where a
+scrollbar press is likeliest to reach the DOM; and how a parked card reads on a
+real hundred-row board where the panel below the seam is a twelve-team solve
+rather than an error line.
 
 ## Comping a player
 
@@ -9651,15 +10018,19 @@ longer a page scrolling behind an open card for a tall header to be a poor trade
 against, and a board where one card behaved differently from the other two would
 be the drift this change exists to remove.
 
-**The cost is real and is the one open decision.** Measured against the
-arithmetic: the panel gets 556px at a 1080 viewport and 376 at 900, and at 800
-and below the room falls under `MIN_PARKED` and the **shell** scrolls. That is
-the documented fallback rather than a failure — driven at a 520px viewport the
-panel held exactly 320, the shell scrolled and the page did not — but it is the
-only card that reaches it on an ordinary laptop. The handoff names the
-alternative: condense the hauls to a line each while parked. That is a change to
-what the card *says* rather than to how it is sized, and the handoff calls it a
-product call, so it is flagged here with the numbers rather than taken.
+**The cost was real and was the one open decision — and it has since been
+taken.** Measured against the arithmetic at the time: the panel got 556px at a
+1080 viewport and 376 at 900, and at 800 and below the room fell under
+`MIN_PARKED` and the **shell** scrolled. That is the documented fallback rather
+than a failure — driven at a 520px viewport the panel held exactly 320, the
+shell scrolled and the page did not — but it was the only card that reached it
+on an ordinary laptop. The alternative the handoff named, condensing the hauls
+while parked, is a change to what the card *says* rather than to how it is
+sized, so it was flagged here with the numbers rather than taken. **See The
+parked header condenses to the take track, under The trades board**, which is
+where it was taken: the open header is the take track alone at a fixed height,
+248px whatever the trade holds, and no two-sided card reaches the floor on a
+laptop any more.
 
 The board's own half of the change is that **the sentinel is not rendered while a
 card is parked**: every row but the open one is `display: none` and the page does
@@ -10623,6 +10994,84 @@ Two rules for adding to it:
   `--window-shadow` is not `--readout-shadow`, and for why the three lit-glass
   type colours (`--readout-line`, `--readout-label`, `--readout-muted`) are
   tokens rather than alphas over `--color-readout`.
+
+### No control renders under 16px on a touch device
+
+iOS Safari zooms the page in when a text-entry control or a `<select>` under 16
+CSS pixels takes focus, and it does not zoom back out — the reader is left
+panning a page wider than the viewport with nothing on screen saying why. The
+only lever is the control's own font size; a `maximum-scale` on the viewport
+meta would fix it by taking pinch-zoom from everybody. So one unlayered rule at
+the foot of `globals.css` floors every input, select and textarea at
+`max(1rem, 16px)` under `@media (pointer: coarse)`.
+
+**The gate is the pointer, not a width, and that is the whole of the fix.**
+Seven controls already carried a `text-[16px]` stepped back down at `sm` or
+`@md`, on the reasoning that the visual size steps down "once there is room for
+it to" — but room is not what decides this. A phone in landscape is 844px and
+clears every one of those breakpoints; an iPad clears them at any orientation.
+Both still zoomed, and the failure is silent in the desktop browser the pages
+are checked in. It is the argument the card's depth is gated on `pointer-fine:`
+by, one control over. Two of the seven were wrong by arithmetic as well —
+`--fs-14` is `0.875rem × 1.14`, **15.96px**, four hundredths of a pixel under
+the threshold and not a thing any review catches.
+
+**Unlayered is what lets it beat a utility without `!important`.** Tailwind's
+utilities live in `@layer utilities` and an unlayered rule outranks any layer
+whatever its specificity, so a bare element selector wins over
+`text-[length:var(--fs-13)]`. That is what lets a component keep stating its
+design size once, in its own class string, with the floor stated once here —
+and the seven `text-[16px]` pairs came out with it. **The types are written as
+exclusions**, not as the types that zoom: an `<input>` with no `type` at all is
+a text field and `picktracker-search`'s is exactly that, so a positive list
+would miss it silently. Range, checkbox and radio have no text to zoom to, and
+`<button>` is absent because a key grown to 16px would resize half the console.
+In one place it is a clamp rather than a floor — the account lookup's field is
+`--fs-15`, 17.1px, and comes down to 16, which is the only control declaring
+more than the floor and a pixel nobody can see.
+
+**What it costs is width, and only where a control is narrow enough to feel
+it.** The expanded card's two pane ledges are the case: at 390 the sort key's
+`ROS starters` was already truncating at 8 of 12 characters and the lens key's
+`Points` fitted whole. Both compensate with their tracking under the same
+`pointer-coarse:` gate, which is principled rather than a patch — tracking is a
+small-type affordance and at 16px it is pure width. Measured: `Points` needs
+69.1px of the 62 it has at `0.12em` and reads `Point…`, and 60.5 of 64 at
+`0.03em`, which is the word; the caret gutter gives the last four of those
+pixels. It buys the sort key one character back of the two the floor costs it
+(8 → 7, against 6 uncompensated), and that one stays truncated at any tracking,
+which is the reading it already ships at this width.
+
+#### Verified
+
+Driven over CDP against `next dev` with no `DATABASE_URL` at 390, 768 and 1280,
+in **two browsers** — the mechanic this needs and the repo's `pointer-fine:`
+flags inverted: `--blink-settings=availablePointerTypes=2,primaryPointerType=2,`
+`availableHoverTypes=1,primaryHoverType=1` is a coarse pointer (Blink's enum is
+None=1, Coarse=2, Fine=4), and the usual `4`/`2` pair is the fine one. Without
+them headless Chrome reports `pointer: none`, which matches neither query, and
+the rule silently tests nothing. A temporary `/preview` route mounted the real
+`LeagueTeams`, `PlayerFilters` and `SeekKey` against fixtures, then was deleted;
+`/tools`, `/picktracker` and `/comps` were driven as themselves.
+
+Every control on every page is **≥16px on a coarse pointer** at all three
+widths, with `documentElement.scrollWidth` equal to the viewport, zero unclipped
+elements past it and one `<h1>` per page. The before-state reproduces exactly in
+the same harness with the rule removed: `/comps` at 14.82 and 12.54, the sort
+and lens keys at 11.4, `/picktracker` at **15.96**. The date input in the trades
+board's seek popover goes 13.68 → 16px and stays inside the viewport at 390. The
+**fine**-pointer render is unchanged from what ships, save the five controls
+whose 16px base became their design size — the largest of those moves is
+`/picktracker`'s 16 → 15.96. 1,844 unit tests pass; `lint`, `typecheck` and
+`build` are clean.
+
+**Not verified against real data**: the sizes and geometry are a render, and no
+iOS device was in the loop — what a headless Chrome emulating a coarse pointer
+cannot confirm is Safari's own threshold behaviour on the four controls that sit
+exactly at 16.00px. The controls behind a database (`shares-drawer`, the filter
+dialog's rule bay, `/logs`, the trades search panel) were reasoned from their
+class strings rather than rendered; all four already drew at 16px on a phone
+before this, so the floor changes nothing about them.
 
 ### The toggle
 

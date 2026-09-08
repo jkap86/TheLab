@@ -49,7 +49,9 @@ export {
   // league reading as dynasty here and as redraft there is a pick grid that
   // disagrees with the one the card beside it draws.
   LEAGUE_TYPE_SQL,
+  getLeagueChain,
   getLeagueLineupRow,
+  getLeagueLineupRows,
   getLeaguemateIds,
   getLeagueRosters,
   getManagerDraftAdp,
@@ -64,9 +66,11 @@ export {
 } from "./queries";
 export type {
   DraftAdpBoards,
+  LeagueChainLink,
   LeagueRow,
   LeaguemateRow,
   LeagueRosterRosterRow,
+  LeagueChain,
   ManagerLeagueRow,
 } from "./queries";
 export { solveLeagueLineup } from "./ros-lineups";
@@ -153,6 +157,8 @@ export type { WeekLineupLeague } from "./week-lineups";
 export { refreshLeague } from "./league-refresh";
 export type { LeagueRefreshResult } from "./league-refresh";
 export { LEAGUE_REFRESH_LIMIT_VAR } from "./league-refresh-admission";
+export { extendLeagueHistory } from "./league-history";
+export type { LeagueHistoryResult } from "./league-history";
 
 // The background crawl, on the KTC and players barrels' terms: the starter and
 // its switch, and nothing else. The tick, the queue, the tiers and the

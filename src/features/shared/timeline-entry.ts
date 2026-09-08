@@ -22,7 +22,7 @@ import type {
   RosterTimelinePayload,
 } from "@/shared/contract";
 
-import { timelineRosters } from "./timeline.ts";
+import { timelineRosters, timelineStop } from "./timeline.ts";
 import type { TimelineRoster } from "./timeline.ts";
 
 /**
@@ -84,6 +84,7 @@ export function timelineEntry(
   const timeline = payload?.timeline;
   if (!timeline) return null;
 
+  const stop = timelineStop(payload, back);
   const rosters = timelineRosters(payload, back);
   const pricing = payload?.pricing ?? null;
 
@@ -91,8 +92,27 @@ export function timelineEntry(
   // this is the join. Null — an account whose lineups have not landed, or a
   // league they hold no roster in — ranks nothing and marks no team, which is
   // what `rankLeagueLineups` already does with an owner it cannot find.
+  //
+  // **Resolved against the head season, never the one on screen.** A roster id
+  // belongs to one league id, so the reader's roster 4 in 2026 is not
+  // necessarily their roster 4 in 2025 — it may be somebody else's team, or no
+  // team at all. The card knows a roster and the chain is joined by *person*, so
+  // the id is turned into a user here and looked back up per season below.
   const managerUserId =
-    rosters.find((r) => r.roster_id === managerRosterId)?.user_id ?? null;
+    timeline.seasons[0]?.rosters.find((r) => r.roster_id === managerRosterId)
+      ?.user_id ?? null;
+
+  // Which roster is theirs *in this season*. In the head season the card's own
+  // answer stands, which is what keeps an orphaned roster — one with no
+  // `user_id` at all — markable; in an earlier one the only join available is
+  // the person, and a season they were not in marks nobody.
+  const seasonRoster =
+    stop.seasonIndex === 0
+      ? rosters.find((r) => r.roster_id === managerRosterId)
+      : managerUserId === null
+        ? undefined
+        : rosters.find((r) => r.user_id === managerUserId);
+  const seasonRosterId = seasonRoster?.roster_id ?? null;
 
   const projections: RosProjections = pricing?.projections ?? {};
   const adp = new Map<string, AdpEntry>(Object.entries(pricing?.adp ?? {}));
@@ -132,7 +152,7 @@ export function timelineEntry(
 
   const solved = rankLeagueLineups(
     {
-      league_id: timeline.league_id,
+      league_id: stop.leagueId,
       total_rosters: pricing?.league.total_rosters ?? rosters.length,
       roster_positions: pricing?.league.roster_positions ?? null,
       scoring_settings: pricing?.league.scoring_settings ?? null,
@@ -142,7 +162,10 @@ export function timelineEntry(
         players: roster.players,
       })),
     },
-    managerUserId ?? NO_MANAGER,
+    // The owner of that roster — `NO_MANAGER` where the join found nobody, so
+    // the solve marks and ranks nothing rather than reading a null `owner_id`
+    // as the reader's own team.
+    seasonRoster?.user_id ?? NO_MANAGER,
     projections,
     adp,
     ktc,
@@ -164,8 +187,9 @@ export function timelineEntry(
     // card the rail swaps for.
     name: named.get(roster.roster_id) ?? `Roster ${roster.roster_id}`,
     // By roster rather than by owner, because the card knows which roster is
-    // the reader's even where the payload's owner column is null.
-    is_manager: roster.roster_id === managerRosterId,
+    // the reader's even where the payload's owner column is null — resolved for
+    // this season above, since a roster id does not survive a year boundary.
+    is_manager: seasonRosterId !== null && roster.roster_id === seasonRosterId,
     lineup,
     // The ten, with the pane's own column over them where it named one — the
     // shape `solveLeagueEntry` composes on the server, spelled once each side.

@@ -519,10 +519,12 @@ function LensControl({
         </span>
         <span className="sr-only">Value lens</span>
         <span className="relative flex min-w-0 flex-1 items-center">
+          {/* Tracking off on a coarse pointer, where the 16px control floor
+              applies — see the sort key above for the measurement. */}
           <select
             value={lens}
             onChange={(e) => onChange(e.target.value as Lens)}
-            className="min-w-0 flex-1 cursor-pointer appearance-none truncate rounded-full bg-[image:var(--key-bg)] py-[5px] pl-[9px] pr-5 font-mono text-[length:var(--fs-10)] uppercase tracking-[0.12em] text-readout shadow-[var(--key-shadow)] [text-shadow:var(--readout-text-glow)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-active/60"
+            className="min-w-0 flex-1 cursor-pointer appearance-none truncate rounded-full bg-[image:var(--key-bg)] py-[5px] pl-[9px] pr-5 font-mono text-[length:var(--fs-10)] uppercase tracking-[0.12em] text-readout shadow-[var(--key-shadow)] [text-shadow:var(--readout-text-glow)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-active/60 pointer-coarse:pr-[18px] pointer-coarse:tracking-[0.03em]"
           >
             {LENSES.map((option) => (
               <option key={option} value={option}>

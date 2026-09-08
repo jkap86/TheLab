@@ -14,7 +14,9 @@ import { formatInstantDate } from "../../format";
 import {
   stopSummary,
   timelineCaveat,
+  timelineEarlier,
   timelineMoveCount,
+  timelineSeasonBoundaries,
   timelineStop,
 } from "../../timeline";
 import { timelineEntry } from "../../timeline-entry";
@@ -104,11 +106,22 @@ export function TimelineView({
   // scrubbing never re-arms a gate.
   const [opened, setOpened] = useState(false);
 
-  const { payload, loading, error } = useTimeline(subject, opened);
+  const { payload, loading, error, loadEarlier, loadingEarlier, earlierError } =
+    useTimeline(subject, opened);
 
   const moves = timelineMoveCount(payload);
   const stop = timelineStop(payload, back);
   const players = payload?.players ?? EMPTY_PLAYERS;
+  const boundaries = useMemo(() => timelineSeasonBoundaries(payload), [payload]);
+
+  // **Offered only at the far end**, which is where it means something: a reader
+  // who has dragged to the oldest stop this database holds is the one asking how
+  // much further back it goes. `back >= moves` covers the league with no stored
+  // moves at all, where the far end and the present are the same stop and the
+  // strip says so — that league's earlier seasons are exactly the ones worth
+  // fetching, and a key only reachable by scrubbing would be unreachable there.
+  const earlier = timelineEarlier(payload);
+  const offer = earlier !== null && stop.back >= moves;
 
   // Solved only where the reader has actually stepped back. At "now" this would
   // be the current rosters on the current boards — which the card already has,
@@ -204,6 +217,7 @@ export function TimelineView({
           <TimelineRail
             stop={stop}
             moves={moves}
+            boundaries={boundaries}
             players={players}
             onChange={setBack}
           />
@@ -229,20 +243,50 @@ export function TimelineView({
 
       {/* Under the table, where the card keeps everything that says how the
           numbers above it are known. It has to stay on screen with them, which
-          is why it is not on the rail a scroll away — and it is drawn only in
-          the past, because at "now" there is nothing to caveat. */}
-      {past && (
-        <p className="m-0 mt-4 shrink-0 text-[length:var(--fs-11-2)] leading-relaxed text-foreground/45">
-          {/* `this point` rather than the formatter's own `date unknown`, which
-              reads as a broken sentence in the one place the two spellings
-              differ — a caveat has to stay a sentence. Unreachable in practice,
-              since the read that produced the event excludes undated rows, and
-              cheap to be right about. */}
-          {timelineCaveat(
-            stop.at === null ? "this point" : formatInstantDate(stop.at),
-            stopSummary(stop, players),
+          is why it is not on the rail a scroll away — and the caveat is drawn
+          only in the past, because at "now" there is nothing to caveat.
+
+          The key beside it is the far end of the rail rather than a control over
+          the card, which is why it sits here rather than on the strip: at 390
+          the strip is four parts in 335px with nothing to spare, and this is the
+          one place a sentence can say what pressing it will cost. */}
+      {(past || offer) && (
+        <div className="mt-4 flex shrink-0 flex-col gap-2">
+          {past && (
+            <p className="m-0 text-[length:var(--fs-11-2)] leading-relaxed text-foreground/45">
+              {/* `null` rather than the formatter's own `date unknown`, which
+                  reads as a broken sentence in the one place the two spellings
+                  differ — a caveat has to stay a sentence. A season's end has no
+                  date by construction; inside a season it is unreachable, since
+                  the read that produced the event excludes undated rows. */}
+              {timelineCaveat(
+                stop,
+                stop.at === null ? null : formatInstantDate(stop.at),
+                stopSummary(stop, players),
+              )}
+            </p>
           )}
-        </p>
+
+          {offer && (
+            <div className="flex flex-wrap items-center gap-2">
+              <button
+                type="button"
+                onClick={loadEarlier}
+                disabled={loadingEarlier}
+                className={`${CONSOLE_KEY_PILL_SHELL} border-foreground/10 bg-[image:var(--key-bg)] px-3 py-[3px] text-foreground/80 shadow-[var(--key-shadow)] disabled:opacity-60 hover:text-readout`}
+              >
+                {loadingEarlier ? "Loading…" : "Load earlier season"}
+              </button>
+              <span
+                className="min-w-0 text-[length:var(--fs-11-2)] leading-relaxed text-foreground/45"
+                role={earlierError === null ? undefined : "status"}
+              >
+                {earlierError ??
+                  `Fetch the season before ${earlier.beforeSeason} from Sleeper — this is as far back as it is stored.`}
+              </span>
+            </div>
+          )}
+        </div>
       )}
     </>
   );
