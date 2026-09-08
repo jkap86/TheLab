@@ -13,7 +13,16 @@ import {
   serializeSlotSets,
   slotSetsOf,
 } from "@/shared/ktc/columns";
-import { isAbortError } from "@/features/shared";
+import { isAbortError, useRequestGuard } from "@/features/shared";
+
+/**
+ * How long a failed lineups read waits before its single retry.
+ *
+ * Long enough that a Sleeper or database blip has plausibly passed and short
+ * enough that a reader still has the page open. There is exactly one of them
+ * per subject, so this is a delay rather than an interval.
+ */
+const LINEUPS_RETRY_MS = 4000;
 
 /**
  * Read `GET /api/user/[username]/lineups` — one JSON answer for the whole page,
@@ -55,7 +64,11 @@ import { isAbortError } from "@/features/shared";
  *
  * A failure resolves to null and the cards simply omit the section — the
  * lineup is an enhancement beside the list, not the list, so it degrades the
- * way the refresh note does rather than replacing the page.
+ * way the refresh note does rather than replacing the page. **It gets one
+ * retry**, because the dependency list that makes this cheap also latched it:
+ * `ready` flips true once and the four strings move only when a reader edits a
+ * bay, so a request lost to a blip left every rank window on an em dash with
+ * nothing that would ever ask again. See `LINEUPS_RETRY_MS`.
  */
 export function useManagerLineups(
   username: string,
@@ -65,6 +78,8 @@ export function useManagerLineups(
 ): ManagerLineupsPayload | null {
   const [payload, setPayload] = useState<ManagerLineupsPayload | null>(null);
   const inFlight = useRef<AbortController | null>(null);
+  /** Which subject has already spent its one retry — see `retryOnce`. */
+  const retriedRef = useRef<string | null>(null);
 
   // Reset during render, the way `useManagerLeagues` does: a subject change
   // must not paint one frame of the previous manager's lineups.
@@ -79,12 +94,47 @@ export function useManagerLineups(
     setPayload(null);
   }
 
+  // The reset above runs during render and the effect's cleanup runs after
+  // paint, so a response for the previous subject can still resolve in between
+  // — past the abort and past the `isAbortError` guard — and write one
+  // manager's ranks under another manager's name. A rank is a plausible number
+  // whichever question produced it, which is what makes this the failure with
+  // no symptom. See `request-guard`.
+  const guard = useRequestGuard(subject);
+
+  /**
+   * Bumped to re-run the effect for the *same* subject, which is the one thing
+   * a dependency list cannot express: a transient failure needs another go, and
+   * nothing about the manager, the season or the boards has changed.
+   */
+  const [attempt, setAttempt] = useState(0);
+
   useEffect(() => {
     if (!ready || !season) return;
 
     inFlight.current?.abort();
     const controller = new AbortController();
     inFlight.current = controller;
+    const ticket = guard.issue();
+    /**
+     * One retry per request, and only for a request that failed.
+     *
+     * **Not polling**: it is a single timer, cancelled by the cleanup below on
+     * unmount, on a subject change and on the retry itself, and a second
+     * failure is where it stops. What it fixes is a hook that was latched by
+     * its own dependency list — `ready` flips true once, the boards move only
+     * when a reader edits a bay, so a lineups request lost to a blip left the
+     * page's ten rank windows on em dashes until something unrelated happened.
+     * The UX stays what it was, deliberately: a lineup is an enhancement beside
+     * the list, so a failure has no error surface and this is how it recovers
+     * without one.
+     */
+    let retry: ReturnType<typeof setTimeout> | null = null;
+    const retryOnce = () => {
+      if (retriedRef.current === subject) return;
+      retriedRef.current = subject;
+      retry = setTimeout(() => setAttempt((n) => n + 1), LINEUPS_RETRY_MS);
+    };
 
     const url =
       `/api/user/${encodeURIComponent(username)}/lineups` +
@@ -97,21 +147,34 @@ export function useManagerLineups(
     void (async () => {
       try {
         const res = await fetch(url, { signal: controller.signal });
-        if (!res.ok) return;
+        if (!res.ok) {
+          if (guard.accepts(ticket)) retryOnce();
+          return;
+        }
         const body = (await res.json()) as ManagerLineupsPayload;
+        // The ticket, not the abort: the abort has not necessarily fired yet.
+        if (!guard.accepts(ticket)) return;
         setPayload(body);
       } catch (err: unknown) {
         if (isAbortError(err)) return;
         // Degraded, not broken — see the hook note.
+        if (guard.accepts(ticket)) retryOnce();
       }
     })();
 
-    return () => controller.abort();
+    return () => {
+      controller.abort();
+      if (retry !== null) clearTimeout(retry);
+    };
     // The four strings and not `columns`: the array is a new identity on every
     // render of the page above, where a string moves only when a bay's market,
     // QB board, position set or slot set does — which are the only edits that
-    // cost a request.
-  }, [username, season, ready, boards, adpBoards, positions, slots]);
+    // cost a request. `attempt` is the retry above, and `guard` is one object for
+    // the life of the hook — see `useRequestGuard`.
+  }, [
+    username, season, ready, boards, adpBoards, positions, slots, attempt,
+    guard, subject,
+  ]);
 
   return payload;
 }

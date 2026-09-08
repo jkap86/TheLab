@@ -161,20 +161,6 @@ export async function GET(
       return NextResponse.json(empty);
     }
 
-    const fromWeek = await restOfSeasonStart(season, getNflState);
-    let projections: RosProjections = {};
-    let coveredFrom: number | null = null;
-    if (fromWeek !== null) {
-      try {
-        projections = await getRosProjections(season, fromWeek);
-        coveredFrom = fromWeek;
-      } catch (error) {
-        // The fallback's case, not the route's failure: every player prices on
-        // draft capital and `from_week: null` says which lens answered.
-        console.warn(`[lineups] projections unavailable for ${season}:`, error);
-      }
-    }
-
     const forced = parseKtcVariants(url.searchParams.get("ktc_boards"));
     const narrowings = parsePositionSets(url.searchParams.get("positions"));
     const seats = parseSlotSets(url.searchParams.get("slots"));
@@ -187,7 +173,25 @@ export async function GET(
       key: qbBoardKeySuffix(lineup),
       adp: lineup === "sf" ? adp.superflex : adp.standard,
     }));
-    const ktc = await readKtcMarkets(leagues, forced);
+
+    // **The two remaining reads are independent, so they run together.** Which
+    // weeks are left in the season and what those weeks project is one chain —
+    // the span decides the fetch — and it has nothing to do with which
+    // KeepTradeCut markets this page's columns read, which is decided by the
+    // leagues already in hand. Serialised, a cold request paid a Sleeper state
+    // read, then a projections span, and only then went looking for the market;
+    // the boards below are the same reads behind the same caches, started at
+    // the same moment.
+    //
+    // Nothing else moves. Each branch keeps its own degradation — a failed
+    // span still leaves `from_week: null` and a failed market is still simply
+    // absent — and `restOfSeasonStart` still throws the route into its 500,
+    // which `Promise.all` propagates exactly as the sequence did.
+    const [ros, ktc] = await Promise.all([
+      readRosProjections(season),
+      readKtcMarkets(leagues, forced),
+    ]);
+    const { projections, coveredFrom } = ros;
 
     const solved: ManagerLineupsPayload["leagues"] = {};
     for (const league of leagues) {
@@ -248,6 +252,34 @@ export async function GET(
     console.error(`[lineups] failed for ${username} ${season}:`, error);
     const payload: ApiErrorPayload = { error: "Failed to load lineups" };
     return NextResponse.json(payload, { status: 500 });
+  }
+}
+
+/**
+ * The rest-of-season span and the projections that cover it.
+ *
+ * Extracted so it can be one arm of the `Promise.all` above rather than three
+ * statements sitting in front of the market read. The two decisions inside are
+ * unchanged and are the route's own: which weeks are left (see the route's
+ * header for all three arms), and that a span nobody could fetch degrades to
+ * `from_week: null` plus draft capital rather than failing the page.
+ *
+ * `restOfSeasonStart` is deliberately *not* caught — a state read that throws is
+ * the route's 500, exactly as it was when this ran in sequence.
+ */
+async function readRosProjections(season: string): Promise<{
+  projections: RosProjections;
+  coveredFrom: number | null;
+}> {
+  const fromWeek = await restOfSeasonStart(season, getNflState);
+  if (fromWeek === null) return { projections: {}, coveredFrom: null };
+  try {
+    return { projections: await getRosProjections(season, fromWeek), coveredFrom: fromWeek };
+  } catch (error) {
+    // The fallback's case, not the route's failure: every player prices on
+    // draft capital and `from_week: null` says which lens answered.
+    console.warn(`[lineups] projections unavailable for ${season}:`, error);
+    return { projections: {}, coveredFrom: null };
   }
 }
 

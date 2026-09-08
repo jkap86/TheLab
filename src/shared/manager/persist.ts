@@ -7,7 +7,7 @@ import { invalidateTradeCaches, rebuildTradeParticipants } from "@/shared/trades
 import { dedupeBy } from "./dedupe";
 import type { LeagueGraph } from "./graph";
 import { dedupeMatchups } from "./matchups";
-import { NEVER_REFRESHED_SQL } from "./sync-freshness";
+import { MANAGER_SCOPE_STAMP_SQL, NEVER_REFRESHED_SQL } from "./sync-freshness";
 
 /**
  * Store leagues Sleeper no longer serves, tombstoned on arrival.
@@ -574,26 +574,40 @@ export async function persistLeagueGraph(
 }
 
 /**
- * Store the order Sleeper listed a manager's leagues in, replacing what was
- * stored for that (manager, season).
+ * Record a manager's Sleeper league enumeration for a season: the leagues, the
+ * order Sleeper listed them in, and the fact that it was confirmed.
  *
- * Only the manager's own sync calls this, because it is the only place that
+ * **This is the manager's scope, not merely a sort key**, and that is what
+ * changed about it. `manager_league_order` was always an enumeration snapshot —
+ * this is its only writer, and it replaces the whole (manager, season) set in
+ * one transaction — but nothing read it as one, so a manager who left a league
+ * went on being a member of it everywhere the app asked the stored *graph*
+ * instead. `IN_MANAGER_SCOPE_SQL` is the reader; this is the write it trusts.
+ *
+ * Only the manager's own sync calls it, because it is the only place that
  * enumeration happens for a known manager — the crawler reaches a league from
- * whichever member came up in its queue, which says nothing about where that
- * league sits in anyone's list.
+ * whichever member came up in its queue, which says nothing about whose list
+ * that league is on, or whether it still is.
  *
- * The wipe is guarded on a non-empty fetch, the same rule the projections
- * refresh follows: Sleeper answers 200-with-null (→ `[]`) for a user it can't
- * resolve, and an ordering dropped on that hiccup would silently re-sort every
- * league on screen. Leaving a stale row costs nothing — it only orders a league
- * the manager still belongs to.
+ * **`[]` is allowed and is the whole of the second fix.** The wipe used to be
+ * guarded on a non-empty fetch, because `sleeperGet` folds a 200-with-null into
+ * `[]` and an ordering dropped on that hiccup would re-sort every league on
+ * screen. The guard has moved to where the ambiguity actually is:
+ * {@link getUserLeaguesEnumeration} refuses to call anything but a genuine
+ * array an answer, so by the time this is called the empty list *is* Sleeper
+ * saying "none", and refusing to store it would leave a manager looking at
+ * leagues they no longer have.
+ *
+ * **`scope_at` rides the same transaction as the rows**, so the marker and the
+ * snapshot it describes commit together or not at all. Stamped separately, a
+ * crash between them leaves a marker over somebody else's snapshot — which is a
+ * page narrowed by an enumeration nobody made.
  */
-export function replaceManagerLeagueOrder(
+export function replaceManagerLeagueScope(
   userId: string,
   season: string,
   leagueIds: readonly string[],
 ): Promise<void> {
-  if (leagueIds.length === 0) return Promise.resolve();
   // Deduplicated by first mention: the primary key is (manager, season, league),
   // so a league Sleeper listed twice would fail the whole sync over a position
   // nobody can tell apart.
@@ -603,12 +617,15 @@ export function replaceManagerLeagueOrder(
       `DELETE FROM manager_league_order WHERE user_id = $1 AND season = $2`,
       [userId, season],
     );
-    await bulkInsert(client, {
-      table: "manager_league_order",
-      columns: ["user_id", "season", "league_id", "position"],
-      rows: ordered.map((leagueId, position) => ({ leagueId, position })),
-      values: (r) => [userId, season, r.leagueId, r.position],
-    });
+    if (ordered.length > 0) {
+      await bulkInsert(client, {
+        table: "manager_league_order",
+        columns: ["user_id", "season", "league_id", "position"],
+        rows: ordered.map((leagueId, position) => ({ leagueId, position })),
+        values: (r) => [userId, season, r.leagueId, r.position],
+      });
+    }
+    await client.query(MANAGER_SCOPE_STAMP_SQL, [userId, season]);
   });
 }
 

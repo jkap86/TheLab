@@ -1,4 +1,6 @@
 import { sleeperGet, sleeperGetOptional, sleeperUrl } from "./client";
+import { classifyUserLeagues } from "./enumeration";
+import type { UserLeaguesEnumeration } from "./enumeration";
 import { freshUrl } from "./fresh";
 import type {
   SleeperDraft,
@@ -27,6 +29,41 @@ export function getUserLeagues(
   season: string,
 ): Promise<SleeperLeague[]> {
   return sleeperGet(sleeperUrl("user", userId, "leagues", "nfl", season), []);
+}
+
+/**
+ * The same enumeration, with "Sleeper said zero" kept apart from "we could not
+ * tell" — {@link getUserLeagues} with its fallback removed rather than a second
+ * request shape.
+ *
+ * **`[]` is an answer and it is the one that has to be trusted.** The manager
+ * sync makes this enumeration authoritative for which leagues are a manager's,
+ * so a confirmed empty list must be able to empty their page — and an
+ * unreadable one must never be allowed to. {@link getUserLeagues} cannot serve
+ * both: `sleeperGet` folds a 200-with-null into the caller's fallback, so a
+ * body nobody could read arrives spelled exactly like a manager with no
+ * leagues. The rule itself is {@link classifyUserLeagues}, in a module of its
+ * own so Node's runner can drive it.
+ *
+ * A transport failure still **throws**, and that is the other half of the
+ * distinction: nothing was learned, the caller has an error to report, and
+ * folding it into a value here would be the same collapse one level down.
+ *
+ * `getUserLeagues` is untouched — the crawler's discovery pass enumerates
+ * managers to *find* leagues, where an empty answer costs a tick and claims
+ * nothing.
+ */
+export async function getUserLeaguesEnumeration(
+  userId: string,
+  season: string,
+): Promise<UserLeaguesEnumeration> {
+  // `null` as the fallback, so a null body arrives as null rather than as an
+  // empty list somebody could mistake for an answer.
+  const body = await sleeperGet<unknown>(
+    sleeperUrl("user", userId, "leagues", "nfl", season),
+    null,
+  );
+  return classifyUserLeagues(body);
 }
 
 /**

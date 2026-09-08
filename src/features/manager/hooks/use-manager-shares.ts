@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 import type {
   KtcBoardChoice,
@@ -8,7 +8,7 @@ import type {
   ManagerLeaguemateRostersPayload,
   ManagerPlayersPayload,
 } from "@/shared/contract";
-import { apiFetch, isAbortError } from "@/features/shared";
+import { apiFetch, isAbortError, useRequestGuard } from "@/features/shared";
 
 /**
  * The three shares reads, on `useManagerLineups`' idiom: one `AbortController`
@@ -33,6 +33,23 @@ export type SharesRead<T> = {
   data: T | null;
   loading: boolean;
   error: string | null;
+  /**
+   * Ask again, keeping the manager, season and board exactly as they are.
+   *
+   * **The latch is what makes this necessary.** `enabled` goes true the first
+   * time a drawer is opened and never goes back, so a request lost to a blip
+   * had nothing that would ever re-run the effect: closing and reopening the
+   * drawer changes no dependency, and the panel stayed on its error message
+   * until the reader picked another manager, another season, another board — or
+   * reloaded the page. That is the cost of the latch, and this is the one
+   * control that pays it back.
+   *
+   * Stable across renders, so a drawer can hand it straight to a key without
+   * re-rendering its list. Clears the error as it starts, because a panel
+   * showing an error under a spinner is describing a request that is no longer
+   * running.
+   */
+  retry: () => void;
 };
 
 /** What the effect actually stores. `loading` is derived from it — see below. */
@@ -52,6 +69,8 @@ function useSharesResource<T>(
     error: null,
   });
   const inFlight = useRef<AbortController | null>(null);
+  /** Bumped by {@link SharesRead.retry} — the same subject, asked again. */
+  const [attempt, setAttempt] = useState(0);
 
   // Reset during render, the way `useManagerLeagues` documents: an effect would
   // paint one frame of the previous manager's shares under the new manager's
@@ -63,12 +82,29 @@ function useSharesResource<T>(
     setState({ data: null, error: null });
   }
 
+  // The reset above is a render and the cleanup below is a passive effect, so
+  // between them the previous manager's response can resolve, pass the
+  // `isAbortError` guard and write itself under the new manager's name — a
+  // drawer of somebody else's players, or somebody else's failure message. The
+  // ticket is what closes that window, and it also keeps a retry from
+  // inheriting the answer to the request it replaced. See `request-guard`.
+  const guard = useRequestGuard(subject);
+
+  const retry = useCallback(() => {
+    // Cleared here rather than in the effect: `loading` is derived from
+    // "neither answered nor failed", so leaving the error set would render the
+    // failure and the spinner at once.
+    setState({ data: null, error: null });
+    setAttempt((n) => n + 1);
+  }, []);
+
   useEffect(() => {
     if (!enabled || !season) return;
 
     inFlight.current?.abort();
     const controller = new AbortController();
     inFlight.current = controller;
+    const ticket = guard.issue();
 
     const url =
       `/api/user/${encodeURIComponent(username)}/${path}` +
@@ -81,11 +117,14 @@ function useSharesResource<T>(
           fallbackError: failure,
         });
         const body = (await res.json()) as T;
+        // The ticket rather than the abort, which has not necessarily fired.
+        if (!guard.accepts(ticket)) return;
         setState({ data: body, error: null });
       } catch (err: unknown) {
         // An abort is this hook being superseded, not a failure to report: the
         // state it would write is about a manager nobody is looking at.
         if (isAbortError(err)) return;
+        if (!guard.accepts(ticket)) return;
         setState({
           data: null,
           error: err instanceof Error ? err.message : failure,
@@ -94,7 +133,8 @@ function useSharesResource<T>(
     })();
 
     return () => controller.abort();
-  }, [path, username, season, enabled, failure, query]);
+    // `attempt` is the retry; `guard` is one object for the life of the hook.
+  }, [path, username, season, enabled, failure, query, attempt, guard]);
 
   // **Derived, not stored.** Writing `loading: true` from inside the effect is
   // a synchronous setState in an effect body — a cascading render, and what the
@@ -104,6 +144,7 @@ function useSharesResource<T>(
   return {
     ...state,
     loading: enabled && Boolean(season) && !state.data && !state.error,
+    retry,
   };
 }
 

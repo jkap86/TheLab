@@ -195,17 +195,91 @@ const FIELDED_A_TEAM_SQL = `(
 )`;
 
 /**
- * The two facts every manager-scoped league read needs: Sleeper still serves
- * the league, and the manager fielded a team in it.
+ * The two facts the stored *graph* can answer: Sleeper still serves the league,
+ * and the manager fielded a team in it.
  *
  * One fragment rather than two spelled out per call site, so two reads cannot
  * apply one half and not the other and then disagree about which leagues are a
  * manager's.
  *
+ * **Not the whole of a manager's scope**, and that is the distinction
+ * {@link IN_MANAGER_SCOPE_SQL} draws: everything here is read off rows that
+ * describe the league, and none of them changes when the manager leaves it.
+ * Only {@link getUnlistedManagerLeagueIds} reads this alone.
+ *
  * Interpolated, so a call site must alias `leagues` as `l` and bind the
  * manager's user id as `$1`.
  */
-const MANAGER_LEAGUE_SQL = `${LIVE_LEAGUE_SQL} AND ${FIELDED_A_TEAM_SQL}`;
+const MANAGER_LEAGUE_GRAPH_SQL = `${LIVE_LEAGUE_SQL} AND ${FIELDED_A_TEAM_SQL}`;
+
+/**
+ * Whether the league is in the manager's **current** Sleeper enumeration.
+ *
+ * Two different facts have to be kept apart here, and collapsing them is the
+ * bug this fragment exists to close. The stored league graph is the last known
+ * state of the *league* — its rosters, its members, its picks — and it is right
+ * to keep after a manager walks away, because eleven other people are still in
+ * it. Whether *this* manager belongs to it is a fact about the manager, and the
+ * only thing that answers it is `/user/:id/leagues/nfl/:season`. Read off the
+ * graph instead, a departure is invisible: Sleeper leaves the leaver in
+ * `league_users` and their roster row stays exactly as it was until some
+ * unrelated sync of that league happens to replace it — which on a deployment
+ * running no crawler is never. So the league stayed on the page, in the shares,
+ * in the leaguemates and in the ranks, and the sync that should have removed it
+ * reported itself complete.
+ *
+ * `manager_league_order` is that enumeration, and always was: the manager's own
+ * sync is its only writer and it replaces the whole (manager, season) set in
+ * one transaction. What it lacked was a way to say *that it is a snapshot* —
+ * zero rows read as both "confirmed empty" and "never enumerated" — so
+ * `manager_syncs.scope_at` is the marker, and this predicate is written in two
+ * arms because of it:
+ *
+ * - **No marker → no narrowing.** A manager the crawler discovered but whose
+ *   own list has never been enumerated has a graph and no snapshot, and the
+ *   honest answer for them is the one this app already gave. They are stale
+ *   rather than wrong, and their first sync establishes the scope.
+ * - **A marker → the snapshot decides**, `[]` included. That is what makes a
+ *   confirmed-empty enumeration able to empty a page, and it is why nothing
+ *   writes the marker without a genuine array from Sleeper — see
+ *   {@link UserLeaguesEnumeration}.
+ *
+ * It **narrows** {@link MANAGER_LEAGUE_GRAPH_SQL} rather than replacing it.
+ * Both halves of that fragment still have to hold: a tombstoned league is gone
+ * for everybody, and a league Sleeper lists but the manager has not drafted a
+ * roster in is still absent from the page on `FIELDED_A_TEAM_SQL`'s own
+ * deliberate terms. Replacing them would quietly ship a different feature.
+ *
+ * Interpolated, so a call site must alias `leagues` as `l`, bind the manager's
+ * user id as `$1` and the season as `$2` — the binding every reader below
+ * already has.
+ */
+const IN_MANAGER_SCOPE_SQL = `(
+  NOT EXISTS (
+    SELECT 1 FROM manager_syncs ms
+     WHERE ms.user_id = $1 AND ms.season = $2 AND ms.scope_at IS NOT NULL
+  )
+  OR EXISTS (
+    SELECT 1 FROM manager_league_order mo
+     WHERE mo.user_id = $1 AND mo.season = $2
+       AND mo.league_id = l.league_id
+  )
+)`;
+
+/**
+ * The three facts every manager-scoped league read needs: Sleeper still serves
+ * the league, the manager fielded a team in it, and the manager still belongs
+ * to it.
+ *
+ * One fragment rather than three spelled out per call site, so two reads cannot
+ * apply two of them and then disagree about which leagues are a manager's.
+ *
+ * **The one deliberate non-reader is {@link getUnlistedManagerLeagueIds}**,
+ * which asks the opposite question — which stored leagues the enumeration has
+ * *stopped* naming — and would find nothing if it were scoped by the very
+ * snapshot it is looking outside of.
+ */
+const MANAGER_LEAGUE_SQL = `${MANAGER_LEAGUE_GRAPH_SQL} AND ${IN_MANAGER_SCOPE_SQL}`;
 
 /**
  * A roster's standings inputs, read off Sleeper's settings blob.
@@ -538,7 +612,8 @@ export async function getManagerRosters(
        FROM rosters r
        JOIN leagues l ON l.league_id = r.league_id
       WHERE r.owner_id = $1 AND l.season = $2
-        AND ${LIVE_LEAGUE_SQL}`,
+        AND ${LIVE_LEAGUE_SQL}
+        AND ${IN_MANAGER_SCOPE_SQL}`,
     [userId, season],
   );
 
@@ -711,6 +786,7 @@ export async function getManagerLeagueRosters(
        FROM leagues l
       WHERE l.season = $2
         AND ${LIVE_LEAGUE_SQL}
+        AND ${IN_MANAGER_SCOPE_SQL}
         AND ${HOLDS_A_ROSTER_SQL}`,
     [userId, season],
   );
@@ -984,9 +1060,18 @@ async function readDraftAdp(
  * enumeration when they *leave* a league too, and that league is alive and full
  * of other people — tombstoning it would hide it from every one of them. Only
  * `getLeague` can tell the two apart, so the caller probes each of these and
- * tombstones the nulls; the departures resolve themselves, since the next sync
- * of one replaces its rosters without the manager's and
- * {@link FIELDED_A_TEAM_SQL} stops matching.
+ * tombstones the nulls. The departures are already handled by the time this
+ * runs — the enumeration that produced `listedIds` has been written as the
+ * manager's scope, so a league they left is off their page whatever this probe
+ * concludes — and the tombstone is what the probe is still for: a league
+ * Sleeper deleted has to go for *everybody*, and this is the earliest signal of
+ * that there is.
+ *
+ * **It reads {@link MANAGER_LEAGUE_GRAPH_SQL} rather than
+ * {@link MANAGER_LEAGUE_SQL}, and that is load-bearing.** This asks which
+ * stored leagues the enumeration has stopped naming; scoped by that same
+ * enumeration it would find nothing, by construction, and no deletion would
+ * ever be tombstoned from this path again.
  *
  * That is also what the bound is for. A departure stays a candidate until its
  * league is next synced, so an unbounded probe would re-ask Sleeper about every
@@ -1007,7 +1092,7 @@ export async function getUnlistedManagerLeagueIds(
          ON lu.league_id = l.league_id AND lu.user_id = $1
       WHERE l.season = $2
         AND NOT (l.league_id = ANY($3::varchar[]))
-        AND ${MANAGER_LEAGUE_SQL}
+        AND ${MANAGER_LEAGUE_GRAPH_SQL}
       ORDER BY l.sync_attempt_at ASC NULLS FIRST, l.league_id
       LIMIT $4`,
     [userId, season, [...listedIds], limit],

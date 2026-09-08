@@ -82,6 +82,8 @@ export function LeaguemateSharesDrawer({
     data: ManagerLeaguematesPayload | null;
     loading: boolean;
     error: string | null;
+    /** Ask again after a failure — see `SharesRead.retry`. */
+    retry: () => void;
   };
   /**
    * Every roster in those leagues — the rail's input, and the one read this
@@ -95,6 +97,8 @@ export function LeaguemateSharesDrawer({
     data: ManagerLeaguemateRostersPayload | null;
     loading: boolean;
     error: string | null;
+    /** Ask again after a failure — see `SharesRead.retry`. */
+    retry: () => void;
   };
   /** The page's manager, dropped from their own list. Null before the stream answers. */
   selfId: string | null;
@@ -228,6 +232,7 @@ export function LeaguemateSharesDrawer({
           rosters={rosterMap}
           loading={rosters.loading}
           error={rosters.error}
+          onRetry={rosters.retry}
           players={playerNames}
           selfId={selfId}
           scope={scope}
@@ -262,6 +267,7 @@ export function LeaguemateSharesDrawer({
       rosterMap,
       rosters.loading,
       rosters.error,
+      rosters.retry,
       playerNames,
       selfId,
       scope,
@@ -293,6 +299,7 @@ export function LeaguemateSharesDrawer({
       }
       loading={read.loading}
       error={read.error}
+      onRetry={read.retry}
       emptyMessage="No leaguemates in these leagues yet."
       matchRow={matchRow}
       disclosure={disclosure}
@@ -385,6 +392,7 @@ function MateRail({
   rosters,
   loading,
   error,
+  onRetry,
   players,
   selfId,
   scope,
@@ -399,6 +407,8 @@ function MateRail({
   rosters: ManagerLeaguemateRostersPayload["rosters"] | null;
   loading: boolean;
   error: string | null;
+  /** Ask for the rosters read again — see `SharesDrawer`'s own `onRetry`. */
+  onRetry?: (() => void) | null;
   players: ManagerLeaguemateRostersPayload["players"];
   selfId: string | null;
   scope: RosterScope;
@@ -420,8 +430,20 @@ function MateRail({
   // wrong for a tray that would otherwise open onto nothing.
   if (!board) {
     return (
-      <p className="mx-2 mb-2 rounded-xl bg-black/[0.28] px-2.5 py-3 font-mono text-[length:var(--fs-9)] uppercase tracking-[0.16em] text-foreground/46 shadow-[var(--track-shadow)]">
-        {error ?? (loading ? "Reading rosters…" : "No rosters read yet.")}
+      <p className="mx-2 mb-2 flex flex-wrap items-center justify-between gap-2 rounded-xl bg-black/[0.28] px-2.5 py-3 font-mono text-[length:var(--fs-9)] uppercase tracking-[0.16em] text-foreground/46 shadow-[var(--track-shadow)]">
+        <span>{error ?? (loading ? "Reading rosters…" : "No rosters read yet.")}</span>
+        {/* The read is latched on the drawer having opened, so nothing else
+            would ever ask again — the same dead end the panel's own error
+            state had. */}
+        {error && onRetry ? (
+          <button
+            type="button"
+            onClick={onRetry}
+            className="rounded-full border border-foreground/12 px-2 py-0.5 uppercase tracking-[0.16em] text-foreground/72 hover:text-readout"
+          >
+            Retry
+          </button>
+        ) : null}
       </p>
     );
   }

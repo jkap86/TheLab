@@ -217,6 +217,160 @@ past trades names players the projections feed no longer carries. **The
 background crawler has since arrived too** — see The league crawler below; the
 freshness columns the schema was carrying for it now have their reader.
 
+### The manager's scope is the enumeration
+
+**Which leagues are a manager's is a fact about the *manager*, and it was being
+read off the *league*.** `FIELDED_A_TEAM_SQL` and its two halves are all read
+from rows that describe a league — its `league_users`, its `rosters` — and not
+one of them changes when somebody walks away: Sleeper leaves a departed manager
+in `league_users`, and their roster row is frozen exactly as a deleted league's
+is until an unrelated sync of that league happens to replace it, which on a
+deployment running no crawler is never. So a league somebody left stayed on
+their page, in their shares, in their leaguemates, in their lineup ranks and in
+the trades board's `mine` circle — and the sync that should have removed it
+reported itself `complete`.
+
+**`manager_league_order` was already the right table**, which is why this needed
+no new one: the manager's own sync is its only writer, it replaces the whole
+(manager, season) set in one transaction, and that *is* an enumeration snapshot.
+What it could not do was say it was one — zero rows read as both "Sleeper
+confirmed none" and "nobody has ever enumerated them" — so
+`manager_syncs.scope_at` is the marker, and `IN_MANAGER_SCOPE_SQL` reads the two
+together. No marker means no narrowing, which is the honest answer for a manager
+the crawler discovered and whose own list has never been read; a marker means the
+snapshot decides.
+
+**It narrows `MANAGER_LEAGUE_GRAPH_SQL` rather than replacing it.** The tombstone
+still applies, and so does the deliberate cost `FIELDED_A_TEAM_SQL` already
+carries — a pre-draft league is absent until its draft fills a roster — because
+replacing them would ship a different feature under a bug fix. The one read that
+takes the graph predicate *alone* is `getUnlistedManagerLeagueIds`, and it has to:
+it asks which stored leagues the enumeration has stopped naming, and scoped by
+that same enumeration it would find nothing, by construction, and no deletion
+would be tombstoned from this signal again.
+
+**A confirmed `[]` and an unreadable body are two different facts, and
+`sleeperGet` could not tell them apart.** It folds a 200-with-null into the
+caller's fallback, so "this manager has no leagues" and "nobody could read the
+answer" arrived spelled identically — which is why `replaceManagerLeagueOrder`
+used to refuse an empty list, and why an ambiguous enumeration used to stamp a
+*complete* sync (`failed === 0 && partial === 0` is trivially true when nothing
+was attempted). `getUserLeaguesEnumeration` is the contained fix:
+`classifyUserLeagues` calls **only a genuine JSON array** an answer, everything
+else is `unreadable`, and a transport failure still throws. Null is deliberately
+on the unreadable side despite Sleeper's documented "null means no data": the
+evidence in this repo is that the endpoint really sends `[]` for an empty
+enumeration — `seasonSyncTier`'s own note records an unknown league year coming
+back as an empty list — so reading null as confirmed-empty would buy nothing and
+risk emptying a page on a hiccup. `getUserLeagues` is untouched; the crawler's
+discovery pass enumerates managers to *find* leagues, where an empty answer costs
+a tick and claims nothing.
+
+Both failure paths stamp `attempt_at` and neither touches the scope or
+`synced_at`, so the stored list stays on screen marked stale and a failing
+upstream does not become a retry loop. A confirmed empty list replaces the scope
+with nothing, the sync completes, and the manager's page is empty because that is
+what is true.
+
+**Verified end to end against a throwaway Postgres 16**, which is what
+`scripts/verify-manager-scope.ts` is: the real `syncManagerLeagues` under its
+real advisory lock, Sleeper stubbed at `globalThis.fetch`. Seven cases — a
+departure, a departure from the last league, a null body, a malformed body, a
+thrown request, a deletion still tombstoning, and a crawler-discovered manager
+with no snapshot of their own. Each was also run against the pre-fix code by
+neutering one half at a time: the scope predicate stubbed to `(true)` fails the
+first two, the `[]`-folding read restored fails the next three. `npm test` gets
+the half a database is not needed for — `manager-scope.test.ts` pins which
+predicate every read applies and where the sync returns, on
+`crawl-writes.test.ts`' terms, because those decisions live in template literals
+and nothing *fails* when one is dropped.
+
+### Stale is a state the page can say out loud
+
+The data layer has tracked `stale` since the leagues route landed and nothing
+rendered it. The route serves stored leagues *without* refreshing whenever the
+sync is throttled, deduped, shed for a permit or held by another caller's
+advisory lock — every one of which looked, on screen, exactly like a refresh
+that had just finished: no spinner, no error, no note, a list that might be
+minutes or days old. `showStale` is `stale && !refreshing && !refreshError &&
+leagues.length > 0`, and it draws a compact readout beside the list rather than
+an alert over it; the tone is the readout's own ink, because this is a fact about
+freshness rather than a fault. Not over an empty list, where "showing cached
+league data" is a claim about data that is not there, and not beside a
+`refreshError`, which says the same thing with a reason attached.
+
+**A cut stream now says so too.** The hook ended one by clearing `refreshing` and
+`progress` and nothing else, which left the page in the one state that reads as
+finished and is not. It keeps the list — the leagues are still worth reading —
+and marks it `stale`, with no `refreshError`, because nothing reported a failure
+and inventing a message for a dropped connection would be a more specific claim
+than there is evidence for. A refresh that fails *loudly* behind a served list
+sets `stale` as well, since a refresh that did not land leaves the data exactly
+as old as one that was never attempted.
+
+### Two narrowings, two ways to undo them
+
+The grid is narrowed by the league filters **and** by the subjects picked in the
+drawers, and the empty state used to blame the first for both: a page emptied by
+a player nobody else rosters read "No leagues match these filters" over a summary
+saying every league matched, beside a `Clear filters` key that cleared filters
+already at their defaults and changed nothing. `emptyState` is three arms —
+filters alone, subjects alone, both — each naming what narrowed and offering the
+key that undoes exactly that. The filter summary is printed where there is one
+and omitted for a subject-only narrowing, because a subject is a chip the reader
+can already see in the token tray and the summary is a sentence nothing else on
+the page carries.
+
+### A response only ever writes its own state
+
+Every async Manager hook resets its visible state **during render** when its
+subject changes and aborts the previous request in an effect cleanup, and the gap
+between the two is a real race: the cleanup is a passive effect and runs after
+paint, so a response for the previous manager can resolve in between, fail the
+`isAbortError` test — because nothing has aborted yet — and commit itself under
+the new manager's name. Nothing throws. A league list, a rank and an error
+message are all plausible values whichever question produced them.
+
+`request-guard.ts` is the fix and the abort stays: the abort is resource control,
+this is correctness. A guard is pointed at the current subject during render (the
+same pass that resets the state, which is what closes the window) and issues a
+ticket per launched request; every asynchronous commit asks `accepts(ticket)`
+first. The generation is what makes a *retry* safe — same manager, same season,
+second attempt — and what stops an A → B → A walk reviving the first visit's
+answer. It is a plain factory with a four-line `useState` wrapper so the
+acceptance rule runs under Node's own runner; a ref would be read during render,
+which is what `react-hooks/refs` exists to stop.
+
+### The reads that could not ask again
+
+**The shares drawers were latched into their own failures.** `enabled` goes true
+the first time a drawer opens and never goes back, so a read lost to a blip had
+nothing that would re-run it: closing and reopening the drawer changes no
+dependency. `SharesRead` carries a stable `retry` now, the drawer's error state
+carries a `Retry` key beside the message (and the leaguemate rail carries one of
+its own), and the retry clears the error as it starts, since `loading` is derived
+from "neither answered nor failed" and a stale error under a spinner describes a
+request that is no longer running.
+
+**`useManagerLineups` had the same shape and keeps its silence.** A lineup is an
+enhancement beside the list, so a failure has no error surface — and that is
+exactly why it needed a way out that costs the reader nothing: `ready` flips true
+once and the four board strings move only when a bay is edited, so a lost request
+left every rank window on an em dash for the life of the page. It gets **one**
+retry, four seconds out, cancelled by the effect cleanup, at most once per
+subject. A single delayed attempt is not polling and there is no second.
+
+### The cold lineups request stopped waiting on itself
+
+`/api/user/[username]/lineups` read the NFL state, then the rest-of-season
+projections span, and only then went looking for the KeepTradeCut markets — three
+serialised waits of which the last depends on nothing but the leagues already in
+hand. The ROS chain is extracted as `readRosProjections` and the two run under one
+`Promise.all`. Nothing else moves: each branch keeps its own degradation (a failed
+span is still `from_week: null`, a failed market is still simply absent), and
+`restOfSeasonStart` still throws the route into its 500, which `Promise.all`
+propagates exactly as the sequence did.
+
 ## The league crawler
 
 Until this landed, nothing refreshed a league except in front of a request: the
