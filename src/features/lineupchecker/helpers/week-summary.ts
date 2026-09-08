@@ -28,10 +28,32 @@ export type LeagueWeekRecord = {
   wins: number;
   losses: number;
   ties: number;
-  /** `wins + losses + ties` — two where the league runs a median, else one. */
-  games: number;
+  /**
+   * The week's games in the order the card reads them: the head-to-head, then
+   * the median where the league runs one.
+   *
+   * **The tally above is folded out of this list rather than counted beside
+   * it**, which is the whole reason the list replaced the count that used to
+   * sit here (`games: number`, which is `games.length`). A strip reading `L W`
+   * and a record reading `1–1` are two presentations of one week, and two
+   * folds are two chances for a card to say the first while its own plate says
+   * the other.
+   */
+  games: readonly WeekGame[];
   /** Whether the second game — the one against the league's median — counted. */
   median: boolean;
+};
+
+/**
+ * One of the week's games: which opponent it was against, and how it went.
+ *
+ * `against` is what a chip's `sr-only` sentence names. A bare `W W` announced
+ * as "W W" is not a reading, and the strip's own left-to-right order — `Proj`,
+ * then `Med` — is the only thing on screen that says which is which.
+ */
+export type WeekGame = {
+  against: "opponent" | "median";
+  result: "win" | "loss" | "tie";
 };
 
 export function leagueWeekRecord(
@@ -39,26 +61,31 @@ export function leagueWeekRecord(
 ): LeagueWeekRecord | null {
   if (!entry || entry.opponent_points === null) return null;
 
-  const record = { wins: 0, losses: 0, ties: 0 };
-  tally(record, entry.current_points, entry.opponent_points);
   const median = entry.median_points !== null;
-  if (median) tally(record, entry.current_points, entry.median_points as number);
+  const games: WeekGame[] = [
+    { against: "opponent", result: outcome(entry.current_points, entry.opponent_points) },
+  ];
+  if (median) {
+    games.push({
+      against: "median",
+      result: outcome(entry.current_points, entry.median_points as number),
+    });
+  }
 
   return {
-    ...record,
-    games: record.wins + record.losses + record.ties,
+    wins: games.filter((game) => game.result === "win").length,
+    losses: games.filter((game) => game.result === "loss").length,
+    ties: games.filter((game) => game.result === "tie").length,
+    games,
     median,
   };
 }
 
-function tally(
-  record: { wins: number; losses: number; ties: number },
-  mine: number,
-  against: number,
-): void {
-  if (mine > against) record.wins++;
-  else if (mine < against) record.losses++;
-  else record.ties++;
+/** A dead heat is a tie and a real answer — folding it into a loss is a claim. */
+function outcome(mine: number, against: number): WeekGame["result"] {
+  if (mine > against) return "win";
+  if (mine < against) return "loss";
+  return "tie";
 }
 
 /**

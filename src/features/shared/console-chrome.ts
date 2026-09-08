@@ -417,6 +417,20 @@ export const CONSOLE_CHIP =
   "bg-[image:var(--chip-bg)] shadow-[var(--chip-shadow)]";
 
 /**
+ * The same chip standing in a **well** rather than lying in a tray.
+ *
+ * A chip in {@link CONSOLE_CHIP_TRAY} is one of a row set into a hole and
+ * throws nothing; a game chip sits in a `StandingBay`'s milled well, where it
+ * is the only raised thing and wants a cast onto the floor under it. A separate
+ * constant rather than a caller appending one, because **a shadow list is
+ * atomic**: a second `shadow-[…]` replaces the chamfer rather than adding to
+ * it, and which of the two wins is Tailwind's emit order. `--chip-shadow-raised`
+ * composes the pair in CSS, so the light counterpart comes from the chamfer's.
+ */
+export const CONSOLE_CHIP_RAISED =
+  "bg-[image:var(--chip-bg)] shadow-[var(--chip-shadow-raised)]";
+
+/**
  * The tray of holes a rail of {@link CONSOLE_CHIP}s sits in.
  *
  * Flat rather than a gradient, deliberately: it is a hole, and a hole has no
@@ -453,8 +467,16 @@ export const CONSOLE_GLASS =
   "relative overflow-hidden bg-[image:var(--readout-bg)] shadow-[var(--glass-shadow)]";
 
 /**
- * A housing set *inside* a housing, with its own padding: the lineup checker's
- * expanded week view.
+ * A housing set *inside* a housing, with its own padding — **and nothing draws
+ * one any more.**
+ *
+ * It was the lineup checker's expanded week view until that half became an
+ * `ExpandedPanel` like the manager and trade cards': the two halves of a card
+ * are one piece of stock under a milled groove now, rather than a second
+ * housing set into the first. `--housing-inset-shadow` lost its last reader
+ * with it. Both are kept and noted rather than deleted, on the design bundle's
+ * own instruction and `peekActiveSeason`'s terms — the argument below is what a
+ * reader would otherwise have to reconstruct.
  *
  * Not a {@link CONSOLE_WINDOW}, and that is the decision rather than the
  * spelling. Every seat inside it is a window, and a lit card inside a lit pane
@@ -515,8 +537,16 @@ export const CONSOLE_METAL =
   "[--key-bg:var(--key-metal)]";
 
 /**
- * A lit window a reader can *press*: the seat cards in the lineup checker's
- * week view.
+ * A lit window a reader can *press* — **and nothing draws one any more.**
+ *
+ * It was the lineup checker's seat card until that view took the manager
+ * card's pane grammar: a seat is a channel cut into the pane's glass now
+ * ({@link CONSOLE_ROW_WELL}), because the two cards list the same leagues and a
+ * row drawn as a lit window on one page and as a cut on the other is the drift
+ * that convergence removed. Kept rather than deleted on `peekActiveSeason`'s
+ * terms — what it carries is the argument below, which is the thing a later
+ * reader would otherwise get wrong twice: why a pressable window is colourless,
+ * and why its scanlines are a background layer rather than a child.
  *
  * {@link CONSOLE_WINDOW}'s surface with the scanlines folded in as a second
  * background layer rather than drawn as a child. A window normally carries its

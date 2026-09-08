@@ -3,6 +3,9 @@ import { describe, test } from "node:test";
 
 import {
   median,
+  rampDepth,
+  rampFace,
+  rankColor,
   sharePercentile,
   slotPercentile,
   winSharePercentile,
@@ -116,5 +119,92 @@ describe("median", () => {
 
   test("an empty set has no middle", () => {
     assert.equal(median([]), 0);
+  });
+});
+
+/**
+ * The polished face and its cast.
+ *
+ * What is pinned here is the *shape*, not the colours: every band is an
+ * `oklch()` over `--rank-l` / `--rank-l-mid` / `--rank-c`, which differ per
+ * scheme and are the browser's to resolve. What a test can hold is that the
+ * hue picks the right side of the ramp, that the reading band is the flat
+ * figure's own colour, that the per-scheme shape travels through tokens rather
+ * than through literals, and — the one that is silent when it is wrong — that
+ * the cast is never handed back as something a caller could set as a
+ * `text-shadow`.
+ */
+describe("rampFace", () => {
+  test("five stops, at the offsets the finish is drawn from", () => {
+    const face = rampFace(100);
+    assert.ok(face.startsWith("linear-gradient(180deg, "));
+    for (const at of ["0%", "22%", "52%", "78%", "100%"]) {
+      assert.ok(face.includes(`${at},`) || face.endsWith(`${at})`), at);
+    }
+  });
+
+  test("the 52% band is the flat figure, to the character", () => {
+    // The polish must not become a second opinion about the week: a reader
+    // comparing a polished margin against a rank window elsewhere on the card
+    // is comparing one ramp, and the optical middle is where they meet.
+    for (const percentile of [0, 25, 50, 75, 100, null]) {
+      assert.ok(
+        rampFace(percentile).includes(`${rankColor(percentile)} 52%`),
+        String(percentile),
+      );
+    }
+  });
+
+  test("the hue picks the side, as the ramp itself does", () => {
+    assert.ok(rampFace(100).includes(" 150)"));
+    assert.ok(!rampFace(100).includes(" 25)"));
+    assert.ok(rampFace(0).includes(" 25)"));
+    assert.ok(!rampFace(0).includes(" 150)"));
+  });
+
+  test("every shaped band reads its lightness and chroma from tokens", () => {
+    // The travel is upward on the dark well and downward on the pale one —
+    // see `--ramp-face-l0`. A literal here would be one scheme's shape drawn
+    // on both, which is a figure that reads below the flat one it replaced.
+    const face = rampFace(100);
+    for (const token of [
+      "--ramp-face-l0",
+      "--ramp-face-c0",
+      "--ramp-face-l1",
+      "--ramp-face-c1",
+      "--ramp-face-l3",
+      "--ramp-face-c3",
+      "--ramp-face-l4",
+      "--ramp-face-c4",
+      "--ramp-face-floor",
+    ]) {
+      assert.ok(face.includes(`var(${token})`), token);
+    }
+  });
+
+  test("a null percentile is the neutral, with no chroma to spend", () => {
+    // `* 0` on every chroma: mid-pack is whatever the ground wants a quiet
+    // number to be, polished but uncoloured.
+    assert.ok(rampFace(null).includes("* 0)"));
+  });
+});
+
+describe("rampDepth", () => {
+  test("the static half is a token and the halo is the ramp's own colour", () => {
+    assert.ok(rampDepth(100).startsWith("var(--ramp-depth) "));
+    assert.ok(rampDepth(100).includes(rankColor(100, 0.45)));
+  });
+
+  test("it is a space-separated filter list, never a comma-separated shadow one", () => {
+    // With `background-clip: text` over a transparent fill a `text-shadow`
+    // paints *above* the element's background: the offset copies cover the
+    // gradient inside the glyph bodies and the figure renders as flat ink with
+    // a 1px rim. Only `drop-shadow()` composites behind the clip — and the two
+    // are told apart by their separator, which is why this is checkable at all.
+    for (const percentile of [0, 50, 100, null]) {
+      const depth = rampDepth(percentile);
+      assert.ok(depth.includes("drop-shadow("), String(percentile));
+      assert.ok(!depth.includes(","), String(percentile));
+    }
   });
 });

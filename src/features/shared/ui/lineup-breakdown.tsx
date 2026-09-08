@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useId, useRef, useState, type ReactNode } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 
 import type {
   LeagueLineup,
@@ -16,7 +16,16 @@ import { ordinal, shortName } from "../format";
 import { rankColor, rankPercentile, slotPercentile } from "../rank-ramp";
 import { type Lens, lensValue } from "../seat-compare";
 import { PickRows, pickSpan } from "./draft-picks";
-import { DrawerRow, PaneGlass } from "./pane";
+import {
+  DrawerBar,
+  DrawerRow,
+  DRAWER_BAR,
+  DRAWER_BAR_HEIGHT,
+  DRAWER_BARS,
+  PaneDrawer,
+  PaneGlass,
+  type DrawerTray,
+} from "./pane";
 
 /**
  * A league card's rest-of-season lineup: the optimal starters in slot order on
@@ -381,38 +390,15 @@ function BenchRow({ player, lens }: { player: LineupPlayer; lens: Lens }) {
  */
 export type BenchReading = { total: string; place: MetricRank | null };
 
-/** Which reading the drawer is showing. */
-type Tray = "bench" | "picks";
-
 /**
- * The two bars' own heights — **34px at `lg` and 30 below it for the bench
- * bar, 30 at both for the picks bar** — which are also what the drawer sits on.
+ * Which reading the drawer is showing.
  *
- * The drawer's `bottom` and its `max-height` are functions of the bars' sum,
- * and the sum follows the breakpoint, so it is written as a CSS custom property
- * on the drawer (`--bars`, in {@link BARS_VAR}) by a class per arm and the two
- * inline values read it back: the drawer sits on its bars at every width with
- * no measurement, and a `ResizeObserver` for two constants is the wrong tool.
- *
- * **Both records are spelled literally rather than templated off a number.**
- * Tailwind finds classes by scanning source text, and a class assembled from a
- * template literal is generated for nothing — driven, the bench bar rendered
- * 30px at `lg` because `lg:h-[34px]` did not exist in the stylesheet. So the
- * arithmetic is in this comment and the spelling is below, side by side: an
- * edit to a bar's height is an edit to its class *and* to every `--bars` arm
- * that sums it, or the drawer sits off its bars by the difference.
+ * The type, the two bars' heights and the `--bars` sums they add up to all
+ * live in `pane.tsx` since the lineup checker's lineup pane took the same
+ * drawer for its bench — see {@link DRAWER_BAR_HEIGHT}, which carries the
+ * arithmetic and the reason both records are spelled literally.
  */
-const BAR_CLASS: Record<Tray, string> = {
-  bench: "h-[30px] lg:h-[34px]",
-  picks: "h-[30px] lg:h-[30px]",
-};
-
-/** The `--bars` sum per combination of bars present, in the order drawn. */
-const BARS_VAR: Record<string, string> = {
-  bench: "[--bars:30px] lg:[--bars:34px]",
-  picks: "[--bars:30px] lg:[--bars:30px]",
-  "bench,picks": "[--bars:60px] lg:[--bars:64px]",
-};
+type Tray = DrawerTray;
 
 /**
  * How long the contents are faded out for while one drawer becomes the other.
@@ -420,69 +406,6 @@ const BARS_VAR: Record<string, string> = {
  * which is the point of not collapsing it.
  */
 const SWAP_MS = 170;
-
-/**
- * The stock both bars are cut from.
- *
- * **The tracking goes below `lg` and the gutter tightens with it**, which is
- * the card's own rule about its tile labels one plane up and is a measurement
- * rather than a taste: a bar is ~160px at 390 and `BENCH · 7` at
- * `tracking-[0.12em]` needs 81 of the 80 it has, so it truncated to `BENCH ·…`
- * and lost the one number it is read for. Letter-spacing is the first thing to
- * spend, because the count is what the bar says and the place beside it is what
- * it says next.
- */
-const DRAWER_BAR =
-  "lab-anim flex w-full cursor-pointer items-center gap-1.5 bg-[image:var(--billet-bg)] px-1.5 text-left " +
-  "font-mono text-[length:var(--fs-11)] uppercase tracking-[0.02em] shadow-[var(--standing-strip-shadow)] " +
-  "transition-colors duration-200 focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-active/60 " +
-  "lg:gap-2.5 lg:px-3 lg:text-[length:var(--fs-12-5)] lg:tracking-[0.12em]";
-
-/**
- * One of the two bars pinned to the bottom of the roster pane's glass.
- *
- * **Billet stock over the glass, not another row of it.** The bar is a part
- * bolted across the list — that is what says the drawer behind it is a separate
- * reading rather than the starters continuing — and it takes the standing
- * strip's own chamfer for it.
- *
- * A real `<button>`, where the design prototype draws a `role="button"` div: a
- * bar is a control and the platform already knows how to make one reachable,
- * announce its state and fire it from a keyboard. `aria-expanded` is true only
- * on the bar whose reading is up, which is accurate — one drawer, and at most
- * one of the two bars has it open.
- */
-function DrawerBar({
-  open,
-  label,
-  children,
-}: {
-  open: boolean;
-  /** What the bar is called, and what its count is: `Bench · 6`. */
-  label: string;
-  /** The readings between the label and the caret. */
-  children?: ReactNode;
-}) {
-  return (
-    <>
-      <span className="min-w-0 flex-1 truncate">{label}</span>
-      {children}
-      {/* The caret turns rather than swapping glyph, which is what says the
-          drawer rises out of this bar rather than appearing somewhere. It is
-          `aria-hidden` because `aria-expanded` on the button already carries
-          the state, and a bar whose name ended in "right-pointing triangle"
-          would be read the long way round. */}
-      <span
-        aria-hidden
-        className={`lab-anim w-4 shrink-0 text-right text-[length:var(--fs-12)] text-[color:var(--billet-label)] transition-transform duration-[240ms] ease-[cubic-bezier(0.2,0.8,0.2,1)] lg:w-5 lg:text-[length:var(--fs-13)] ${
-          open ? "rotate-90" : ""
-        }`}
-      >
-        ▸
-      </span>
-    </>
-  );
-}
 
 export function LineupBreakdown({
   lineup,
@@ -551,7 +474,7 @@ export function LineupBreakdown({
   };
 
   const benchTone = rankColor(rankPercentile(bench?.place ?? null));
-  const barsVar = BARS_VAR[bars.join(",")] ?? "";
+  const barsVar = DRAWER_BARS[bars.join(",")] ?? "";
   const span = pickSpan(picks);
 
   return (
@@ -591,56 +514,11 @@ export function LineupBreakdown({
       {bars.length > 0 && (
         <>
           {/*
-            **One drawer for both readings, anchored at the bottom.** Because it
-            is anchored there, growing its `max-height` *is* the upward
-            accordion — no measurement, and no transform that would blur the
-            type under it. The cap is the glass less the bars it sits on and a
-            little of the starters, so a reader can always see what the drawer
-            is rising over.
-
-            **Kept mounted while shut**, or it would have no closed state to
-            animate from, and `inert` is what keeps its rows out of the tab
-            order while it is — `pointer-events: none` stops a mouse and
-            nothing else, which is `CollapseTray`'s own finding one component
-            over. The transition list is spelled identically in both states for
-            that file's other reason: rewriting `transition` in the same frame
-            as the animated property cancels it.
+            **One drawer for both readings**, where two over one list would
+            cover it twice — see {@link PaneDrawer} for the box, and `toggle`
+            for why switching does not collapse the one that is up.
           */}
-          <div
-            id={drawerId}
-            inert={open === null}
-            // **A flex column, and its scroller below is `min-h-0 flex-1`.**
-            // The drawer's own height comes from `max-height` over auto
-            // content, so a percentage `max-height` on the child has nothing
-            // definite to resolve against and computes to `none` — which is
-            // not a scroller that fails to scroll but a scroller that is not
-            // one: the rows overflow and this box's `overflow-hidden` clips
-            // them, so a deep bench simply loses its last few players with
-            // nothing on screen saying so. Flexed, the child is free to shrink
-            // when the cap bites (which is what `min-h-0` buys, an item's
-            // automatic minimum being its content) and scrolls what is left.
-            className={`lab-anim absolute inset-x-[3px] z-[2] flex flex-col overflow-hidden rounded-[0.625rem] bg-[image:var(--billet-bg)] shadow-[var(--billet-shadow),0_-22px_34px_-14px_rgba(0,0,0,0.9)] [transition:max-height_340ms_cubic-bezier(0.2,0.8,0.2,1),opacity_200ms_ease,padding_340ms_cubic-bezier(0.2,0.8,0.2,1)] ${barsVar}`}
-            style={{
-              // The bars it stands on, as the breakpoint-aware sum `BARS_VAR`
-              // wrote onto this element — see `BAR_CLASS`.
-              bottom: "var(--bars)",
-              // The bars it stands on, plus a sliver of the starters so the
-              // drawer reads as *over* the list rather than as having replaced
-              // it. **`max()` and not the bare `calc`**, which is what the
-              // design specifies and what goes silently wrong on a short
-              // viewport: the panel's cap can leave a glass shorter than the
-              // bars themselves, and a negative `max-height` clamps to zero —
-              // a lit bar with a rotated caret that opens nothing. Floored, a
-              // cramped drawer overflows upward instead and is clipped by the
-              // glass, which shows less than it wants and never nothing.
-              maxHeight: open
-                ? "max(5.75rem, calc(100% - var(--bars) - 14px))"
-                : 0,
-              padding: open ? 4 : 0,
-              opacity: open ? 1 : 0,
-              pointerEvents: open ? "auto" : "none",
-            }}
-          >
+          <PaneDrawer id={drawerId} open={open !== null} bars={barsVar}>
             <div
               className={`lab-anim lab-scroll-glass min-h-0 flex-1 overflow-y-auto overflow-x-hidden [transition:opacity_160ms_ease,transform_220ms_cubic-bezier(0.2,0.8,0.2,1)] ${
                 swapping ? "translate-y-2 opacity-0" : "translate-y-0 opacity-100"
@@ -656,7 +534,7 @@ export function LineupBreakdown({
                 </ul>
               )}
             </div>
-          </div>
+          </PaneDrawer>
 
           {/* Above the drawer, so a drawer at full height stops at the bars
               rather than under them. */}
@@ -667,7 +545,7 @@ export function LineupBreakdown({
                 onClick={() => toggle("bench")}
                 aria-expanded={open === "bench"}
                 aria-controls={drawerId}
-                className={`${DRAWER_BAR} ${BAR_CLASS.bench} ${
+                className={`${DRAWER_BAR} ${DRAWER_BAR_HEIGHT.bench} ${
                   open === "bench"
                     ? "text-[color:var(--billet-accent)]"
                     : "text-[color:var(--billet-name)]"
@@ -705,7 +583,7 @@ export function LineupBreakdown({
                 onClick={() => toggle("picks")}
                 aria-expanded={open === "picks"}
                 aria-controls={drawerId}
-                className={`${DRAWER_BAR} ${BAR_CLASS.picks} ${
+                className={`${DRAWER_BAR} ${DRAWER_BAR_HEIGHT.picks} ${
                   open === "picks"
                     ? "text-[color:var(--billet-accent)]"
                     : "text-[color:var(--billet-name)]"

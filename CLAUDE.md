@@ -4624,6 +4624,252 @@ preview was driven over CDP, so the phone lamp's width against the league name
 at 390 and the three-bay plate's width at 1280 are estimates rather than
 measurements.
 
+### The expanded half converged, and the projection became a strip
+
+`/manager` and `/lineupchecker` list the same leagues and draw the same card,
+and two parts of that card had drifted. The manager card's open half is a milled
+groove holding two **parts** — each a billet with a ledge and a sheet of glass,
+its own control, its own scroller, and rows cut as channels into that glass; the
+checker's was an inner housing holding two bare `<div>`s, one scroller for the
+lot and rows drawn as lit pressable windows. And the checker's header carried
+`Proj / Med / Rec` on a raised plate sharing the billet's row, which is width the
+league's own name was paying for. The checker adopts the manager's grammar, and
+the plate becomes a strip. Applied from a design handoff, its `1c` and `6d`.
+**Nothing on the wire moved for either** — no route, no query, no payload field,
+no migration; one contract *helper* gained per-game outcomes, and that is a
+client fold.
+
+**It is a convergence, so the target is quoted rather than re-derived.** The
+expanded half is `ExpandedPanel`, `Pane`, `PaneLedge`, `PaneGlass`,
+`CONSOLE_ROW_WELL`, `CONSOLE_FIGURE_WELL`, `DrawerRow` and the drawer bar — the
+manager card's own parts, at its own two row heights (38px at `lg`, 52 below),
+rather than a second spelling of them. What is left of the checker's own file is
+what only it has: two lineups, a seat that answers back, and the gap meters.
+
+**`lineup-check-card.tsx` is hook-free again**, which its own module note has
+claimed since it was written and which `usePanelCap` had quietly cost it:
+`ExpandedPanel` owns the cap, the `mounted` gate and the perspective, and the
+summary hands it the bottom inset while the card is open (`group-open/card:pb-0`
+— `group-open` rather than `data-lit`, because the padding has to hold through
+the collapse). `CONSOLE_HOUSING_INSET`, `CONSOLE_HOUSING_INSET_SHELL`,
+`--housing-inset-shadow`, `CONSOLE_WINDOW_KEY`, `PlateBay` and `ReadingPlate`'s
+`tight` arm all lost their last reader with it. Every one is **kept and noted
+dead where it is declared**, on `peekActiveSeason`'s terms and the handoff's own
+instruction: what each carries is an argument a later reader would otherwise
+reconstruct — why a pressable window is colourless, why a nested housing was a
+housing rather than a window, why a reading buys a second figure with height.
+
+**The two glass scrollers are linked, and that is the one thing A adds.**
+`WeekPanes`' own note argues that its two lineups are read *across* — a seat row
+against the seat row opposite — and that one scroller is what keeps them in
+step; the manager's grammar asks for a scroller per pane. Both are right, so the
+panes scroll their own lists and `useLinkedScroll` mirrors `scrollTop`. Every
+row is one of two fixed heights and both panes take the same one, so index *N*
+sits at the same offset in each and nothing has to be measured. The guard is the
+whole of it: writing to one fires the other's `scroll` event, so a `held` flag
+released on the next frame is what stops the two trading events for as long as a
+reader keeps scrolling. It re-attaches on every pick, because a press replaces
+one pane and the element that is the scroller changes with it, and the listeners
+are `passive` — nothing in the subtree may take `scroll-behavior: smooth`, which
+would animate over frames and fight a mirror that writes on every one.
+
+**The billet is *not* stretched to the row**, which is where this parts company
+with the bundle's letter and keeps its intent. The handoff says to give
+`LeagueBillet` `flex-1`; the manager card's billet hugs its content, and a
+checker billet run to the full width would be a different object on the two
+pages — the drift the pass exists to remove. Hugging, the name still takes as
+much of the row as it needs and truncates only past it, which is the measured
+requirement (312px, against the 270 the plate left it and the 20px — one
+character — it left at 390).
+
+**Both strips take their own line at every width, and `LeagueConfigWindow` is
+not told it is `shared`.** Measured at a 620px card: the settings strip needs
+~512px un-wrapped and a 289px part beside it leaves 285, so it breaks to three
+lines — 81px — where the two on their own lines are 35px each. Sharing costs
+more than it saves here, and a settings strip told it has a neighbour would clip
+its own `TE prem` inside its own `overflow-hidden`. The manager card shares its
+row and wraps for it; that is flagged in the handoff as a follow-up and is not
+taken here.
+
+#### The strip, the margins and the chips
+
+`Proj / Med / Rec` on `StandingStrip` — the manager card's standing, in the same
+place, cut from the same stock. Three things about it are decisions.
+
+**The readings are signed margins, where the plate printed both totals.**
+`141.0–121.7` is two numbers a reader has to subtract; `+19.3` is the answer.
+The totals are not lost — they are the `Set` reading on each pane's own ledge,
+one seam down. The sign is decided *after* rounding, so a margin that rounds to
+nothing prints `0.0` rather than `−0.0`, and a `0.0` beside an `L` is true
+rather than contradictory: the game was that close, and the chip settles it.
+
+**The colour is the margin's size, not which way it went.** The chip beside it
+already says that, and a ramp fed a win/lose boolean would paint a 0.4-point
+squeaker the same green as a rout. `sharePercentile` is the scale the standings
+table already reads its totals on — a margin as a share of what the two sides
+average, saturating at ±10% — so a dead heat lands on the neutral and a
+comfortable win at the ramp's end. It is the fourth reader of that function and
+the first outside `features/manager`, which is what took it into the barrel.
+
+**One chip per game, head-to-head first**, which is the strip's own
+left-to-right order: the first maps onto `Proj` and the second onto `Med`, and
+the part itself says which is which. That is a reading `1–1` cannot make, and a
+split week is a red `L` beside a green `W` rather than a neutral pip.
+`leagueWeekRecord`'s `games` is that ordered list and the tally is folded **out
+of** it — the field replaced a `games: number` that was `games.length`, so a
+strip reading `L W` and a plate counting `1–1` are two presentations of one week
+rather than two counts. Each chip's letter is `aria-hidden` under an `sr-only`
+sentence naming which game and which result: a bare `W W` announced as "W W" is
+not a reading.
+
+**A league with no median draws two bays, never `Med —`.** The app's em dash
+means "this league has this field and we have no answer for it" — the reading
+`Rank —` makes before a season starts. A league that runs no median has no such
+field, so a dash there reads as a median the sync failed to fetch: two bays
+state the league, three state a fault. The bays stretch at every width, so two
+fill the line rather than leaving a hole where a third would have been — which
+is what `StandingStrip`'s and `StandingBay`'s new `stretch` is for. It is a prop
+rather than the parent reaching in with `[&>span]:flex-1`, which would be one
+more selector for a later `flex-none` to lose an emit-order flip against; it
+goes away the day the manager card takes the own-line arrangement too.
+
+#### The polished figure, and the light half that had to be measured
+
+Both the bay figures and the chip letters are set as **tinted chrome**: the
+ramp's own hue clipped to the glyphs with the cast behind it. `rampFace()` and
+`rampDepth()` sit beside `rankColor()` and are computed rather than tokens,
+because the hue is continuous. Three things in the finish are load-bearing and
+each is silent when wrong — the cast is a `filter` and never a `text-shadow`
+(with `background-clip: text` over a transparent fill a text-shadow paints
+*above* the background and the offset copies cover the gradient inside the glyph
+bodies); `color: transparent` is spelled as well as `-webkit-text-fill-color`,
+so a browser ignoring the clip still paints something; and the cast rides
+`pointer-fine:` on the card's per-device budget, which a `style` cannot carry, so
+the computed value travels through a custom property the gated utility reads.
+
+**What is a token is the *shape*, and the shape turns over.** Eight numbers —
+a lightness delta and a chroma multiplier for each of the four shaped stops —
+plus `--ramp-face-floor`, the depth a band stops descending at. The 52% stop
+takes none, because it *is* `rankColor`'s own colour: the polished figure and
+the flat one read the same at the optical middle, which is what stops the polish
+becoming a second opinion about the week.
+
+**The bundle's own reference implementation does not meet the floor it sets, and
+the well is why.** The figure sits in a `--billet-well-bg`, and that well is the
+constraint at both ends. On the dark well the ramp's own 0.84 is already within
+0.03 of the 4.5:1 line, so a face running to `L−0.28` puts its foot at 2.3:1 —
+the prototype's own numbers. The travel therefore goes *upward* in dark: a white
+lip, and a foot that recedes only to the floor. On the pale well it is the other
+way round and the travel goes downward, which is the move the bundle asks for in
+exactly those words. Measured band against the well's own gradient at the same
+offset, both hues, five percentiles: **dark clears 4.69:1 at its worst** (a
+decisive red's foot) and every light band is at least the **3.41:1 the flat ramp
+figure already reads there**. That 3.41 is `rankColor` on this well rather than
+anything this pass adds — a pre-existing property of the light ramp against
+`--billet-well-bg`, reported rather than silently worked around, and the reason
+a strict 4.5 is not reachable in light without moving the base and with it the
+reading.
+
+`--chip-shadow-raised` is the one other new token and it is defined once:
+`var(--chip-shadow), 0 1px 2px …`, so the light counterpart comes from the
+chamfer it composes. `CONSOLE_CHIP_RAISED` is the constant, because **a shadow
+list is atomic** — appending a second `shadow-[…]` replaces the chamfer rather
+than adding a cast to it.
+
+#### Three things a render changed
+
+- **The `Kick` column is 88px and untracked, where the bundle draws 64.** That
+  column was measured against `Sun 1:00`, and this app does not print that
+  string: `kickoffTime` formats in the *reader's own* locale, so an en-US
+  afternoon game is `Sun 12:00 PM`. Measured at `--fs-10` in this build's own
+  Plex Mono that is **97.4px tracked and 83.5px untracked**, so at 64px the one
+  number a reader checks against a clock on the wall was cut on every row.
+  Letter-spacing is the first thing to spend, which is this card's own rule
+  about its window labels one plane up. The cost is the name column, which is
+  the right way round: a truncated name is still readable and a truncated time
+  is wrong.
+- **The ledge's `Opt` total drops below `lg`.** A pane is ~165px at 390 and its
+  track ~148; the labelled pair is 160px there even with the legend already
+  hidden and the figures already stepped down, so it overflowed the pane's own
+  `overflow-hidden` with nothing on screen saying so. `Set` is what the two
+  panes are compared on and stays; the reader's own `Opt` is what the card's
+  `Vs optimal` window above already reports. The bench bar's `N start` chip goes
+  the same way and for the same kind of reason — this pane is half the manager
+  card's, so a 62px chip left `Bench · 7` fifty of the seventy it needs, and
+  every promoted player carries a `start` chip on his own row one press away.
+- **The ledge track's height is fixed, not a floor.** Sized to its content it is
+  31.9px holding two totals and 29.8px holding a `Back` key, so opening an
+  options pane put its rows 2px out of step with the lineup opposite — the one
+  thing this view is arranged against, and invisible as anything but a slight
+  wrongness. 32px / 34px at `lg`, which is also the card's own control recess
+  above, so its two recesses are one height. The `Back` key lost its `min-h-11`
+  with it, which is the manager card's own geometry for a control on a pane
+  ledge.
+
+#### Verified
+
+Driven over CDP against `next dev` through a temporary `/preview` route mounting
+the **real** `LineupCheckCard`, `useActiveCard`, `PageShell` and — for the
+extraction — the real `LineupBreakdown`, then deleted. The mechanics are the ones
+this file records: `--no-proxy-server`, `localhost` rather than `127.0.0.1`, a
+phone viewport from `Emulation.setDeviceMetricsOverride` with `mobile: true`,
+`data-theme` rather than `prefers-color-scheme`, the
+`--blink-settings=availablePointerTypes=4,…` flags, a **client-component**
+harness, and a CDP client over Node's own `WebSocket`, since Playwright is not
+installed here. One is this pass's own: `--disable-features=OverlayScrollbar`,
+because an overlay scrollbar reserves no gutter and the pane's own `pr-[9px]`
+cannot be seen to do its job without one. The fixtures are five leagues — a
+dynasty superflex with an opponent, a median, a locked seat, an unprojected
+bench stash, a `sit` and a `→ SF`; a league with no median; a best-ball league
+whose four checks are clear and whose median it loses; a league with no opponent
+at all; and one nothing was read for.
+
+**Fourteen renders — 1440, 1280, 1024, 768, 640, 390 and 375 in both schemes —
+all clean**: nothing clipped outside a `truncate`, **zero** elements painted
+past the viewport that an ancestor does not clip, `documentElement.scrollWidth`
+within the viewport, exactly one `<h1>`, and **both panes' ledges the same
+height at every width**. Rows are 38px from `lg` and 52 below it. No console
+output but the dev server's own React-DevTools and HMR lines and the sandbox's
+cert refusals for the headshot CDN.
+
+Every arm landed. The billet row carries one child. The strip drew `+19.3 /
++22.8 / W W` on the median league, `−3.5 / L` on the one without — two bays
+filling the line — and `+6.4 / −2.4 / W L` on the split week, with no strip at
+all on the league with no opponent and none on the unread one. The polished
+figure computes `background-clip: text`, a transparent fill *and* a transparent
+`color`, and a three-layer `drop-shadow` filter; its 52% band is `rankColor`'s
+own string to the character, and the whole ramp inverts in light (0.433 → 0.493
+→ 0.313 against dark's 1 → 0.84 → 0.79). `--chip-shadow-raised` resolves to the
+chamfer plus its cast in both schemes from one declaration.
+
+The expanded half: `ExpandedPanel` with the groove as its first child, the
+summary's `padding-bottom` 0 while open, `perspective: 1400px`, the sync key in
+a 32px recess strip, **two equal panes** (537.7px each at 1280), ledges carrying
+`Yours / Set / Opt` and `Theirs`, and a `Gap` head only where there is a column
+under it. Pressing a seat put `Your options · RB` in the pane *opposite* with
+the pressed row lit and the lineup unmoved; `Back` restored it. The bench drawer
+opened to 296px with `inert` off. **The scroll link works**: writing 90 to one
+scroller left both at 37 (clamped by content), and 30 to the other left both at
+30. The no-opponent league drew one pane at rest and two after a press; best
+ball drew **zero** pressable seats.
+
+**The manager card's own drawer is unchanged through the extraction**, which is
+what the shared-parts move had to prove: bars at 34px and 30px, `--bars` summing
+to 64px on the drawer's `bottom`, and the bench→picks swap holding the drawer
+open at one height rather than collapsing it.
+
+2,069 unit tests pass (nine more — the ordered games, the tally folded out of
+them, and the face and cast's shape); `lint`, `typecheck` and `build` are clean.
+
+**Not verified against real data**, which is the gap to close first: every number
+above is a fixture. Four things a render here cannot check — how the linked
+scroll reads on a real week where one pane's lineup is longer than the other's;
+whether `opponent_team_name` and the opponent's bench are populated widely
+enough for the right pane to be worth its half of the card; whether the 88px
+`Kick` column is enough in a locale this build has not been run in; and whether
+the polished figure reads as *the same* green as the rank ramp's own on a page
+of a hundred cards, which is the one question no single-card render can answer.
+
 ### Starters and Opponents
 
 Two more Browse keys in the rack, each opening a side panel of *week* shares:

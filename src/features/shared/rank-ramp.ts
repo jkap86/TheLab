@@ -91,6 +91,110 @@ export function rankColor(fill: number | null, alpha?: number): string {
 }
 
 /**
+ * The polished face for a ramp percentile: a white lip, the tone at the optical
+ * middle, receding to a shaded foot — the ramp's own hue set as **tinted
+ * chrome**.
+ *
+ * It is `--chrome-face` / `--billet-face`'s shape and `--alert-face`'s
+ * technique, tinted rather than neutral so the *reading* survives the polish: a
+ * neutral chrome figure on a machined strip says nothing about whether the week
+ * went well, which is the whole job of a figure the ramp colours.
+ *
+ * **Computed rather than a token, because the hue is continuous**, which is
+ * {@link rankColor}'s own argument one step down — there is no utility to
+ * generate and no finite set of values to name. What *is* a token is the shape:
+ * the five stops' lightness deltas and chroma multipliers, because those are
+ * what turn over for the light scheme. In dark the relief is bought by spiking
+ * the top stop to white above a base that is already near-white; on the pale
+ * billet a white lip is invisible, so the light face is the same direction with
+ * a much shallower travel over a base that is already dark — which is exactly
+ * what `--alert-face` does between the two schemes, and why the deltas differ
+ * rather than the formula.
+ *
+ * Applied with `background-clip: text` over a transparent fill; see
+ * {@link rampDepth} for the half that must be a `filter`.
+ */
+export function rampFace(percentile: number | null): string {
+  const stops = RAMP_STOPS.map(
+    ({ at, l, c }) => `${rampStop(percentile, l, c)} ${at}%`,
+  );
+  return `linear-gradient(180deg, ${stops.join(", ")})`;
+}
+
+/**
+ * The polished face's cast. **It must be used as `filter`, never as
+ * `text-shadow`.**
+ *
+ * With `background-clip: text` over a transparent fill the element's background
+ * paints first, so a `text-shadow` paints *above* it — the dark offset copies
+ * cover the gradient inside the glyph bodies and the figure renders as flat ink
+ * with a 1px lit rim. Chained `drop-shadow`s composite behind the clipped
+ * gradient. `globals.css` records the same failure against `--alert-depth` and
+ * `card-plate.tsx` against `--wordmark-depth`.
+ *
+ * The static half is `--ramp-depth`, a token because it inverts wholesale for
+ * light mode rather than dimming — the lit hairline under the glyph becomes a
+ * dark one and the dark step becomes a light one, which is what
+ * `--figure-engrave` and `--standing-engrave` already do between the schemes.
+ * Only the halo is computed, and a `filter` is a space-separated list, so the
+ * two compose in one declaration exactly as a `text-shadow` and its glow do.
+ *
+ * **A caller gates it on `pointer-fine:`**, on the league card's per-device
+ * budget: a `filter` is a compositor buffer per element and this is up to three
+ * per card on a page with no virtualizer, which is the same budget that killed
+ * an iOS Safari tab. A coarse pointer gets the tinted ramp clipped to the
+ * glyphs, without the cast. The value therefore travels through a custom
+ * property that a `pointer-fine:[filter:…]` utility reads — a `style` cannot
+ * carry a variant.
+ */
+export function rampDepth(percentile: number | null): string {
+  return `var(--ramp-depth) drop-shadow(0 0 14px ${rankColor(percentile, 0.45)})`;
+}
+
+/**
+ * The five stops, as offsets down the glyph and as *names* of the per-scheme
+ * numbers that shape them.
+ *
+ * The 52% stop is the ramp colour itself and takes no tokens: it is what the
+ * figure would be with no polish at all, which is what keeps the polished
+ * reading and `rankColor`'s own the same colour.
+ */
+const RAMP_STOPS: readonly { at: number; l?: string; c?: string }[] = [
+  { at: 0, l: "--ramp-face-l0", c: "--ramp-face-c0" },
+  { at: 22, l: "--ramp-face-l1", c: "--ramp-face-c1" },
+  { at: 52 },
+  { at: 78, l: "--ramp-face-l3", c: "--ramp-face-c3" },
+  { at: 100, l: "--ramp-face-l4", c: "--ramp-face-c4" },
+];
+
+/**
+ * One stop of the face, as an `oklch()` the browser resolves.
+ *
+ * The lightness is clamped rather than added raw, because the deltas run past
+ * both ends: dark mode's lip is `+0.6` on a base of up to 0.99 precisely so it
+ * lands on white whatever the percentile did, and `--ramp-face-floor` is where
+ * a foot stops descending — the legibility bound the token's own note carries
+ * the measurement for. `clamp()` is a math function and resolves wherever a
+ * `<number>` is allowed.
+ */
+function rampStop(
+  percentile: number | null,
+  l: string | undefined,
+  c: string | undefined,
+): string {
+  const p = percentile === null ? 0.5 : Math.max(0, Math.min(1, percentile / 100));
+  const t = Math.abs(p - 0.5) * 2;
+  const hue = p < 0.5 ? 25 : 150;
+  const base = `(var(--rank-l-mid) + (var(--rank-l) - var(--rank-l-mid)) * ${t})`;
+  const chroma = `(var(--rank-c) * ${t})`;
+  if (!l || !c) return `oklch(calc${base} calc${chroma} ${hue})`;
+  return (
+    `oklch(clamp(var(--ramp-face-floor), ${base} + var(${l}), 1) ` +
+    `calc(${chroma} * var(${c})) ${hue})`
+  );
+}
+
+/**
  * Where one figure sits among the league's, as a rank the meters and the ramp
  * above can read.
  *

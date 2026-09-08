@@ -16,6 +16,7 @@ export {
   CONSOLE_CARD,
   CONSOLE_CARD_SHELL,
   CONSOLE_CHIP,
+  CONSOLE_CHIP_RAISED,
   CONSOLE_CHIP_TRAY,
   CONSOLE_FIGURE_WELL,
   CONSOLE_GLASS,
@@ -29,8 +30,10 @@ export {
   CONSOLE_METAL,
   CONSOLE_METAL_TRACK_SM,
   CONSOLE_MILLED_WELL,
+  CONSOLE_PANE_TRACK,
   CONSOLE_PLATE,
   CONSOLE_READOUT,
+  CONSOLE_ROW_WELL,
   CONSOLE_TRACK,
   CONSOLE_TRACK_SM,
   CONSOLE_WELL,
@@ -70,7 +73,18 @@ export {
 // The rank ramp and its two readings. The trades board joined the manager
 // card as a reader when its asset values gained a place in their own league:
 // a bar and a hue drawn from one rank on two pages must come off one module.
-export { placeAmong, rankColor, rankFill, rankPercentile } from "./rank-ramp";
+export {
+  placeAmong,
+  rampDepth,
+  rampFace,
+  rankColor,
+  rankFill,
+  rankPercentile,
+  // A margin is a share of what it was measured against rather than a rank —
+  // see the function. The lineup checker's projected margins joined the
+  // standings table as a reader, one page over.
+  sharePercentile,
+} from "./rank-ramp";
 export * from "./league-filters";
 // The dialog those rules are built in. It moved here from `features/manager`
 // when the trades board became a second reader — the line `CONSOLE_KEY` and
@@ -182,6 +196,7 @@ export {
   CardPlateRow,
   CardRule,
   DateBillet,
+  GameChip,
   LeagueBillet,
   LeaguePlate,
   LedgeBay,
@@ -192,6 +207,7 @@ export {
   PlateBay,
   PlateDivider,
   PlateField,
+  RampFigure,
   ReadingPlate,
   Scanlines,
   StandingBay,
@@ -211,13 +227,33 @@ export {
   FLASK_VESSEL,
 } from "./ui/bubbling-flask";
 export { ConsoleGround } from "./ui/console-ground";
+// The parts an expanded card's browser is built from — a billet carrying a
+// ledge and a sheet of glass, the channel a row is cut in it, and the drawer a
+// bench rises out of. They were the manager card's alone and reached through a
+// sibling's relative import; the lineup checker's week view is the second
+// reader, and a sibling feature may not import from `features/manager` or reach
+// past this barrel into `features/shared`'s own internals.
+export {
+  DrawerBar,
+  DrawerRow,
+  DRAWER_BAR,
+  DRAWER_BAR_HEIGHT,
+  DRAWER_BARS,
+  Pane,
+  PaneDrawer,
+  PaneGlass,
+  PaneHead,
+  PaneLedge,
+} from "./ui/pane";
+export type { DrawerTray } from "./ui/pane";
 // The capped inner housing an open card's expanded half is drawn in. It came
 // here from `features/manager` when the trade card became a second reader — the
 // line `LeagueTeams` and `LeagueConfigWindow` moved on, and the same folder
 // rule, since `features/trades` may not import from `features/manager`.
 export { ExpandedPanel } from "./ui/expanded-panel";
-// Exported beside it because the lineup checker's expanded half is not an
-// `ExpandedPanel` — it keeps its own inset and takes only the arithmetic.
+// Exported beside it, though all three cards mount `ExpandedPanel` since the
+// lineup checker's expanded half converged on it: the hook is still the seam a
+// half with a different inset would take, which is what it was split off for.
 export { usePanelCap } from "./use-panel-cap";
 // The park is the *list*'s, not the card's — see `useActiveCard`, which is
 // what three pages mount to make an open card the screen and a link.

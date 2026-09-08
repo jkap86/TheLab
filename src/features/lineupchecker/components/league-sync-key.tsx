@@ -1,6 +1,6 @@
 "use client";
 
-import { CONSOLE_KEY } from "@/features/shared";
+import { CONSOLE_KEY_PILL_SHELL } from "@/features/shared";
 
 import { syncStatusNote } from "../helpers/sync-status-note";
 import { useLeagueRefresh } from "../hooks/use-league-refresh";
@@ -40,6 +40,19 @@ import { useLeagueRefresh } from "../hooks/use-league-refresh";
  * hundred cards — a keyboard reader would be dumped to `<body>` and have to tab
  * back. `WeekStepper` keeps real `disabled` because its states are stable facts
  * about the week bounds rather than a momentary one about a request.
+ *
+ * **It stands in a 32px recess strip and owns no margin of its own**, since the
+ * expanded-half convergence: the card puts card-scoped controls where the
+ * manager card's history rail puts its own, so the two open halves read as one
+ * object. The row that used to wrap under a `mb-3.5` is one line inside that
+ * strip, and the key shrank to fit it.
+ *
+ * **The key composes the padding-free pill shell**, not `CONSOLE_KEY`.
+ * Appending a smaller padding to that constant's `px-4 py-2` is decided by
+ * Tailwind's emit order rather than by the class attribute — and the scale is
+ * emitted ascending, so the *larger* value wins whatever is written. It is the
+ * trap the shell exists to keep a key out of, and `TimelineView`'s `History`
+ * key is the same measurement one tool over.
  */
 export function LeagueSyncKey({
   leagueId,
@@ -65,7 +78,7 @@ export function LeagueSyncKey({
   };
 
   return (
-    <div className="mb-3.5 flex flex-wrap items-center gap-x-3 gap-y-2">
+    <div className="flex min-w-0 flex-1 items-center gap-2 sm:gap-2.5">
       <button
         type="button"
         onClick={() => void press()}
@@ -74,7 +87,7 @@ export function LeagueSyncKey({
         // and a reader speaking the words on screen still hits this control.
         aria-label={`Sync ${leagueName} from Sleeper`}
         title="Re-read this league's rosters and this week's lineup from Sleeper"
-        className={`${CONSOLE_KEY} inline-flex items-center gap-2 px-3.5 py-1.5 aria-disabled:cursor-default aria-disabled:text-foreground/40 aria-disabled:shadow-[var(--key-shadow-pressed)] aria-disabled:active:translate-y-0`}
+        className={`${CONSOLE_KEY_PILL_SHELL} inline-flex items-center gap-2 border-foreground/10 bg-[image:var(--key-bg)] px-3 py-[3px] text-foreground/80 shadow-[var(--key-shadow)] hover:text-readout aria-disabled:cursor-default aria-disabled:text-foreground/40 aria-disabled:shadow-[var(--key-shadow-pressed)] aria-disabled:active:translate-y-0`}
       >
         <SyncMark spinning={pending} />
         Sync

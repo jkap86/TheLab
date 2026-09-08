@@ -429,6 +429,10 @@
    * and a lit card inside a lit pane reads as glass on glass — the manager
    * card's bezel-and-windows grammar, one plane down.
    */
+  /* **No reader since the lineup checker's week view became an
+     `ExpandedPanel`** — see `CONSOLE_HOUSING_INSET`, which is the surface it
+     shadows and which is noted the same way. Kept rather than deleted: it is
+     the one place the inner housing's stack is written down. */
   --housing-inset-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.3),
     inset 0 -2px 5px rgba(0, 0, 0, 0.72), 0 1px 0 rgba(255, 255, 255, 0.05);
   /*
@@ -685,6 +689,50 @@
   --rank-l: 0.84;
   --rank-l-mid: 0.99;
   --rank-c: 0.18;
+  /*
+   * ── The polished ramp figure ─────────────────────────────────────────────
+   *
+   * `rampFace()` sets a ramp figure as **tinted chrome** — the hue clipped to
+   * the glyphs over a transparent fill — and these are the shape of it: a
+   * lightness delta and a chroma multiplier per stop, applied to whatever
+   * `rankColor()` would have painted flat. The 52% stop takes none, because it
+   * *is* that colour: the polished figure and the flat one read the same at
+   * the optical middle, which is what stops the polish from becoming a second
+   * opinion about the week.
+   *
+   * **They are tokens because the travel turns over, not because it dims.**
+   * The figure sits in a `--billet-well-bg`, and that well is the constraint at
+   * both ends: on the dark well the ramp's own 0.84 is already within 0.03 of
+   * the 4.5:1 floor, so the travel has to be *upward* — a white lip and a foot
+   * that barely recedes. On the pale well it is the other way round and the
+   * travel is downward, which is the move the design bundle asks for in
+   * exactly those words. Measured band against the well's own gradient at the
+   * same offset: dark clears **4.69:1** at its worst (a decisive red's foot)
+   * and every light band is at least the 3.41:1 the *flat* ramp figure already
+   * reads there — the polish costs nothing it did not already cost, and that
+   * 3.41 is `rankColor` on this well rather than anything added here.
+   *
+   * `--ramp-face-floor` is where a band stops descending whatever the deltas
+   * ask for. It is a legibility bound rather than a shape: move the well and
+   * this is the number to re-measure.
+   */
+  --ramp-face-floor: 0.79;
+  --ramp-face-l0: 0.6;
+  --ramp-face-c0: 0;
+  --ramp-face-l1: 0.11;
+  --ramp-face-c1: 0.55;
+  --ramp-face-l3: -0.025;
+  --ramp-face-c3: 0.95;
+  --ramp-face-l4: -0.05;
+  --ramp-face-c4: 0.8;
+  /*
+   * Its cast, less the coloured halo the caller appends — see `rampDepth()`
+   * for why a `filter` and never a `text-shadow`, and for how the two compose.
+   * A lit hairline along the glyph's bottom edge and a dark cast under it,
+   * which is `--wordmark-depth`'s stack at readout scale.
+   */
+  --ramp-depth: drop-shadow(0 1px 0 rgba(255, 255, 255, 0.3))
+    drop-shadow(0 2px 3px rgba(0, 0, 0, 0.85));
 
   /* ---- Machined billet — the league card's ledge, rail and windows ---- */
   /*
@@ -730,6 +778,16 @@
      no face to catch a light. */
   --chip-bg: linear-gradient(180deg, #43555b 0%, #2b3c41 55%, #1f2b30 100%);
   --chip-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.3), 0 1px 2px rgba(0, 0, 0, 0.4);
+  /*
+   * The same chip, standing in a *well* rather than in a tray: the chamfer
+   * above plus a real cast onto the floor it is raised off. A shadow list is
+   * atomic, so a caller cannot append the cast to `--chip-shadow` — appending
+   * a second `shadow-[…]` replaces the whole stack, and which of the two wins
+   * is Tailwind's emit order rather than the class attribute. Composed here
+   * with `var()` instead, which is also why there is no light counterpart to
+   * write: the chamfer it is built on already has one.
+   */
+  --chip-shadow-raised: var(--chip-shadow), 0 1px 2px rgba(0, 0, 0, 0.5);
   --chip-tray-bg: #111a1d;
   --chip-tray-shadow: inset 0 2px 6px rgba(0, 0, 0, 0.7);
   /* The header a rank window's words are stamped into, above its glass. */
@@ -1321,6 +1379,28 @@
   --rank-l: 0.52;
   --rank-l-mid: 0.42;
   --rank-c: 0.16;
+  /*
+   * The polished figure, turned over rather than dimmed — see the dark set.
+   * A white lip is invisible on near-white billet metal *and* it would be the
+   * one thing on the glyph reading below the flat figure's own contrast, so
+   * the light face takes its travel downward: the top two stops sit a hair
+   * under the ramp colour and the foot drops into shadow. The floor is the
+   * depth a stop stops at rather than a shape, as it is in dark.
+   */
+  --ramp-face-floor: 0.2;
+  --ramp-face-l0: -0.06;
+  --ramp-face-c0: 0.72;
+  --ramp-face-l1: -0.03;
+  --ramp-face-c1: 0.88;
+  --ramp-face-l3: -0.09;
+  --ramp-face-c3: 0.95;
+  --ramp-face-l4: -0.18;
+  --ramp-face-c4: 0.78;
+  /* `--wordmark-depth`'s own inversion, one figure down: the lit hairline
+     stays lit — a raised edge catches the light on either ground — and the
+     cast turns from black to slate. */
+  --ramp-depth: drop-shadow(0 1px 0 rgba(255, 255, 255, 0.9))
+    drop-shadow(0 2px 3px rgba(15, 23, 42, 0.28));
 
   /* ---- Machined billet (light) ---------------------------------------- */
   /*

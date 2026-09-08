@@ -8,17 +8,17 @@ import {
   CardBilletRow,
   CardRule,
   CONSOLE_CARD_SHELL,
-  CONSOLE_HOUSING_INSET,
   CONSOLE_METAL,
   CONSOLE_WINDOW,
+  ExpandedPanel,
+  GameChip,
   LeagueConfigWindow,
   LeagueBillet,
-  PlateBay,
-  PlateDivider,
-  rankColor,
-  ReadingPlate,
+  RampFigure,
+  sharePercentile,
   Scanlines,
-  usePanelCap,
+  StandingBay,
+  StandingStrip,
 } from "@/features/shared";
 
 import {
@@ -28,11 +28,7 @@ import {
   superflexCell,
   type MetricCell,
 } from "../helpers/lineup-check-metrics";
-import {
-  formatRecord,
-  leagueWeekRecord,
-  type LeagueWeekRecord,
-} from "../helpers/week-summary";
+import { leagueWeekRecord, type WeekGame } from "../helpers/week-summary";
 import { LeagueSyncKey } from "./league-sync-key";
 import { WeekPanes } from "./week-panes";
 
@@ -43,10 +39,25 @@ import { WeekPanes } from "./week-panes";
  * deliberately the same object: a reader arriving here from `/manager` is
  * looking at the same leagues, and two cards drawn to hold a league would be
  * two chances for one of them to drift. So it carries the same housing, the
- * same league plate with the avatar lit in its bezel, and the same league
- * config rail — with the week's projected outcome on the plate opposite, where
- * the manager card puts the record and the ranks, and four checks on the tile
- * row where that card puts its ranks.
+ * same billet with the avatar lit in its bezel, and the same league config
+ * strip — with the week's projected outcome on a milled strip under it, where
+ * the manager card puts `Rank / Rec / Pts`, and four checks on the window row
+ * where that card puts its ranks.
+ *
+ * **The billet row carries the league alone, and that is a width.** The week's
+ * readings used to share it as a raised plate, and a plate opposite the name is
+ * width the *name* is paying for: measured on the design's own render the name
+ * needs 312px to set and the plate left it 270, and at 390 the two-bay plate
+ * left it 20px — one character, which is why that plate dropped its median bay
+ * below `sm`. On its own line nothing competes, nothing is dropped for width
+ * any more, and the row is the manager card's to the pixel.
+ *
+ * **The billet is not stretched to the row**, which is the one place this
+ * parts company with the design bundle's letter and keeps its intent: the
+ * manager card's billet hugs its content, and a checker billet run to the full
+ * width would be a *different object* on the two pages — the drift the pass
+ * exists to remove. Hugging, the name still takes as much of the row as it
+ * needs and truncates only past it, which is the measured requirement.
  *
  * Three constraints are inherited and every one is silent when broken:
  *
@@ -94,13 +105,17 @@ import { WeekPanes } from "./week-panes";
  * difference between them here is a drift with nothing on screen saying which
  * page a reader is on.
  *
- * **The expanded half fills the shell and scrolls as one block**, where the
- * manager card's two panes scroll their own lists. That is the arrangement
- * `WeekPanes` already asks for rather than a shortcut: its two lineups are read
- * *across* — a seat row against the seat row opposite, which is why both are
- * measured to the same height at every width — and two independent scrollers
- * are exactly what would put them out of step. One scroller keeps the rows
- * aligned; {@link usePanelCap} is what bounds it.
+ * **The expanded half is an {@link ExpandedPanel}**, which is the manager and
+ * trade cards' own — so the two halves of the card are one piece of stock under
+ * a milled groove rather than a housing set inside a housing, and the summary
+ * hands it the bottom inset while it is open. That component owns the cap, the
+ * `mounted` gate and the perspective, which is what takes the last hook off
+ * this card and makes the claim above true again.
+ *
+ * It used to scroll as **one** block, on the argument that its two lineups are
+ * read across each other and two scrollers would put them out of step. That
+ * argument is right and is answered rather than dropped: the panes scroll their
+ * own lists, as the manager card's do, and `WeekPanes` links the two.
  *
  * A fourth constraint travels with the card: the depth chrome rides
  * `pointer-fine:`, because one card per league times several composited planes
@@ -142,16 +157,6 @@ export const LineupCheckCard = memo(function LineupCheckCard({
   /** The press. `useActiveCard` drives the disclosure and the list together. */
   onToggle: (id: string, event: MouseEvent<HTMLElement>) => void;
 }) {
-  // The card is still hook-free in the sense that matters — it owns no state of
-  // its own. This is a measurement of the box below and nothing else; see
-  // `usePanelCap`, which is a hook rather than a wrapper component precisely so
-  // this half can keep its own inset.
-  const {
-    ref: panelRef,
-    style: panelStyle,
-    mounted: panelMounted,
-  } = usePanelCap<HTMLDivElement>(open, open && !lit);
-
   const gap = gapCell(entry);
   const kickoff = kickoffCell(entry);
   const superflex = superflexCell(entry);
@@ -193,7 +198,19 @@ export const LineupCheckCard = memo(function LineupCheckCard({
             // size. Around `MIN_PARKED` that has two self-consistent answers
             // and it alternates between them forever; the manager card carries
             // the same rule and the driven figures for it.
-            `lab-card-3d ${CONSOLE_CARD_SHELL} pb-[1.125rem] pt-[1.875rem] sm:pt-[2.125rem] flex flex-1 group-open/card:flex-none cursor-pointer list-none flex-col font-mono ` +
+            //
+            // **The bottom padding is 0 while the card is open.** The expanded
+            // half is no longer a housing set into the card — it is the same
+            // piece of stock under a milled groove, and the groove is the
+            // panel's first child (see `ExpandedPanel`). So the summary hands
+            // its bottom inset to the panel for as long as there is a panel;
+            // shut, a card is one housing and keeps it, or the four windows
+            // would sit flush on its bottom edge. `group-open` rather than
+            // `group-data-[lit]` because the padding has to hold through the
+            // collapse: `lit` goes off as the close *begins*, and 18px
+            // returning under a panel still clipping shut is a jump. The
+            // manager card carries the same rule.
+            `lab-card-3d ${CONSOLE_CARD_SHELL} pb-[1.125rem] pt-[1.875rem] sm:pt-[2.125rem] group-open/card:pb-0 flex flex-1 group-open/card:flex-none cursor-pointer list-none flex-col font-mono ` +
             // **The gutter is 14px below `sm`**, where the card takes 18px from
             // `sm` up. Four tiles across a 362px card is what asks for it — the
             // strip is the card's full width less this inset, and the four
@@ -228,22 +245,32 @@ export const LineupCheckCard = memo(function LineupCheckCard({
               a clip is exactly what would cut them off. */}
           <CardBilletRow>
             <LeagueBillet name={league.name} avatarUrl={league.avatar_url} />
-            <ProjectionPlate entry={entry} />
           </CardBilletRow>
 
           <CardRule />
 
-          {/* What game this league is playing, where the identity line used to
-              be. It is the manager card's own window and the same component,
-              so a league described one way there cannot be described another
-              here — and the team name went with the line deliberately: the
-              card is about the league, and `total_rosters` is now stated once,
-              as the rail's own `Teams` field. `18px` sits between the tiles'
-              22px and the plates, so the planes read front to back. */}
-          <LeagueConfigWindow
-            league={league}
-            className="mt-3.5 pointer-fine:[transform:translateZ(18px)]"
-          />
+          {/* What game this league is playing, then how the week is going at
+              it — the manager card's own order, and its own two parts. The
+              settings strip is that card's component, so a league described one
+              way there cannot be described another here; the projection strip
+              below it is `StandingStrip` where the manager card puts its
+              standing, cut from the same billet stock so the pair reads as one
+              machined block. `18px` sits between the windows' 22px and the
+              billet, so the planes read front to back.
+
+              **Both take their own line, at every width.** The manager card
+              shares this row from `sm` up and its settings strip wraps for it;
+              measured at a 620px card the settings strip needs ~512px
+              un-wrapped and a 289px part beside it leaves 285, so it breaks to
+              three lines — 81px — where the two on their own lines are 35px
+              each. Sharing costs more than it saves here, which is also why
+              `LeagueConfigWindow` is *not* told it is `shared`: it has the full
+              width, so its own `md` and `sm` arms are unchanged and nothing
+              clips. */}
+          <div className="relative mt-3 flex flex-col items-stretch gap-2 sm:mt-3.5 pointer-fine:[transform:translateZ(18px)]">
+            <LeagueConfigWindow league={league} />
+            <ProjectionStrip entry={entry} />
+          </div>
 
           {/* A lineup graded off the roster's *live* starters rather than the
               week's own stored ones has to say so — otherwise a stepped week
@@ -274,302 +301,192 @@ export const LineupCheckCard = memo(function LineupCheckCard({
           </div>
         </summary>
 
-        {/* Outside the 3D context on purpose: a lineup table inside a
-            `preserve-3d` subtree pays for a composited layer per row and gains
-            nothing, since none of it is tilted. It is also what makes this
-            wrapper's own `overflow: hidden` safe — a clip inside the summary
-            would collapse the depth.
+        {/* **The expanded half is the card's own bottom half**, not a housing
+            set into it: `ExpandedPanel` paints no surface, cuts a milled groove
+            where the border was, and sizes itself into what the parked shell
+            has left. It is the manager and trade cards' own component, which is
+            what makes the three open halves one object rather than three.
 
-            **A housing rather than one big window**, which is the change the
-            seats forced: every seat below is a lit window of its own now, and
-            a lit card inside a lit pane reads as glass on glass. This is the
-            manager card's bezel-and-windows grammar one plane down. */}
-        <div
-          ref={panelRef}
-              style={panelStyle}
-          // **A scroller of its own, sized to the shell.** It fills what the
-          // parked card has left and scrolls its whole self — the sync key, both
-          // lineups and the note under them together — for the reason in the
-          // module note: the two panes are read across each other, and two
-          // scrollers is what would put their rows out of step. `min-h-0` is the
-          // half of that which is silent when missing: a flex item's default
-          // `min-height: auto` refuses to shrink below its content, so the cap
-          // would be a number nothing obeyed.
-          className={`${CONSOLE_HOUSING_INSET} lab-scroll-glass mt-3 min-h-0 overflow-y-auto px-3 pb-3 pt-3.5 font-mono sm:px-[1.125rem] sm:pb-[1.125rem] sm:pt-4`}
-        >
-          {/* **Nothing is rendered while the card is shut**, which is the same
-              bound `ExpandedPanel` takes one tool over — see `usePanelCap`'s
-              `mounted`. Two full lineups per card times a hundred cards is a
-              document nothing can lay out at speed. */}
-          {!panelMounted ? null : (
-          <>
-          {/* Above the panes rather than in the summary: a `<summary>` is a
+            It stays *outside* the summary's `preserve-3d` subtree, as it always
+            has, and owns a shallow perspective of its own instead — not the
+            same claim: `preserve-3d` cannot survive a clip and `perspective`
+            can, so the panel can both hold its parts on their own planes and
+            keep the `overflow: hidden` its radius needs.
+
+            **No wrapper between the panel and its parts**, which is the half of
+            that perspective which is silent when it is missing: a perspective
+            projects an element's *direct* children only, and an intermediate
+            `<div>` is `transform-style: flat` — so the control strip and the
+            panes would compute their `translateZ` against no projection at all,
+            with no error to say so. The fragment below is not an element. */}
+        <ExpandedPanel open={open} closing={open && !lit}>
+          {/* Card-scoped controls, in the recess the manager card's history
+              rail stands in — same height, same stock, same place, so a reader
+              crossing between the two tools finds the card's own controls where
+              they left them.
+
+              Above the panes rather than in the summary: a `<summary>` is a
               leaf button to assistive technology, so a control nested in one is
               unreliably reachable and a live region inside it is swallowed into
               the disclosure's name. It also lands beside the empty state below,
               which is the case a sync most often fixes. */}
-          <div className="relative">
+          <div className="mb-2 flex h-[30px] shrink-0 flex-nowrap items-center gap-1.5 rounded-full bg-[color:var(--recess-bg)] pl-1.5 pr-3.5 shadow-[var(--track-shadow)] sm:mb-2.5 sm:h-8 sm:gap-2.5 sm:pr-4 pointer-fine:[transform:translateZ(4px)]">
             <LeagueSyncKey
               leagueId={league.league_id}
               leagueName={league.name}
               onSynced={onSynced}
             />
           </div>
+
           {entry ? (
-            <>
-              <WeekPanes entry={entry} teamName={league.team_name} />
-              {entry.unknown_slots.length > 0 && (
-                // A partial lineup must say so — see `unknown_slots` on the
-                // contract. Under both panes, because it is true of both: the
-                // opponent is solved through the same slots.
-                <p className="relative m-0 pt-3 font-mono text-[length:var(--fs-11)] uppercase tracking-[0.14em] text-readout-label">
-                  Not shown: {entry.unknown_slots.join(", ")}
-                </p>
-              )}
-            </>
+            <WeekPanes entry={entry} teamName={league.team_name} />
           ) : (
-            <p className="relative m-0 font-mono text-[length:var(--fs-11)] uppercase tracking-[0.16em] text-readout-label">
+            <p className="m-0 font-mono text-[length:var(--fs-11)] uppercase tracking-[0.16em] text-readout-label">
               No lineup read for this league this week
             </p>
           )}
-          </>
+
+          {entry && entry.unknown_slots.length > 0 && (
+            // A partial lineup must say so — see `unknown_slots` on the
+            // contract. Under both panes, because it is true of both: the
+            // opponent is solved through the same slots. `shrink-0`, so it
+            // takes its line out of the panel rather than out of the panes'
+            // own height being negotiated around it.
+            <p className="m-0 shrink-0 pt-2.5 font-mono text-[length:var(--fs-11)] uppercase tracking-[0.14em] text-readout-label">
+              Not shown: {entry.unknown_slots.join(", ")}
+            </p>
           )}
-        </div>
+        </ExpandedPanel>
       </details>
     </li>
   );
 });
 
 /**
- * The week's projected outcome: this lineup against the one it plays, and —
- * where the league runs one — against the league's median beside it, then
- * the record the week adds up to.
+ * The week's projected outcome as a **milled strip**: the two comparisons as
+ * signed margins, and the week they add up to as one chip per game.
  *
- * **Two bays or three, or nothing at all.** There is no opponent for a future week
- * (the sync fetches matchups only up to the week being played), for a week
- * Sleeper filed without a pairing, or where the opponent's roster is not
- * stored — and the honest answer to all three is no plate, not `128.4–0` and a
- * W. `opponent_points` is null in every one of them and never zero, which is
- * what makes the distinction drawable at all. A league that runs no median
- * matchup draws **one** bay rather than an empty second one, on the same rule
- * one grain down: `median_points` is null there and null is not a score.
- * The `Rec` bay is drawn wherever the plate is, and it is the one reading
- * that says what the league's week *is* in Sleeper's own terms — a median
- * league plays two games a week and is `2–0`, `1–1` or `0–2`, which is the
- * figure the page's `Proj rec` sums. See `leagueWeekRecord`.
+ * **It is the manager card's standing, one tool over.** That card puts
+ * `Rank / Rec / Pts` on a `StandingStrip` bolted to the housing under the
+ * settings; this puts `Proj / Med / Rec` on the same part, in the same place,
+ * cut from the same stock. The two pages list the same leagues, so the header
+ * is the same object with a different pair of numbers in it — which is the
+ * whole of what this replaced a raised plate for.
  *
- * The head-to-head bay is what gates the plate even where a median exists.
- * That is deliberate: this plate is the week's *game*, and a median standing
- * alone on it — over a lineup the card is already captioning "as set now" —
- * would be a reading of a week nobody has been scheduled for.
+ * **The margins are signed, where the plate printed both totals.** `141.0–121.7`
+ * is two numbers a reader has to subtract; `+19.3` is the answer, and the two
+ * totals are not lost — they are the `Set` reading on each pane's own ledge,
+ * one seam down. An explicit `+` because the sign is the reading: a margin
+ * printed bare would read as a score.
  *
- * **The bays stack their label over their figure**, which is `PlateBay`'s whole
- * argument: two readings side by side are 377px of a 620px card against 281px
- * stacked, and the difference is exactly what the league name opposite was
- * losing. Height is the one dimension nothing else on this card wants — at a
- * *phone's* width there is none of it to spend either, which is why the second
- * bay drops below `sm`; the measurement is on the branch that does it.
+ * **Two bays or three, or nothing at all.** There is no opponent for a future
+ * week (the sync fetches matchups only up to the week being played), for a week
+ * Sleeper filed without a pairing, or where the opponent's roster is not stored
+ * — and the honest answer to all three is no strip, not `+128.4` and a W.
+ * `opponent_points` is null in every one of them and never zero, which is what
+ * makes the distinction drawable at all.
  *
- * Each pip takes its colour from `rankColor`, the same red→green ramp the
- * manager card's rank tiles run on, rather than from a second green and a
- * second red — one ramp, so a good outcome is the same green everywhere and
- * both ends invert for light mode together.
+ * **A league with no median matchup draws two bays, never `Med —`.** The app's
+ * em dash means "this league has this field and we have no answer for it" — the
+ * reading the manager card's `Rank —` makes before a season starts. A league
+ * that runs no median has no such field, so a dash there would read as a median
+ * the sync failed to fetch: two bays state the league, three state a fault. The
+ * bays stretch, so two of them fill the line rather than leaving a hole where a
+ * third would have been.
  *
- * **A dead heat draws a neutral pip rather than no pip.** Two lineups
- * projecting to the hundredth of a point is vanishingly rare and a real answer
- * when it happens; leaving the pip off would spell it the same way as "no
- * opponent", which is the one thing this plate is careful about.
+ * The head-to-head is what gates the strip even where a median exists. That is
+ * deliberate: this is the week's *game*, and a median standing alone on it —
+ * over a lineup the card is already captioning "as set now" — would be a
+ * reading of a week nobody has been scheduled for.
  */
-function ProjectionPlate({ entry }: { entry?: LineupCheckLeague | null }) {
+function ProjectionStrip({ entry }: { entry?: LineupCheckLeague | null }) {
   const record = leagueWeekRecord(entry);
   if (!entry || entry.opponent_points === null || !record) return null;
 
   const mine = entry.current_points;
-  const theirs = entry.opponent_points;
   const median = entry.median_points;
 
   return (
-    <ReadingPlate tight>
-      <PlateBay label="Proj">
-        {mine.toFixed(1)}–{theirs.toFixed(1)}
-        {/* **Below `sm` the pip is the week's record**, and that is the one
-            place the median reaches a phone. The median bay is dropped there
-            (measured below), and a lamp reading `W` over a league that is
-            `2–0` for the week says half of what the card knows. `2–0` in the
-            lamp's own place costs a lozenge's width over a disc's — estimated,
-            not rendered — against the ~88px a second bay would,
-            and for a league with no median it reads `1–0`, which is the same
-            letter one grain more exact. From `sm` up the two bays carry a pip
-            each and the record has a bay of its own, so the lamp goes back
-            to being the head-to-head's alone. `display: none` on the copy
-            not shown keeps exactly one in the accessibility tree. */}
-        <span className="hidden sm:contents">
-          <OutcomePip mine={mine} against={theirs} />
+    <StandingStrip stretch>
+      <MarginBay label="Proj" mine={mine} against={entry.opponent_points} />
+      {median !== null && <MarginBay label="Med" mine={mine} against={median} />}
+      {/* **One chip per game, head-to-head first**, which is the strip's own
+          left-to-right order — so the first maps onto `Proj` and the second
+          onto `Med`, and the part itself says which is which. That is a
+          reading `1–1` cannot make: it says *which* of the two went which way.
+          The bay draws no ink of its own, because each chip carries its own —
+          see `StandingBay`'s `tone`. */}
+      <StandingBay label="Rec" stretch>
+        <span className="inline-flex items-center gap-1">
+          {record.games.map((game) => (
+            <GameChip
+              key={game.against}
+              percentile={OUTCOME_PERCENTILE[game.result]}
+              name={`Projected ${game.result} against ${AGAINST[game.against]}`}
+            >
+              {OUTCOME_LETTER[game.result]}
+            </GameChip>
+          ))}
         </span>
-        <span className="contents sm:hidden">
-          <RecordPip record={record} />
-        </span>
-      </PlateBay>
-      {median !== null && (
-        // **The median bay drops below `sm`, and that is measured.** The plate
-        // sits opposite a league name that truncates, so every pixel it spends
-        // is a character off the card's own subject — and at 390 the two-bay
-        // plate is 233px of a 322px row, which leaves the name **20px: one
-        // character**. Dropped, a median league's plate is 145px and its name
-        // 108px, which is exactly what every other league on the page already
-        // gets. The alternative measured against it — keeping both bays and
-        // setting the head-to-head as `128.4` alone — buys the name back only
-        // to 74px *and* loses the opponent's total, which is a number the
-        // expanded half no longer states either.
-        //
-        // It is `hidden`/`sm:contents` rather than a second render, on
-        // `StandingPlate`'s own rule one card over: `display: none` takes the
-        // bay out of the accessibility tree as well as off the screen, so a
-        // phone reader is not read a figure nobody can see. `contents` rather
-        // than `inline-flex` because the plate is `items-stretch` and the
-        // divider has to be a flex item of the plate itself to run its height.
-        <>
-          <span className="hidden sm:contents">
-            {/* Stretched, so the cut runs the bays' own height — a fixed 17px
-                centred in a 34px stack reads as a dash rather than a
-                channel. */}
-            <PlateDivider stretch />
-          </span>
-          <span className="hidden sm:contents">
-            <PlateBay label="Med">
-              {median.toFixed(1)}
-              <OutcomePip mine={mine} against={median} median />
-            </PlateBay>
-          </span>
-        </>
-      )}
-      {/* **The week's record for this league, as its own bay.** One game for
-          most leagues and two where the league runs a median — which is what
-          Sleeper's own standings write down for the week, and the figure the
-          plate above the list sums. It is `leagueWeekRecord`'s answer, the
-          same fold the page's `Proj rec` reads, so a card reading `2–0`
-          cannot sit under a plate that counted it once. It is drawn beside the
-          pips rather than instead of them: a pip says which game went which
-          way, and the record says what the week adds up to. `sm` up only —
-          below it the record has taken the pip's place in the first bay. */}
-      <span className="hidden sm:contents">
-        <PlateDivider stretch />
-        <PlateBay label="Rec">
-          <span className="sr-only">
-            {record.median
-              ? `Projected ${formatRecord(record)} for the week, median game included`
-              : `Projected ${formatRecord(record)} for the week`}
-          </span>
-          <span aria-hidden>{formatRecord(record)}</span>
-        </PlateBay>
-      </span>
-    </ReadingPlate>
+      </StandingBay>
+    </StandingStrip>
   );
 }
 
 /**
- * The W/L/T lamp on a bay's own figure line.
+ * One comparison, as a signed margin polished in the ramp's own hue.
  *
- * One component for both bays rather than two, because the two readings are
- * the same question asked of two opponents — and a second spelling is how the
- * median's tie could come to be drawn in a green the head-to-head's is not.
- * `median` changes only the word a screen reader gets, since the letter is the
- * same letter and the bay above it already says which comparison this is.
+ * **The colour is the margin's size, not which way it went** — the chip beside
+ * it already says that, and a rank ramp fed a win/lose boolean would paint a
+ * 0.4-point squeaker the same green as a thirty-point rout. `sharePercentile`
+ * is the scale the standings table already reads its totals on: a margin as a
+ * share of what the two sides average, saturating at ±10%, which lands a dead
+ * heat on the neutral and a comfortable win at the ramp's end.
+ *
+ * **The sign is decided after rounding**, so a margin that rounds to nothing
+ * prints `0.0` rather than `−0.0` — and a `0.0` beside an `L` is true rather
+ * than contradictory: the game was that close, and the chip is what settles it.
  */
-function OutcomePip({
+function MarginBay({
+  label,
   mine,
   against,
-  median = false,
 }: {
+  label: string;
   mine: number;
   against: number;
-  /** Whether this is the bay read against the league median. */
-  median?: boolean;
 }) {
-  // 1 for a win, 0 for a loss, 0.5 for a tie — the ramp's own ends and middle.
-  const outcome = mine > against ? 1 : mine < against ? 0 : 0.5;
-  const letter = outcome === 1 ? "W" : outcome === 0 ? "L" : "T";
-  const result = outcome === 1 ? "win" : outcome === 0 ? "loss" : "tie";
+  const margin = Number((mine - against).toFixed(1));
+  const sign = margin > 0 ? "+" : margin < 0 ? "\u2212" : "";
 
   return (
-    <Lamp
-      percentile={outcome * 100}
-      name={median ? `Projected ${result} against the median` : `Projected ${result}`}
-    >
-      {letter}
-    </Lamp>
+    <StandingBay label={label} stretch>
+      <RampFigure percentile={sharePercentile(mine, [mine, against])}>
+        {sign}
+        {Math.abs(margin).toFixed(1)}
+      </RampFigure>
+    </StandingBay>
   );
 }
 
-/**
- * The week's record as a lamp, where the phone plate has room for one lamp and
- * not for a second bay.
- *
- * Its tone is the pip's own scale one game wider — wins as a share of the
- * games with a result, so `2–0` is the green a `W` is, `1–1` the neutral a
- * `T` is, and `0–2` the red an `L` is. Not `winSharePercentile`, which
- * stretches a *season's* .250–.750 band across the ramp: over one or two
- * games there is no band to stretch, and a `1–0` read through it would land
- * at the same full green as a `W` anyway, with a `1–1` off the neutral for no
- * reason a reader could see. A tie is left out of the share, on that
- * function's own rule — it is neither result.
- */
-function RecordPip({ record }: { record: LeagueWeekRecord }) {
-  const played = record.wins + record.losses;
-  const share = played === 0 ? 0.5 : record.wins / played;
-  const text = formatRecord(record);
+/** The ramp's own ends and middle: a win, a loss, a dead heat. */
+const OUTCOME_PERCENTILE: Record<WeekGame["result"], number> = {
+  win: 100,
+  loss: 0,
+  tie: 50,
+};
 
-  return (
-    <Lamp
-      percentile={share * 100}
-      name={
-        record.median
-          ? `Projected ${text} for the week, median game included`
-          : `Projected ${text} for the week`
-      }
-      wide
-    >
-      {text}
-    </Lamp>
-  );
-}
+const OUTCOME_LETTER: Record<WeekGame["result"], string> = {
+  win: "W",
+  loss: "L",
+  tie: "T",
+};
 
-/**
- * The lit lamp both pips are drawn on: a bordered disc of readout glass with
- * its letter — or its record — coloured off the rank ramp.
- *
- * `rankColor` rather than a second green and a second red, so a good outcome
- * is the same green everywhere on the console and both ends invert for light
- * mode together. `wide` lets the disc stretch into a lozenge for a record,
- * which is three characters where a letter is one; the height is the same so
- * the two sit on the figure line identically.
- */
-function Lamp({
-  percentile,
-  name,
-  wide = false,
-  children,
-}: {
-  percentile: number;
-  /** The screen reader's sentence — the visible text is the letter alone. */
-  name: string;
-  wide?: boolean;
-  children: string;
-}) {
-  const tone = rankColor(percentile);
-
-  return (
-    <span
-      className={`inline-flex h-5 shrink-0 items-center justify-center rounded-full border border-active/45 bg-[image:var(--readout-bg)] font-mono text-[length:var(--fs-11)] font-medium tabular-nums shadow-[inset_0_0_12px_var(--accent-glow)] ${
-        wide ? "min-w-5 px-1.5" : "w-5"
-      }`}
-      style={{ color: tone, textShadow: `0 0 10px ${rankColor(percentile, 0.6)}` }}
-    >
-      <span className="sr-only">{name}</span>
-      <span aria-hidden>{children}</span>
-    </span>
-  );
-}
+/** What each chip's sentence names, so `W W` is never announced as "W W". */
+const AGAINST: Record<WeekGame["against"], string> = {
+  opponent: "this week\u2019s opponent",
+  median: "the league median",
+};
 
 /**
  * One reading, as a lit window — the same surface as the console's readouts.
