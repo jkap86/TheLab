@@ -1,9 +1,18 @@
 "use client";
 
-import { memo, useEffect, useRef, useState, type MouseEvent } from "react";
+import {
+  memo,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type MouseEvent,
+} from "react";
 
 import type {
+  LineupColumn,
   ManagerLeague,
+  ManagerLineupsPayload,
   MetricRank,
   Trade,
   TradeSide,
@@ -168,6 +177,7 @@ export const TradeCard = memo(function TradeCard({
   trade,
   league,
   view,
+  teamsColumn,
   season,
   username,
   open,
@@ -178,6 +188,16 @@ export const TradeCard = memo(function TradeCard({
   /** Null before the leagues request lands, or if it failed. */
   league: ManagerLeague | null;
   view: TradeCardView;
+  /**
+   * What the expanded half's standings pane reads — see `TradeLeague`.
+   *
+   * A prop rather than a hook, where the value basis and the KeepTradeCut
+   * market are a context read: this is one column threaded from the page, and
+   * both alternatives — a store subscription per card, or a second context —
+   * cost more than passing it. The card's *asset* figures are priced on the
+   * reader's own market, which is a different question with its own control.
+   */
+  teamsColumn: LineupColumn;
   /**
    * The season this board answers, which the expanded half is solved and
    * rewound against. The page's own, so the trade a reader is looking at and
@@ -419,6 +439,7 @@ export const TradeCard = memo(function TradeCard({
             leagueId={trade.league_id}
             season={season}
             username={username}
+            teamsColumn={teamsColumn}
           />
         </ExpandedPanel>
       </details>
@@ -480,6 +501,12 @@ function DisclosureHint() {
 }
 
 /**
+ * No market answered — a read in flight, or one whose board could not be. A
+ * shared empty so the pane below is not handed a new array identity per render.
+ */
+const NO_KTC: ManagerLineupsPayload["ktc"] = [];
+
+/**
  * The league this trade happened in, as the manager card opens it.
  *
  * **The read is behind the disclosure, and that is a bound rather than a
@@ -491,9 +518,18 @@ function DisclosureHint() {
  * costs one request and keeps its answer for as long as it is on screen.
  *
  * **Two reads, one subject.** The entry and the log are asked the same
- * question — the same season, the same manager, the same market — because a
+ * question — the same season, the same manager, the same column — because a
  * card's present priced on a different board from the past its own rail scrubs
  * to is not a comparison, it is two numbers on two rulers.
+ *
+ * **The boards come off the standings pane's own column, not off this page's
+ * Value panel.** Those are two different questions and the answer is on screen
+ * beside each: the panel's market is what the *asset* figures on the card above
+ * are printed in, where the pane's column names the market its own head states
+ * and its own totals are summed on. A pane whose head said `Dyn` over numbers
+ * read on the redraft board would be the wrong-number failure this whole seam
+ * is arranged against; a card printing its assets on one market above a table
+ * on another is two readings, each labelled.
  *
  * **The three states under the housing are three different sentences**, and
  * collapsing them is what would make an ordinary answer look like a fault. A
@@ -509,15 +545,22 @@ function TradeLeague({
   leagueId,
   season,
   username,
+  teamsColumn,
 }: {
   leagueId: string;
   season: string;
   username: string | null;
+  /**
+   * What the expanded card's standings pane reads — the device's own stored
+   * column, threaded down rather than read here.
+   *
+   * A prop for the reason `basis` and `board` are: this board appends a hundred
+   * rows at a time and never unmounts one, so a hook here would subscribe every
+   * card to one device preference and drop the `memo` that makes the page
+   * usable.
+   */
+  teamsColumn: LineupColumn;
 }) {
-  // The reader's market, off the list's context rather than a card prop — see
-  // `TradeCard`. Only an open card mounts this, so the read costs nothing on
-  // the hundreds that are closed.
-  const { board } = useValueLensChoice();
   // **Whether the card has been opened, held here rather than in `TradeCard`**,
   // which is what keeps that component hook-free — its own stated design, and
   // `league-card.tsx`'s: the one interaction a card owns is the disclosure, and
@@ -544,7 +587,14 @@ function TradeLeague({
     return () => card.removeEventListener("toggle", onToggle);
   }, []);
 
-  const subject = { leagueId, season, username, board };
+  // `useMemo` so the identity is stable across the renders this card takes for
+  // reasons that have nothing to do with its league — the subject is a
+  // dependency of both reads below, and a fresh object each render is a
+  // re-fetch each render.
+  const subject = useMemo(
+    () => ({ leagueId, season, username, column: teamsColumn }),
+    [leagueId, season, username, teamsColumn],
+  );
   const { payload, loading, error } = useLeagueLineup(subject, opened);
 
   return (
@@ -561,6 +611,12 @@ function TradeLeague({
       <TimelineView
         subject={subject}
         entry={payload?.entry ?? null}
+        column={teamsColumn}
+        // **Off this card's own answer**, which is where the stamp is: the
+        // per-league route reads one market and says which and when, so the
+        // pane's picker draws its scrape line from the read it is a picker for
+        // rather than from a page-wide fetch this board does not make.
+        ktc={payload?.ktc ?? NO_KTC}
         // Whichever roster the reader holds here, if any — read off the answer
         // the table is drawn from, so a past stop marks the same team the
         // present one does. On this board that is usually nobody: the trades

@@ -6,11 +6,13 @@ import type { LineupColumn, ManagerLineupsPayload } from "@/shared/contract";
 import {
   adpBoardsOf,
   ktcVariantsOf,
+  lineupColumnKey,
   positionSetsOf,
   serializeAdpBoards,
   serializeKtcVariants,
   serializePositionSets,
   serializeSlotSets,
+  serializeTeamTotalKeys,
   slotSetsOf,
 } from "@/shared/ktc/columns";
 import { isAbortError, useRequestGuard } from "@/features/shared";
@@ -75,6 +77,19 @@ export function useManagerLineups(
   season: string | null,
   ready: boolean,
   columns: readonly LineupColumn[],
+  /**
+   * What the expanded card's standings pane reads — a fifth column, and one
+   * that asks a different question from the four.
+   *
+   * **The four bays want a rank and this wants a total per roster**, which is
+   * why it is a parameter of its own rather than an entry in `columns`. Its
+   * *axes* do join those four, because a forced market or a narrowing has to be
+   * priced and re-totalled either way — but the total itself is only carried
+   * out for the columns `?team_totals=` names, since the cross product of four
+   * bays' axes over a dozen rosters is hundreds of sums a league where a pane
+   * reads one.
+   */
+  teamsColumn: LineupColumn,
 ): ManagerLineupsPayload | null {
   const [payload, setPayload] = useState<ManagerLineupsPayload | null>(null);
   const inFlight = useRef<AbortController | null>(null);
@@ -83,22 +98,35 @@ export function useManagerLineups(
 
   // Reset during render, the way `useManagerLeagues` does: a manager change
   // must not paint one frame of the previous manager's lineups.
-  const boards = serializeKtcVariants(ktcVariantsOf(columns));
-  const adpBoards = serializeAdpBoards(adpBoardsOf(columns));
-  const positions = serializePositionSets(positionSetsOf(columns));
-  const slots = serializeSlotSets(slotSetsOf(columns));
-  const subject = `${username} ${season ?? ""} ${boards} ${adpBoards} ${positions} ${slots}`;
+  // **The teams column joins the four reductions**, which is what makes its
+  // own totals answerable: a pricing it has forced has to be read for this
+  // league and a narrowing it carries has to be re-totalled, and both of those
+  // are decided by the *axes* the request names rather than by which column
+  // named them. Its rank comes along for free and nothing reads it, which is
+  // the same free ride a bay's ninth metric already takes.
+  const asked = [...columns, teamsColumn];
+  const boards = serializeKtcVariants(ktcVariantsOf(asked));
+  const adpBoards = serializeAdpBoards(adpBoardsOf(asked));
+  const positions = serializePositionSets(positionSetsOf(asked));
+  const slots = serializeSlotSets(slotSetsOf(asked));
+  // The one column whose totals are carried out per roster. A column on each
+  // league's own board narrowing nothing folds to a bare metric id, which the
+  // ten totals every entry already carries answer — so a reader who has never
+  // opened the pane's picker sends a key that costs the route nothing.
+  const teamTotals = serializeTeamTotalKeys([lineupColumnKey(teamsColumn)]);
+  const subject = `${username} ${season ?? ""} ${boards} ${adpBoards} ${positions} ${slots} ${teamTotals}`;
   /**
    * The half of the subject a stale answer would be *wrong* about.
    *
    * **Only a manager or a season change blanks the payload.** Those name which
    * data the page is about, so last manager's ranks under this one's name is a
-   * wrong number rather than an old one. A board, an ADP board, a position set
-   * or a slot set is not: every rank is filed under `lineupColumnKey`, which
-   * encodes all four, so a bay edit asks for a key the held payload simply does
-   * not carry and that column reads an em dash until the answer lands. Blanking
-   * for it took all of a hundred-league page's rank windows down for a round
-   * trip — and the request is the whole ~5MB payload — to change one tile.
+   * wrong number rather than an old one. None of the five reductions above is:
+   * every rank is filed under `lineupColumnKey` and every carried total under
+   * its own key, so a bay edit — or a teams-column change — asks for a key the
+   * held payload simply does not carry, and that column reads an em dash until
+   * the answer lands. Blanking for it took all of a hundred-league page's rank
+   * windows down for a round trip — and the request is the whole ~5MB payload —
+   * to change one tile.
    */
   const identity = `${username} ${season ?? ""}`;
   const [renderedIdentity, setRenderedIdentity] = useState(identity);
@@ -155,7 +183,8 @@ export function useManagerLineups(
       (boards ? `&ktc_boards=${encodeURIComponent(boards)}` : "") +
       (adpBoards ? `&adp_boards=${encodeURIComponent(adpBoards)}` : "") +
       (positions ? `&positions=${encodeURIComponent(positions)}` : "") +
-      (slots ? `&slots=${encodeURIComponent(slots)}` : "");
+      (slots ? `&slots=${encodeURIComponent(slots)}` : "") +
+      (teamTotals ? `&team_totals=${encodeURIComponent(teamTotals)}` : "");
 
     void (async () => {
       try {
@@ -179,13 +208,14 @@ export function useManagerLineups(
       controller.abort();
       if (retry !== null) clearTimeout(retry);
     };
-    // The four strings and not `columns`: the array is a new identity on every
-    // render of the page above, where a string moves only when a bay's market,
-    // QB board, position set or slot set does — which are the only edits that
-    // cost a request. `attempt` is the retry above, and `guard` is one object for
-    // the life of the hook — see `useRequestGuard`.
+    // The five strings and not the columns: the arrays are new identities on
+    // every render of the page above, where a string moves only when a bay's
+    // market, QB board, position set or slot set does, or when the standings
+    // pane's own column does — which are the only edits that cost a request.
+    // `attempt` is the retry above, and `guard` is one object for the life of
+    // the hook — see `useRequestGuard`.
   }, [
-    username, season, ready, boards, adpBoards, positions, slots, attempt,
+    username, season, ready, boards, adpBoards, positions, slots, teamTotals, attempt,
     guard, subject,
   ]);
 

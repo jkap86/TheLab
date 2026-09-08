@@ -4,6 +4,8 @@ import { useEffect, useRef, useState } from "react";
 
 import type { LeagueLineupPayload } from "@/shared/contract";
 
+import { teamsColumnQuery } from "./teams-column-query";
+
 import { apiFetch } from "./api";
 import { errorMessage } from "./error-message";
 import type { TimelineSubject } from "./use-timeline";
@@ -16,8 +18,11 @@ import type { TimelineSubject } from "./use-timeline";
  * two reads have to be asked the same question or a card's table and the past
  * its own rail scrubs to are priced on two different rulers. So this takes the
  * identical {@link TimelineSubject} — the same season, the same manager whose
- * drafts the ADP is averaged over, the same market — and sends it as the same
- * three parameters.
+ * drafts the ADP is averaged over, the same column and therefore the same two
+ * boards. What it sends beyond that is the column's *narrowing* and the key its
+ * per-roster totals should be filed under, which the timeline route has no use
+ * for: a stop there is solved in the browser, so a narrowing is arithmetic
+ * rather than a request. See `teamsColumnQuery`.
  *
  * **`enabled` is a press, and it is the card's disclosure.** `/manager` batches
  * one lineups read for every league on its page; the trades board is
@@ -56,12 +61,26 @@ export function useLeagueLineup(
   const [error, setError] = useState<string | null>(null);
   const inFlight = useRef<AbortController | null>(null);
 
-  const { leagueId, season, username, board } = subject;
+  const { leagueId, season, username, column } = subject;
+  // Everything this route is asked, off the one column: the two boards it
+  // prices on, the two narrowings it re-totals under, and the key the pane will
+  // read the per-roster totals back by. `lineupColumnKey` folds an un-narrowed
+  // column on each league's own board to its bare metric id, so a reader who
+  // has forced nothing sends a key the ten totals already answer.
+  // A *string*, not the record: it is both the subject key and the effect's
+  // dependency, and an object literal rebuilt each render is a changed
+  // dependency every render — the loop `usePublishRackControls` documents at
+  // the other end of this codebase.
+  const params = new URLSearchParams(teamsColumnQuery(column)).toString();
 
   // Reset during render, the idiom `useManagerLeagues` documents: a subject
   // change must not paint one frame of the previous answer under the new
   // subject's heading.
-  const key = `${leagueId} ${season ?? ""} ${username ?? ""} ${board}`;
+  // **The whole column, where the timeline's key takes the boards alone.** A
+  // narrowing changes what this route ships — it is a per-roster total keyed by
+  // the column — so it has to blank the entry for one round trip rather than
+  // leave the old narrowing's numbers under the new one's head.
+  const key = `${leagueId} ${season ?? ""} ${username ?? ""} ${params}`;
   const [renderedKey, setRenderedKey] = useState(key);
   if (renderedKey !== key) {
     setRenderedKey(key);
@@ -76,7 +95,7 @@ export function useLeagueLineup(
     const controller = new AbortController();
     inFlight.current = controller;
 
-    const query = new URLSearchParams({ ktc_board: board });
+    const query = new URLSearchParams(params);
     if (season) query.set("season", season);
     if (username) query.set("user", username);
 
@@ -97,7 +116,7 @@ export function useLeagueLineup(
     })();
 
     return () => controller.abort();
-  }, [leagueId, season, username, board, enabled]);
+  }, [leagueId, season, username, params, enabled]);
 
   return {
     payload,

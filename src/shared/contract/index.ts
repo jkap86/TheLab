@@ -30,6 +30,7 @@ export {
   type LineupColumn,
   type KtcBoardStamp,
   type RosterPick,
+  type TeamTotals,
   type LeagueTeam,
   type LeagueLineupEntry,
   type LeagueLineupPayload,

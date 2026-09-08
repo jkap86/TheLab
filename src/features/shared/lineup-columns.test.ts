@@ -10,6 +10,7 @@ import {
   COLUMN_SCOPES,
   COLUMN_VALUES,
   DEFAULT_LINEUP_COLUMNS,
+  DEFAULT_TEAMS_COLUMN,
   IDP_LINEUP_POSITIONS,
   ktcBoardLabel,
   ktcChoiceLabel,
@@ -23,6 +24,7 @@ import {
   MAX_LINEUP_COLUMNS,
   metricAt,
   metricAxes,
+  normalizeTeamsColumn,
   narrowingClause,
   normalizeLineupColumns,
   positionGapReason,
@@ -634,5 +636,89 @@ describe("slotsLabel and narrowingClause", () => {
     // One spelling, so the window cannot word an un-narrowed column two ways.
     assert.equal(narrowingClause([], ["QB", "TE"]), positionsClause(["QB", "TE"]));
     assert.equal(narrowingClause([], []), "");
+  });
+});
+
+/**
+ * The standings pane's own stored column.
+ *
+ * **Every rule here is silent when it goes wrong**, which is the reason the
+ * fold runs through the one `column()` constructor rather than trusting what it
+ * is handed: a stored value carrying a slot set on a bench scope is not a
+ * column that ranks nothing, it is a column whose *key* the server never files
+ * a total under — so the pane looks one up, finds nothing, and draws a table of
+ * em dashes with no error anywhere.
+ */
+describe("normalizeTeamsColumn", () => {
+  test("a whole column survives every axis", () => {
+    const stored = column("ktc_starters", "dynasty", "sf", ["WR"], ["FLEX"]);
+    assert.deepEqual(normalizeTeamsColumn(stored), stored);
+  });
+
+  test("a legacy bare metric id reads as that column on every default", () => {
+    // The shape the pane's `Sort by` menu would have stored, had it stored
+    // anything: a metric id and nothing else.
+    assert.deepEqual(normalizeTeamsColumn("capital_total"), column("capital_total"));
+  });
+
+  test("anything unreadable is the default column", () => {
+    for (const value of [null, undefined, 42, "nonsense", {}, { metric: "x" }]) {
+      assert.deepEqual(normalizeTeamsColumn(value), DEFAULT_TEAMS_COLUMN);
+    }
+  });
+
+  test("the default is what the pane sorted by before it had a picker", () => {
+    assert.equal(DEFAULT_TEAMS_COLUMN.metric, "ros_starters");
+    assert.deepEqual(DEFAULT_TEAMS_COLUMN, column("ros_starters"));
+  });
+
+  test("a slot set off the starters scope is dropped, not kept", () => {
+    // A seat is a thing only a starting lineup has, so `ros_bench:@flex` is a
+    // key nothing ranks and nothing totals.
+    const folded = normalizeTeamsColumn({
+      metric: "ros_bench",
+      slots: ["FLEX"],
+    });
+    assert.deepEqual(folded.slots, []);
+    assert.equal(lineupColumnKey(folded), "ros_bench");
+  });
+
+  test("a position set on a picks column is dropped", () => {
+    const folded = normalizeTeamsColumn({
+      metric: "ktc_picks",
+      positions: ["QB"],
+    });
+    assert.deepEqual(folded.positions, []);
+  });
+
+  test("a market on a column that reads none is folded to auto", () => {
+    // Otherwise it would key as a second, un-removable copy of a projections
+    // column — the same rule `column()` enforces for the bays.
+    const folded = normalizeTeamsColumn({
+      metric: "ros_starters",
+      format: "dynasty",
+    });
+    assert.equal(folded.format, "auto");
+    assert.equal(lineupColumnKey(folded), "ros_starters");
+  });
+
+  test("an unreadable axis value folds rather than failing the column", () => {
+    const folded = normalizeTeamsColumn({
+      metric: "ktc_total",
+      format: "sideways",
+      lineup: 7,
+      positions: ["QB", "NOPE"],
+      slots: "flex",
+    });
+    assert.deepEqual(folded, column("ktc_total", "auto", "auto", ["QB"], []));
+  });
+
+  test("the fold is idempotent, so read and write cannot disagree", () => {
+    const once = normalizeTeamsColumn({
+      metric: "ros_starters",
+      slots: ["SUPER_FLEX", "FLEX"],
+      positions: ["TE", "WR"],
+    });
+    assert.deepEqual(normalizeTeamsColumn(once), once);
   });
 });

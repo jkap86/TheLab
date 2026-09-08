@@ -7,13 +7,30 @@ import type {
   LeagueLineupPayload,
 } from "@/shared/contract";
 import { getKtcBoards, isSuperflexLineup, ktcBoardValue } from "@/shared/ktc";
-import { parseKtcBoardChoice, resolveKtcFormat } from "@/shared/ktc/board-choice";
+import {
+  parseKtcBoardChoice,
+  parseKtcLineupChoice,
+  resolveKtcFormat,
+} from "@/shared/ktc/board-choice";
+import {
+  isAutoVariant,
+  ktcVariantKey,
+  parsePositionSets,
+  parseSlotSets,
+  parseTeamTotalKeys,
+  qbBoardKeySuffix,
+} from "@/shared/ktc/columns";
 import {
   getLeagueLineupRow,
   lookupManagerDraftAdp,
   solveLeagueEntry,
 } from "@/shared/manager";
-import type { KtcPricing, ManagerLeagueRow } from "@/shared/manager";
+import type {
+  AdpVariant,
+  KtcPricing,
+  KtcVariantPricing,
+  ManagerLeagueRow,
+} from "@/shared/manager";
 import type { AdpEntry } from "@/shared/manager";
 import { getRosProjections, restOfSeasonStart } from "@/shared/projections";
 import type { RosProjections } from "@/shared/projections";
@@ -45,12 +62,28 @@ export const dynamic = "force-dynamic";
  * feed, the ADP the manager's drafts measure, the KTC market — every one of
  * them a cached read shared with that route rather than work of this one's.
  *
- * **The three narrowing parameters are the timeline route's, to the name.**
- * `?season=`, `?user=` and `?ktc_board=` are what decide which boards answer,
- * and a card's present priced on a different board from the past its own rail
- * scrubs to is not a comparison — it is two numbers on two rulers. A reader who
- * opens a card and drags its history is looking at one league through one lens,
- * so the two reads behind that have to be asked the same question.
+ * **The narrowing parameters are the timeline route's, to the name.**
+ * `?season=`, `?user=`, `?ktc_board=` and `?qb_board=` are what decide which
+ * boards answer, and a card's present priced on a different board from the past
+ * its own rail scrubs to is not a comparison — it is two numbers on two rulers.
+ * A reader who opens a card and drags its history is looking at one league
+ * through one lens, so the two reads behind that have to be asked the same
+ * question.
+ *
+ * **`?qb_board=`, `?positions=`, `?slots=` and `?team_totals=` are the teams
+ * pane's**, and they arrived together because that pane's column names its own
+ * pricing and its own narrowing now. The first forces which of the two QB
+ * columns both valuations read — it is the axis `?ktc_board=` always lacked,
+ * and it is one choice rather than the batched route's list because a card
+ * shows one column, not four. The middle two are that column's seats and
+ * positions, which are a re-total over lineups this route has already solved.
+ * The last names the key the pane will read a per-roster total under; see the
+ * batched route, whose parameter this is verbatim.
+ *
+ * **One board, filed under two names.** Where a market or a QB board has been
+ * forced, the pricing this route resolves is *also* handed to the solve as a
+ * named variant, so the key the pane looks up exists — see `variant` below for
+ * why that is the single-board route's job rather than the client's.
  *
  * **`?user=` is optional and costs exactly the three capital metrics.** The ADP
  * fallback board is built from *that manager's* synced drafts, so a board-less
@@ -89,6 +122,15 @@ export async function GET(
   try {
     const season = requested?.season ?? (await getActiveSeason());
     const board = parseKtcBoardChoice(url.searchParams.get("ktc_board"));
+    // The QB half of the same question — see the route note. Unreadable folds
+    // to `auto` on `?ktc_board=`' terms, since it names which of two prices to
+    // print for data already chosen.
+    const qb = parseKtcLineupChoice(url.searchParams.get("qb_board"));
+    const narrowings = parsePositionSets(url.searchParams.get("positions"));
+    const seats = parseSlotSets(url.searchParams.get("slots"));
+    const teamTotals = new Set(
+      parseTeamTotalKeys(url.searchParams.get("team_totals")),
+    );
     const [league, managerUserId] = await Promise.all([
       getLeagueLineupRow(leagueId),
       resolveManager(url.searchParams.get("user")),
@@ -104,12 +146,43 @@ export async function GET(
       return NextResponse.json(empty, { headers: CACHE });
     }
 
-    const superflex = isSuperflexLineup(league.roster_positions);
+    // **The reader's choice where they made one, the league's own reading
+    // otherwise**, which is what `auto` means on both axes everywhere else.
+    const superflex =
+      qb === "auto" ? isSuperflexLineup(league.roster_positions) : qb === "sf";
     const [projections, adp, ktc] = await Promise.all([
       readProjections(season),
       readAdp(managerUserId, season, superflex),
-      readKtc(league, board),
+      readKtc(league, board, superflex),
     ]);
+
+    /**
+     * The pricing this route resolved, named — where the reader forced it.
+     *
+     * **One board, filed under two names, and that is what a single-board route
+     * has to do for a column that names its own.** The batched route prices
+     * several markets at once and files each under its variant key, so a column
+     * forcing `dynasty:sf` finds `ktc_total:dynasty:sf` waiting. Here there is
+     * only ever *the* board — the one `?ktc_board=` and `?qb_board=` resolved,
+     * which is the reader's own choice — so the same numbers are also filed
+     * under the name the column will look them up by. The alternative is the
+     * client knowing which kind of read produced an entry and spelling the key
+     * two ways, which is exactly the drift `lineupColumnKey` exists to prevent.
+     *
+     * Absent on `auto`/`auto`, since a column that has forced nothing is keyed
+     * by its bare metric id and answered by the ten totals every entry carries.
+     * The cost where it is present is one re-total over a dozen lineups
+     * against a price table already in hand — never a second solve.
+     */
+    const variant: KtcVariantPricing[] = isAutoVariant({
+      format: board,
+      lineup: qb,
+    })
+      ? []
+      : [{ key: ktcVariantKey({ format: board, lineup: qb }), ...ktc.pricing }];
+    /** The same, one valuation over: a capital column names the QB board alone. */
+    const adpVariants: AdpVariant[] =
+      qb === "auto" ? [] : [{ key: qbBoardKeySuffix(qb), adp }];
 
     const payload: LeagueLineupPayload = {
       season,
@@ -122,6 +195,11 @@ export async function GET(
         projections.board,
         adp,
         ktc.pricing,
+        variant,
+        narrowings,
+        adpVariants,
+        seats,
+        teamTotals,
       ),
     };
     return NextResponse.json(payload, { headers: CACHE });
@@ -219,9 +297,11 @@ async function readAdp(
 async function readKtc(
   league: ManagerLeagueRow,
   choice: KtcBoardChoice,
+  /** Which of the two QB columns to read — resolved by the caller, since the
+   * ADP board beside it splits on the same answer and the two must agree. */
+  superflex: boolean,
 ): Promise<{ pricing: KtcPricing; stamp: KtcBoardStamp | null }> {
   const format = resolveKtcFormat(choice, league.league_type);
-  const superflex = isSuperflexLineup(league.roster_positions);
 
   let boards;
   try {

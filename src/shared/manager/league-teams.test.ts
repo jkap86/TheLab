@@ -139,9 +139,10 @@ describe("solveLeagueEntry", () => {
     );
   });
 
-  // The narrowings ride through to the ranks and stop there. Keys are spelled
-  // out rather than asked of `lineupColumnKey` here on purpose — that agreement
-  // is pinned in `league-ranks.test.ts`, and what this checks is the wire.
+  // The narrowings reach the ranks, and reach a *team* only where a column
+  // asked. Keys are spelled out rather than asked of `lineupColumnKey` here on
+  // purpose — that agreement is pinned in `league-ranks.test.ts`, and what this
+  // checks is the wire.
   test("a position narrowing reaches the ranks and leaves the teams alone", () => {
     const entry = solveLeagueEntry(
       row(),
@@ -161,10 +162,66 @@ describe("solveLeagueEntry", () => {
     assert.deepEqual(entry.ranks["ros_starters:wr"], { rank: 1, of: 2 });
     assert.equal(entry.ranks["ros_starters:qb"], null);
 
-    // A team still carries the nine whole-roster totals and its own solve —
-    // nothing per-position ships, because nothing reads one.
+    // A team still carries the ten whole-roster totals and its own solve, and
+    // nothing per-position beside them: the narrowing was ranked, not asked
+    // for by a column that reads one across the league.
     assert.equal(entry.teams[0]?.totals.ros_starters, 20);
+    assert.equal(entry.teams[0]?.totals["ros_starters:wr"], undefined);
     assert.equal(entry.teams[0]?.lineup.starters[0]?.player?.player_id, "w1");
+  });
+
+  /**
+   * The seam the two narrowing axes were landed without, each with a note
+   * saying it "arrives with a browser that can ask the question".
+   *
+   * The standings pane's column picker is that browser: it reads one column
+   * across every roster, so a narrowed or forced column needs a total per team
+   * rather than a rank.
+   */
+  test("a named column carries a total onto every team", () => {
+    const entry = solveLeagueEntry(
+      row(),
+      "me",
+      "2026",
+      PROJECTIONS,
+      NO_ADP,
+      undefined,
+      [],
+      [["WR"]],
+      [],
+      [],
+      new Set(["ros_starters:wr"]),
+    );
+    assert.ok(entry);
+
+    // Both rosters hold receivers alone, so the narrowed column is the whole
+    // roster's answer — which is the point: the number is the same one the
+    // rank was made from, recorded rather than summed again.
+    assert.equal(entry.teams[0]?.totals["ros_starters:wr"], 20);
+    assert.equal(entry.teams[1]?.totals["ros_starters:wr"], 10);
+    // The ten are untouched beside it.
+    assert.equal(entry.teams[0]?.totals.ros_starters, 20);
+  });
+
+  test("a key nothing computed is absent rather than zero", () => {
+    // A market this call was never given a pricing for. The route composes no
+    // such key, so the total does not exist — which the pane draws an em dash
+    // for, where a zero would be a price.
+    const entry = solveLeagueEntry(
+      row(),
+      "me",
+      "2026",
+      PROJECTIONS,
+      NO_ADP,
+      undefined,
+      [],
+      [],
+      [],
+      [],
+      new Set(["ktc_total:dynasty:sf"]),
+    );
+    assert.ok(entry);
+    assert.equal(entry.teams[0]?.totals["ktc_total:dynasty:sf"], undefined);
   });
 });
 

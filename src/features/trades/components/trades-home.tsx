@@ -11,6 +11,7 @@ import {
   storeTradeValueBasis,
   useActiveCard,
   useKtcBoard,
+  useTeamsColumn,
   useStoredAccount,
   useTradeDataStamp,
   useTradeValueBasis,
@@ -94,6 +95,17 @@ export function TradesHome({
   // `TradesPagePayload.assetValues`.
   const basis = useTradeValueBasis();
   const ktcBoard = useKtcBoard();
+  /**
+   * What the standings pane inside an open card reads.
+   *
+   * Read once here on `basis` and `ktcBoard`'s own rule — a hook inside a card
+   * would subscribe every row of a board that appends a hundred at a time — and
+   * it is a *different* preference from `ktcBoard` beside it: that one is which
+   * market the asset figures on every card are printed in, this one is the
+   * column one card's expanded league is totalled and ordered by, on its own
+   * ledge with its own picker.
+   */
+  const teamsColumn = useTeamsColumn();
 
   const narrowingLeagues = activeFilterCount(leagueFilters) > 0;
 
@@ -352,6 +364,7 @@ export function TradesHome({
           leaguesById={byId}
           basis={basis}
           board={ktcBoard}
+          teamsColumn={teamsColumn}
           // The page's own season, and the stored account read once here rather
           // than by each of hundreds of memo'd cards — `TradeCard` carries the
           // rule. An opened card solves and rewinds the league it names, and

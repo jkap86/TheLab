@@ -545,3 +545,68 @@ export function serializeAdpBoards(
 ): string {
   return boards.join(",");
 }
+
+/**
+ * How many column keys one request may name a per-roster total for.
+ *
+ * **A bound on a list of opaque strings, and it is a bound rather than a
+ * budget.** Every other parameter here is a vocabulary the parser can check
+ * against — a market is one of three words, a position one of nine — where a
+ * key is matched by string equality against whatever {@link lineupColumnKey}
+ * writes, so nothing about it can be validated except its shape. What stops a
+ * hand-typed query from asking a route to carry a thousand keyed sums over
+ * every roster of a hundred leagues is therefore a count, and it is set at the
+ * one number the app actually asks for with room to spare: the teams pane reads
+ * one column, and a second reader of this parameter would read one of its own.
+ */
+export const MAX_TEAM_TOTAL_KEYS = 4;
+
+/**
+ * The longest a column key can legitimately be, in characters.
+ *
+ * The worst case a picker can compose is a KeepTradeCut metric on a forced
+ * market and QB board, narrowed to every seat and every position —
+ * `ktc_starters:dynasty:sf:@` plus fifteen slot names and nine position names,
+ * which lands comfortably under this. It is a guard on the *parse* rather than
+ * a statement about the vocabulary: a key is never read back apart, so the only
+ * thing worth refusing is one long enough to be something other than a key.
+ */
+const MAX_TEAM_TOTAL_KEY = 200;
+
+/** What a column key is made of — {@link lineupColumnKey}'s whole alphabet. */
+const TEAM_TOTAL_KEY = /^[a-z0-9_:@+]+$/;
+
+/**
+ * Read the request's list of column keys back — the columns whose totals a
+ * caller will read **per roster** rather than as a rank.
+ *
+ * **Opaque, and deliberately never parsed apart.** A key is composed at both
+ * ends by {@link lineupColumnKey} and by the route's own metric-plus-suffixes,
+ * and this is a third reader that only ever compares one against the other. A
+ * parser would be a second spelling of a format whose own note says it is
+ * "never parsed back" — and it would buy nothing, since a key naming a pricing
+ * the request did not also ask for is one the route cannot answer whether it
+ * understands the string or not.
+ *
+ * So an unrecognised key is not an error: it is a total the payload does not
+ * carry, which the pane reading it draws as an em dash. That is the degradation
+ * every narrowing parameter here already has — a garbled one costs the column
+ * that named it and nothing else.
+ */
+export function parseTeamTotalKeys(value: string | null): string[] {
+  if (!value) return [];
+  const seen = new Set<string>();
+  for (const token of value.split(",")) {
+    const key = token.trim();
+    if (!key || key.length > MAX_TEAM_TOTAL_KEY) continue;
+    if (!TEAM_TOTAL_KEY.test(key)) continue;
+    seen.add(key);
+    if (seen.size >= MAX_TEAM_TOTAL_KEYS) break;
+  }
+  return [...seen];
+}
+
+/** The request's spelling of a column-key list — `ros_starters:@flex,ktc_total:dynasty:sf`. */
+export function serializeTeamTotalKeys(keys: readonly string[]): string {
+  return keys.join(",");
+}

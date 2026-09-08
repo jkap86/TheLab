@@ -2,7 +2,15 @@
 
 import { useState } from "react";
 
-import type { LeagueLineupEntry, LeagueTeam, LineupMetricId } from "@/shared/contract";
+import type {
+  LeagueLineupEntry,
+  LeagueTeam,
+  LineupColumn,
+  LineupMetricId,
+  LineupSlot,
+  ManagerLineupsPayload,
+} from "@/shared/contract";
+import { lineupColumnKey } from "@/shared/ktc/columns";
 
 import { Avatar } from "../avatar";
 // Relative, not through the barrel: this folder's own modules are what a
@@ -13,7 +21,14 @@ import {
   CONSOLE_ROW_WELL,
 } from "../console-chrome";
 import { ordinal } from "../format";
-import { LINEUP_METRIC_IDS, LINEUP_METRIC_LABELS } from "../lineup-columns";
+import {
+  type ColumnValue,
+  column as composeColumn,
+  LINEUP_METRIC_LABELS,
+  metricAt,
+  metricAxes,
+  storeTeamsColumn,
+} from "../lineup-columns";
 import { placeAmong, rankColor, sharePercentile } from "../rank-ramp";
 import { slotMedians } from "../seat-compare";
 import {
@@ -25,6 +40,7 @@ import {
   LineupLensKeys,
 } from "./lineup-breakdown";
 import { Pane, PaneGlass, PaneHead, PaneLedge } from "./pane";
+import { TeamsColumnDialog } from "./teams-column-dialog";
 
 /**
  * The expanded card's team browser: the league's standings on the left, and
@@ -64,10 +80,36 @@ import { Pane, PaneGlass, PaneHead, PaneLedge } from "./pane";
  * **What the panes now say instead is what the numbers *mean*.** A total is
  * coloured by the team's share of the league's points and a seat figure by the
  * league's median at that slot — see `sharePercentile` and `slotPercentile` for
- * why a rank ramp is the wrong input for either. The metric column is still a
- * per-card control, deliberately unpersisted like the lens beside it, and the
- * list is still sorted by it, because it is the standings behind the card's
- * "2nd" and the order and the number must agree.
+ * why a rank ramp is the wrong input for either. The list is still sorted by
+ * the column, because it is the standings behind the card's "2nd" and the order
+ * and the number must agree.
+ *
+ * **The column is a column now, and it is the reader's rather than the
+ * sitting's.** It was a `Sort by` menu over the ten `LineupMetricId`s, held in
+ * `useState` on the argument that a way of reading one card is a fact about one
+ * sitting. Both halves of that changed together. Every other surface on this
+ * page had stopped thinking in metric ids — the card's four bays are columns
+ * composed from a value, a scope, a market, a QB board, a seat set and a
+ * position set — so the table of teams was the one place a reader could not ask
+ * how their leaguemates compare on the flex seat, or on the dynasty board. It
+ * takes the same six axes in the same panel now (`TeamsColumnDialog`), and a
+ * column composed on six axes is not something to rebuild on every visit, so it
+ * is stored on the device beside the four (`useTeamsColumn`).
+ *
+ * **The lens beside it is that column's own value axis**, not a second control.
+ * `Points` / `Capital` / `KTC` on the roster pane's ledge writes the column's
+ * value straight through — one column, two places to reach it, and nothing for
+ * the two to disagree about. What that costs is a scope press the reader did
+ * not make: a `KTC · Picks` column pressed to `Points` has no metric at that
+ * cell, so it falls back to that value's whole-roster scope. Answering nothing
+ * would be a key that visibly does not work.
+ *
+ * **A total is read by column key, never by metric id.** `lineupColumnKey` folds
+ * an un-narrowed column on each league's own board back to its bare metric, so
+ * the ten totals every entry carries answer it for free, and a column that has
+ * forced or narrowed reads the key the server filed its per-roster sums under.
+ * An absent key is a real state — a request in flight, or a producer that could
+ * not price it — and it draws the same em dash the all-zero rule does.
  *
  * **Both panes are fixed-height columns whose glass scrolls**, which is what
  * lets the card cap its expanded half to the viewport rather than pushing a
@@ -101,8 +143,10 @@ import { Pane, PaneGlass, PaneHead, PaneLedge } from "./pane";
  * the present's table with different rosters in it, and a second table would be
  * a second set of edge rules to drift. It is also why the rail renders this
  * element itself rather than swapping it out — one element at one position keeps
- * the metric, the lens and the selected team across a scrub, where two would
- * reset all three every time a reader crossed "now".
+ * the selected team across a scrub, where two would reset it every time a
+ * reader crossed "now". The column and its lens survive for a stronger reason
+ * since they became one stored preference: they are not this element's state at
+ * all.
  */
 
 /**
@@ -124,10 +168,87 @@ const BENCH_METRIC: Record<Lens, LineupMetricId> = {
   ktc: "ktc_bench",
 };
 
-export function LeagueTeams({ entry }: { entry: LeagueLineupEntry }) {
-  const [metric, setMetric] = useState<LineupMetricId>("ros_starters");
+/**
+ * The lens a column's value axis *is*.
+ *
+ * **Two names for one axis, and the map exists only to say which of the two a
+ * given surface speaks.** `Lens` is `points | capital | ktc` and `ColumnValue`
+ * is `projection | capital | ktc`: the same three readings of a roster, differing
+ * in one word because the breakdown named them for the figures it prints and
+ * the picker names them for the metrics it composes. Collapsing the two types
+ * would be the tidier change and the wrong one — a lens is a *display* choice
+ * on a pane where a value is one axis of a stored column — so what is here is
+ * the join, in one place, rather than a `value === "projection" ? …` at each
+ * site that needs it.
+ */
+const LENS_OF_VALUE: Record<ColumnValue, Lens> = {
+  projection: "points",
+  capital: "capital",
+  ktc: "ktc",
+};
+
+/** The same join read the other way, for a press on the lens keys. */
+const VALUE_OF_LENS: Record<Lens, ColumnValue> = {
+  points: "projection",
+  capital: "capital",
+  ktc: "ktc",
+};
+
+/**
+ * What the picker is handed where the caller has nothing to hand it.
+ *
+ * Shared empties rather than literal defaults, so the identities are stable
+ * across renders: this element is drawn inside a `memo`'d card on one of the
+ * two pages that mount it, and a fresh `[]` per render is a changed prop on a
+ * subtree with no reason to re-render for it. Both are real states — a page
+ * whose lineups read has not landed carries no scrape stamps, and an account
+ * whose leagues have no stored `roster_positions` offers no seats.
+ */
+const NO_KTC: ManagerLineupsPayload["ktc"] = [];
+const NO_SLOTS: readonly LineupSlot[] = [];
+
+export function LeagueTeams({
+  entry,
+  column,
+  ktc = NO_KTC,
+  slots = NO_SLOTS,
+}: {
+  entry: LeagueLineupEntry;
+  /**
+   * What the standings read and are ordered by — the device's own stored
+   * column, handed down rather than read here.
+   *
+   * **A prop for the reason `basis` and `board` are props on the trades
+   * board**: this element is mounted once per open card and the trade card that
+   * also draws it is `memo`'d over hundreds of rows, so a hook subscribing
+   * every instance to the same value is a subscription per card to buy nothing.
+   * The *write* is a direct `storeTeamsColumn`, which is the same split
+   * `LineupColumnsDialog` already makes — the value comes down, the write goes
+   * to the store, and every reader moves together.
+   */
+  column: LineupColumn;
+  /** Which markets answered and when — the picker's foot. */
+  ktc?: ManagerLineupsPayload["ktc"];
+  /** The starting seats this account's leagues run — the picker's slot track. */
+  slots?: readonly LineupSlot[];
+}) {
   const [chosen, setChosen] = useState<number | null>(null);
-  const [lens, setLens] = useState<Lens>("points");
+
+  // Both derived from the one stored column: see the module note on why the
+  // lens is that column's value axis rather than a control of its own.
+  const metric = column.metric;
+  const lens = LENS_OF_VALUE[metricAxes(metric).value];
+  /**
+   * What a total is filed under.
+   *
+   * `lineupColumnKey` folds an un-narrowed column on each league's own board
+   * back to its bare metric id, so the ten totals every entry carries answer it
+   * without anything here knowing what the server resolved — the same property
+   * the card's rank windows read their ten by.
+   */
+  const key = lineupColumnKey(column);
+  /** This column's total for one team, or undefined where the payload has none. */
+  const read = (team: LeagueTeam): number | undefined => team.totals[key];
 
   // Selection is resolved, not synced: a stale choice (payload refreshed under
   // an open card) falls back to the manager's team rather than an empty pane.
@@ -136,11 +257,20 @@ export function LeagueTeams({ entry }: { entry: LeagueLineupEntry }) {
     entry.teams.find((t) => t.roster_id === chosen) ?? manager ?? entry.teams[0];
   if (!selected) return null;
 
-  const teams = [...entry.teams].sort(
-    (a, b) => b.totals[metric] - a.totals[metric],
-  );
-  const totals = entry.teams.map((t) => t.totals[metric]);
-  const anyNonZero = totals.some((v) => v !== 0);
+  // Absent sorts as zero, which is the only thing it can do and is why the
+  // order is stable: where the payload carries no answer at all, `sort` leaves
+  // the roster order the entry arrived in and the `#` place still agrees with
+  // it, exactly as it does for a metric no roster has scored on.
+  const teams = [...entry.teams].sort((a, b) => (read(b) ?? 0) - (read(a) ?? 0));
+  // **Absent folds in with zero here and nowhere else.** The all-zero rule and
+  // an unanswered column both draw an em dash and neither has anything to
+  // colour, so one gate covers them; what they must not do is reach a `toFixed`
+  // or a percentile, which is what `shown` is read before.
+  const totals = entry.teams.map((t) => read(t) ?? 0);
+  const anyNonZero = entry.teams.some((t) => {
+    const value = read(t);
+    return value !== undefined && value !== 0;
+  });
 
   // The league's middle player at each seat, under the lens the figures are
   // read on — what each of them is coloured against. See `slotMedians`.
@@ -149,6 +279,37 @@ export function LeagueTeams({ entry }: { entry: LeagueLineupEntry }) {
     selected.lineup.starters.length,
     lens,
   );
+
+  /**
+   * Press a lens: write that value onto the column and store it.
+   *
+   * **Where the pressed value has no metric at the column's own scope, it falls
+   * back to that value's whole-roster one.** A `KTC · Picks` column pressed to
+   * `Points` is the case — there is no projection of a draft pick — and the
+   * alternatives are both worse than moving the scope: refusing is a key that
+   * visibly does nothing, and greying it would put a rule on this ledge that is
+   * only explicable in the panel two clicks away.
+   *
+   * Every other axis is carried over, which is `ColumnAxes`' own rule for a
+   * press: `column()` then drops whatever the new metric cannot read, so a
+   * points column cannot keep a market and a picks column cannot keep a
+   * position.
+   */
+  const pressLens = (next: Lens) => {
+    const value = VALUE_OF_LENS[next];
+    const chosenMetric =
+      metricAt(value, metricAxes(metric).scope) ?? metricAt(value, "all");
+    if (!chosenMetric) return;
+    storeTeamsColumn(
+      composeColumn(
+        chosenMetric,
+        column.format,
+        column.lineup,
+        column.positions,
+        column.slots,
+      ),
+    );
+  };
 
   const benchMetric = BENCH_METRIC[lens];
   const benchTotals = entry.teams.map((t) => t.totals[benchMetric]);
@@ -178,57 +339,31 @@ export function LeagueTeams({ entry }: { entry: LeagueLineupEntry }) {
       <div className="flex min-h-0 flex-1 items-stretch gap-1.5 sm:gap-2.5 lg:gap-3.5 pointer-fine:[transform:translateZ(7px)]">
         <Pane>
           <PaneLedge>
-            {/* A labelled recess with the menu raised out of it, on the pane it
-                orders. The label is the control's name, so the `<select>` needs
-                none of its own — but it keeps an `sr-only` one, because a
-                screen reader reaches the select without the text beside it. */}
-            <label
+            {/* A labelled recess with the picker's key raised out of it, on the
+                pane it orders. The legend is the control's name and the key
+                carries its own `sr-only` sentence, so the recess needs no
+                `<label>`: what sits in it is a button that opens a dialog, not
+                a form control a name has to be associated with. */}
+            <div
               className={`${CONSOLE_PANE_TRACK} flex min-w-0 items-center gap-1.5 p-[3px] pl-[9px] lg:gap-2.5 lg:pl-3`}
             >
               <span
                 aria-hidden
                 className="shrink-0 font-mono text-[length:var(--fs-9)] uppercase tracking-[0.16em] text-[color:var(--billet-label)] lg:text-[length:var(--fs-10)]"
               >
-                {/* `Sort` on a phone, where the track is ~165px and the key
-                    inside it is what a reader actually reads. */}
-                <span className="lg:hidden">Sort</span>
-                <span className="hidden lg:inline">Sort by</span>
+                {/* `Col` on a phone, where the track is ~165px and the key
+                    inside it is what a reader actually reads — the rule the
+                    `Sort`/`Sort by` legend this replaces already lived by. */}
+                <span className="lg:hidden">Col</span>
+                <span className="hidden lg:inline">Column</span>
               </span>
-              <span className="sr-only">Order teams by</span>
-              <span className="relative flex min-w-0 flex-1 items-center">
-                {/* The tracking comes off on a coarse pointer, where
-                    `globals.css` floors every control at 16px so iOS Safari
-                    does not zoom the page on focus. Tracking is a small-type
-                    affordance and it is pure width at 16: measured at 390, the
-                    lens key's `Points` needs 69.1px of the 62 it has at
-                    `0.12em` and reads `Point…` — a whole word truncated — and
-                    60.5 of 64 at `0.03em`, which is the word. The caret gutter
-                    gives the last four of those pixels. It buys the sort key
-                    one character back of the two the floor costs it (8 → 7 of
-                    `ROS starters`, against 6 uncompensated); that one stays
-                    truncated at any tracking, which is the same reading it
-                    already ships at this width. */}
-                <select
-                  value={metric}
-                  onChange={(e) => setMetric(e.target.value as LineupMetricId)}
-                  className="min-w-0 flex-1 cursor-pointer appearance-none truncate rounded-full bg-[image:var(--key-bg)] py-[5px] pl-[9px] pr-5 font-mono text-[length:var(--fs-10)] uppercase tracking-[0.12em] text-readout shadow-[var(--key-shadow)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-active/60 pointer-coarse:pr-[18px] pointer-coarse:tracking-[0.03em] lg:py-[7px] lg:pl-[13px] lg:pr-[30px] lg:text-[length:var(--fs-12)] lg:tracking-[0.16em] lg:pointer-coarse:tracking-[0.06em]"
-                >
-                  {LINEUP_METRIC_IDS.map((id) => (
-                    <option key={id} value={id}>
-                      {LINEUP_METRIC_LABELS[id].column}
-                    </option>
-                  ))}
-                </select>
-                {/* `appearance-none` takes the native caret with it, so the key
-                    gets one drawn back in the accent. */}
-                <span
-                  aria-hidden
-                  className="pointer-events-none absolute right-2 text-[length:var(--fs-8)] leading-none text-active lg:right-3 lg:text-[length:var(--fs-9)]"
-                >
-                  ▼
-                </span>
-              </span>
-            </label>
+              <TeamsColumnDialog
+                column={column}
+                onChange={storeTeamsColumn}
+                ktc={ktc}
+                slots={slots}
+              />
+            </div>
 
             {/* The column heads, in the rows' own widths. Below `lg` the pane
                 is ~165px and the only head worth the line is the list's own
@@ -242,11 +377,20 @@ export function LeagueTeams({ entry }: { entry: LeagueLineupEntry }) {
               </span>
               <span aria-hidden className="hidden w-5 shrink-0 lg:block" />
               <PaneHead className="min-w-0 flex-1">Teams</PaneHead>
+              {/* **The unit, where this said `Total`.** A literal was honest
+                  while the pane read one metric at a time and is not now: a
+                  column can be draft capital on the superflex board narrowed to
+                  the flex seats, and `Total` says nothing about which of those
+                  the figures under it are. The unit is the same word the card's
+                  own tile prints over the same number, which is what keeps the
+                  strip above and the table below reading as one instrument.
+                  Truncated at `lg`'s 78px cell rather than abbreviated, since
+                  what it clips is the qualifier and not the noun. */}
               <span
                 aria-hidden
-                className="hidden w-[78px] shrink-0 text-right font-mono text-[length:var(--fs-10)] uppercase tracking-[0.14em] text-[color:var(--billet-label)] lg:block"
+                className="hidden w-[78px] shrink-0 truncate text-right font-mono text-[length:var(--fs-10)] uppercase tracking-[0.1em] text-[color:var(--billet-label)] lg:block"
               >
-                Total
+                {LINEUP_METRIC_LABELS[metric].unit}
               </span>
             </div>
           </PaneLedge>
@@ -275,12 +419,20 @@ export function LeagueTeams({ entry }: { entry: LeagueLineupEntry }) {
                   // with the order the menu above sorted by.
                   place={i + 1}
                   metric={metric}
-                  // Not a rank: see `sharePercentile`. Null where nothing has
-                  // been scored, which is the all-zero rule the server ranks by
-                  // — and which is why the totals go to dashes with it.
+                  // **The column's own figure, handed down rather than looked
+                  // up by metric id inside the row.** It was the second, and
+                  // the sort was already the first — so a narrowed or forced
+                  // column ordered the table by one number and printed
+                  // another beside it, under a head naming the narrowing. Both
+                  // ends read `read()` now, which is the one lookup.
+                  value={read(team)}
+                  // Not a rank: see `sharePercentile`. Undefined where nothing
+                  // has been scored — the all-zero rule the server ranks by,
+                  // which is why the totals go to dashes with it — and where
+                  // this column has no answer for this team at all.
                   tone={
-                    anyNonZero
-                      ? rankColor(sharePercentile(team.totals[metric], totals))
+                    anyNonZero && read(team) !== undefined
+                      ? rankColor(sharePercentile(read(team) ?? 0, totals))
                       : undefined
                   }
                   shown={anyNonZero}
@@ -294,7 +446,7 @@ export function LeagueTeams({ entry }: { entry: LeagueLineupEntry }) {
 
         <Pane>
           <PaneLedge>
-            <LensControl lens={lens} onChange={setLens} />
+            <LensControl lens={lens} onChange={pressLens} />
             {/* Whose roster the seats below belong to. It is the pane's own
                 head rather than a comparison of two teams: the ghost column
                 that needed attributing went with the bars. */}
@@ -422,6 +574,7 @@ function StandingRow({
   team,
   place,
   metric,
+  value,
   tone,
   shown,
   selected,
@@ -429,10 +582,22 @@ function StandingRow({
 }: {
   team: LeagueTeam;
   place: number;
+  /** Which scale the figure is on — how many decimals it reads to, and nothing else. */
   metric: LineupMetricId;
+  /**
+   * This team's figure for the column on screen, or undefined where the
+   * payload carries none.
+   *
+   * **Handed in rather than looked up here**, because the column is a key and
+   * not a metric id: a narrowed or forced column is filed under a name only
+   * the caller composes, and a row that looked its own figure up by metric
+   * would print the whole-roster number under a narrowed head — beside a sort
+   * that had used the right one.
+   */
+  value: number | undefined;
   /** The share ramp's colour, or undefined where there is nothing to colour. */
   tone: string | undefined;
-  /** False where no roster in the league has scored on this metric. */
+  /** False where no roster in the league has scored on this column. */
   shown: boolean;
   selected: boolean;
   onSelect: () => void;
@@ -507,7 +672,9 @@ function StandingRow({
             {/* The colour rides an inner span so it tints the figure rather
                 than the channel the figure sits in. */}
             <span style={tone ? { color: tone } : undefined}>
-              {shown ? formatTotal(metric, team.totals[metric]) : "—"}
+              {/* Two absences, one em dash: no roster has scored on this
+                  column, or this payload carries no answer for it at all. */}
+              {shown && value !== undefined ? formatTotal(metric, value) : "—"}
             </span>
           </span>
         </span>

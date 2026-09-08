@@ -2,7 +2,12 @@
 
 import { useMemo, useState, type ReactNode } from "react";
 
-import type { LeagueLineupEntry } from "@/shared/contract";
+import type {
+  LeagueLineupEntry,
+  LineupColumn,
+  LineupSlot,
+  ManagerLineupsPayload,
+} from "@/shared/contract";
 
 import { CONSOLE_KEY_PILL_SHELL } from "../../console-chrome";
 import { formatInstantDate } from "../../format";
@@ -51,6 +56,9 @@ import { TimelineRail } from "./timeline-rail";
 export function TimelineView({
   subject,
   entry,
+  column,
+  ktc,
+  slots,
   managerRosterId = null,
   children,
 }: {
@@ -58,6 +66,27 @@ export function TimelineView({
   subject: TimelineSubject;
   /** The card's own answer — what "now" is. Null while the solve is in flight. */
   entry: LeagueLineupEntry | null;
+  /**
+   * What the standings pane reads, forwarded — and, at a past stop, what this
+   * has to answer.
+   *
+   * **A stop is solved here, so the column has to be too.** The card's present
+   * comes priced from the route with that column's totals on it; a past stop is
+   * the browser's own solve over rewound rosters, and it would carry the ten
+   * whole-roster totals alone unless it were told which column to file beside
+   * them. Then scrubbing back would blank the one column a reader is looking
+   * at — see `timelineEntry`, whose parameter this is.
+   *
+   * **It is also why `subject` carries both board halves.** The payload holds
+   * one price table per board and the solve here files it under the column's
+   * own pricing, which is sound only because the request asked for that
+   * pricing. The card is what keeps the two in step.
+   */
+  column: LineupColumn;
+  /** Forwarded to the pane's own picker — see `LeagueTeams`. */
+  ktc?: ManagerLineupsPayload["ktc"];
+  /** Likewise. */
+  slots?: readonly LineupSlot[];
   /**
    * Which roster is the reader's own, so the past table marks and ranks the
    * same team the present one does. Null until the lineups read lands.
@@ -105,9 +134,9 @@ export function TimelineView({
   const past = useMemo(
     () =>
       stop.back > 0
-        ? timelineEntry(payload, stop.back, managerRosterId, stop)
+        ? timelineEntry(payload, stop.back, managerRosterId, column, stop)
         : null,
-    [payload, stop, managerRosterId],
+    [payload, stop, managerRosterId, column],
   );
 
   const shown = past ?? entry;
@@ -206,7 +235,12 @@ export function TimelineView({
           hold their heights and the browser takes what is left — see `Pane` for
           the `min-h-0` that has to run all the way down or nothing scrolls. */}
       {shown && shown.teams.length > 0 ? (
-        <LeagueTeams entry={shown} />
+        <LeagueTeams
+          entry={shown}
+          column={column}
+          ktc={ktc}
+          slots={slots}
+        />
       ) : (
         <div className="shrink-0">{children}</div>
       )}
