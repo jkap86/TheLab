@@ -451,7 +451,15 @@ export async function getManagerLeagues(
 ): Promise<ManagerLeague[]> {
   const { rows } = await pool.query<ManagerLeagueRowShape>(
     `SELECT ${LEAGUE_COLUMNS_SQL},
-        lu.team_name,
+        -- The reader's own label, on leagueTeamName's rule: the username
+        -- first, the chosen team name behind it, and null where the row
+        -- carries neither. (No backticks in here -- the statement is a
+        -- template literal.) Resolved in SQL rather than on the client
+        -- because the client holds one column and this has both, and a second
+        -- spelling of the rule is how the Yours pane could come to name the
+        -- manager differently from the standings row beneath it.
+        COALESCE(NULLIF(TRIM(lu.display_name), ''),
+                 NULLIF(TRIM(lu.team_name), '')) AS team_name,
         mr.roster_id           AS manager_roster_id,
         mr.settings->>'wins'   AS wins,
         mr.settings->>'losses' AS losses,
@@ -1581,11 +1589,14 @@ function toOpponent(row: ManagerWeekLineupSqlRow): WeekLineupOpponent | null {
     roster_id: row.opponent_roster_id,
     // `leagueTeamName`'s rule, spelled over two columns and a roster id rather
     // than over a users array: this query has the two columns and no array to
-    // search. Blanks fold in with absent — Sleeper stores `""` for a team
-    // nobody has named — so a plate never reads as an empty pair of quotes.
+    // search. The username wins over the chosen team name for that function's
+    // reason, and the order must not drift from it — the opponent named here
+    // and the same manager named in a shares row are one person. Blanks fold in
+    // with absent — Sleeper stores `""` for a team nobody has named — so a
+    // plate never reads as an empty pair of quotes.
     team_name:
-      row.opponent_team_name?.trim() ||
       row.opponent_display_name?.trim() ||
+      row.opponent_team_name?.trim() ||
       `Roster ${row.opponent_roster_id}`,
     starters,
     players: stored

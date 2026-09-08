@@ -85,9 +85,16 @@ const KTC: KtcPricing = {
 describe("leagueTeamName", () => {
   const users = row().users;
 
-  test("the team's own name wins, the display name backs it up", () => {
-    assert.equal(leagueTeamName(users, 1, "me"), "Glass Cannons");
+  test("the username wins, the team name backs it up", () => {
+    // "me" has set a team name and is still named by their username, which is
+    // the whole of the rule: one person is called one thing on every page.
+    assert.equal(leagueTeamName(users, 1, "me"), "Me");
     assert.equal(leagueTeamName(users, 2, "t2"), "Slim");
+  });
+
+  test("the team name answers where the username does not", () => {
+    const unnamed = [{ user_id: "u", display_name: null, team_name: "Sharks" }];
+    assert.equal(leagueTeamName(unnamed, 4, "u"), "Sharks");
   });
 
   test("blank names fold in with null at every step", () => {
@@ -109,7 +116,7 @@ describe("solveLeagueEntry", () => {
     assert.deepEqual(
       entry.teams.map((t) => [t.roster_id, t.name, t.is_manager]),
       [
-        [1, "Glass Cannons", true],
+        [1, "Me", true],
         [2, "Slim", false],
       ],
     );

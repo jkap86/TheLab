@@ -1057,7 +1057,8 @@ rather than being re-summed on the client because the sums carry edge rules
 (`lineupMetricTotals`) and a second spelling is how the teams column would
 drift from the ranks beside it. `manager/league-teams.ts` composes the entry
 — `solveLeagueEntry` = ranks + picks + the `leagueTeamName` label rule
-(team name → owner's display name → "Roster N", blanks folding in with null)
+(owner's username → the team name they set → "Roster N", blanks folding in
+with null; see A team is named by its manager, below)
 — so the route stays a handler; `manager/league-ranks.ts` remains the pure
 solve-and-rank underneath: one `solveLeagueLineup` per roster, eight of the
 nine metric totals read off that one solve (the solver prices `points`,
@@ -1109,6 +1110,42 @@ zero-runtime character, and the client cannot read a list out of
 ids is what that seam is for**: it broke four compiles — the ranks literal,
 `lineupMetricTotals`, `METRIC_ORDER` and `LINEUP_METRIC_LABELS` — and nothing
 else.
+
+### A team is named by its manager
+
+A team is labelled by **its owner's username**, everywhere in the app, with the
+team name they set as the fallback behind it and `Roster N` behind that. That
+reverses Sleeper's own precedence, and the reason is that Sleeper's rule is
+right for a page about one league and wrong for every page here.
+
+**The same person appeared under a different name in every league.** A manager
+sets a team name per league, so a reader looking at their leaguemates saw
+`Glass Cannons` in the standings of one card, `Sunday Scaries` as the opponent
+on another, and `slimjim` in the shares rail and on the trades board — three
+labels for one person, with nothing on screen saying they were one. Half the
+app was already naming people by `display_name` because it *had* to: a shares
+row spans a dozen leagues and has no league to take a team name from, a pick's
+origin names who traded it away, and a trade side names a manager. So the two
+halves disagreed by construction. A username is the identity that survives
+crossing a league boundary, and naming a team by it is what makes them agree.
+
+**The rule has three spellings and they are three because of what each can
+see**, not because the rule is stated three times: `leagueTeamName` reads a
+league's users array, `toOpponent` reads two columns of a joined row, and
+`getManagerLeagues` resolves the reader's own label in SQL. Each is a
+username-then-team-name fallback and each names the other in its comment; a
+drift between them is the "Yours" pane naming the manager one way and the
+standings row directly beneath it naming them another.
+
+**The team name is kept as the fallback rather than dropped.** A stored
+`league_users` row with no `display_name` still has something a reader can tell
+apart from `Roster 7`, and blanks still fold in with null at every step —
+Sleeper stores an unset name as `""` about as often as it omits it.
+
+Nothing on the wire moved: no route, no query shape, no contract type, no
+payload field, no migration. `ManagerLeague.team_name` keeps its name, because
+that is what the stored column is called; what it *holds* is the label.
+
 
 ### The collapsed card and the expanded one are two reads
 
@@ -1531,8 +1568,9 @@ the board runs that wide — and a snake draft with no width evidence names no
 slot rather than an unflipped guess. `from` is
 relative to the owning roster — the same asset is "from Slim" in one portfolio
 and origin-less in the one it came out of — and it names the *person*
-(display name), where the teams pane prefers the team name: "from" points at
-who traded it away. The card's
+(display name), which is what the teams pane names a team by too: "from" points
+at who traded it away, and the two agree by construction rather than by two
+rules that happened to land together. The card's
 naming rule is Sleeper's: "1.05" once the order is set, "2nd" before, and the
 origin printed only where there is no slot to say which
 pick this is — the payload ships both facts (`slot`, `from` on `RosterPick`)

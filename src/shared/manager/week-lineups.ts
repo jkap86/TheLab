@@ -106,10 +106,10 @@ export type WeekLineupRoster = {
 export type WeekLineupOpponent = {
   roster_id: number;
   /**
-   * What they call themselves, on `leagueTeamName`'s rule — resolved by the
-   * query, which is the half that can see `league_users`. Null where no member
-   * row is stored for the owner, which the pane draws as no name rather than
-   * as "Opponent".
+   * What the opponent is called, on `leagueTeamName`'s rule — their username,
+   * else the team name they set — resolved by the query, which is the half
+   * that can see `league_users`. Null where no member row is stored for the
+   * owner, which the pane draws as no name rather than as "Opponent".
    */
   team_name: string | null;
   /** The week's own lineup where one is stored, else the roster's live one. */

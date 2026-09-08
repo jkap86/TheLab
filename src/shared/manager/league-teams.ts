@@ -46,11 +46,23 @@ import type { AdpVariant, RankLeague, RankVariant } from "./league-ranks.ts";
 export type LineupLeagueRow = RankLeague & PickLeague;
 
 /**
- * How a team is labelled, which is Sleeper's own rule for a league page: the
- * team's chosen name, else its owner's display name, else the roster number.
- * Blank strings fold in with null at each step — Sleeper stores an unset name
- * as `""` about as often as it omits it. One spelling here, because the teams
- * pane and anything later that lists a league's teams must agree on it.
+ * How a team is labelled: **the owner's username**, else the team's chosen
+ * name, else the roster number. Blank strings fold in with null at each step —
+ * Sleeper stores an unset name as `""` about as often as it omits it. One
+ * spelling here, because the teams pane and anything later that lists a
+ * league's teams must agree on it.
+ *
+ * **The username wins, which is this app's rule rather than Sleeper's own.**
+ * Sleeper's league page prefers the chosen team name, and that reads well on a
+ * page about one league and badly on every page here: a manager appears in a
+ * dozen leagues under a dozen invented names, so a shares row, a leaguemate
+ * rail and a standings table name the same *person* three ways and nothing on
+ * screen says they are one. A username is the identity that survives crossing
+ * a league boundary — it is what `draft-picks` already names a pick's origin
+ * by, and what the trades board already labels a side with — so naming a team
+ * by it is what makes those agree. The team name is kept as the fallback
+ * rather than dropped: a roster whose owner has no stored `display_name` still
+ * has something a reader can tell apart from `Roster 7`.
  */
 export function leagueTeamName(
   users: PickLeague["users"],
@@ -59,7 +71,7 @@ export function leagueTeamName(
 ): string {
   const user = ownerId === null ? null : users.find((u) => u.user_id === ownerId);
   return (
-    user?.team_name?.trim() || user?.display_name?.trim() || `Roster ${rosterId}`
+    user?.display_name?.trim() || user?.team_name?.trim() || `Roster ${rosterId}`
   );
 }
 

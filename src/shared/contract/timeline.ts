@@ -234,9 +234,9 @@ export type TimelineSeasonPayload = {
  * by user id because a pick's origin could be a roster its card had never
  * heard of. This payload carries *every* roster in the league, so an origin is
  * always a row on this list and naming it is a lookup the client already has in
- * hand. One name per roster, by `leagueTeamName`'s one spelling — team name,
- * then the owner's display name, then "Roster N" — so a team is called the same
- * thing here as it is in the card's own teams pane.
+ * hand. One name per roster, by `leagueTeamName`'s one spelling — the owner's
+ * username, then the team name they set, then "Roster N" — so a team is called
+ * the same thing here as it is in the card's own teams pane.
  *
  * There is deliberately no avatar on it: the teams pane this rail swaps for
  * draws none. Re-adding a field is cheap.
