@@ -1,7 +1,13 @@
 import { loopSwitch, startBackgroundLoop } from "@/shared/util";
 import type { BackgroundLoopHandle } from "@/shared/util";
 
-import { CRAWL_LEAGUE_BATCH, runLeagueCrawl } from "./crawl";
+import { CRAWL_CONCURRENCY, CRAWL_LEAGUE_BATCH, runLeagueCrawl } from "./crawl";
+import {
+  createCrawlPressureGate,
+  crawlerPressureConfig,
+  fmtMb,
+  memorySnapshot,
+} from "./crawl-pressure";
 
 /**
  * How often the background league crawl ticks. This is execution granularity,
@@ -53,6 +59,16 @@ function fmtMs(ms: number): string {
  * exact terms — a local dev server that shouldn't be crawling in the background
  * is the case it is there for.
  *
+ * **Every tick is admitted by the resource guard** (`./crawl-pressure`), whose
+ * hysteresis latch lives in this closure and is handed to `runLeagueCrawl` on
+ * each tick. A refused tick costs nothing — no pool connection, no advisory
+ * lock, no Sleeper request — and the loop's own interval is the retry: there is
+ * no polling here and no backoff of its own. A crawler paused across many ticks
+ * says so once per heartbeat window, with the memory breakdown, because a pause
+ * that never lifts is the one shape that is either honest or a leak and the
+ * breakdown is what tells them apart. `CRAWLER_MEMORY_GUARD_ENABLED=false`
+ * restores the unguarded behaviour exactly.
+ *
  * **TheLabX runs this on a worker process and not on the one serving requests,
  * and the reason applies here whenever a second process appears.** The crawl
  * holds a pool connection across a league's whole Sleeper fan-out, so on a busy
@@ -68,24 +84,74 @@ export function startLeagueCrawler(): BackgroundLoopHandle {
   // ticks, so the running loop keeps the only live copy.
   let lastNoteMs = 0;
   let lastWarnMs = 0;
+  let lastPressureMs = 0;
   let lockSkips = 0;
+  /** Consecutive ticks the resource guard refused. */
+  let pressureSkips = 0;
+
+  // The hysteresis latch lives here for the same reason the throttles do — see
+  // {@link createCrawlPressureGate}, which argues at length why this is a
+  // closure rather than a module singleton.
+  const gate = createCrawlPressureGate(
+    crawlerPressureConfig({ maxConcurrency: CRAWL_CONCURRENCY }),
+  );
 
   async function tick(): Promise<void> {
-    const s = await runLeagueCrawl();
+    const wasPaused = pressureSkips > 0;
+    const s = await runLeagueCrawl({ gate });
     const now = Date.now();
 
-    if (s.locked) {
-      lockSkips += 1;
-      if (now - lastNoteMs >= HEARTBEAT_MS) {
-        lastNoteMs = now;
-        console.log(
-          `[crawl] Lock held by another instance; ` +
-            `${lockSkips} tick(s) skipped since the last note.`,
+    // One guard for both reasons, because `if (s.skipped)` is what narrows the
+    // union: the skipped arm's discriminant is a *union* of literals, so
+    // comparing it to one of them does not remove the arm — the truthiness test
+    // does. See {@link CrawlSkip}.
+    if (s.skipped) {
+      if (s.skipped === "lock") {
+        lockSkips += 1;
+        if (now - lastNoteMs >= HEARTBEAT_MS) {
+          lastNoteMs = now;
+          console.log(
+            `[crawl] Lock held by another instance; ` +
+              `${lockSkips} tick(s) skipped since the last note.`,
+          );
+          lockSkips = 0;
+        }
+        return;
+      }
+
+      pressureSkips += 1;
+      // The first refusal of a run speaks immediately — an operator watching a
+      // dyno should see the crawler stand down at the moment it does — and
+      // everything after it is throttled to the heartbeat, because a paused
+      // crawler that logged every minute would be the loudest thing in the log
+      // at exactly the moment the log is being read for something else.
+      if (pressureSkips === 1 || now - lastPressureMs >= HEARTBEAT_MS) {
+        lastPressureMs = now;
+        const m = memorySnapshot();
+        console.warn(
+          `[crawl] Skipped for memory pressure — rss=${fmtMb(s.pressure.startRssMb)} ` +
+            `(stop ${fmtMb(gate.config.stopMb)}, resume ${fmtMb(gate.config.resumeMb)}); ` +
+            `${pressureSkips} tick(s) paused. ` +
+            // The breakdown, and the reason it is here rather than in the guard:
+            // a pause that never lifts while traffic is low is either an honestly
+            // fat process or a leak, and which term is growing is what tells them
+            // apart. Raising the thresholds until the crawler runs again would
+            // bury exactly this.
+            `heap=${m.heapUsedMb}/${m.heapTotalMb}MB external=${m.externalMb}MB ` +
+            `buffers=${m.arrayBuffersMb}MB.`,
         );
-        lockSkips = 0;
       }
       return;
     }
+
+    if (wasPaused) {
+      console.log(
+        `[crawl] Memory recovered — rss=${fmtMb(s.pressure.startRssMb)} ` +
+          `(resume ${fmtMb(gate.config.resumeMb)}); resuming after ` +
+          `${pressureSkips} paused tick(s).`,
+      );
+    }
+    pressureSkips = 0;
 
     // Only a tick that found work can be this far behind — an idle tick means
     // nothing was due, so the stalest league was inside the TTL. Throttled on
@@ -124,6 +190,18 @@ export function startLeagueCrawler(): BackgroundLoopHandle {
       s.discoverQueued +
       gone;
     const skipNote = lockSkips ? `; ${lockSkips} tick(s) lock-skipped` : "";
+    // Only where the guard did something. A tick that ran at full width says
+    // nothing about memory, which is the ordinary case and should stay silent.
+    const p = s.pressure;
+    const pressureNote =
+      p.yielded || p.discoveryDeferred || p.endConcurrency < p.startConcurrency
+        ? `; ${p.yielded ? "yielded" : "throttled"} at rss=${fmtMb(p.endRssMb)} ` +
+          `(from ${fmtMb(p.startRssMb)}), concurrency ` +
+          `${p.startConcurrency}→${p.endConcurrency}` +
+          (p.leaguesRemaining ? `, ${p.leaguesRemaining} league(s) left unclaimed` : "") +
+          (p.discoveryDeferred ? ", discovery deferred" : "") +
+          (p.poolSaturated ? ", pool saturated" : "")
+        : "";
 
     if (touched === 0) {
       // `lastNoteMs` starts at 0, so the boot tick heartbeats immediately —
@@ -134,10 +212,10 @@ export function startLeagueCrawler(): BackgroundLoopHandle {
       lockSkips = 0;
       console.log(
         s.corpus === 0
-          ? `[crawl] Idle — no leagues stored yet${skipNote}.`
+          ? `[crawl] Idle — no leagues stored yet${skipNote}${pressureNote}.`
           : `[crawl] Idle — ${s.tier} tier (ttl ${fmtMs(s.leagueTtlMs)}), ` +
               `${s.corpus} league(s) fresh ` +
-              `(stalest ${fmtMs(s.oldestAgeMs)})${skipNote}.`,
+              `(stalest ${fmtMs(s.oldestAgeMs)})${skipNote}${pressureNote}.`,
       );
       return;
     }
@@ -159,6 +237,7 @@ export function startLeagueCrawler(): BackgroundLoopHandle {
           : "") +
         (s.deferred ? `; ${s.deferred} member(s) deferred` : "") +
         skipNote +
+        pressureNote +
         `; ${fmtMs(s.tickMs)}.`,
     );
   }

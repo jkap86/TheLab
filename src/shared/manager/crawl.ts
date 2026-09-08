@@ -1,4 +1,4 @@
-import { LOCK_KEYS, withAdvisoryLock } from "@/shared/db";
+import { LOCK_KEYS, poolStats, withAdvisoryLock } from "@/shared/db";
 import { getActiveSeason } from "@/shared/season";
 import { getLeague, getNflState, getUserLeagues } from "@/shared/sleeper";
 import type { SleeperLeague } from "@/shared/sleeper";
@@ -12,12 +12,22 @@ import {
   pendingManagers,
   stampManagers,
 } from "./crawl-queue";
+import {
+  admitInBatches,
+  createCrawlPressureGate,
+  crawlerPressureConfig,
+  fmtMb,
+  type CrawlPressureGate,
+  type CrawlerPressureConfig,
+  type CrawlerPressureLevel,
+  type CrawlerResourcePressure,
+} from "./crawl-pressure";
 import { leagueCrawlTtl, type CrawlTier } from "./crawl-ttl";
 import {
   remainingDue,
   selectDiscoveryLeagues,
   stampableManagers,
-  unrecordedFailures,
+  unrecordedDiscoveries,
 } from "./discovery";
 import type { SyncClock } from "./graph-weeks";
 import { persistGoneLeagues, persistUnsyncedLeagues } from "./persist";
@@ -29,6 +39,12 @@ import { flooredWeek, refreshedLeagues, syncLeagueGraphs } from "./sync";
  * `./crawl-ttl` can actually cover. Raise it only on telemetry showing the
  * in-season target missed (the scheduler warns), never preemptively: the budget
  * math on {@link CRAWL_DISCOVERY_CAP} assumes this size.
+ *
+ * It is a *budget* rather than a promise: a tick that stands down for memory
+ * pressure spends less of it and the rest is never claimed, so those leagues
+ * keep their place in the queue rather than being deferred a freshness TTL. See
+ * `./crawl-pressure` and {@link RefreshResult.due}, which counts what actually
+ * completed.
  */
 export const CRAWL_LEAGUE_BATCH = 15;
 
@@ -68,6 +84,13 @@ export const CRAWL_MANAGER_TTL_MS = 6 * 60 * 60 * 1000;
  * used to be the lower of the two league concurrencies; since the interactive
  * path came down to two it is the higher, which is right — a tick is one
  * session where two admitted syncs are two, so it can afford the wider fan-out.
+ *
+ * **It is a ceiling now rather than the width every tick runs at.** The resource
+ * guard (`./crawl-pressure`) takes width away as RSS rises — halving here, one
+ * league at a time there, none at all past the stop threshold — and derives
+ * those levels from *this* number, so moving it carries them with it. It can
+ * only ever narrow: the pool budget above is stated against this ceiling and
+ * stays true whatever the guard decides.
  */
 export const CRAWL_CONCURRENCY = 4;
 
@@ -171,21 +194,70 @@ export type DiscoveryResult = {
   deferred: number;
 };
 
+/**
+ * What the resource guard did to this tick — see `./crawl-pressure`.
+ *
+ * Reported rather than logged from inside the passes, so the scheduler prints
+ * one line about a tick rather than one per decision, and so a test of the
+ * scheduler's wording never has to read the crawler's memory.
+ */
+export type CrawlPressureReport = {
+  /** False when `CRAWLER_MEMORY_GUARD_ENABLED` turned the guard off. */
+  enabled: boolean;
+  /** RSS when the tick was admitted. */
+  startRssMb: number;
+  /** RSS when it finished — the pair is what says whether the tick grew it. */
+  endRssMb: number;
+  /** The band the last reading fell in. */
+  level: CrawlerPressureLevel;
+  /** Width the tick was admitted at. */
+  startConcurrency: number;
+  /** Width it ended on: 0 when it stopped admitting. */
+  endConcurrency: number;
+  /** True when the refresh pass stopped admitting before its batch was spent. */
+  yielded: boolean;
+  /** Refresh budget the tick never claimed, because it stood down. */
+  leaguesRemaining: number;
+  /** True when discovery was skipped or cut short for pressure. */
+  discoveryDeferred: boolean;
+  /** True when the pool was saturated at the last reading. */
+  poolSaturated: boolean;
+};
+
 type CrawlTickBase = RefreshResult &
   DiscoveryResult & {
     season: string;
     /** Wall-clock cost of the tick, lock attempt included. */
     tickMs: number;
+    pressure: CrawlPressureReport;
   };
 
 /**
- * Discriminated on `locked`, so a tick that lost the lock — and therefore never
- * read Sleeper's state — carries no tier rather than a made-up one, and the
- * scheduler's `if (locked)` guard is also the type guard.
+ * Why a tick did nothing at all.
+ *
+ * There are two reasons now and there used to be one, which is why the
+ * discriminant is no longer the bare `locked` boolean: a tick refused for memory
+ * pressure has, like a tick that lost the lock, never read Sleeper's state and
+ * so carries no tier — but it is a different thing to say about a deployment,
+ * and the scheduler answers the two with different lines.
+ */
+export type CrawlSkip =
+  /** Another tick or instance held the crawl's advisory lock. */
+  | "lock"
+  /**
+   * The resource guard refused it: RSS at or above the stop threshold, or a
+   * previous yield still latched and RSS not yet back below the resume point.
+   */
+  | "memory";
+
+/**
+ * Discriminated on `skipped`, so a tick that did nothing carries no tier rather
+ * than a made-up one, and the scheduler's `if (s.skipped)` guard is also the
+ * type guard.
  */
 export type CrawlSummary =
   | (CrawlTickBase & {
-      locked: false;
+      skipped: null;
       /** Raw `season_type` the TTL was derived from. */
       seasonType: string | null;
       /** Freshness TTL applied to the whole tick — see `./crawl-ttl`. */
@@ -194,8 +266,7 @@ export type CrawlSummary =
       tier: CrawlTier;
     })
   | (CrawlTickBase & {
-      /** Another tick or instance held the lock; this tick did nothing. */
-      locked: true;
+      skipped: CrawlSkip;
       seasonType: null;
       leagueTtlMs: null;
       tier: null;
@@ -223,6 +294,23 @@ const NO_DISCOVERY: DiscoveryResult = {
 };
 
 /**
+ * How many league syncs may start right now, and 0 when the answer is none.
+ *
+ * The crawler's two passes take this rather than a number, which is the whole of
+ * the adaptive half: a width read once at the top of a tick is a decision made
+ * before any of the memory the tick is about to allocate exists.
+ */
+type Admit = () => number;
+
+/** A refresh pass, plus what the guard stopped it doing. */
+type RefreshOutcome = RefreshResult & {
+  /** Refresh budget the pass never claimed because it stood down. */
+  remaining: number;
+  /** True when it stopped admitting with budget and queue left. */
+  yielded: boolean;
+};
+
+/**
  * Re-sync the stalest stored leagues — the same fetch+persist the leagues route
  * runs when someone searches a username, just driven off the league table rather
  * than off one manager.
@@ -230,55 +318,86 @@ const NO_DISCOVERY: DiscoveryResult = {
  * The league itself is re-read from Sleeper (not replayed from our row) because
  * name, status, settings and scoring drift, and the persisted league row comes
  * from that payload.
+ *
+ * **The batch is claimed in the width it is about to run, never whole**, and
+ * that is the one thing about this loop that is silent when it is wrong.
+ * `claimStaleLeagues` is an `UPDATE … RETURNING` that *stamps* `sync_attempt_at`
+ * on everything it hands back, and the claim query refuses a league it has
+ * attempted inside the same freshness TTL — so a league claimed and then not run
+ * is a league marked attempted that nothing attempted, deferred a whole TTL (15
+ * minutes in season, six hours in the deep offseason) for a reason nothing on
+ * the outside could see. Taking exactly what runs makes that unreachable: a
+ * league the guard stops us reaching is simply never claimed, keeps its place in
+ * the queue, and is the next tick's first candidate.
+ *
+ * What it costs is `ceil(batch / width)` claim statements instead of one, and
+ * the same again for `syncLeagueGraphs`' three prefetch reads. Each is a small
+ * indexed query against a tick that spends ~11 Sleeper requests per league;
+ * nothing about duplicate protection changes, because each claim is still the
+ * same single atomic statement two ticks cannot both win.
  */
 async function refreshStaleLeagues(
   season: string,
   clock: SyncClock,
   limit: number,
   ttlMs: number,
-): Promise<RefreshResult> {
+  admit: Admit,
+): Promise<RefreshOutcome> {
   const { corpus, due: dueBefore, oldestAgeMs } = await leagueQueueStats(
     season,
     ttlMs,
   );
-  const leagueIds = await claimStaleLeagues(season, ttlMs, limit);
-  if (leagueIds.length === 0) {
-    return { ...NO_REFRESH, corpus, dueBefore, oldestAgeMs, due: dueBefore };
-  }
 
-  const leagues: SleeperLeague[] = [];
-  const goneIds: string[] = [];
+  let refreshed = 0;
+  let partial = 0;
   let failed = 0;
+  let goneCount = 0;
 
-  await mapWithConcurrency(leagueIds, CRAWL_CONCURRENCY, async (leagueId) => {
-    try {
-      const league = await getLeague(leagueId);
-      if (league) leagues.push(league);
-      else goneIds.push(leagueId);
-    } catch (error) {
-      failed += 1;
-      console.warn(
-        `[crawl] failed to fetch league ${leagueId}:`,
-        errorMessage(error),
-      );
-    }
+  const admission = await admitInBatches<string>({
+    budget: limit,
+    admit,
+    take: (width) => claimStaleLeagues(season, ttlMs, width),
+    run: async (leagueIds, width) => {
+      const leagues: SleeperLeague[] = [];
+      const goneIds: string[] = [];
+
+      await mapWithConcurrency(leagueIds, width, async (leagueId) => {
+        try {
+          const league = await getLeague(leagueId);
+          if (league) leagues.push(league);
+          else goneIds.push(leagueId);
+        } catch (error) {
+          failed += 1;
+          console.warn(
+            `[crawl] failed to fetch league ${leagueId}:`,
+            errorMessage(error),
+          );
+        }
+      });
+
+      // Tombstoned so the queue stops claiming them — an unmarked deleted league
+      // stays due forever and burns a slot plus a Sleeper request every rotation.
+      await markLeaguesGone(goneIds);
+      goneCount += goneIds.length;
+
+      const result = await syncLeagueGraphs(leagues, clock, {
+        concurrency: width,
+      });
+      refreshed += refreshedLeagues(result);
+      partial += result.partial;
+      failed += result.failed;
+
+      // `leagues` and `result` are this batch's alone and go out of scope with
+      // it, so the tick's peak retention is one batch of graphs rather than the
+      // whole claim. Nothing is accumulated here but counters.
+    },
   });
-
-  // Tombstoned so the queue stops claiming them — an unmarked deleted league
-  // stays due forever and burns a slot plus a Sleeper request every rotation.
-  await markLeaguesGone(goneIds);
-
-  const result = await syncLeagueGraphs(leagues, clock, {
-    concurrency: CRAWL_CONCURRENCY,
-  });
-
-  const refreshed = refreshedLeagues(result);
 
   return {
     refreshed,
-    refreshPartial: result.partial,
-    refreshFailed: failed + result.failed,
-    gone: goneIds.length,
+    refreshPartial: partial,
+    refreshFailed: failed,
+    gone: goneCount,
     corpus,
     dueBefore,
     oldestAgeMs,
@@ -288,7 +407,11 @@ async function refreshStaleLeagues(
     // `persistLeagueGraph`, so it is still due by the same query that counted it
     // due, and pretending otherwise would understate the backlog the scheduler's
     // missed-target warning reads.
-    due: remainingDue(dueBefore, refreshed, goneIds.length),
+    due: remainingDue(dueBefore, refreshed, goneCount),
+    // Budget, not backlog: what this tick was allowed to spend and did not.
+    // Zero when the queue simply ran dry, which is not a yield.
+    remaining: admission.yielded ? Math.max(limit - admission.started, 0) : 0,
+    yielded: admission.yielded,
   };
 }
 
@@ -321,10 +444,18 @@ async function refreshStaleLeagues(
  * them: the enumeration payload is the only copy of that league we will ever
  * hold. A failure with no payload behind it is in neither list, which is what
  * leaves it blocking — there is nothing to write.
+ *
+ * `width` is the resource guard's current allowance, floored at **one**
+ * deliberately: this is not new work, it is writing down what the tick already
+ * learned, and skipping it under pressure would leave a league that failed with
+ * no row at all — which holds its managers unstamped and is the one state that
+ * loses discovery work rather than deferring it. A handful of single probes is
+ * the cheapest thing in the pass.
  */
 async function partitionSyncFailures(
   failedIds: string[],
   attempted: readonly SleeperLeague[],
+  width: number,
 ): Promise<{ gone: SleeperLeague[]; unsynced: SleeperLeague[] }> {
   const gone: SleeperLeague[] = [];
   const unsynced: SleeperLeague[] = [];
@@ -332,7 +463,7 @@ async function partitionSyncFailures(
 
   const byId = new Map(attempted.map((l) => [l.league_id, l]));
 
-  await mapWithConcurrency(failedIds, CRAWL_CONCURRENCY, async (leagueId) => {
+  await mapWithConcurrency(failedIds, Math.max(1, width), async (leagueId) => {
     const league = byId.get(leagueId);
     if (!league) return;
     try {
@@ -354,26 +485,57 @@ async function partitionSyncFailures(
   return { gone, unsynced };
 }
 
+/** A discovery pass, plus what the guard stopped it doing. */
+type DiscoveryOutcome = DiscoveryResult & {
+  /**
+   * True when the pass was skipped outright, or stopped admitting leagues with
+   * some of its selection untouched.
+   */
+  deferredForPressure: boolean;
+};
+
+const NO_DISCOVERY_RUN: DiscoveryOutcome = {
+  ...NO_DISCOVERY,
+  deferredForPressure: false,
+};
+
 /**
  * Walk league members and pull in leagues we have never seen.
  *
  * This is what grows the corpus: every league sync writes its members to
  * `league_users`, each member's other leagues get discovered here, and those
  * leagues bring in more members. Seeded by the first username someone searches.
+ *
+ * **It is the first thing the resource guard takes away, and the last thing it
+ * gives back.** A first sync backfills every week of both week-keyed collections
+ * — ~41 Sleeper requests and a whole graph in memory against a refresh's ~11 —
+ * so under pressure a corpus whose known leagues are going stale is the worse
+ * state of the two. Nothing is lost by deferring: `pendingManagers` is a join
+ * over `league_users` rather than a queue with a cursor, so a manager not
+ * enumerated this tick is enumerated on a later one, and — see
+ * {@link unrecordedDiscoveries} — a league this pass selects and then never
+ * starts holds its managers unstamped exactly as a failure does, so it comes
+ * straight back rather than being forgotten.
  */
 async function discoverMemberLeagues(
   season: string,
   clock: SyncClock,
   limit: number,
   cap: number,
-): Promise<DiscoveryResult> {
+  admit: Admit,
+): Promise<DiscoveryOutcome> {
+  const enumerationWidth = admit();
+  if (enumerationWidth <= 0) {
+    return { ...NO_DISCOVERY, deferredForPressure: true };
+  }
+
   const userIds = await pendingManagers(season, CRAWL_MANAGER_TTL_MS, limit);
-  if (userIds.length === 0) return NO_DISCOVERY;
+  if (userIds.length === 0) return NO_DISCOVERY_RUN;
 
   const byManager = new Map<string, SleeperLeague[]>();
   let failed = 0;
 
-  await mapWithConcurrency(userIds, CRAWL_CONCURRENCY, async (userId) => {
+  await mapWithConcurrency(userIds, enumerationWidth, async (userId) => {
     try {
       byManager.set(userId, await getUserLeagues(userId, season));
     } catch (error) {
@@ -393,9 +555,38 @@ async function discoverMemberLeagues(
   // "eligible" means and why a manager is taken whole or not at all.
   const selection = selectDiscoveryLeagues(userIds, byManager, known, cap);
 
-  const result = await syncLeagueGraphs(selection.leagues, clock, {
-    concurrency: CRAWL_CONCURRENCY,
+  // Admitted in the guard's current width, on the refresh pass's terms and for
+  // an extra reason of its own: this selection is not claimed in the database,
+  // so what a batch boundary decides is simply which leagues this tick attempts
+  // and which stay unknown — with the managers who were waiting on them left
+  // unstamped, which is what brings both back next tick.
+  const attempted: SleeperLeague[] = [];
+  const failedIds: string[] = [];
+  let discovered = 0;
+  let partial = 0;
+  let syncFailed = 0;
+
+  const admission = await admitInBatches<SleeperLeague>({
+    budget: selection.leagues.length,
+    admit,
+    // `attempted` is the cursor as well as the record — `run` pushes its batch
+    // before syncing it and `admitInBatches` awaits each `run` before the next
+    // `take`, so the two cannot drift into disagreeing about where we are.
+    take: (width) =>
+      selection.leagues.slice(attempted.length, attempted.length + width),
+    run: async (batch, width) => {
+      attempted.push(...batch);
+      const result = await syncLeagueGraphs(batch, clock, {
+        concurrency: width,
+      });
+      discovered += refreshedLeagues(result);
+      partial += result.partial;
+      syncFailed += result.failed;
+      failedIds.push(...result.failedIds);
+    },
   });
+
+  const unattempted = selection.leagues.slice(attempted.length);
 
   // A league that fails its first sync every time holds its managers unstamped
   // forever, and because unstamped managers sort to the front of
@@ -406,8 +597,9 @@ async function discoverMemberLeagues(
   // one it still serves. Both retire the id from this pass; only the second is
   // still due a graph, and the refresh pass is what owes it.
   const { gone, unsynced } = await partitionSyncFailures(
-    result.failedIds,
-    selection.leagues,
+    failedIds,
+    attempted,
+    admission.yielded ? 1 : enumerationWidth,
   );
   await persistGoneLeagues(gone);
   await persistUnsyncedLeagues(unsynced);
@@ -418,30 +610,38 @@ async function discoverMemberLeagues(
   // suppress them for the enumeration TTL on the strength of a row that may not
   // exist — the one way a league is lost for good rather than merely late.
   //
-  // What still blocks is a failure with no row behind it, which is a failure we
-  // held no payload to write one from. See {@link unrecordedFailures} for why
-  // that residual is the right thing to keep blocking, and why "the league
-  // synced" was the wrong release condition for a hold with no other bound.
+  // What still blocks is a failure with no row behind it, and — since the guard
+  // — a league this tick never started, which has no row for the same reason and
+  // must hold its managers for the same one. See {@link unrecordedDiscoveries};
+  // an unattempted league is not counted as a failure anywhere, it only holds a
+  // stamp back.
   const recorded = new Set([...gone, ...unsynced].map((l) => l.league_id));
   const stamped = stampableManagers(
     selection,
-    unrecordedFailures(result.failedIds, recorded),
+    unrecordedDiscoveries(
+      failedIds,
+      recorded,
+      unattempted.map((l) => l.league_id),
+    ),
   );
   await stampManagers(season, stamped);
 
   return {
     managersCrawled: stamped.length,
-    discovered: refreshedLeagues(result),
-    discoverPartial: result.partial,
+    discovered,
+    discoverPartial: partial,
     // Only the failures nothing was written for. A parked league is reported as
     // queued rather than failed: it *did* fail to sync, but counting it here as
-    // well would have the same league show up twice in one summary line.
-    discoverFailed: failed + result.failed - gone.length - unsynced.length,
+    // well would have the same league show up twice in one summary line. An
+    // unattempted league is in none of these — it was never tried.
+    discoverFailed: failed + syncFailed - gone.length - unsynced.length,
     discoverGone: gone.length,
     discoverQueued: unsynced.length,
-    // Managers this tick did not retire: cap-deferred, enumeration failures, and
-    // those held back by a failed league. All three are unstamped and come back.
+    // Managers this tick did not retire: cap-deferred, enumeration failures,
+    // those held back by a failed league, and those held back by a league the
+    // guard stopped us starting. All are unstamped and come back.
     deferred: userIds.length - stamped.length,
+    deferredForPressure: admission.yielded,
   };
 }
 
@@ -453,7 +653,91 @@ export type CrawlOptions = {
   managerLimit?: number;
   /** Newly discovered leagues to fetch this tick. */
   discoveryCap?: number;
+  /**
+   * The resource guard, carrying the hysteresis latch across ticks.
+   *
+   * The scheduler builds one in its own closure and hands it over every tick,
+   * beside the throttles that already live there. A caller that passes none —
+   * a script, a one-off — gets a gate with no memory of a previous tick, which
+   * is the truthful answer when there was not one.
+   */
+  gate?: CrawlPressureGate;
 };
+
+/**
+ * The guard's configuration, resolved once per process.
+ *
+ * `CRAWL_CONCURRENCY` is handed over as the maximum rather than restated, so the
+ * reduced widths are always a fraction of whatever the crawler's own budget is —
+ * see `crawlerPressureConfig`. The notice is written at module initialisation
+ * on `sync-admission`'s terms: an operator whose numbers this app will not honour
+ * should hear about it once, at boot, rather than per tick or not at all.
+ */
+const PRESSURE_CONFIG = crawlerPressureConfig({
+  maxConcurrency: CRAWL_CONCURRENCY,
+});
+if (PRESSURE_CONFIG.notice) {
+  console.warn(`[crawl] memory guard: ${PRESSURE_CONFIG.notice}`);
+}
+
+/** What a tick that did nothing still reports about the guard. */
+function idlePressure(
+  pressure: CrawlerResourcePressure,
+  enabled: boolean,
+): CrawlPressureReport {
+  return {
+    enabled,
+    startRssMb: pressure.rssMb,
+    endRssMb: pressure.rssMb,
+    level: pressure.level,
+    startConcurrency: pressure.allowedConcurrency,
+    endConcurrency: pressure.allowedConcurrency,
+    yielded: false,
+    leaguesRemaining: 0,
+    discoveryDeferred: !pressure.shouldDiscover,
+    poolSaturated: pressure.pool?.saturated === true,
+  };
+}
+
+/**
+ * Say once, per tick, that the width moved.
+ *
+ * Only on a *transition*: a steady tick prints nothing, and a tick whose
+ * pressure genuinely moves prints at most one line per batch boundary, which on
+ * a fifteen-league batch is at most a handful. That is the difference between
+ * telemetry and a log line every time memory is read — and memory is read
+ * between every batch, which is the whole point.
+ */
+function logPressureShift(
+  from: CrawlerResourcePressure,
+  to: CrawlerResourcePressure,
+  config: CrawlerPressureConfig,
+): void {
+  if (
+    to.level === from.level &&
+    to.allowedConcurrency === from.allowedConcurrency
+  ) {
+    return;
+  }
+  const rss = `rss=${fmtMb(to.rssMb)}`;
+  if (to.allowedConcurrency === 0) {
+    console.warn(
+      `[crawl] yielding — ${to.hold === "recovering" ? "recovering" : "memory pressure"}: ` +
+        `${rss} stop=${fmtMb(config.stopMb)}; ` +
+        `no further league work admitted this tick.`,
+    );
+    return;
+  }
+  const label = to.hold === "pool" ? "pool pressure" : `${to.level} pressure`;
+  console.log(
+    `[crawl] ${label} — ${rss}; ` +
+      `concurrency ${from.allowedConcurrency}→${to.allowedConcurrency}` +
+      (to.hold === "pool" && to.pool
+        ? ` (pool ${to.pool.total}/${to.pool.max}, ${to.pool.waiting} waiting)`
+        : "") +
+      ".",
+  );
+}
 
 /**
  * One tick of the background league crawl:
@@ -466,6 +750,21 @@ export type CrawlOptions = {
  * league. Nothing here throws for an individual league or member: failures are
  * counted, the row's attempt is stamped so the queue rotates past it, and it
  * comes around again later.
+ *
+ * **The resource guard is read before the lock, and again between every batch.**
+ * Before, because a tick that cannot afford to crawl must not take a pool
+ * connection and park a session on the crawl's advisory lock to find that out —
+ * and because the first thing a refused tick owes an operator is to have cost
+ * nothing. Between, because a tick that starts at 240 MB and is at 410 MB four
+ * leagues later is the ordinary shape of this failure: the memory is made *by*
+ * the tick, so one check at the top is a decision taken before any of it exists.
+ *
+ * **Yielding is a matter of admission and never of cancellation.** Nothing here
+ * aborts a fetch, rolls back a transaction or abandons a promise; a batch in
+ * flight is awaited whole, the advisory lock is released through the ordinary
+ * `finally` in `withAdvisoryLock`, and what the guard withholds is the *next*
+ * batch. There is no `process.exit` and no polling — the scheduler's own
+ * interval is the retry.
  */
 export async function runLeagueCrawl(
   options: CrawlOptions = {},
@@ -473,13 +772,56 @@ export async function runLeagueCrawl(
   const {
     // Resolved rather than compiled in, so a league-year rollover doesn't leave
     // the crawler refreshing last season's leagues until someone redeploys.
+    //
+    // It stays *ahead* of the guard's reading, and deliberately: the resolver is
+    // memoized for the whole process, so in the steady state this is a field
+    // read, and it takes no pool connection, no advisory lock and no league
+    // fetch — none of the things a refused tick must not spend. `peekActiveSeason`
+    // is not the answer here for the reason its own note gives: `undefined` means
+    // "not yet resolved" rather than "no season", and a summary is not worth
+    // teaching this function to report one it does not have.
     season = await getActiveSeason(),
     leagueLimit = CRAWL_LEAGUE_BATCH,
     managerLimit = CRAWL_MANAGER_BATCH,
     discoveryCap = CRAWL_DISCOVERY_CAP,
+    gate = createCrawlPressureGate(PRESSURE_CONFIG),
   } = options;
 
   const startedAt = Date.now();
+
+  // Before `pool.connect()` and before the lock. Reading the pool's counters
+  // takes no connection — see `poolStats` — so the whole admission decision
+  // costs one `process.memoryUsage()` and four integer reads.
+  const opening = gate.read({ pool: poolStats() });
+  if (!opening.shouldStartTick) {
+    // Latched, so the next tick stays conservative until RSS has come all the
+    // way back to the resume threshold rather than merely off the stop one.
+    gate.yielded();
+    return {
+      season,
+      skipped: "memory",
+      seasonType: null,
+      leagueTtlMs: null,
+      tier: null,
+      tickMs: Date.now() - startedAt,
+      pressure: idlePressure(opening, gate.config.enabled),
+      ...NO_REFRESH,
+      ...NO_DISCOVERY,
+    };
+  }
+
+  // The one mutable thing a tick keeps about pressure: the last reading, so a
+  // shift can be recognised and reported once rather than on every check.
+  let last = opening;
+  const admit: Admit = () => {
+    const now = gate.read({ pool: poolStats() });
+    // The gate's own config, never the module-level one: a caller may hand over
+    // a gate configured differently (a script, a harness), and a line quoting a
+    // threshold the reading was not taken against is worse than no line.
+    logPressureShift(last, now, gate.config);
+    last = now;
+    return now.shouldAcceptNewWork ? now.allowedConcurrency : 0;
+  };
 
   // The lock is held for the whole tick so overlapping ticks — and extra app
   // instances, which share one database — don't crawl the same rows twice. The
@@ -499,16 +841,32 @@ export async function runLeagueCrawl(
     // "due" means, or the numbers reported describe a different queue than the
     // one crawled.
     const { ttlMs, tier } = leagueCrawlTtl(state);
-    const refresh = await refreshStaleLeagues(season, clock, leagueLimit, ttlMs);
-    const discovery = await discoverMemberLeagues(
+    const refresh = await refreshStaleLeagues(
       season,
       clock,
-      managerLimit,
-      discoveryCap,
+      leagueLimit,
+      ttlMs,
+      admit,
     );
+    // Re-read rather than reusing the refresh pass's last answer: discovery is
+    // held back a band earlier than refresh work, so "may I still admit a
+    // league" and "may I start discovering new ones" are different questions
+    // even when nothing has moved between them.
+    const discoveryPressure = gate.read({ pool: poolStats() });
+    logPressureShift(last, discoveryPressure, gate.config);
+    last = discoveryPressure;
+    const discovery = discoveryPressure.shouldDiscover
+      ? await discoverMemberLeagues(
+          season,
+          clock,
+          managerLimit,
+          discoveryCap,
+          admit,
+        )
+      : { ...NO_DISCOVERY, deferredForPressure: true };
     return {
       season,
-      locked: false as const,
+      skipped: null as null,
       seasonType: state?.season_type ?? null,
       leagueTtlMs: ttlMs,
       tier,
@@ -518,16 +876,42 @@ export async function runLeagueCrawl(
   });
 
   const tickMs = Date.now() - startedAt;
-  return summary
-    ? { ...summary, tickMs }
-    : {
-        season,
-        locked: true,
-        seasonType: null,
-        leagueTtlMs: null,
-        tier: null,
-        tickMs,
-        ...NO_REFRESH,
-        ...NO_DISCOVERY,
-      };
+
+  if (!summary) {
+    return {
+      season,
+      skipped: "lock",
+      seasonType: null,
+      leagueTtlMs: null,
+      tier: null,
+      tickMs,
+      pressure: idlePressure(opening, gate.config.enabled),
+      ...NO_REFRESH,
+      ...NO_DISCOVERY,
+    };
+  }
+
+  const { remaining, yielded, deferredForPressure, ...tick } = summary;
+  // The latch is set by a tick that *stood down*, not by one that merely ran
+  // warm: a refresh pass that spent its whole budget at width 1 is the guard
+  // working, and holding the next tick back for it would turn a throttle into a
+  // pause.
+  if (yielded) gate.yielded();
+
+  return {
+    ...tick,
+    tickMs,
+    pressure: {
+      enabled: gate.config.enabled,
+      startRssMb: opening.rssMb,
+      endRssMb: last.rssMb,
+      level: last.level,
+      startConcurrency: opening.allowedConcurrency,
+      endConcurrency: last.allowedConcurrency,
+      yielded,
+      leaguesRemaining: remaining,
+      discoveryDeferred: deferredForPressure,
+      poolSaturated: last.pool?.saturated === true,
+    },
+  };
 }

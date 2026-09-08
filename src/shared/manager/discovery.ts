@@ -164,6 +164,36 @@ export function unrecordedFailures(
 }
 
 /**
+ * Every discovered league this tick left no trace of — the failures above, plus
+ * the ones it never started.
+ *
+ * **The second set is new and is the one that is silent when it is missing.**
+ * A tick that stands down for memory pressure stops admitting leagues, so some
+ * of the selection is neither loaded nor failed: it is simply untouched. To
+ * {@link stampableManagers} an untouched league looks exactly like a successful
+ * one — it is absent from `failedLeagueIds` — so the manager who was waiting on
+ * it would be stamped, suppressed for `CRAWL_MANAGER_TTL_MS`, and the league
+ * would go back to being unknown to everyone until some other member of it
+ * happened to come up. That is the "discovery work is deferred, never lost"
+ * promise, and this is where it is kept: an unattempted league blocks its
+ * managers exactly as an unrecorded failure does, so the next tick finds them at
+ * the head of the queue with the same leagues still to fetch.
+ *
+ * It is emphatically *not* a claim that the league failed — nothing is written
+ * for it and nothing is counted against it. The only thing it does is hold a
+ * stamp back.
+ */
+export function unrecordedDiscoveries(
+  failedIds: readonly string[],
+  recorded: ReadonlySet<string>,
+  unattemptedIds: readonly string[],
+): Set<string> {
+  const blocking = unrecordedFailures(failedIds, recorded);
+  for (const id of unattemptedIds) blocking.add(id);
+  return blocking;
+}
+
+/**
  * Leagues still past the freshness TTL after a refresh pass.
  *
  * Both a successful refresh and a tombstone leave the queue: `markLeaguesGone`

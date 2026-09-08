@@ -538,6 +538,205 @@ none may lose: **the boot tick does not force and interval ticks do**, because
 the interval equals the TTL and an unforced interval tick would find the rows a
 moment short of stale and skip forever.
 
+### The crawler yields to the web server
+
+The crawler and the request handlers share a process — and on a Heroku Basic
+dyno a **512 MB quota**. A tick is a Sleeper fan-out over a batch of leagues
+whose parsed graphs, rosters, transactions and matchups are all in memory at
+once, and it is the only workload in the process that can be asked to wait: a
+delayed refresh is a fact about freshness, where a request handler that cannot
+allocate is a fact about the app. So `shared/manager/crawl-pressure.ts` is what
+makes the crawler stand down, and the priority it encodes is one sentence —
+**background freshness is opportunistic, user-facing traffic is not.**
+
+**It needed no migration and nothing on the wire moved.** The queue is still
+`leagues`, the discovery frontier is still `league_users ⋈ manager_syncs`, the
+advisory lock, the seasonal TTL, the five tiers, the batch caps and the failure
+accounting are all untouched. What changed is *when* the tick is allowed to
+claim its next batch.
+
+**The signal is RSS and not `heapUsed`**, because what the platform kills a dyno
+for is resident memory and this process holds a great deal V8's heap does not
+account for — `Buffer`s, the HTTP and TLS buffers under `fetch`, `pg`'s
+allocations, Next's runtime, and the strings a multi-megabyte Sleeper response is
+parsed out of. A guard on `heapUsed` would report a comfortable 90 MB while the
+dyno was at 480 and about to be told about it. `heapUsed` *is* read, in exactly
+one place — the diagnostic line a long pause prints — because a diagnosis wants
+the breakdown even though a decision must not be made on one term of it.
+
+**Nothing calls `global.gc()`** and nothing depends on `--expose-gc`. The answer
+to pressure is to stop making garbage, not to stop the world clearing it: a
+forced collection is a synchronous pause on the thread that is also serving
+requests.
+
+**Four bands, and the thresholds are one table.** Below 300 MB the tick runs at
+`CRAWL_CONCURRENCY`; 300–350 halves it; 350–400 is one league at a time and no
+discovery; at 400 nothing new is admitted at all. Development gets three times
+the headroom (`DEV_HEADROOM_MULTIPLE`) because `next dev` carries source maps,
+HMR state and an uncompiled module graph and sits past the production stop
+threshold doing nothing — the production numbers there would pause the crawler
+permanently and teach a developer the guard is broken. The guard stays *on* in
+development; only the RSS at which it fires moves.
+
+**The reduced widths are derived from the crawler's own maximum, never written
+down.** `normalConcurrency` *is* `CRAWL_CONCURRENCY`, halving is the moderate
+step and one is the floor, so moving that constant carries the ladder with it
+rather than leaving a 4/2/1 describing a crawler that no longer exists. Every
+configured width clamps **downward** and to its neighbours in order: a guard that
+could be configured to widen the crawler would be the failure it exists to
+prevent, reached through the variable meant to prevent it.
+
+**Memory is read before the lock and again between every batch, and one reading
+would not do.** Before, because a tick that cannot afford to crawl must not take
+a pool connection and park a session on the crawl's advisory lock to find that
+out — a refusal has to cost nothing, or a pressured process pays for its own
+guard every minute. Between, because the memory is made *by* the tick: a tick
+that starts at 240 MB and is at 410 MB four leagues later is the ordinary shape
+of this failure, and a check at the top is a decision taken before any of it
+exists.
+
+**Yielding is admission and never cancellation.** Nothing aborts a fetch, rolls
+back a transaction or abandons a promise; `admitInBatches` awaits a batch whole
+before the next reading, so a threshold crossed mid-batch cannot interrupt a
+write. The tick returns normally from inside `withAdvisoryLock`'s callback, so
+the unlock and the client release happen through the ordinary `finally` they
+always did. There is no `process.exit`, no polling and no backoff of its own —
+the loop's 60-second interval is the retry.
+
+**The batch is claimed in the width that runs, and that is the rule which is
+silent when it is wrong.** `claimStaleLeagues` is an `UPDATE … RETURNING` that
+*stamps* `sync_attempt_at` on everything it hands back, and the claim query
+refuses a league it has attempted inside the same freshness TTL — so a league
+claimed and then not run is a league marked attempted that nothing attempted,
+deferred a whole TTL (fifteen minutes in season, six hours in the deep
+offseason) for a reason nothing outside the process could see. Claiming exactly
+what runs makes that state unreachable: a league the guard stops us reaching is
+never claimed, keeps its place in the queue and is the next tick's first
+candidate. It costs `ceil(batch / width)` claim statements instead of one, and
+the same again for `syncLeagueGraphs`' three prefetch reads; each is a small
+indexed query against a tick that spends ~11 Sleeper requests per league, and
+duplicate protection is unchanged because each claim is still the one atomic
+statement two ticks cannot both win.
+
+**Discovery is the first thing given up and the last taken back** — held at
+`high` rather than at `critical`. A first sync backfills every week of both
+week-keyed collections, ~41 Sleeper requests and a whole graph in memory against
+a refresh's ~11, and a corpus whose known leagues are going stale is the worse
+of the two states. Nothing is lost: `pendingManagers` is a join rather than a
+cursor, so a manager not enumerated this tick is enumerated on a later one.
+
+**A discovered league the tick never started holds its managers unstamped, and
+that is the second rule with no symptom.** An unattempted league is neither
+loaded nor failed, so to `stampableManagers` it looks exactly like a success —
+the manager waiting on it would be stamped, suppressed for `CRAWL_MANAGER_TTL_MS`,
+and the league would go back to being unknown to everybody until some other
+member of it happened to come up. `unrecordedDiscoveries` is where the
+"deferred, never lost" promise is kept: an unattempted league blocks a stamp
+exactly as an unrecorded failure does, while being counted as neither a failure
+nor a success anywhere. `partitionSyncFailures` still runs at a width floored at
+**one** under pressure, because it is not new work — it is writing down what the
+tick already learned, and skipping it would leave a failed league with no row at
+all, which is the one state that loses a discovery rather than deferring it.
+
+**Hysteresis is a latch, not a fifth threshold.** A bare bound oscillates, and
+worse than it sounds: 401 MB stops the tick, the pause frees a little, 399 MB
+starts a full-width fan-out, the fan-out is back over 400 within seconds, and the
+crawler spends every minute launching work it immediately abandons — at exactly
+the moment the process can least afford it. So a yield latches and is released
+only by RSS falling to `resumeMb`, a whole band below the 400 that set it; 399 MB
+is not a recovery, it is one megabyte of luck. The latch is **not** a global: it
+lives in the crawl loop's own closure beside the log throttles, on the rule that
+file already states — a re-invoked start (dev, HMR) builds a closure the
+double-start guard never ticks, so the running loop keeps the only live copy —
+and a one-off `runLeagueCrawl()` from a script gets a gate with no memory, which
+is the truthful answer when there was no previous tick.
+
+**A throttle does not latch and a stand-down does.** A refresh pass that spends
+its whole budget at width 1 is the guard *working*; holding the next tick back
+for it would turn a throttle into a pause.
+
+**The database pool is a secondary signal and can never refuse a tick.**
+`poolStats()` reads `pg`'s own counters — no connection taken, none reserved —
+and `waiting > 0` (or a pool fully checked out) narrows the crawler to its
+minimum width and defers discovery. It stops there deliberately: waiting for a
+perfectly idle pool is a crawler that never runs on a busy deployment, and the
+counters move between the reading and the batch it would be refusing. It is read
+at a batch boundary, where the crawler itself holds one lock session and no
+transactions, so what it measures is mostly somebody else.
+
+**What is logged is transitions, not readings.** Memory is checked between every
+batch and a steady tick prints nothing; a tick whose pressure moves prints one
+line per shift, and a tick that stood down or ran narrow adds a clause to the
+summary line it was already printing. A refused tick speaks immediately the
+first time and then once per heartbeat window, carrying the whole
+`process.memoryUsage()` breakdown — because a pause that never lifts while
+traffic is low is either an honestly fat process or a leak, and which term is
+growing is what tells them apart. **Raising the thresholds until the crawler runs
+again would bury exactly that**, and nothing here restarts the process: Heroku
+owns the lifecycle.
+
+**`CRAWLER_MEMORY_GUARD_ENABLED=false` restores the crawler exactly**, width and
+all, and every threshold and width is overridable — see the README's table.
+Junk falls back per variable and a set that is not ordered
+(`resume < stop`, `normal <= throttle < stop`) is discarded **whole** rather than
+repaired piecemeal, because a half-normalised set is a configuration nobody
+wrote. One notice, at boot, on `sync-admission`'s terms. `CRAWLER_MEMORY_FAKE_RSS_MB`
+drives the levels without exhausting a machine's memory and is honoured
+**outside production only** — it is an env var rather than an endpoint because a
+route that could tell the crawler it was out of memory is a route that can stop
+the crawler.
+
+**`crawl-pressure.ts` is pure**, with the RSS, the pool counters, the environment
+and the production flag all as arguments, no timers and no cached readings — the
+bar `crawl-ttl.ts` and `crawl-priority.ts` are already held to, and what lets
+Node's own runner drive every band, width and latch without allocating a byte.
+
+#### Verified
+
+**Against a throwaway Postgres 16**, which is what a unit test cannot reach:
+`crawl.ts` imports `@/shared/db` and `@/shared/sleeper`, so `npm test` cannot
+resolve it, and the claim the whole design turns on is a fact about *rows*.
+`scripts/verify-crawl-pressure.ts` is that half — the real `runLeagueCrawl` under
+its real advisory lock, Sleeper stubbed at `globalThis.fetch`, with a gate whose
+RSS readings are scripted. Six cases, all passing. A tick refused at 418 MB
+claimed nothing, asked Sleeper **nothing**, and never took the lock. A tick
+scripted through 242 → 318 → 366 → 407 MB claimed and refreshed exactly
+**4 + 2 + 1 = 7** leagues and left the other **eight with a null
+`sync_attempt_at`** — unclaimed, not deferred — with no manager stamped, the lock
+released and the pool fully checked in. The next tick at 382 MB was refused
+(hysteresis) and the one at 329 MB crawled all eight and ran discovery. With the
+guard disabled the tick took the whole batch of fifteen and never latched. With
+three leagues' fetches throwing, the tick still yielded on schedule, released the
+lock, and the next tick ran normally. A saturated pool narrowed the tick to one
+league at a time and deferred discovery **without refusing it**.
+
+Under Node's own runner, 75 new tests: the four bands and their boundaries, the
+widths, the guard-disabled arm, the pool classification, config parsing and the
+ordering rejection, the latch through a full pause-and-recover cycle, and
+`admitInBatches` — including that a batch is awaited whole before the next
+reading and that the queue is never asked for more than will be run.
+`crawl-guard.test.ts` pins the wiring textually on `crawl-writes.test.ts`' terms,
+and three deliberate mutations were checked against it: claiming the whole budget
+up front, dropping the unattempted-league blocking set, and moving the admission
+read inside the lock each fail a named assertion.
+
+Smoke-tested against a real production server on the throwaway database:
+`CRAWLER_MEMORY_STOP_MB=50` printed
+`[crawl] Skipped for memory pressure — rss=133MB (stop 50MB, resume 45MB); 1
+tick(s) paused. heap=30/44MB external=4MB buffers=0MB.` and took no lock;
+an unordered set printed one notice and used the defaults; `LEAGUE_CRAWLER=off`
+still disables the loop outright. 2,022 unit tests pass; `lint`, `typecheck` and
+`build` are clean.
+
+**Not verified against real traffic**, which is the gap to close first: every
+number above is a fixture or a synthetic reading. Three things they cannot check
+— what a real 113-league tick's RSS actually peaks at, and therefore whether 300
+/ 350 / 400 are the right bands for this corpus rather than merely conservative
+ones; whether the pool signal fires often enough on a low-traffic dyno to matter
+or is effectively dead code there; and whether one Basic dyno serving requests
+*and* crawling stays under 512 MB at all, which is the question this work exists
+to answer and which only the first deployment can.
+
 ## Valuing a roster off ADP
 
 `shared/manager/adp-value.ts` turns an average draft pick into a number that can
