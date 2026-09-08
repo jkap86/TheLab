@@ -25,6 +25,20 @@
  * single instance and a laptop want and is exactly what this file did before.
  * Migrations run under every role, because a process must not serve *or*
  * maintain against a schema it cannot vouch for. See `util/process-role`.
+ *
+ * **The shipped deployment is `all` on one dyno**, which is the arrangement the
+ * crawler's own RSS guard was written for: on a 512 MB Heroku Basic dyno the
+ * loops below and the request handlers share a process, and the crawler is the
+ * one workload there that can be told to wait (`manager/crawl-pressure`). The
+ * split — `web` here, `worker` on a dyno of its own — is one config var away and
+ * changes nothing about the loops themselves; see `Procfile` and the Deploying
+ * section of README.md.
+ *
+ * **They no longer all start at the same instant.** Each carries a
+ * `BOOT_STAGGER_MS` entry, so the first tick of the four is spread over ninety
+ * seconds in dependency order — the players map first, because the KTC matcher
+ * and the comps loader both read what it writes. Their cadences are untouched;
+ * see `util/boot-stagger`.
  */
 export async function register(): Promise<void> {
   if (process.env.NEXT_RUNTIME !== "nodejs") return;
@@ -47,12 +61,22 @@ export async function register(): Promise<void> {
   // outside — no ticks, no errors — and the difference is a database that stops
   // being refreshed. An unreadable value reads as `all` rather than as a
   // refusal, on the same argument: see `processRole`.
-  const { backgroundJobsSkipReason } = await import("@/shared/util");
+  const { backgroundJobsSkipReason, PROCESS_ROLE_VAR, processRole } = await import(
+    "@/shared/util"
+  );
   const skip = backgroundJobsSkipReason();
   if (skip !== null) {
     console.log(`[jobs] Background loops not started on this process (${skip}).`);
     return;
   }
+  // **And a boot that starts them says so too**, naming the role it read. Under
+  // the single-dyno `all` — the default, and what the `Procfile`'s web line runs
+  // as until a config var says otherwise — the loops are sharing this process
+  // with the requests it is serving, which is a deliberate arrangement rather
+  // than an accident and is worth one line at the top of a dyno's log.
+  console.log(
+    `[jobs] Starting background loops (${PROCESS_ROLE_VAR}=${processRole()}).`,
+  );
 
   // Started, not awaited: the boot tick can run half an hour of history
   // backfill and `register()` gates request serving. And unlike migrations, a

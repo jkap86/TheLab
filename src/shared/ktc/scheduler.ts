@@ -1,4 +1,9 @@
-import { errorMessage, loopSwitch, startBackgroundLoop } from "@/shared/util";
+import {
+  BOOT_STAGGER_MS,
+  errorMessage,
+  loopSwitch,
+  startBackgroundLoop,
+} from "@/shared/util";
 import type { BackgroundLoopHandle } from "@/shared/util";
 
 import { syncKtcHistory } from "./history";
@@ -34,6 +39,9 @@ export function startKtcScheduler(): BackgroundLoopHandle {
     guardKey: "ktc-sync",
     ...loopSwitch(KTC_SYNC_VAR),
     cadence: "every 15m; history backfilled once at boot",
+    // Second of the four, and behind the players map its matcher resolves
+    // `sleeper_id` against — see `BOOT_STAGGER_MS` for the whole order.
+    initialDelayMs: BOOT_STAGGER_MS.ktc,
     tick: async (firstRun) => {
       if (firstRun) return bootTick();
       await valuesTick(true);

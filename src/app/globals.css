@@ -286,6 +286,70 @@
   --rack-channel-bg: rgba(0, 0, 0, 0.52);
   --rack-channel-shadow: inset 0 4px 10px rgba(0, 0, 0, 0.95),
     inset 0 1px 0 rgba(0, 0, 0, 0.9), inset 0 -1px 0 rgba(255, 255, 255, 0.075);
+
+  /*
+   * The tool tray, as a milled part.
+   *
+   * It was a `--key-bg` panel with flat rows — a *surface* with a list on it —
+   * and it is a billet with a bay cut into its face per group and a brushed key
+   * seated in each. What that buys is the grouping: three holes in one part read
+   * as three groups, where three runs of rows on one panel read as one list with
+   * rules across it. The stock is `--billet-bg`, which the league cards' ledges
+   * and the manager billet are already cut from, so what is new here is the two
+   * depths below rather than a family.
+   *
+   * The tray shell's chamfer is `--standing-strip-shadow` under a heavier cast,
+   * spelled whole because a shadow list is atomic — a caller appending a cast to
+   * that token would *replace* the chamfer rather than add to it, which is the
+   * trap `CONSOLE_BILLET_FACE` exists beside `CONSOLE_BILLET` for. Deeper than
+   * the strip's own because this hangs in the air off the rack rather than
+   * standing on a housing's face.
+   */
+  --rack-tray-shadow: inset 0 2px 0 rgba(255, 255, 255, 0.55),
+    inset 0 -2px 0 rgba(0, 0, 0, 0.7), inset 2px 0 0 rgba(255, 255, 255, 0.12),
+    inset -2px 0 0 rgba(0, 0, 0, 0.4), 0 2px 3px rgba(0, 0, 0, 0.55),
+    0 14px 22px -10px #000, 0 30px 52px -22px #000;
+  /*
+   * A bay: one group's hole, cut deeper than `--billet-well-bg` and walled on
+   * all four sides. The gradient is the face's *inverted* — dark at the top,
+   * lighter at the bottom — which is the recess cue that well already runs on: a
+   * surface lit from above is bright where it faces the light, and a recess is
+   * bright where it faces away. Deeper than the well because what sits in it is
+   * a *part* rather than a reading, which is the distinction `CONSOLE_PART_TRAY`
+   * draws one grain up.
+   */
+  --rack-tray-bay-bg: linear-gradient(180deg, #1a2428, #2b393f);
+  --rack-tray-bay-shadow: inset 0 5px 11px rgba(0, 0, 0, 0.82),
+    inset 0 1px 0 rgba(0, 0, 0, 0.65), inset 1px 0 0 rgba(0, 0, 0, 0.4),
+    inset -1px 0 0 rgba(0, 0, 0, 0.4), inset 0 -1px 0 rgba(255, 255, 255, 0.22);
+  /*
+   * A tool key's face, and it is **not `--key-metal`** for a measured reason.
+   * That token carries `--brush-fine` and opens at `#78868c`, where solid
+   * `--billet-name` measures **3.53:1** — under the floor a legend owes, and
+   * visibly lost in the vertical brush besides, which is what the first pass at
+   * this tray drew and what the revision took out. This is the same family with
+   * the brush off and the stops darkened: 5.25:1 at the top stop, and 7.7–10.6:1
+   * across the band a `--fs-11` legend in a 9px-padded row actually occupies.
+   *
+   * The riser is `--key-shadow` unchanged, which is already exactly the three
+   * layers the design drew — so a key here is this face in the console's own
+   * standard travel rather than a second kind of key.
+   */
+  --rack-tray-key-bg: linear-gradient(180deg, #5c6a70 0%, #4a565b 24%, #333e42 60%,
+    #242c30 100%);
+  /*
+   * The same face, teal-cast, for the row naming the page you are on. Its ink is
+   * `--readout-text`, which measures 5.4–8.7:1 across the band the legend
+   * occupies — 3.8:1 at the very top stop, which a row padded 9px does not
+   * reach, and which is the band the handoff's own figure skipped past in the
+   * other direction by measuring at the 60% stop.
+   *
+   * The accent rim, the halo and the lamp are the caller's, composed onto
+   * `--key-shadow`: a lit key is this surface plus light rather than a second
+   * surface.
+   */
+  --rack-tray-key-lit-bg: linear-gradient(180deg, #5f7d80 0%, #4a6468 24%, #31474b 60%,
+    #223336 100%);
   /*
    * The card as an *instrument housing*, which is what the console cards
    * became: a bezel with lit windows set into it, rather than a pane of glass
@@ -1032,6 +1096,47 @@
   --rack-channel-bg: rgba(15, 23, 42, 0.1);
   --rack-channel-shadow: inset 0 4px 10px rgba(15, 23, 42, 0.26),
     inset 0 1px 0 rgba(15, 23, 42, 0.16), inset 0 -1px 0 rgba(255, 255, 255, 0.9);
+
+  /*
+   * The tool tray (light), derived rather than dimmed on the rack block's own
+   * note above. The chamfer inverts — bright top becomes brighter, dark
+   * underside becomes slate — and both casts go slate, since pure black over a
+   * near-white page reads as dirt.
+   */
+  --rack-tray-shadow: inset 0 2px 0 rgba(255, 255, 255, 0.95),
+    inset 0 -2px 0 rgba(15, 23, 42, 0.3), inset 2px 0 0 rgba(255, 255, 255, 0.8),
+    inset -2px 0 0 rgba(15, 23, 42, 0.16), 0 2px 3px rgba(15, 23, 42, 0.22),
+    0 14px 22px -10px rgba(15, 23, 42, 0.5), 0 30px 52px -22px rgba(15, 23, 42, 0.6);
+  /*
+   * The bay stays a recess by *darkening* against a near-white face, which is
+   * the same inversion `--billet-well-bg` makes one part over — and it is cut
+   * two steps below that well for the same reason the dark half is: a hole
+   * holding a part rather than a reading. The bottom lip is white here where the
+   * dark half's is, because a recess is lit from the side it faces away from in
+   * either scheme.
+   */
+  --rack-tray-bay-bg: linear-gradient(180deg, #9db1b9, #d2dfe3);
+  --rack-tray-bay-shadow: inset 0 5px 11px rgba(15, 23, 42, 0.3),
+    inset 0 1px 0 rgba(15, 23, 42, 0.22), inset 1px 0 0 rgba(15, 23, 42, 0.14),
+    inset -1px 0 0 rgba(15, 23, 42, 0.14), inset 0 -1px 0 rgba(255, 255, 255, 0.95);
+  /*
+   * The dark half darkens its stops so pale ink reads on them; this one keeps
+   * the light scheme's own key stock and takes the brush off for the same
+   * legibility reason. The ink inverts with the face — `--billet-name` is a
+   * near-black here — and measures 12.2–17.7:1 across every band.
+   */
+  --rack-tray-key-bg: linear-gradient(180deg, #ffffff 0%, #f2f7f8 24%, #dfe8eb 60%,
+    #cbd8dd 100%);
+  /*
+   * The lit face, teal-cast, and **lightened** where the dark half is darkened:
+   * the ink inverts with it, `--readout-text` being a dark teal on this side.
+   * Its stops are chosen so that ink clears 4.5:1 on *every* band including the
+   * bottom one — 4.66–6.0:1 — rather than only on the band the legend occupies,
+   * because the light scheme has no `--readout-text-glow` to carry a thin
+   * reading the way the dark one does.
+   */
+  --rack-tray-key-lit-bg: linear-gradient(180deg, #f4fdfb 0%, #e9f8f5 24%, #daefeb 60%,
+    #c9e5e0 100%);
   /*
    * The housing, darkened rather than mirrored — the one place the light
    * scheme is not the dark one inverted.

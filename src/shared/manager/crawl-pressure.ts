@@ -114,7 +114,10 @@ export const CRAWLER_MEMORY_THROTTLE_VAR = "CRAWLER_MEMORY_THROTTLE_MB";
 export const CRAWLER_MEMORY_STOP_VAR = "CRAWLER_MEMORY_STOP_MB";
 /** RSS a yielded crawler has to fall back below before it works again. */
 export const CRAWLER_MEMORY_RESUME_VAR = "CRAWLER_MEMORY_RESUME_MB";
-/** Overrides the width taken from `CRAWL_CONCURRENCY`. */
+/**
+ * Narrows the width taken from `CRAWL_CONCURRENCY`. It can only ever narrow it:
+ * a value above the crawler's own maximum is capped at that maximum.
+ */
 export const CRAWLER_NORMAL_CONCURRENCY_VAR = "CRAWLER_MEMORY_NORMAL_CONCURRENCY";
 /** Width under moderate pressure. */
 export const CRAWLER_THROTTLED_CONCURRENCY_VAR =
@@ -179,6 +182,11 @@ export type CrawlerPressureConfig = {
   stopMb: number;
   /** RSS a yielded crawler must fall below before it works again. */
   resumeMb: number;
+  /**
+   * The widest the crawler may run, and never wider than `CRAWL_CONCURRENCY`
+   * itself — see {@link crawlerPressureConfig}, where all three are clamped
+   * downward. `high <= throttled <= normal <= CRAWL_CONCURRENCY` always holds.
+   */
   normalConcurrency: number;
   throttledConcurrency: number;
   highConcurrency: number;
@@ -208,6 +216,11 @@ function defaultThresholds(production: boolean) {
  * the database pool). Halving is the moderate step and one is the floor, so a
  * later change to the maximum carries the reduced levels with it instead of
  * leaving a hard-coded 4/2/1 describing a crawler that no longer exists.
+ *
+ * It is also the **ceiling** every configured width is clamped to, which is why
+ * this returns the maximum rather than the caller reading `maxConcurrency`
+ * again: the number a level defaults to and the number it may not exceed are
+ * one fact.
  */
 function defaultConcurrency(maxConcurrency: number) {
   const normal = Math.max(1, Math.trunc(maxConcurrency));
@@ -337,13 +350,24 @@ export function crawlerPressureConfig(options: {
   }
 
   const widths = defaultConcurrency(maxConcurrency);
-  const normalConcurrency =
+  // **Clamped downward only, every one of them.** `normalConcurrency` is
+  // clamped to the crawler's own maximum and the other two to the level above,
+  // so `high <= throttled <= normal <= CRAWL_CONCURRENCY` holds however the
+  // three were written. A guard that could be configured to *widen* the crawler
+  // is the failure it exists to prevent, reached through the variable meant to
+  // prevent it — and it is the one that is silent when wrong: a
+  // `CRAWLER_MEMORY_NORMAL_CONCURRENCY=20` against a `CRAWL_CONCURRENCY` of 4
+  // is a crawler running five times its budgeted width on a dyno the guard is
+  // there to keep alive, with nothing on screen saying so. The requested value
+  // is not recorded as *invalid* — it is a legible number the guard simply
+  // will not honour past the ceiling — so an oversized one is capped in
+  // silence rather than discarding the whole set the way an unordered
+  // threshold set is.
+  const normalConcurrency = Math.min(
     readInteger(env, CRAWLER_NORMAL_CONCURRENCY_VAR, invalid) ??
-    widths.normalConcurrency;
-  // Clamped downward only, and to each other in order, so `high <= throttled <=
-  // normal` holds however the three were written. A guard that could be
-  // configured to widen the crawler is the failure it exists to prevent reached
-  // through the variable meant to prevent it.
+      widths.normalConcurrency,
+    widths.normalConcurrency,
+  );
   const throttledConcurrency = Math.min(
     readInteger(env, CRAWLER_THROTTLED_CONCURRENCY_VAR, invalid) ??
       widths.throttledConcurrency,

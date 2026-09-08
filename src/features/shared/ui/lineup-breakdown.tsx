@@ -12,7 +12,7 @@ import type {
 // Relative, not through the barrel: this folder's own modules are what a
 // module in it reaches for — the rule the move here brought with it.
 import { CONSOLE_FIGURE_WELL, CONSOLE_ROW_WELL } from "../console-chrome";
-import { ordinal } from "../format";
+import { ordinal, shortName } from "../format";
 import { rankColor, rankPercentile, slotPercentile } from "../rank-ramp";
 import { type Lens, lensValue } from "../seat-compare";
 import { PickRows, pickSpan } from "./draft-picks";
@@ -253,20 +253,6 @@ function PlayerFace({ player }: { player: LineupPlayer | null }) {
       )}
     </span>
   );
-}
-
-/**
- * **An initial and a surname below `lg`.** A ~136px name column at this type
- * size does not hold "Amon-Ra St. Brown", and an ellipsis eats the surname —
- * which is the half of a player's name a reader identifies him by. Above `lg`
- * the full name has the room and keeps it.
- *
- * A one-word name (a team defence, an id with no name on the feed) is returned
- * whole: there is no first initial to take.
- */
-function shortName(name: string): string {
-  const space = name.indexOf(" ");
-  return space > 0 ? `${name.charAt(0)}. ${name.slice(space + 1)}` : name;
 }
 
 /** One seat's name, at both widths, from one node. */
