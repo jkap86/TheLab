@@ -105,6 +105,7 @@ export function solveLeagueLineup(
       player_id: id,
       name: line?.name ?? null,
       positions: line?.positions ?? [],
+      team: line?.team ?? null,
       points,
       adp_value: capital,
       ktc_value: ktc.get(id) ?? null,

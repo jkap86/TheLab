@@ -4,7 +4,7 @@ import { useMemo, useState, type ReactNode } from "react";
 
 import type { LeagueLineupEntry } from "@/shared/contract";
 
-import { CONSOLE_KEY_PILL, CONSOLE_WELL } from "../../console-chrome";
+import { CONSOLE_KEY_PILL_SHELL } from "../../console-chrome";
 import { formatInstantDate } from "../../format";
 import {
   stopSummary,
@@ -115,22 +115,27 @@ export function TimelineView({
           has — a control that vanishes on press is worse than one that says it
           found nothing.
 
-          **It is a shallow well now, not a bottom-bordered row.** The expanded
-          half became a housing holding parts, and a rule drawn across a housing
-          is a line on metal where a bay is a tray cut into it — which is what
-          says the rail belongs to this card rather than dividing it. The floor
-          rises with it: 56px, which is the taller keys and the deeper channel
-          the bay holds, and it is still a floor for the same reason it always
-          was, so pressing `History` moves nothing under it. */}
+          **It is one recess strip, not a well.** It was a 56px `CONSOLE_WELL`
+          plus a 16px margin holding a rail that wrapped to three parts on a
+          phone — ~94px of a 390px card before the first row of the table it
+          sits over. It is a 32px strip now (30 on a phone), the same
+          `--recess-bg` + `--track-shadow` the rail's own bay already wore,
+          with every part of the rail on one line; see `TimelineRail` for the
+          parts. The height is **fixed** rather than a floor, because a fixed
+          height is what makes the five states one height, and a fixed 32px is
+          what the `History` key had to shrink to fit (`py-[3px] px-3`, on the
+          padding-free pill shell — appending a smaller padding to
+          `CONSOLE_KEY_PILL`'s `px-4 py-2` is decided by Tailwind's emit order,
+          the trap that shell exists to keep a key out of). */}
       <div
-        className={`${CONSOLE_WELL} mb-3 flex min-h-[3.5rem] shrink-0 flex-wrap items-center gap-2.5 px-2.5 py-[9px] sm:mb-4 sm:gap-3.5 sm:px-3 pointer-fine:[transform:translateZ(4px)]`}
+        className="mb-2 flex h-[30px] shrink-0 flex-nowrap items-center gap-1.5 rounded-full bg-[color:var(--recess-bg)] pl-2.5 pr-[5px] shadow-[var(--track-shadow)] sm:mb-2.5 sm:h-8 sm:gap-2.5 sm:pl-3.5 sm:pr-1.5 pointer-fine:[transform:translateZ(4px)]"
       >
         {!opened && (
           <>
             <button
               type="button"
               onClick={() => setOpened(true)}
-              className={`${CONSOLE_KEY_PILL} border-foreground/10 bg-[image:var(--key-bg)] px-3.5 py-1.5 text-foreground/80 shadow-[var(--key-shadow)] hover:text-readout`}
+              className={`${CONSOLE_KEY_PILL_SHELL} border-foreground/10 bg-[image:var(--key-bg)] px-3 py-[3px] text-foreground/80 shadow-[var(--key-shadow)] hover:text-readout`}
             >
               History
             </button>
@@ -146,17 +151,19 @@ export function TimelineView({
         )}
 
         {opened && loading && (
-          <span className="font-mono text-[length:var(--fs-11)] uppercase tracking-[0.16em] text-readout-label">
+          <span className="min-w-0 truncate font-mono text-[length:var(--fs-11)] uppercase tracking-[0.16em] text-readout-label">
             Reading history…
           </span>
         )}
 
         {opened && error !== null && (
-          <span className="text-[length:var(--fs-12)] text-error">{error}</span>
+          <span className="min-w-0 truncate text-[length:var(--fs-12)] text-error">
+            {error}
+          </span>
         )}
 
         {opened && !loading && error === null && moves === 0 && (
-          <span className="font-mono text-[length:var(--fs-11)] uppercase tracking-[0.16em] text-readout-label">
+          <span className="min-w-0 truncate font-mono text-[length:var(--fs-11)] uppercase tracking-[0.16em] text-readout-label">
             No stored moves to rewind through
           </span>
         )}

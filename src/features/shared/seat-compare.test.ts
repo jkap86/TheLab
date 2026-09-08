@@ -13,6 +13,7 @@ function player(
     player_id: id,
     name: id,
     positions: ["WR"],
+    team: null,
     points: figures.points ?? null,
     adp_value: figures.adp_value ?? null,
     ktc_value: figures.ktc_value ?? null,

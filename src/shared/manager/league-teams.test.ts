@@ -44,8 +44,22 @@ function row(overrides: Partial<LineupLeagueRow> = {}): LineupLeagueRow {
 }
 
 const PROJECTIONS: RosProjections = {
-  w1: { player_id: "w1", stats: { rec: 20 }, weeks: [1], name: "W One", positions: ["WR"] },
-  w2: { player_id: "w2", stats: { rec: 10 }, weeks: [1], name: "W Two", positions: ["WR"] },
+  w1: {
+    player_id: "w1",
+    stats: { rec: 20 },
+    weeks: [1],
+    name: "W One",
+    positions: ["WR"],
+    team: null,
+  },
+  w2: {
+    player_id: "w2",
+    stats: { rec: 10 },
+    weeks: [1],
+    name: "W Two",
+    positions: ["WR"],
+    team: null,
+  },
 };
 
 const NO_ADP = new Map<string, AdpEntry>();

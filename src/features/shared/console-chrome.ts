@@ -396,7 +396,7 @@ export const CONSOLE_ROW_WELL =
  * keeps a six-figure KeepTradeCut total from running under the team name.
  */
 export const CONSOLE_FIGURE_WELL =
-  "overflow-hidden rounded-md bg-[color:var(--figure-well-bg)] " +
+  "overflow-hidden rounded-[5px] bg-[color:var(--figure-well-bg)] " +
   "shadow-[var(--figure-well-shadow)]";
 
 /**

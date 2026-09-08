@@ -30,12 +30,100 @@ import {
  * `-top-[13px]` against the card's `1.875rem` (30px) top padding is what leaves
  * the plate half on the bezel and half above it. The row is `absolute`, so the
  * card's own first child starts at the padding rather than under the plate.
+ *
+ * **The three league cards no longer mount this** — they take
+ * {@link CardBilletRow} and {@link LeagueBillet} since the expanded-card pass.
+ * The picktracker board and the comps page still do, on the plate pill: they
+ * were not part of that design and a plate is still the right part where the
+ * subject is a draft or a player-season rather than a league.
  */
 export function CardPlateRow({ children }: { children: ReactNode }) {
   return (
     <div className="absolute -top-[13px] left-5 right-5 flex items-center gap-2.5">
       {children}
     </div>
+  );
+}
+
+/**
+ * The billet's row, hung off the card's top edge — {@link CardPlateRow} for a
+ * taller part.
+ *
+ * `-top-[18px]` against a `2.125rem` (34px) top padding on a desktop, `-top-4`
+ * against `1.875rem` (30px) on a phone: the same half-on, half-above the plate
+ * row leaves, one size up. **The insets match the card's own horizontal
+ * padding at each width** — `18px` from `sm`, `14px` below it — because an
+ * absolutely positioned part resolves `left`/`right` against the card's
+ * padding box, its border's inner edge, while everything under it starts one
+ * padding in. That is the measurement `CardLedge` documents, and it is what
+ * puts the billet's left edge on the settings strip's.
+ *
+ * The lineup checker and the trade card stand a {@link ReadingPlate} in this
+ * row beside the billet, as they did beside the plate; on the manager card the
+ * billet has the row to itself.
+ */
+export function CardBilletRow({ children }: { children: ReactNode }) {
+  return (
+    <div className="absolute -top-4 left-3.5 right-3.5 flex items-center gap-2.5 sm:-top-[18px] sm:left-[18px] sm:right-[18px]">
+      {children}
+    </div>
+  );
+}
+
+/**
+ * The league, as a **milled billet carrying an engraved name** — the card's
+ * subject, cut from the same stock as the settings and standing strips under
+ * it, which is what makes the header read as part of the same instrument
+ * rather than as a pill pinned to it.
+ *
+ * It replaces {@link LeaguePlate} on the three league cards. The plate set the
+ * name in mono at `--fs-16` with `tracking-[0.08em]` on a `CONSOLE_PLATE` pill;
+ * this sets it in the display face at `--fs-24` (`--fs-18` on a phone), 600,
+ * uppercase, as **engraved chrome** — the treatment the wordmark and the page
+ * titles already wear: `--chrome-face` clipped to the glyphs over a transparent
+ * fill, with `--wordmark-depth` for the cast.
+ *
+ * **The depth is a `filter`, never a `text-shadow`.** The fill is transparent,
+ * so a text-shadow paints *above* the element's background and the dark offset
+ * copies cover the gradient inside the glyph bodies — the word renders as flat
+ * slate with a 1px lit rim. It is the failure `--alert-depth` records one
+ * component over, and the reason both are tokens: a `drop-shadow` list written
+ * into the class string could not invert for the light scheme, where
+ * `--chrome-face` is a dark ramp and the billet goes near-white.
+ *
+ * **The name has the line to itself**, which is the whole point of the part:
+ * the standing moved off the plate row in an earlier pass, so on the manager
+ * card nothing competes with it for width, and the `truncate` it still
+ * declares is for a hundred-character league. On the two cards that keep a
+ * reading plate beside it the name truncates into what is left, as it did
+ * beside the plate.
+ *
+ * Two alternatives were built and rejected in the design file: a lit
+ * nameplate — the name in `--readout-text` inside a glass window — which makes
+ * the name a *reading the league reports about itself* rather than the card's
+ * subject, and would be a third place the card spends teal; and the same
+ * billet with the name stamped in `--billet-name` ink, which reads as one more
+ * label on one more strip, since it is the same ink as `Teams` and `Starters`
+ * below it. What landed is the second's part carrying the first's hierarchy.
+ *
+ * Everything inside is `relative` to sit above the grain and the specular —
+ * `BilletFinish`'s two overlays are absolutely positioned children.
+ */
+export function LeagueBillet({
+  name,
+  avatarUrl,
+}: {
+  name: string;
+  avatarUrl: string | null | undefined;
+}) {
+  return (
+    <span className="relative inline-flex min-w-0 items-center gap-[9px] overflow-hidden rounded-xl bg-[image:var(--billet-bg)] pb-[7px] pl-1.5 pr-[15px] pt-1.5 shadow-[var(--standing-strip-shadow)] sm:gap-3 sm:rounded-[13px] sm:pb-2 sm:pl-[7px] sm:pr-5 sm:pt-[7px]">
+      <BilletFinish />
+      <LeagueMark name={name} url={avatarUrl} size="lg" />
+      <span className="relative min-w-0 truncate bg-[image:var(--billet-face)] bg-clip-text font-display text-[length:var(--fs-18)] font-semibold uppercase leading-[1.1] tracking-[0.03em] text-transparent [filter:var(--wordmark-depth)] sm:text-[length:var(--fs-24)] sm:leading-[1.05]">
+        {name}
+      </span>
+    </span>
   );
 }
 
@@ -219,16 +307,33 @@ export function LeaguePlate({
  * text with the readout's own glow — rather than to `Avatar`'s grey letter,
  * because an unlit letter inside a lit ring reads as a failed image.
  */
-function LeagueMark({ name, url }: { name: string; url: string | null | undefined }) {
+function LeagueMark({
+  name,
+  url,
+  size = "sm",
+}: {
+  name: string;
+  url: string | null | undefined;
+  /** `sm` is the plate's 24px ring; `lg` is the billet's, 28px from `sm` up. */
+  size?: "sm" | "lg";
+}) {
   return (
     <span
       aria-hidden
-      className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full border border-active/35 bg-[image:var(--readout-bg)] shadow-[inset_0_0_14px_var(--accent-glow),0_0_14px_-4px_var(--accent-glow)]"
+      className={`relative flex shrink-0 items-center justify-center rounded-full border border-active/35 bg-[image:var(--readout-bg)] shadow-[inset_0_0_14px_var(--accent-glow),0_0_14px_-4px_var(--accent-glow)] ${
+        size === "lg" ? "size-6 sm:size-7" : "size-6"
+      }`}
     >
       {url ? (
         <Avatar url={url} name={name} size="sm" />
       ) : (
-        <span className="font-mono text-[length:var(--fs-11)] text-readout [text-shadow:var(--readout-text-glow)]">
+        <span
+          className={`font-mono text-readout [text-shadow:var(--readout-text-glow)] ${
+            size === "lg"
+              ? "text-[length:var(--fs-11)] sm:text-[length:var(--fs-12)]"
+              : "text-[length:var(--fs-11)]"
+          }`}
+        >
           {name.charAt(0).toUpperCase()}
         </span>
       )}

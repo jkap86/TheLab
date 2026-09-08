@@ -9600,6 +9600,281 @@ one discrete layout spent on the press, so length is the one thing about them
 that is free. What the extra time buys is a card that travels rather than
 arrives.
 
+## The expanded half, the header, and the type
+
+Four visual changes to the manager card's expanded half and its header, plus a
+field on the wire and a typeface, from a design handoff: the history rail is
+compressed from a 56px well to a 32px strip; the seam between the header and
+the expanded half is closed; the rows and the drawer bars are slimmer; and the
+header is a milled billet carrying the league's name engraved in chrome. With
+them, an NFL team on every seat row, and Geist → IBM Plex throughout. Changes 1,
+2 and 3 land in shared modules and reach `/trades` for free; the header is
+applied at each of the three league cards' own call sites, on the handoff's
+instruction that the three are kept in sync.
+
+**One contract addition, and no migration.** `LineupPlayer.team` — see The team
+below — and nothing else on the schema or the wire.
+
+### The panel was never inside the card, and closing the seam is what showed it
+
+The handoff describes the expanded half as "an inner housing", a card inside a
+card, and asks that its border, radius and top gap go so the two halves become
+one piece of stock under a groove. What the render showed is that the inner
+housing was never *inside*: the `<summary>` carried the card's shell — the
+border, the metal, the tilt, the hover lift — and the panel was its sibling
+under it, a second housing standing on the page ground below the first. Take
+the panel's surface away and its parts sit on the ground with nothing behind
+them, and the groove is a band drawn on nothing.
+
+**So the housing moved onto the `<details>`.** The shell, `CONSOLE_METAL`, the
+tilt, the lit and hover chrome and `lab-card-3d` are the details' now; the
+summary keeps what a header owns — its inset, the `preserve-3d` its own planes
+project through, and the focus ring, since it is the element a keyboard lands
+on. The panel is the housing's bottom half, carries the card's own gutter
+(`px-3.5 sm:px-[1.125rem]`) and nothing else, and its first child is the groove,
+run edge to edge by negative margins equal to that gutter. `--card-seam-groove`
+is the band, with its light half inverted on `--glass-lip-shadow`'s terms. The
+summary's bottom padding is `0` **while the card is open** (`group-open/card`
+rather than `data-lit`, because the padding has to hold through the collapse)
+and its own inset shut, or a closed card's rank windows would sit flush on its
+bottom edge.
+
+**The decorative layer became the details' first child, before the summary**,
+so the floor, the glow and the edge light cover the whole card rather than
+ending at the seam. First rather than last because a positioned `z-auto` span
+paints in tree order among its siblings' positioned content and both the
+summary and the panel come after it — a `z-index` would have needed a stacking
+context on the housing to be contained by, and `isolation: isolate` is a
+grouping value that flattens `preserve-3d`, while the transform that would
+otherwise provide one rides `pointer-fine:`. The browser reads the *first
+summary child* as the disclosure whatever precedes it.
+
+**An open card is flat, at `translateZ(0)`, and hovering it lifts nothing.**
+Two things followed from the whole housing being the transformed element, and
+both were found by measurement. The hover lift is gated on
+`:not([open]):has(summary:hover)` — the summary, so a pointer crossing a closed
+card's edge lifts it, and closed, so a reader inside the open panel is not
+raising the card they are reading. And the lit `translateZ(20px)` went to 0: a
+lift is a projection of the card, 0.84% larger under the list's 2400px
+perspective, and the open card is the parked shell's exact height, so 20px of
+lift was a housing 3px taller than its shell and a scrollbar on a list with
+nothing to scroll (`ul.scrollHeight` 804 against a `clientHeight` of 801,
+measured). The halo and the lit border are what say the card is open; there is
+no neighbour left on the page for it to rise above.
+
+**`usePanelCap` measures with layout metrics now, and this was a loop.** The
+cap read the panel's offset as a subtraction of two `getBoundingClientRect`
+tops, which was right for as long as the card element (the details) carried no
+transform. With the housing on it every rect is the *projected* box, so the
+offset read 0.84% long, the cap came out short, the `flex-1` summary absorbed
+the slack, the `ResizeObserver` on it fired, and the offset read longer still —
+a cap shrinking by about a pixel every frame for as long as the card stayed
+open, measured as a header growing 38px between two presses. `offsetTop` and
+`clientTop` are transform-free, and the bottom border is the rest of
+`offsetHeight` that `clientHeight` and the top border do not account for. The
+summary now holds one height across every state at every width driven (211.8px
+at 1280 through open, history, a scrub and a drawer; 212 at 390; 264 at 640).
+
+**The lineup checker keeps its own inner housing**, on the handoff's own note
+that its week view keeps `--housing-inset-shadow`: its summary still carries
+the shell and its expanded half is still the block under it. It took the
+header and the raised top padding and nothing else, so the two league tools'
+*open* cards now differ in exactly the way this pass changed one of them.
+That is the handoff's scope rather than an oversight, and the checker's seam is
+the next thing to close.
+
+### The rail is a strip, and the seat is one height by construction
+
+`TimelineView`'s seat is one recess strip — `--recess-bg` + `--track-shadow`,
+32px from `sm` and 30 below — at a **fixed** height rather than a floor,
+because a fixed height is what makes the five states one height and what the
+`History` key had to shrink to fit: `py-[3px] px-3` on `CONSOLE_KEY_PILL_SHELL`,
+the padding-free shell, since appending a smaller padding to
+`CONSOLE_KEY_PILL`'s `px-4 py-2` is decided by Tailwind's emit order. The rail
+is a fragment of parts on that strip: the caption, two 22px step keys, a 6px
+channel with `.lab-rail`'s own 14px key on it, a `--groove` hairline, the moment
+as bare lit ink, and the two end keys inline in a track that is drawn from `sm`
+up and not below it — a recess inside the strip's recess is two cuts where the
+design has one. `.lab-rail-bay` went with the 18-over-8 key it existed for; the
+comps page's criteria rails are `.lab-rail`'s other reader and why it must not
+grow.
+
+**The phone drops the moment readout and the `Now` key carries it**, printing
+the stop's date at `--fs-10` tabular once the reader scrubs back. Two spans
+switched by the cascade, so the key needs no hydration to learn a breakpoint;
+`aria-valuetext` on the slider is untouched at every width. Measured at 390 the
+strip is 30.3px holding `Hist ‹ ━━ › │ Start Now` in 335px, and scrubbed back
+the right key reads `Aug 20, 2026` at 116px with the rail still 110px wide.
+
+### The rows, and three things the constants had to give
+
+Standings and seat rows are 38px at `lg` and 52 below it, 7px radius, 3px
+apart; drawer rows take the same two heights because a drawer row is read
+directly over the seat row it covers. The cells are the handoff's to the pixel
+— a 40px place, 20px / 18px marks, `--fs-13` names, 78px totals at `--fs-12-5`,
+a 38px slot, a 22px / 18px face, a 70px figure — and three things had to move
+in the constants to get there.
+
+- **`CONSOLE_FIGURE_WELL` is `rounded-[5px]`.** It said `rounded-md`, and a
+  `rounded-[5px]` appended by the row lost to it on emit order — measured at
+  6px on every total. Its two readers are these rows, both of which want 5.
+- **`Avatar` gained `xs`**: 20px at `lg`, 18 below, viewport-gated rather than
+  container-gated like `sm`, because the row it labels turns its layout on
+  `lg` and the mark turns with the row rather than with the pane.
+- **Every cell names its `lg` order, the mark included.** The standings mark
+  carried no order and so sorted to 0 — ahead of the place cell, under a `#`
+  head that promised the place first. It is place, mark, name, total now, and
+  the seat row is slot, face, name, team, figure; `DrawerRow` renumbered to
+  match and grew a `note` slot between the name and the figure.
+
+**The drawer bars are 34px / 30px at `lg` and 30 / 30 below**, and `BAR_HEIGHT`
+became two records spelled *literally*. The first cut templated `h-[${n}px]`
+off a number and the bench bar rendered 30px at `lg`: Tailwind finds classes by
+scanning source text, and a class assembled from a template literal is
+generated for nothing. The drawer's `bottom` and `max-height` read the sum back
+off a `--bars` custom property the bar combination writes onto the drawer by
+class (`[--bars:60px] lg:[--bars:64px]`), so the drawer sits on its bars at
+every width with no measurement — and the arithmetic is in the comment beside
+the spelling, since an edit to a bar's height is an edit to every arm that
+sums it.
+
+Both glass scrollers took the handoff's right gutter — `pr-[11px]` on the
+standings glass, `pr-[9px]` on the roster's inner scroller — as four longhands
+rather than `p-[3px] pr-[11px]`, for the emit-order reason again, and not as
+`scrollbar-gutter: stable`, which `.lab-scroll-glass` deliberately reserves
+nothing for.
+
+### The header is a billet, and its light face is its own
+
+`LeagueBillet` and `CardBilletRow` sit beside the plates in `card-plate.tsx`:
+`--billet-bg` under `BilletFinish` with `--standing-strip-shadow`'s chamfer, a
+28px / 24px lit mark, and the name in the display face at `--fs-24` / `--fs-18`,
+600, uppercase, clipped to the chrome ramp with `--wordmark-depth` for the cast
+— a `filter`, never a `text-shadow`, for `--alert-depth`'s reason. The row
+hangs `-top-[18px]` / `-top-4` at the card's own gutter and the three cards'
+top padding rose 4px at both widths to clear it. The picktracker board and the
+comps page keep `CardPlateRow` and `LeaguePlate`; they were not in this design
+and a plate is still the right part where the subject is a draft or a
+player-season. The trade card gives up its `size="md"`: the billet has one
+size, and a league drawn one size on `/manager` and another on `/trades` is
+the drift the three-cards-in-sync instruction exists to remove.
+
+**`--billet-face` is the chrome ramp with a light half of its own**, and it is
+the one token this pass added beyond the groove. The handoff names the light
+scheme as the measurement it could not take, and the measurement failed:
+`--chrome-face`'s light ramp opens on `#7d9c9f`, and the billet is the one
+surface the chrome sits on that opens at white — the wordmark's plate starts at
+`#dfe6ea`. Band against band down the glyph (the name occupies 16–82% of the
+billet's height at 1280 and 16–77% at 390), the lightest aligned pairing was
+2.78:1 where a 27.84px headline owes 3:1. The light ramp is the same eight
+stops taken down until every aligned band clears 4.4:1 on both billets, 3.1:1
+against any band of the stock at all, and 8.2:1 at the foot; the dark scheme is
+`var(--chrome-face)` itself.
+
+### The team rides the projections feed, not the players map
+
+The handoff says to read `LineupPlayer.team` "off the stored players map, the
+same join `positions` comes from". Positions do not come from the players map:
+they come from the projections feed's inlined player object, which is what
+`assembleRosProjections` reads identity from and what every reader of the
+lineup solve already has in hand. So `team` comes from the same rows, and on
+the *week* fold's own rule rather than identity's: **only a real projection
+names a team** — a no-game row carries none — and across a span it is the
+**latest** real week's, because a player traded mid-season is on his new team
+by the last week that projects him. Compared by week number rather than by
+arrival, so the fold stays a fact about the response. `RosPlayerProjection`,
+`TimelineProjectionPayload` and `LineupPlayer` all carry it; the timeline's
+trim passes it through; `ros.test.ts` pins the latest-wins rule and that a
+player with no real projection has no team.
+
+On the row it is a 32px right-aligned mono column between the name and the
+figure at `lg`, and the second line after the slot below it, in the dimmed mint
+(`text-readout/50`, `/45`) — the billet's label ink on a bench row, since a
+drawer row is a part rather than glass. **An absent team renders nothing rather
+than an em dash**, the handoff's own call and the one place the row parts
+company with the three-way grammar for the grammar's own reason: it sits
+between a name and a figure, where a dash reads as a missing number, and there
+is no zero for a team to be mistaken for.
+
+### The type
+
+IBM Plex Sans and IBM Plex Mono through `next/font`, on `--font-plex-sans` and
+`--font-plex-mono`; the `@theme inline` entries moved and nothing else did,
+since every surface names `--font-display` or `--font-mono`. Plex Sans is a
+variable face and takes no weight list; Plex Mono has no variable axis, so its
+400 and 500 are named. The OG image still renders in Geist off the TTFs in
+`public/og` — `ImageResponse` reads font files, not `next/font`, and a share
+card is not the console.
+
+**The two fits the handoff asked to re-check are unchanged, and that was
+measured rather than assumed.** With Geist Mono loaded as a `FontFace` and
+swapped in for `--font-plex-mono` on the same page, every rank-window label and
+every settings strip measured the same `scrollWidth` under both faces at 390,
+640, 768 and 1280 — 65 / 119 / 151 / 247px on the same label — so the phone
+scope line and the strip's two abbreviation thresholds hold to the pixel.
+
+### Verified
+
+Rendered through a temporary `/preview` route against the real `LeagueCard`,
+`LineupCheckCard`, `useActiveCard` and `PageShell` over fixture leagues, with
+`window.fetch` stubbed to answer the timeline read from a fixture log of three
+moves, then driven over CDP at 1280, 768, 640 and 390 in both schemes and
+deleted. The mechanics are the ones this file records — `--no-proxy-server`,
+`localhost`, `data-theme`, `localStorage.clear()`, the
+`--blink-settings=availablePointerTypes=4,…` flags, a client-component harness,
+and a CDP client over Node's own `WebSocket` — plus one that is this pass's own:
+**phone widths need `mobile: true` on `setDeviceMetricsOverride`**, because
+`html` reserves a classic scrollbar's gutter (`scrollbar-gutter: stable`) and a
+390 viewport with a classic bar lays out at 375, which is not the phone being
+emulated. The first phone run reported the 375 clip at 390 for exactly that
+reason.
+
+Every arm landed. The billet is 44.2px tall at 1280 on `7px 20px 8px 7px`, 13px
+radius, 16px above the card's edge and 21px in (18 plus the border plus the
+tilt's projection), the name at 27.84px 600 Plex Sans with `background-clip:
+text`, a transparent fill and a `drop-shadow` filter, unclipped at 318px; 36.7px
+on `6px 15px 7px 6px` at 390 with the name unclipped at 233px. Open, the
+summary's padding reads `34px / 0px`, the panel `0 18px 18px`, the groove 2px
+on `linear-gradient(rgba(0,0,0,0.75), rgba(255,255,255,0.07))` spanning the
+panel at 14px under the summary, and the open housing's transform is the
+identity matrix. The strip is 32.1px with `14px / 6px` padding and a 10px
+margin, the step keys 22.2px, the channel 6.1px, the input 24.3px; standings
+rows 38.2px, radius 7, 3px apart, ordered place 1 · mark 2 · name 3 · total 4
+with the place cell 40px and the total 78px at 14.5px in a 5px well; seat rows
+38.2px ordered slot 1 (38px) · face 2 (22px) · name 3 (15.08px) · team 4 (32px,
+12.76px, `SF` / `BUF` / `DAL`, absent on the two null fixtures) · figure 5
+(70px); the bars 34.5 and 30.4px at `lg`, 30.4 and 30.4 at 390, with `--bars`
+reading 64px and 60px and the drawer standing on it. The panes are 6px padding
+at 12px radius, the glass `3px 11px 3px 3px` and `3px`. Pressing `History`
+drew the rail at now, a step back put `Aug 20, 2026` in the moment (and in the
+phone's right key) with the caveat under the panes, and the bench drawer rose
+`inert`-free to 207px at 390 carrying `GB` / `MIN` / `SEA` on its rows.
+
+At every width and in both schemes: `document.documentElement.scrollWidth`
+equal to the viewport, the shell's `scrollWidth` and `scrollHeight` equal to
+its client box while parked, exactly one `<h1>`, no window label clipped at a
+true 390, every settings strip fitting its box, and **no console output of any
+kind**. 1,805 unit tests pass (two more, the fold's team rule); `lint`,
+`typecheck` and `build` are clean.
+
+**Two findings outside this pass, reported rather than patched.** At 375 the
+manager card's `Draft cap` label overflows its 61px box by 1px and the
+checker's `Vs optimal` by 3 — the pre-existing sub-390 finding, unchanged by
+the font (identical under Geist Mono, measured). And at 640 the checker card's
+`2 to move` and `No superflex slot` lines clip in their 119px tiles under both
+faces; the checker's tiles are not this handoff's and the fixture's kickoff
+arm is what exercises them.
+
+**Not verified against real data**, which is the gap to close first: every
+number above is a fixture, and the trade card — which took the header, the
+housing move and the seam — was not driven at all, since its fixtures are a
+`Trade`, a `TradeCardView` and a per-league fetch; it is typechecked and built.
+Three things a render cannot check: how a real twelve-team browser reads at
+38px rows against the 50 the pass replaced; whether `team` is populated as
+widely on a real projections span as it is on the fixture, where the last real
+week's row is what names it; and whether the engraved name holds its hierarchy
+over a hundred billets rather than four.
+
 ## The identity plate became a billet, and the win rate the hero
 
 `/manager`'s header was the one object on the page not made of metal. Every

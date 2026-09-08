@@ -1,22 +1,35 @@
 import type { Metadata } from "next";
-import { Geist, Geist_Mono } from "next/font/google";
+import { IBM_Plex_Mono, IBM_Plex_Sans } from "next/font/google";
 import { RackControlsProvider, THEME_BOOT_SCRIPT } from "@/features/shared";
 import { AppRack } from "@/features/tools";
 import { resolveSiteUrl } from "@/shared/og/site-url";
 
 import "./globals.css";
 
-// Two faces, both mapped: `--font-display` for everything, `--font-mono` for
-// the account readout, the key legends and the section labels. Geist Mono was
-// previously loaded here and mapped by nothing; it is wired up in
-// `globals.css` now, so it is fetched for markup that asks for it.
-const geistSans = Geist({
-  variable: "--font-geist-sans",
+// Two faces, both mapped: `--font-display` for the rank figures, the standing
+// bays and the league names, `--font-mono` for every label, key legend and
+// figure well. IBM Plex since the expanded-card pass — Geist before it — and
+// nothing about the type *system* moved with the families: the components only
+// ever name `--font-display` and `--font-mono`, so the swap is these two calls
+// and the two `@theme inline` entries in `globals.css`.
+//
+// Plex Sans ships a variable face, so it takes no `weight` list and the 400,
+// 500 and 600 the console sets come off one file. Plex Mono has no variable
+// axis, so its two weights are named — a static Google face with no `weight`
+// is a build error rather than a default.
+//
+// `src/shared/og/assets.ts` still renders the share images in Geist off the
+// `geist` package's own TTFs. That is deliberate for now: `ImageResponse`
+// reads font *files*, not `next/font`, and an OG card is not the console —
+// see that file. The two move together when the OG image is redrawn.
+const plexSans = IBM_Plex_Sans({
+  variable: "--font-plex-sans",
   subsets: ["latin"],
 });
 
-const geistMono = Geist_Mono({
-  variable: "--font-geist-mono",
+const plexMono = IBM_Plex_Mono({
+  variable: "--font-plex-mono",
+  weight: ["400", "500"],
   subsets: ["latin"],
 });
 
@@ -54,7 +67,7 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
     // boundary — throws the script's work away along with the theme.
     <html
       lang="en"
-      className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
+      className={`${plexSans.variable} ${plexMono.variable} h-full antialiased`}
       suppressHydrationWarning
     >
       <head>

@@ -187,6 +187,18 @@
     0 5px 1px rgba(0, 0, 0, 0.9), 0 0 34px rgba(0, 255, 229, 0.18);
   --wordmark-depth: drop-shadow(0 1px 0 rgba(255, 255, 255, 0.35))
     drop-shadow(0 3px 5px rgba(0, 0, 0, 0.75)) drop-shadow(0 0 22px var(--accent-glow));
+  /*
+   * The chrome face as a league card's billet engraves its name in it. The
+   * dark scheme is `--chrome-face` itself; the light scheme is that ramp with
+   * its top darkened, because the billet is the one surface the chrome sits
+   * on that starts at white — the wordmark's plate opens on `#dfe6ea` — and
+   * `--chrome-face`'s light ramp opens on `#7d9c9f`, which is 2.8:1 against it
+   * where a 27.84px headline owes 3:1. Measured band against band down the
+   * glyph (see CLAUDE.md), the ramp below clears 4.4:1 at its lightest aligned
+   * pairing on the desktop billet, 4.4:1 on the phone's, 3.1:1 against any
+   * band of the stock at all, and 8.2:1 at the foot.
+   */
+  --billet-face: var(--chrome-face);
 
   --bezel-bg: linear-gradient(180deg, #2b3a3f, #0d1618);
   --bezel-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.3), inset 0 -2px 4px rgba(0, 0, 0, 0.85),
@@ -355,6 +367,17 @@
    */
   --housing-inset-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.3),
     inset 0 -2px 5px rgba(0, 0, 0, 0.72), 0 1px 0 rgba(255, 255, 255, 0.05);
+  /*
+   * The groove between a card's header and its expanded half — the one cut
+   * that replaced the inner housing's border on the manager and trade cards.
+   * It is a band rather than a hairline because it separates two halves of
+   * *one* part rather than two parts: the panes, the rail strip and the drawer
+   * bars are mounted on the card itself now, not on a second housing set into
+   * it. Dark above, lit below, which is a cut seen from above. Its light half
+   * inverts, as every bevel in this file does — the same relationship
+   * `--glass-lip-shadow` draws one surface down.
+   */
+  --card-seam-groove: linear-gradient(to bottom, rgba(0, 0, 0, 0.75), rgba(255, 255, 255, 0.07));
 
   --housing-metal: var(--brush-fine),
     linear-gradient(102deg, transparent 12%, rgba(240, 248, 250, 0.12) 33%, transparent 48%),
@@ -915,6 +938,10 @@
    */
   --wordmark-depth: drop-shadow(0 1px 0 rgba(255, 255, 255, 0.9))
     drop-shadow(0 2px 4px rgba(15, 23, 42, 0.28));
+  /* See the dark set's note: the chrome ramp with its top two stops taken
+     down, so the lightest band clears the billet's white top. */
+  --billet-face: linear-gradient(180deg, #587a7d 0%, #486a6e 20%, #3f6064 38%,
+    #35585c 50%, #426367 57%, #4d6f73 70%, #43656a 86%, #345458 100%);
 
   /* The raised bezel the flask mark is mounted on, and the tactile keys. */
   --bezel-bg: linear-gradient(180deg, #ffffff, #dbe4e7);
@@ -994,6 +1021,7 @@
 
   --housing-inset-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.9),
     inset 0 -2px 5px rgba(15, 23, 42, 0.16), 0 1px 0 rgba(255, 255, 255, 0.6);
+  --card-seam-groove: linear-gradient(to bottom, rgba(15, 23, 42, 0.18), rgba(255, 255, 255, 0.9));
 
   --housing-metal: var(--brush-fine),
     linear-gradient(102deg, transparent 12%, rgba(255, 255, 255, 0.5) 33%, transparent 48%),
@@ -1264,11 +1292,19 @@
   --color-readout-label: var(--readout-label);
   --color-readout-muted: var(--readout-muted);
 
-  --font-display: var(--font-geist-sans), ui-sans-serif, system-ui,
+  /* IBM Plex, loaded by `app/layout.tsx`; the two variables are its. The
+     families are the only thing the expanded-card pass moved about the type —
+     every size is still an `--fs-*` token and every surface still names one of
+     these two, which is what let the swap be two lines here and two calls
+     there. Plex Mono is slightly wider than Geist Mono at the same size, so the
+     two lines the console measures to the character — the rank window's phone
+     scope line and the settings strip's abbreviation thresholds — were
+     re-measured under it; see CLAUDE.md. */
+  --font-display: var(--font-plex-sans), ui-sans-serif, system-ui,
     "Helvetica Neue", Arial, sans-serif;
   /* The readout, the key legends and the section labels are the only monospace
      on the page, and the only reason the face is loaded again. */
-  --font-mono: var(--font-geist-mono), ui-monospace, SFMono-Regular, Menlo, monospace;
+  --font-mono: var(--font-plex-mono), ui-monospace, SFMono-Regular, Menlo, monospace;
 }
 
 body {
@@ -1462,6 +1498,7 @@ html {
 @media (prefers-reduced-motion: reduce) {
   .lab-card-3d,
   .lab-card-3d:hover,
+  .lab-card-3d[open],
   .group\/card[open] > .lab-card-3d {
     transform: none !important;
   }
@@ -1605,6 +1642,12 @@ html {
  * Chrome needs that arithmetic spelled out, where Firefox centres its own.
  * Both colours are tokens rather than literals, so one rule reads in both
  * themes — the rule every other named colour in this file keeps.
+ *
+ * There used to be a `.lab-rail-bay` modifier beside this — the same control
+ * one size up, an 18px key over an 8px groove, for the history bay's rail
+ * alone. The rail is a 32px strip now and its key is this rule's own 14 over
+ * 6, so the modifier had no reader and went. The comps page's criteria rails
+ * are this rule's second reader and are why it must not grow.
  */
 .lab-rail {
   -webkit-appearance: none;
@@ -1642,40 +1685,6 @@ html {
   border-radius: 9999px;
   background-image: var(--key-bg);
   box-shadow: var(--key-shadow), 0 0 8px var(--accent-glow);
-}
-
-/*
- * The **history bay's** rail: the same control one size up, an 18px key over an
- * 8px groove where the base is 14 over 6.
- *
- * A modifier rather than a change to `.lab-rail` itself, because that class has
- * a second reader — the comps page's criteria weights — whose channel is a
- * different height and whose input is stretched over it with `inset-0`. Growing
- * the shared thumb would move the grip off its groove there, on a page this
- * design does not cover.
- *
- * `margin-top` is the half-difference between the input's own box and the
- * thumb, spelled rather than centred because a WebKit thumb is positioned
- * against the *runnable track*, which carries no height of its own here. The
- * two engines are kept in step by hand: there is no shorthand reaching two
- * vendor pseudo-elements, and a thumb centred on one and not the other is a
- * slider whose grip sits a few pixels off its groove in one browser.
- */
-.lab-rail-bay,
-.lab-rail-bay::-webkit-slider-runnable-track,
-.lab-rail-bay::-moz-range-track {
-  height: 1.75rem;
-}
-
-.lab-rail-bay::-webkit-slider-thumb {
-  width: 18px;
-  height: 18px;
-  margin-top: 5px;
-}
-
-.lab-rail-bay::-moz-range-thumb {
-  width: 18px;
-  height: 18px;
 }
 
 .lab-rail:focus-visible {

@@ -16,6 +16,13 @@
  *   projects nothing for still has a name and positions, and the lineup solve
  *   needs the positions to seat him by the fallback key — an unprojected player
  *   with no known position is eligible for no slot and can only ride the bench.
+ * - **The team is taken from the latest real projection**, and this is the
+ *   one reading that is neither of the two above. It is not stats — it does
+ *   not sum — and it is not identity, because a no-game row leaves it null (the
+ *   week fold makes the same call). Latest rather than first, because a player
+ *   traded mid-span is on his new team by the last week that projects him, and
+ *   compared by week number rather than by arrival so the fold stays a fact
+ *   about the response and not about the order it came in.
  */
 
 import { aggregateWeeklyStats } from "./aggregate.ts";
@@ -37,6 +44,14 @@ export type RosPlayerProjection = {
   name: string | null;
   /** Sleeper `fantasy_positions`; empty when the feed carries none. */
   positions: string[];
+  /**
+   * His NFL team, off the **latest** real projection in the span — a player
+   * traded mid-season is on his new team by the last week that projects him,
+   * and that is the team a rest-of-season reading should name. Null where no
+   * real row named one: a no-game row carries no `team`, which is why it is
+   * read on `isRealProjection`'s terms rather than identity's.
+   */
+  team: string | null;
 };
 
 /** Player id → their rest-of-season line, for every id the feed mentioned. */
@@ -60,6 +75,7 @@ export function assembleRosProjections(
   weeks: readonly RosWeek[],
 ): RosProjections {
   const identity = new Map<string, { name: string | null; positions: string[] }>();
+  const teams = new Map<string, { week: number; team: string | null }>();
   const real: PlayerWeekStats[] = [];
 
   for (const { week, rows } of weeks) {
@@ -77,6 +93,11 @@ export function assembleRosProjections(
       // in `./identity` because `./week` folds the same feed and must agree.
       if (!isRealProjection(row)) continue;
       real.push({ player_id: id, week, stats: row.stats });
+
+      const held = teams.get(id);
+      if (!held || week >= held.week) {
+        teams.set(id, { week, team: row.team ?? null });
+      }
     }
   }
 
@@ -91,6 +112,7 @@ export function assembleRosProjections(
       weeks: line?.weeks ?? [],
       name,
       positions,
+      team: teams.get(id)?.team ?? null,
     };
   }
   return board;
