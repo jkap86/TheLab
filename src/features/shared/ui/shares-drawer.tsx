@@ -623,8 +623,7 @@ export function SharesDrawer({
                 onChange={(e) => setQuery(e.target.value)}
                 placeholder={`Search ${noun}`}
                 aria-label={`Search ${noun}`}
-                // 16px or iOS Safari zooms the page on focus.
-                className="min-w-0 flex-1 rounded-xl border border-black/60 bg-[image:var(--key-bg)] px-[0.6875rem] py-[0.3125rem] text-[16px] text-foreground/88 shadow-[var(--track-shadow)] placeholder:text-foreground/45 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-active/60 @md:text-[length:var(--fs-13)]"
+                className="min-w-0 flex-1 rounded-xl border border-black/60 bg-[image:var(--key-bg)] px-[0.6875rem] py-[0.3125rem] text-[length:var(--fs-13)] text-foreground/88 shadow-[var(--track-shadow)] placeholder:text-foreground/45 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-active/60"
               />
               <span
                 className={`${CONSOLE_WINDOW} inline-flex shrink-0 items-center rounded-xl px-[0.6875rem] py-[0.4375rem]`}

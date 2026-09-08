@@ -196,10 +196,22 @@ export function LeagueTeams({ entry }: { entry: LeagueLineupEntry }) {
               </span>
               <span className="sr-only">Order teams by</span>
               <span className="relative flex min-w-0 flex-1 items-center">
+                {/* The tracking comes off on a coarse pointer, where
+                    `globals.css` floors every control at 16px so iOS Safari
+                    does not zoom the page on focus. Tracking is a small-type
+                    affordance and it is pure width at 16: measured at 390, the
+                    lens key's `Points` needs 69.1px of the 62 it has at
+                    `0.12em` and reads `Point…` — a whole word truncated — and
+                    60.5 of 64 at `0.03em`, which is the word. The caret gutter
+                    gives the last four of those pixels. It buys the sort key
+                    one character back of the two the floor costs it (8 → 7 of
+                    `ROS starters`, against 6 uncompensated); that one stays
+                    truncated at any tracking, which is the same reading it
+                    already ships at this width. */}
                 <select
                   value={metric}
                   onChange={(e) => setMetric(e.target.value as LineupMetricId)}
-                  className="min-w-0 flex-1 cursor-pointer appearance-none truncate rounded-full bg-[image:var(--key-bg)] py-[5px] pl-[9px] pr-5 font-mono text-[length:var(--fs-10)] uppercase tracking-[0.12em] text-readout shadow-[var(--key-shadow)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-active/60 lg:py-[7px] lg:pl-[13px] lg:pr-[30px] lg:text-[length:var(--fs-12)] lg:tracking-[0.16em]"
+                  className="min-w-0 flex-1 cursor-pointer appearance-none truncate rounded-full bg-[image:var(--key-bg)] py-[5px] pl-[9px] pr-5 font-mono text-[length:var(--fs-10)] uppercase tracking-[0.12em] text-readout shadow-[var(--key-shadow)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-active/60 pointer-coarse:pr-[18px] pointer-coarse:tracking-[0.03em] lg:py-[7px] lg:pl-[13px] lg:pr-[30px] lg:text-[length:var(--fs-12)] lg:tracking-[0.16em] lg:pointer-coarse:tracking-[0.06em]"
                 >
                   {LINEUP_METRIC_IDS.map((id) => (
                     <option key={id} value={id}>
@@ -355,10 +367,12 @@ function LensControl({
         </span>
         <span className="sr-only">Value lens</span>
         <span className="relative flex min-w-0 flex-1 items-center">
+          {/* Tracking off on a coarse pointer, where the 16px control floor
+              applies — see the sort key above for the measurement. */}
           <select
             value={lens}
             onChange={(e) => onChange(e.target.value as Lens)}
-            className="min-w-0 flex-1 cursor-pointer appearance-none truncate rounded-full bg-[image:var(--key-bg)] py-[5px] pl-[9px] pr-5 font-mono text-[length:var(--fs-10)] uppercase tracking-[0.12em] text-readout shadow-[var(--key-shadow)] [text-shadow:var(--readout-text-glow)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-active/60"
+            className="min-w-0 flex-1 cursor-pointer appearance-none truncate rounded-full bg-[image:var(--key-bg)] py-[5px] pl-[9px] pr-5 font-mono text-[length:var(--fs-10)] uppercase tracking-[0.12em] text-readout shadow-[var(--key-shadow)] [text-shadow:var(--readout-text-glow)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-active/60 pointer-coarse:pr-[18px] pointer-coarse:tracking-[0.03em]"
           >
             {LENSES.map((option) => (
               <option key={option} value={option}>

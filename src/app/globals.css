@@ -1767,3 +1767,64 @@ html {
   outline: 2px solid color-mix(in srgb, var(--accent) 60%, transparent);
   outline-offset: 2px;
 }
+
+/*
+ * **No form control renders under 16px on a touch device.**
+ *
+ * iOS Safari zooms the page in when a text-entry control or a `<select>`
+ * smaller than 16 CSS pixels takes focus, and it does not zoom back out: the
+ * reader is left panning a page wider than the viewport, with nothing on
+ * screen saying what happened. The only lever is the control's own font size —
+ * a `maximum-scale` on the viewport meta would fix it by taking pinch-zoom
+ * away from everybody, which is a worse trade than a slightly larger field.
+ *
+ * **The gate is the pointer, not a width**, and that is the whole of what this
+ * rule fixes. Seven controls already carried a `text-[16px]` stepped back down
+ * at `sm` or `@md`, on the reasoning that the visual size steps down "once
+ * there is room for it to" — but room is not what decides this. A phone in
+ * landscape is 844px and clears every one of those breakpoints; an iPad clears
+ * them at any orientation. Both still zoom, and the failure is silent in the
+ * desktop browser the pages are checked in. It is the argument the card's
+ * depth is gated on `pointer-fine:` by, one control over: this is a device
+ * affordance and a width cannot see it. Two of those seven were wrong by
+ * arithmetic as well — `--fs-14` is `0.875rem × 1.14`, which is 15.96px, four
+ * hundredths of a pixel under the threshold and not a thing any review catches.
+ *
+ * So the components state their design size once, in their own class strings,
+ * and the floor is stated once, here.
+ *
+ * **Unlayered, which is what lets it beat a utility without `!important`.**
+ * Tailwind's utilities live in `@layer utilities` and an unlayered rule
+ * outranks any layer whatever its specificity, so a bare element selector wins
+ * over `text-[length:var(--fs-13)]` without the escalation `.lab-anim` needs
+ * for inline styles.
+ *
+ * `max(1rem, 16px)` rather than a flat `16px`: Safari measures against an
+ * absolute 16 CSS pixels, and a reader who has enlarged their root font wants
+ * the controls to grow with the page rather than be pinned to the floor. In
+ * one place it is a clamp rather than a floor — the account lookup's field is
+ * `--fs-15`, 17.1px, and comes down to 16 — which is the only control in the
+ * app that declares more than the floor and a pixel nobody can see. One that
+ * ever wants to stay larger declares its size inside this media query.
+ *
+ * **What it costs is width**, and only in the two places a control is narrow
+ * enough to feel it: the expanded card's pane ledges. Both compensate with
+ * their tracking under the same `pointer-coarse:` gate — see `league-teams`
+ * for the measurement.
+ *
+ * The excluded types have no text to zoom to: a range is the two sliders
+ * `.lab-rail` and `.lab-range` draw, and a checkbox and a radio are boxes.
+ * `<button>` is absent for the same reason — Safari zooms on a text-entry
+ * focus, and a key grown to 16px on a phone would resize half the console.
+ * The list is written as exclusions rather than as the types that do zoom,
+ * because an `<input>` with no `type` at all is a text field and
+ * `picktracker-search`'s is exactly that — a positive list would miss it, and
+ * miss it silently.
+ */
+@media (pointer: coarse) {
+  input:not([type="range"]):not([type="checkbox"]):not([type="radio"]):not([type="button"]):not([type="submit"]):not([type="reset"]),
+  select,
+  textarea {
+    font-size: max(1rem, 16px);
+  }
+}
