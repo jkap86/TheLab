@@ -1,4 +1,4 @@
-import { loopSwitch, startBackgroundLoop } from "@/shared/util";
+import { BOOT_STAGGER_MS, loopSwitch, startBackgroundLoop } from "@/shared/util";
 import type { BackgroundLoopHandle } from "@/shared/util";
 
 import { CRAWL_CONCURRENCY, CRAWL_LEAGUE_BATCH, runLeagueCrawl } from "./crawl";
@@ -248,6 +248,10 @@ export function startLeagueCrawler(): BackgroundLoopHandle {
     guardKey: "league-crawler",
     ...loopSwitch(LEAGUE_CRAWLER_VAR),
     cadence: "every 60s; league TTL 15m in-season, 1h draft window, 6h offseason",
+    // Third of the four: it depends on none of them and holds the most memory
+    // in flight at once, so it starts into a settled process. At a 60s cadence
+    // the delay costs the corpus at most one rotation. See `BOOT_STAGGER_MS`.
+    initialDelayMs: BOOT_STAGGER_MS.crawl,
     tick,
   });
 }
