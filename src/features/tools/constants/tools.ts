@@ -6,7 +6,7 @@ import type { Tool } from "../types/tools.types";
  *
  * **The order is the grouping**, and the grouping is what a reader is meant to
  * see: the two tools that answer a question about *your* account, then the one
- * that follows a draft as it happens, then the two that read the whole crawled
+ * that follows a draft as it happens, then the one that reads the whole crawled
  * corpus. `group` is what the tray cuts a bay between — see {@link Tool.group},
  * which is why this is one list with a field rather than three arrays.
  */
@@ -52,16 +52,6 @@ export const tools: Tool[] = [
     group: 2,
     description:
       "Track rookie picks selected in a draft using kickers as placeholders.",
-  },
-  {
-    href: "/comps",
-    text: "Comps",
-    group: 3,
-    description:
-      "Find the player-seasons most similar to any player, on the stats and weights you choose.",
-    // A question about the player pool, not about anyone's account — like
-    // Trades, live without a resolved username.
-    accountless: true,
   },
   {
     href: "/trades",

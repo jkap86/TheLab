@@ -6146,6 +6146,17 @@ or a guard.
 
 ## Comping a player
 
+**It is unlisted, and that is deliberate rather than a regression.** The tool is
+not finished, so its entry came out of `constants/tools.ts` — which is the one
+list the `/tools` grid and the rack's tray both read, so removing it takes the
+card and the tray row together and there is no second place to forget. The route
+is untouched and reachable by URL; what a reader on it sees is the honest
+consequence of the registry not owning the path — no tool name in the rack's
+readout and no groove beside it, which is `/logs`' own state. The registry's
+three-run grouping is unchanged and Trades still opens a bay of its own: `group`
+is read as a run, so a bay is cut wherever the value changes and a removed entry
+takes no neighbour with it. Putting the entry back is what ships the tool.
+
 `/comps` was the one tool the rack named and the app did not have. It is a
 player-comparison tool: the reader picks a player as he stands entering the
 coming season, weights the criteria the comparison should run on, and the page
