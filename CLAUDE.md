@@ -10410,6 +10410,84 @@ Two rules for adding to it:
   type colours (`--readout-line`, `--readout-label`, `--readout-muted`) are
   tokens rather than alphas over `--color-readout`.
 
+### No control renders under 16px on a touch device
+
+iOS Safari zooms the page in when a text-entry control or a `<select>` under 16
+CSS pixels takes focus, and it does not zoom back out — the reader is left
+panning a page wider than the viewport with nothing on screen saying why. The
+only lever is the control's own font size; a `maximum-scale` on the viewport
+meta would fix it by taking pinch-zoom from everybody. So one unlayered rule at
+the foot of `globals.css` floors every input, select and textarea at
+`max(1rem, 16px)` under `@media (pointer: coarse)`.
+
+**The gate is the pointer, not a width, and that is the whole of the fix.**
+Seven controls already carried a `text-[16px]` stepped back down at `sm` or
+`@md`, on the reasoning that the visual size steps down "once there is room for
+it to" — but room is not what decides this. A phone in landscape is 844px and
+clears every one of those breakpoints; an iPad clears them at any orientation.
+Both still zoomed, and the failure is silent in the desktop browser the pages
+are checked in. It is the argument the card's depth is gated on `pointer-fine:`
+by, one control over. Two of the seven were wrong by arithmetic as well —
+`--fs-14` is `0.875rem × 1.14`, **15.96px**, four hundredths of a pixel under
+the threshold and not a thing any review catches.
+
+**Unlayered is what lets it beat a utility without `!important`.** Tailwind's
+utilities live in `@layer utilities` and an unlayered rule outranks any layer
+whatever its specificity, so a bare element selector wins over
+`text-[length:var(--fs-13)]`. That is what lets a component keep stating its
+design size once, in its own class string, with the floor stated once here —
+and the seven `text-[16px]` pairs came out with it. **The types are written as
+exclusions**, not as the types that zoom: an `<input>` with no `type` at all is
+a text field and `picktracker-search`'s is exactly that, so a positive list
+would miss it silently. Range, checkbox and radio have no text to zoom to, and
+`<button>` is absent because a key grown to 16px would resize half the console.
+In one place it is a clamp rather than a floor — the account lookup's field is
+`--fs-15`, 17.1px, and comes down to 16, which is the only control declaring
+more than the floor and a pixel nobody can see.
+
+**What it costs is width, and only where a control is narrow enough to feel
+it.** The expanded card's two pane ledges are the case: at 390 the sort key's
+`ROS starters` was already truncating at 8 of 12 characters and the lens key's
+`Points` fitted whole. Both compensate with their tracking under the same
+`pointer-coarse:` gate, which is principled rather than a patch — tracking is a
+small-type affordance and at 16px it is pure width. Measured: `Points` needs
+69.1px of the 62 it has at `0.12em` and reads `Point…`, and 60.5 of 64 at
+`0.03em`, which is the word; the caret gutter gives the last four of those
+pixels. It buys the sort key one character back of the two the floor costs it
+(8 → 7, against 6 uncompensated), and that one stays truncated at any tracking,
+which is the reading it already ships at this width.
+
+#### Verified
+
+Driven over CDP against `next dev` with no `DATABASE_URL` at 390, 768 and 1280,
+in **two browsers** — the mechanic this needs and the repo's `pointer-fine:`
+flags inverted: `--blink-settings=availablePointerTypes=2,primaryPointerType=2,`
+`availableHoverTypes=1,primaryHoverType=1` is a coarse pointer (Blink's enum is
+None=1, Coarse=2, Fine=4), and the usual `4`/`2` pair is the fine one. Without
+them headless Chrome reports `pointer: none`, which matches neither query, and
+the rule silently tests nothing. A temporary `/preview` route mounted the real
+`LeagueTeams`, `PlayerFilters` and `SeekKey` against fixtures, then was deleted;
+`/tools`, `/picktracker` and `/comps` were driven as themselves.
+
+Every control on every page is **≥16px on a coarse pointer** at all three
+widths, with `documentElement.scrollWidth` equal to the viewport, zero unclipped
+elements past it and one `<h1>` per page. The before-state reproduces exactly in
+the same harness with the rule removed: `/comps` at 14.82 and 12.54, the sort
+and lens keys at 11.4, `/picktracker` at **15.96**. The date input in the trades
+board's seek popover goes 13.68 → 16px and stays inside the viewport at 390. The
+**fine**-pointer render is unchanged from what ships, save the five controls
+whose 16px base became their design size — the largest of those moves is
+`/picktracker`'s 16 → 15.96. 1,844 unit tests pass; `lint`, `typecheck` and
+`build` are clean.
+
+**Not verified against real data**: the sizes and geometry are a render, and no
+iOS device was in the loop — what a headless Chrome emulating a coarse pointer
+cannot confirm is Safari's own threshold behaviour on the four controls that sit
+exactly at 16.00px. The controls behind a database (`shares-drawer`, the filter
+dialog's rule bay, `/logs`, the trades search panel) were reasoned from their
+class strings rather than rendered; all four already drew at 16px on a phone
+before this, so the floor changes nothing about them.
+
 ### The toggle
 
 `ThemeToggle` (in `features/shared`) writes `data-theme` onto `<html>` and

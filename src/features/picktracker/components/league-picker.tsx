@@ -135,7 +135,7 @@ export function LeaguePicker({
         }}
         onFocus={() => setOpen(true)}
         onKeyDown={handleKeyDown}
-        className={`${CONSOLE_WELL} w-full px-4 py-2.5 text-[16px] text-foreground/90 outline-none placeholder:text-foreground/35 focus-visible:border-active/45 disabled:text-foreground/40 @md:text-[length:var(--fs-14)]`}
+        className={`${CONSOLE_WELL} w-full px-4 py-2.5 text-[length:var(--fs-14)] text-foreground/90 outline-none placeholder:text-foreground/35 focus-visible:border-active/45 disabled:text-foreground/40`}
       />
 
       {open && !disabled && (

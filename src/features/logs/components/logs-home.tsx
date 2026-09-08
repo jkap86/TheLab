@@ -130,8 +130,7 @@ export function LogsHome({
               value={query}
               onChange={(e) => setQuery(e.target.value)}
               placeholder="route or address"
-              // 16px or iOS Safari zooms the page on focus.
-              className="w-full rounded-[0.5rem] border border-black/85 bg-[image:var(--readout-bg)] px-3 py-2 text-[16px] text-readout shadow-[var(--window-shadow)] placeholder:text-readout-muted focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-active/60 sm:text-[length:var(--fs-13)]"
+              className="w-full rounded-[0.5rem] border border-black/85 bg-[image:var(--readout-bg)] px-3 py-2 text-[length:var(--fs-13)] text-readout shadow-[var(--window-shadow)] placeholder:text-readout-muted focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-active/60"
             />
           </div>
           {FACET_KEYS.map((key) => (
@@ -239,7 +238,7 @@ function Facet({
         id={id}
         value={value}
         onChange={(e) => onChange(e.target.value)}
-        className="w-full rounded-[0.5rem] border border-foreground/12 bg-[image:var(--key-bg)] px-2 py-2 text-[16px] text-foreground/85 shadow-[var(--key-shadow)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-active/60 sm:text-[length:var(--fs-13)]"
+        className="w-full rounded-[0.5rem] border border-foreground/12 bg-[image:var(--key-bg)] px-2 py-2 text-[length:var(--fs-13)] text-foreground/85 shadow-[var(--key-shadow)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-active/60"
       >
         <option value="">All</option>
         {options.map((option) => (

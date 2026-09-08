@@ -108,13 +108,15 @@ export function RuleRow({
   const onSentinel = isSentinelRule(rule);
   const ops = named || onSentinel ? NAMED_OPS : COMPARE_OPS;
 
-  // One string for both menus, so the row cannot drift into two heights. 16px
-  // specifically: anything smaller makes iOS Safari zoom the page on focus, so
-  // the visual size only steps down once there is room for it to.
+  // One string for both menus, so the row cannot drift into two heights. The
+  // size is the design's at every width — a touch device floors it at 16px in
+  // `globals.css`, which is where the reason for that lives now: it used to be
+  // spelled here as a 16px base stepped down at `@md`, and a width cannot see
+  // the device the zoom belongs to.
   const slot =
     "min-w-0 cursor-pointer appearance-none rounded-lg bg-[image:var(--key-bg)] py-1.5 pl-2 pr-5 " +
-    "font-mono text-[16px] text-foreground/88 shadow-[var(--well-shadow)] outline-none " +
-    "focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-active/60 @md:text-[length:var(--fs-11)]";
+    "font-mono text-[length:var(--fs-11)] text-foreground/88 shadow-[var(--well-shadow)] outline-none " +
+    "focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-active/60";
   /** `appearance-none` takes the native caret with it; this draws one back. */
   const caret = (
     <span
@@ -213,7 +215,7 @@ export function RuleRow({
               });
             }}
             onBlur={() => setEdit(null)}
-            className="relative w-full min-w-0 bg-transparent px-2 py-1.5 text-right font-mono text-[16px] tabular-nums text-readout outline-none [text-shadow:var(--readout-text-glow)] disabled:opacity-40 @md:text-[length:var(--fs-11)]"
+            className="relative w-full min-w-0 bg-transparent px-2 py-1.5 text-right font-mono text-[length:var(--fs-11)] tabular-nums text-readout outline-none [text-shadow:var(--readout-text-glow)] disabled:opacity-40"
           />
         </span>
       )}
