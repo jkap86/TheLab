@@ -1,3 +1,5 @@
+import type { ReactNode } from "react";
+
 /**
  * One count stamped into a billet: a label and its figure on one baseline, in
  * the milled well they share with whatever is counted beside them.
@@ -27,12 +29,24 @@
  * the page does — the attention count is `—` until the check answers, and the
  * answer should be announced when it arrives rather than found. `title` is the
  * whole sentence for a figure whose spelling is a ratio (`3 / 12`).
+ *
+ * **`children` is a node rather than a string, and `centred` is what that
+ * costs.** A count is type on a baseline, which is what the row is aligned on;
+ * a count that has not landed is now a *drawn* object — the bubbling flask —
+ * and an object has no baseline worth aligning a label to. Left on
+ * `items-baseline` the flask hangs its bottom edge on the label's baseline and
+ * the label sits level with the vessel's base. It is a boolean rather than a
+ * `className` because a second `self-*` utility in one class attribute is
+ * settled by Tailwind's emit order rather than by the caller — the trap
+ * `CONSOLE_KEY_PILL` and `CONSOLE_CARD_SHELL` are both split to keep a part out
+ * of.
  */
 export function StampedCount({
   label,
   tone,
   live = false,
   title,
+  centred = false,
   children,
 }: {
   label: string;
@@ -41,7 +55,9 @@ export function StampedCount({
   /** Announce the figure when it changes — for a count the page waits on. */
   live?: boolean;
   title?: string;
-  children: string;
+  /** The figure is a drawn object rather than type — see the module note. */
+  centred?: boolean;
+  children: ReactNode;
 }) {
   return (
     <dl
@@ -55,7 +71,9 @@ export function StampedCount({
           record split across two lines reads as two numbers. */}
       <dd
         aria-live={live ? "polite" : undefined}
-        className="m-0 whitespace-nowrap font-display text-[length:var(--fs-21)] font-semibold leading-[1.1] tracking-[-0.015em] tabular-nums [text-shadow:var(--standing-engrave)]"
+        className={`m-0 whitespace-nowrap font-display text-[length:var(--fs-21)] font-semibold leading-[1.1] tracking-[-0.015em] tabular-nums [text-shadow:var(--standing-engrave)] ${
+          centred ? "self-center" : ""
+        }`}
         style={{ color: tone ?? "var(--billet-figure)" }}
       >
         {children}

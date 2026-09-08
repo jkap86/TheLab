@@ -3,8 +3,10 @@
 import { type ReactNode, useMemo, useRef, useState } from "react";
 
 import {
+  BubblingFlask,
   CONSOLE_KEY,
   DEFAULT_LEAGUE_FILTERS,
+  FlaskDefs,
   LeagueFiltersDialog,
   activeFilterCount,
   filterSummary,
@@ -195,6 +197,17 @@ export function TradesHome({
     // both pages already set to `console`. With the panel gone the two agree by
     // construction rather than by two spellings of a width.
     <div className="relative">
+      {/* The flask's gradients and its clip, once for the whole page rather
+          than once per flask — see `FlaskDefs`.
+
+          **Above the ternary, not inside either arm**, and that is the one
+          thing about the placement that matters: this page has two loading
+          states in two *exclusive* branches — the first page's indicator below,
+          which replaces the board, and the load-more note inside the board it
+          replaces. Mounted in either one, the other draws a vessel whose fill,
+          fluid and bubbles resolve to nothing, which reads as an *empty* flask
+          rather than as a broken page. */}
+      <FlaskDefs />
       {/* **Everything above the board stands down while a card is parked.**
           One wrapper rather than a class on each of the six, and
           `display: contents` off it — so the page's own layout is byte for byte
@@ -343,9 +356,7 @@ export function TradesHome({
           </button>
         </div>
       ) : loading ? (
-        <p className="relative font-mono text-[length:var(--fs-11)] uppercase tracking-[0.16em] text-foreground/60">
-          Reading the board…
-        </p>
+        <TradesLoading />
       ) : !data || data.trades.length === 0 ? (
         <EmptyBoard
           narrowed={narrowingLeagues || searchCount > 0 || seek !== null}
@@ -378,6 +389,76 @@ export function TradesHome({
           onRetry={retryLoadMore}
         />
       )}
+    </div>
+  );
+}
+
+/**
+ * The board's first page, in flight.
+ *
+ * It was the words `Reading the board…` and nothing else, which is a page that
+ * has said what it is doing and then shows no sign of doing it. This is the
+ * app's own mark bubbling beside the copy, over a sweep bar.
+ *
+ * **The bar is indeterminate by construction** rather than by omission: nothing
+ * on this board knows how many trades are coming — the count beside the filters
+ * is a `Reading…` of its own until the first page lands and the total is
+ * answered on that page alone. So a determinate bar would be a fraction of a
+ * denominator nobody has. `--progress-fill` is the cold sync's own segmented
+ * ramp, which is the right vocabulary for the same reason it is there: discrete
+ * segments read as an instrument counting, where a solid fill reads as a
+ * painted rectangle sliding about.
+ *
+ * **This is the `loading` arm and not a thing beside it**, which is what keeps
+ * the promise that a flask is never left bubbling behind a failed request: the
+ * error arm above replaces this one whole, and the empty state below it does
+ * too. There is no path on which both are on screen.
+ *
+ * The whole block is one `role="status"` region, so the flask is decoration —
+ * the copy already says what it says, and a named flask beside it would be the
+ * same news read twice.
+ */
+function TradesLoading() {
+  return (
+    <div role="status" aria-live="polite" className="relative flex items-center gap-[1.125rem] pt-5">
+      <span
+        aria-hidden
+        className="relative inline-flex size-22 shrink-0 items-center justify-center"
+      >
+        {/* The halo is a sibling rather than part of the svg: a `filter` cannot
+            pulse on its own, and the cast the flask already carries is a
+            different job — this is the light the glass throws on the ground
+            around it while it works. `loud` only; at a well flask's size a
+            breathing halo is a flicker. */}
+        <span
+          className="lab-anim absolute -inset-2 rounded-full bg-[image:var(--flask-halo)]"
+          style={{ animation: "fl-glow 2.6s ease-in-out infinite" }}
+        />
+        <BubblingFlask size={88} tone="loud" label={null} className="relative" />
+      </span>
+      <div className="min-w-0">
+        <p className="m-0 font-mono text-[length:var(--fs-11)] uppercase tracking-[0.16em] text-foreground/60">
+          {/* The ellipsis breathes on its own so the words do not: a whole line
+              of copy fading in and out reads as a fault. */}
+          Loading trades
+          <span className="lab-anim" style={{ animation: "fl-ellipsis 1.4s ease-in-out infinite" }}>
+            …
+          </span>
+        </p>
+        <span
+          aria-hidden
+          className="mt-2.5 block h-1 w-44 overflow-hidden rounded-full bg-[color:var(--meter-track)] shadow-[inset_0_1px_3px_rgba(0,0,0,0.9),inset_0_-1px_0_rgba(255,255,255,0.06)]"
+        >
+          {/* 42% of the channel over a −108%→196% travel. A narrower bar over a
+              longer range leaves the channel visibly empty for part of every
+              cycle, and an indicator that is blank a third of the time reads as
+              static. */}
+          <span
+            className="lab-anim block h-full w-[42%] bg-[image:var(--progress-fill)]"
+            style={{ animation: "fl-sweep 1.9s cubic-bezier(0.55,0.1,0.45,0.9) infinite" }}
+          />
+        </span>
+      </div>
     </div>
   );
 }
