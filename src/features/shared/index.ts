@@ -204,6 +204,7 @@ export {
   LedgeName,
   LedgeWell,
   MilledHairline,
+  OwnerBillet,
   PlateBay,
   PlateDivider,
   PlateField,

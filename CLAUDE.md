@@ -3148,6 +3148,154 @@ reads for a leaguemate whose board runs to fifty players against the twelve-chip
 preview cap, and whether `owner_id` is null often enough in this corpus for the
 orphan-team arm to be a case rather than a guard.
 
+### The card says who has him
+
+The shares drawer answers *which* of a manager's leagues a player is in. Narrowed
+to the leagues where somebody **else** holds him — the `taken` mode above —
+nothing on the cards behind the drawer said *who*, so the reader had the right
+list and no way to read it without opening each card. `OwnerBillet` is that
+answer: a small milled billet hung on the league card's top-right edge, naming
+the leaguemate. Applied from a design handoff. **Nothing on the wire moved** —
+no route, no query, no contract type, no payload field, no migration — and no
+token was added.
+
+**It is a header part rather than a row in the card body**, which is the whole
+reason it is affordable: it sits in `CardBilletRow`'s overhang, so it costs the
+card **zero height** and reads at a glance down a column of a hundred of them.
+It is `DateBillet`'s construction — `ml-auto` at the row's right end, cut from
+the same stock as the `LeagueBillet` opposite — for that part's own reason: two
+billets in a row are parts of one piece, where a pill beside a billet reads as
+two objects that happen to share a line.
+
+**Which leagues draw one is three bounds and each is a real one.** Exactly one
+subject picked, of kind `player`, on the `taken` narrowing. The billet names
+*one* player's owner, so two picked subjects would have it silently answer for
+whichever came first — a second bay is what that case wants and it is unbuilt,
+deliberately rather than implied. `taken` is the only mode with an owner to
+name: on `owned` the manager holds him and on `available` nobody does, and the
+`You` and `Free` variants an earlier design pass carried were cut for exactly
+that — a card answering a question the reader did not ask is a card with more on
+it. And a leaguemate pick narrows to a *person*, so there is no subject for an
+owner to be the owner of.
+
+**`leagueOwners` is the rule and it is `playerModeCounts`' own**, spelled once
+beside it in `leaguemate-rosters.ts`: that fold answers *how many* leagues are
+in the taken state and this answers *whose team he is on* in each of them, so a
+card naming an owner the drawer's `Taken` count does not agree with would be two
+answers to one question with neither visibly wrong. The three exclusions are
+therefore that fold's, and each is silent when dropped — a league the manager
+holds him in has no owner to name (naming the roster that shares him would
+present a leaguemate as the person who has him *instead of* you); an orphan team
+is nobody; and a league absent from the map is one whose rosters were never
+stored rather than one where he is free. `leaguemate-rosters.test.ts` pins the
+invariant the two share: **the map's size is the taken count**, over every
+fixture id.
+
+**The names come from the leaguemates payload, and that read had to be
+widened.** The handoff says the owner's display name and avatar come from
+`league_users`, which is true of the database and not of the client: on the page
+the only place a user id becomes a name and a face is
+`ManagerLeaguematesPayload.users`, and that read was latched on
+`opened.has("leaguemate")` alone — the drawer this narrowing never opens. Gated
+as it was, a reader who narrowed to the taken leagues would get a billet naming
+a raw Sleeper id on every card. It is `opened.has("leaguemate") ||
+opened.has("player")` now, which is the call `useManagerLeaguemateRosters`
+already makes one line down and for the same kind of reason; it is also the
+cheap one of the three to widen — ~1,300 member ids and ~720 user rows on a
+113-league account, against every roster of every league for the read beside it.
+A stored row with no display name still falls back to the id, on `PlayerShare`'s
+rule that a token beats a blank.
+
+**Two primitives on the card, never the row itself.** `LeagueCard` is `memo`'d
+over every league on the account and its own note says every prop is stable by
+construction; a `{ name, avatar }` built in the page's render would be a new
+reference on each of a hundred cards to move the one that changed. So the page
+resolves and passes `ownerName` and `ownerAvatarUrl`, and null covers every case
+the readout is not for — no subject, two subjects, the wrong mode, a map still
+in flight, a league where nobody but the manager holds him. They are
+deliberately not distinguished: a league outside the narrowing simply draws no
+part.
+
+**The avatar is a `background-image` over the initial, never an `<img>`**, which
+is the handoff's call and is where it diverges from the leaguemate *row* one
+panel over. That row draws an uploaded avatar through its `<img>` arm on the
+argument that a picture somebody uploaded is there when the row says it is; here
+the fallback is a letter *underneath* rather than instead of, which is the
+construction only the background arm composes — and a stored avatar can still
+404 for a user who has dropped theirs since the sync, where a broken `<img>`
+paints the platform's own placeholder glyph over the letter. `bg-center` rather
+than the `bg-top` a Sleeper *headshot* takes: an avatar is a square somebody
+uploaded, not a head-and-shoulders crop.
+
+**Two of the prototype's literals were not shipped, and the second is the one
+that matters.** The reference inlines resolved dark-scheme values because an
+inline style has no `var()` to read, and its fallback initial carries
+`text-shadow: 0 1px 0 rgba(0,0,0,0.6)` — a black drop under a near-white letter.
+`--billet-figure` inverts to a near-black ink in light mode, where a black cast
+under a black letter is a smear. It takes `--standing-engrave`, which turns over
+with it and is what the date billet's own figure-in-a-well already uses.
+
+**Not interactive**, like the standing strip beside it: it is a reading. The
+card's press covers the whole summary and this adds no control of its own — zero
+`<button>`s, zero `<a>`s inside the part, driven.
+
+#### Verified
+
+Rendered through a temporary `/preview` route against the real `LeagueCard`,
+`useActiveCard`, `PageShell` and `ConsoleGround`, the real tokens and the real
+Tailwind build — the method the console-card, shares, rack and timeline passes
+established, since no database is reachable from where this was built — then
+driven over CDP at 1280 and 390 in both schemes and deleted. The mechanics are
+the ones this file records: `--no-proxy-server`, `localhost` rather than
+`127.0.0.1`, a phone viewport from `Emulation.setDeviceMetricsOverride` with
+`mobile: true`, `data-theme` rather than `prefers-color-scheme`,
+`--disable-features=OverlayScrollbar`, the
+`--blink-settings=availablePointerTypes=4,…` flags, a **client-component**
+harness, a CDP client over Node's own `WebSocket` since Playwright is not
+installed here, and a fresh `--remote-debugging-port` per run. The fixtures are
+five leagues — three ordinary owners, one whose `league_users` row carries no
+display name (so the id is the token), one carrying an avatar URL unreachable
+from the sandbox, and one outside the narrowing.
+
+Every arm landed, identically at both widths. The part measures the handoff's
+own geometry to the value: radius **9px**, padding **`4px 6px 5px 5px`**, gap
+**8px**, `--billet-bg` under `--standing-strip-shadow`, a **20×20** round face
+on `--billet-well-bg` under `--standing-well-shadow`, and the name at
+**15.08px** (`--fs-13` at scale 1.16) IBM Plex Sans 600, `nowrap`,
+`-0.01em`, on `--billet-figure` under `--standing-engrave`. Height **28.8px**.
+The avatar fixture computes `url+well` where the other four compute the well
+alone, with **zero `<img>` tags and zero controls** in every one of them. The
+league outside the narrowing draws **no part at all** — one child in the billet
+row rather than two — and its league billet takes the full width back (394.6px
+at 1280, 295.4 at 390).
+
+**Both themes turn over**, which is what naming the tokens rather than the
+prototype's literals bought: the name ink is `rgb(241,244,244)` in dark and
+`rgb(21,36,40)` in light, on the same part, with no light-mode block written for
+it.
+
+The phone trade is the documented one. At 390 `K. Mercer` takes 103.1px and
+leaves the league billet **217.5px**, comfortably more than the ~150 the handoff
+predicts, and the long-id fallback takes 143.2 and leaves 177.3 — so even the
+worst fixture never has to truncate the *name*, and the league's name gives up
+width exactly as `ReadingPlate` already makes it on the two other cards.
+
+At every width and in both schemes: `document.documentElement.scrollWidth` equal
+to the viewport, **zero** unclipped elements past it, exactly one `<h1>`, and no
+console output but the dev server's own React-DevTools and HMR lines. 2,094 unit
+tests pass (seven more, all `leagueOwners`'); `lint`, `typecheck` and `build`
+are clean.
+
+**Not verified against real data**, which is the gap to close first: every
+number above is a fixture, and no database was reachable from here. Four things
+a render cannot check — whether the widened `leaguemates` latch is as cheap on a
+real 113-league account as its payload's own note implies; whether real display
+names sit in the part without wanting the truncation the handoff reserves for
+them; whether the avatar arm reads at all, since `sleepercdn.com` is unreachable
+from the sandbox and every face rendered as its letter mount; and how often a
+league's owner is a person the users map has *not* named, which is the one case
+that falls back to a raw id on screen.
+
 ## KeepTradeCut values
 
 `shared/ktc` scrapes both of KTC's markets — dynasty (`/dynasty-rankings`) and

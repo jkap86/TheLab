@@ -25,6 +25,7 @@ import {
   leagueType,
   LINEUP_METRIC_LABELS,
   ordinal,
+  OwnerBillet,
   useLeagueLineup,
   ordinalParts,
   positionsLabel,
@@ -222,6 +223,8 @@ export const LeagueCard = memo(function LeagueCard({
   slots,
   summary,
   ranksPending = false,
+  ownerName = null,
+  ownerAvatarUrl = null,
   season,
   username,
   open,
@@ -262,6 +265,25 @@ export const LeagueCard = memo(function LeagueCard({
    * carries and the lineups query does not). See `ManagerLineupsState.pending`.
    */
   ranksPending?: boolean;
+  /**
+   * Who holds the picked player in **this** league, where a leaguemate does —
+   * already abbreviated, and null where there is nobody to name.
+   *
+   * **Resolved by the page rather than read here**, and as two primitives
+   * rather than one object, which is this card's `memo` rather than a style: a
+   * `{ name, avatar }` built fresh in the page's own render would be a new
+   * reference on every render and would re-render all 113 cards to move the one
+   * that changed. Every other prop is stable by construction for the same
+   * reason — see the note above.
+   *
+   * Null covers every case the readout is not for, and they are not
+   * distinguished on purpose: no subject picked, two picked, a subject not on
+   * the taken narrowing, the rosters map still in flight, or a league where
+   * nobody but the manager holds him. The part exists for the taken narrowing
+   * and a league outside it simply draws none — see {@link OwnerBillet}.
+   */
+  ownerName?: string | null;
+  ownerAvatarUrl?: string | null;
   /**
    * What a *past* stop is priced against — the same season and manager the
    * present table was solved on, so the two are one comparison rather than two
@@ -436,6 +458,14 @@ export const LeagueCard = memo(function LeagueCard({
               `LeagueBillet` for what that replaced and why. */}
           <CardBilletRow>
             <LeagueBillet name={league.name} avatarUrl={league.avatar_url} />
+            {/* Who has the picked player here, in the row's own overhang — so
+                the answer costs the card no height and reads down a column of
+                cards. Drawn only where a leaguemate holds him, which is the
+                narrowing the reader is already looking at; see `OwnerBillet`
+                for why there is no `You` or `Free` arm beside it. */}
+            {ownerName != null && (
+              <OwnerBillet name={ownerName} avatarUrl={ownerAvatarUrl} />
+            )}
           </CardBilletRow>
 
           <CardRule />

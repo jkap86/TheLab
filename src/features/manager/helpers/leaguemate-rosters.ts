@@ -206,6 +206,66 @@ export function playerModeCounts(
 }
 
 /**
+ * Who holds one player in each league, where that somebody is a **leaguemate**.
+ *
+ * The card's ownership readout, and the third reading of the same rows
+ * {@link playerModeCounts} counts: that fold answers *how many* leagues are in
+ * the taken state, and this answers *whose team he is on* in each of them. They
+ * are one rule deliberately spelled once — a card naming an owner the drawer's
+ * `Taken` count does not agree with is two answers to one question, and neither
+ * of them is visibly wrong.
+ *
+ * So the three exclusions are `playerModeCounts`' own, and each is silent when
+ * it is dropped:
+ *
+ * - **A league the manager holds him in has no owner to name.** It is the
+ *   `owned` arm rather than the taken one, and naming the roster that shares
+ *   him would be a leaguemate presented as the person who has him instead of
+ *   you.
+ * - **An orphan team is nobody**, so it holds him without anybody owning him —
+ *   the same reason `available` is the complement of *anyone* rather than the
+ *   negation of the other two.
+ * - **A league absent from the map is not a league where he is free.** Its
+ *   rosters were never stored, and a readout drawn off that absence would name
+ *   nobody on a card that has simply not been read.
+ *
+ * The **first** qualifying roster wins where a league somehow answers with two.
+ * Sleeper can return two rosters for one owner in one league, and a genuine
+ * pair of different leaguemates holding one player is not a state the platform
+ * produces — `playerModeCounts` already counts such a league once, so taking
+ * the first keeps the two folds counting the same league the same way.
+ */
+export function leagueOwners(
+  leagues: readonly ManagerLeague[],
+  playerId: string,
+  rosters: Record<string, readonly LeagueRosterEntry[]>,
+  selfId: string | null,
+): Map<string, string> {
+  const owners = new Map<string, string>();
+  if (!isPlayerId(playerId)) return owners;
+
+  for (const league of leagues) {
+    const entries = rosters[league.league_id];
+    if (!entries) continue;
+
+    let owner: string | null = null;
+    for (const entry of entries) {
+      if (!entry.players.includes(playerId)) continue;
+      if (selfId != null && entry.user_id === selfId) {
+        // The manager's own, which settles the league whatever else names him:
+        // this is not a taken league and there is nobody to put on the card.
+        owner = null;
+        break;
+      }
+      if (entry.user_id != null) owner ??= entry.user_id;
+    }
+
+    if (owner != null) owners.set(league.league_id, owner);
+  }
+  return owners;
+}
+
+/**
  * The two roll maps the modes narrow by: every league's rosters, and every
  * league's rosters that are not the manager's.
  *

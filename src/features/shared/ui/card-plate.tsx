@@ -599,6 +599,100 @@ export function DateBillet({
 }
 
 /**
+ * Who holds the picked player in this league — a small billet hung on the
+ * card's top-right edge, naming the leaguemate.
+ *
+ * The manager page's shares drawer answers *which* of a reader's leagues a
+ * player is in; narrowed to the leagues where somebody **else** holds him,
+ * nothing on the cards behind the drawer said *who*. This is that answer, and
+ * it is deliberately a header part rather than a row in the card body: it sits
+ * in {@link CardBilletRow}'s overhang, so it costs the card **zero height** and
+ * reads at a glance down a column of a hundred of them.
+ *
+ * It is {@link DateBillet}'s construction — `ml-auto` at the row's right end,
+ * cut from the same stock as the {@link LeagueBillet} opposite — for that
+ * part's reason: two billets in a row are parts of one piece, where a pill
+ * beside a billet reads as two objects that happen to share a line.
+ *
+ * **The name yields width, never the league's.** The row is one flex line at
+ * every width and `LeagueBillet` is `min-w-0 truncate`, so this part being
+ * `shrink-0` means a phone spends ~78px of the league's name on it — the same
+ * trade the reading plate already makes on the two other cards. If a longer
+ * form is ever wanted, truncate **this** name: a clipped leaguemate is still a
+ * person, where a clipped league is the card losing its subject.
+ *
+ * **There is exactly one state.** It is drawn only where a leaguemate holds
+ * him, which is the state the reader has filtered to — a league not in it
+ * renders no part at all. An earlier pass had a `You` and a `Free` variant and
+ * both were cut: this readout exists for the taken narrowing, and a card that
+ * answers a question the reader did not ask is a card with more on it.
+ *
+ * **Not interactive**, like the standing strip: it is a reading. The card's own
+ * press covers the whole summary and this must not swallow it or add a control
+ * of its own.
+ *
+ * @see leagueOwners in `features/manager/helpers/leaguemate-rosters.ts` — the
+ * one spelling of *who holds him*, which the drawer's `Taken` count and this
+ * part are two readings of.
+ */
+export function OwnerBillet({
+  name,
+  avatarUrl,
+}: {
+  /**
+   * The owner, already abbreviated — `shortName`'s `K. Mercer`.
+   *
+   * Falls back to the stored id where the `league_users` row carries no
+   * display name, on `PlayerShare`'s rule: a token beats a blank.
+   */
+  name: string;
+  avatarUrl: string | null | undefined;
+}) {
+  return (
+    <span className="relative ml-auto inline-flex shrink-0 items-center gap-2 overflow-hidden rounded-[9px] bg-[image:var(--billet-bg)] pb-[5px] pl-[5px] pr-1.5 pt-1 shadow-[var(--standing-strip-shadow)]">
+      <BilletFinish />
+      {/* The face, seated in a hole milled in the billet — the same well the
+          date's minute drops into, one size down and round.
+
+          **The avatar is a `background-image` over the initial, never an
+          `<img>`.** A background that 404s paints nothing and the letter under
+          it is exactly the fallback it is there to be, where a broken `<img>`
+          paints the platform's own placeholder glyph over it — `PlayerFace`'s
+          reasoning in `lineup-breakdown.tsx` and `SharesDrawerRow`'s `faceUrl`
+          arm. The drawer draws a *leaguemate's* avatar through its `<img>` arm
+          instead, on the argument that an uploaded picture is there when the
+          row says it is; here the fallback is a letter *underneath* rather than
+          instead of, which is the construction only the background arm
+          composes — and a stored avatar can still 404 for a user who has
+          dropped theirs since the sync.
+
+          `bg-center`, where a Sleeper *headshot* takes `bg-top`: an avatar is a
+          square somebody uploaded, not a head-and-shoulders crop. */}
+      <span
+        aria-hidden
+        className="relative flex size-5 shrink-0 items-center justify-center overflow-hidden rounded-full bg-[image:var(--billet-well-bg)] bg-cover bg-center bg-no-repeat font-mono text-[length:var(--fs-9)] text-[color:var(--billet-figure)] shadow-[var(--standing-well-shadow)] [text-shadow:var(--standing-engrave)]"
+        style={
+          avatarUrl ? { backgroundImage: `url(${avatarUrl})` } : undefined
+        }
+      >
+        {name.charAt(0).toUpperCase()}
+      </span>
+      {/* Stamped proud on the face, in the display type the ledge's own name
+          takes — the labels around it stay mono, which is this card's
+          distinction between a caption cut into metal and the thing it names.
+
+          The engrave is a token rather than the prototype's flat black drop:
+          `--billet-figure` inverts to a near-black ink in light mode, and a
+          black cast under a black letter is a smear. `--standing-engrave`
+          turns over with it. */}
+      <span className="relative whitespace-nowrap font-display text-[length:var(--fs-13)] font-semibold leading-[1.15] tracking-[-0.01em] text-[color:var(--billet-figure)] [text-shadow:var(--standing-engrave)]">
+        {name}
+      </span>
+    </span>
+  );
+}
+
+/**
  * One bay of a reading plate: a stamped label **over** its figure — **and
  * nothing draws one any more**, along with {@link ReadingPlate}'s `tight` arm,
  * which existed for it.

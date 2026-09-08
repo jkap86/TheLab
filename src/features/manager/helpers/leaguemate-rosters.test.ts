@@ -8,6 +8,7 @@ import type {
 } from "@/shared/contract";
 
 import {
+  leagueOwners,
   leaguematePlayerRolls,
   leaguematePlayers,
   modeRolls,
@@ -215,6 +216,62 @@ describe("playerModeCounts", () => {
       taken: 1,
       available: 1,
     });
+  });
+});
+
+describe("leagueOwners", () => {
+  test("names the leaguemate holding him, per league", () => {
+    // p3 is the mate's in `a` and nobody's in `b`.
+    const owners = leagueOwners(LEAGUES, "p3", ROSTERS, ME);
+    assert.deepEqual([...owners], [["a", MATE]]);
+  });
+
+  test("a league the manager holds him in names nobody", () => {
+    // p2 is the mate's in `a` and the manager's in `b` — and `b` also has the
+    // mate holding him. It is the `owned` arm whatever else names him, so `b`
+    // is absent, which is what keeps this agreeing with `playerModeCounts`.
+    const owners = leagueOwners(LEAGUES, "p2", ROSTERS, ME);
+    assert.deepEqual([...owners], [["a", MATE]]);
+    assert.equal(playerModeCounts(LEAGUES, "p2", ROSTERS, ME).taken, 1);
+  });
+
+  test("an orphan team is nobody", () => {
+    // Held, and by no one — so there is no owner to put on the card, and the
+    // league is not in the taken state either.
+    assert.equal(leagueOwners([league("a")], "p9", ROSTERS, ME).size, 0);
+  });
+
+  test("a league nobody has stored names nobody", () => {
+    // `c` is absent from the map. An absence is not evidence that he is free
+    // there, and it is certainly not evidence about who has him.
+    assert.equal(leagueOwners(LEAGUES, "p3", ROSTERS, ME).has("c"), false);
+  });
+
+  test("the map's size is the taken count", () => {
+    // The invariant the two folds share, and the reason this one exists here
+    // rather than beside the card: one rule, counted and named.
+    for (const id of ["p1", "p2", "p3", "p9"]) {
+      assert.equal(
+        leagueOwners(LEAGUES, id, ROSTERS, ME).size,
+        playerModeCounts(LEAGUES, id, ROSTERS, ME).taken,
+        id,
+      );
+    }
+  });
+
+  test("Sleeper's padding names nobody", () => {
+    for (const id of ["", "0"]) {
+      assert.equal(leagueOwners(LEAGUES, id, ROSTERS, ME).size, 0);
+    }
+  });
+
+  test("with no manager resolved yet, their own roster is an owner", () => {
+    // The same reading `playerModeCounts` takes: `selfId` null is "we do not
+    // know which team is theirs", so every named roster is somebody else's.
+    // It is reachable for a frame at most — the leagues stream answers before
+    // a drawer can be opened — and it agrees with the count either way.
+    const owners = leagueOwners(LEAGUES, "p1", ROSTERS, null);
+    assert.deepEqual([...owners], [["a", ME]]);
   });
 });
 
