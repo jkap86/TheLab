@@ -7379,7 +7379,7 @@ and the production boot refuses to start without `DATABASE_URL`**, where
 Every arm landed. The wordmark draws at **every** width on every route,
 including 390 with controls. (**Superseded below 390 on the two pages that
 publish controls** — unfolding the Browse pair took 38px of that row back; see
-The wordmark yields to the controls again, below, for the measurement.) The readout reads `LINEUPS` / `MGR` at 390 and
+The wordmark yields to the controls again, below, for the measurement.) The readout reads `LINEUPS` / `MANAGER` at 390 and
 `LINEUP CHECKER` / `MANAGER` from 640, and renders **nothing** on `/tools`. The
 rack is **one row at every width** on all four routes, 54px at 390 and 65.1 (or
 62 without a track) at `md`, with `documentElement.scrollWidth` equal to the
@@ -7628,6 +7628,188 @@ what they are as the two legends were; whether the 9.4px of slack at 390 on
 whole margin the wordmark's gate is set against; and whether the 32px cap is
 comfortable in the hand rather than merely consistent with the tool key beside
 it, which is the one open question no measurement here can close.
+
+### The slack moved behind the controls, and the tray became a part
+
+Three changes to the rack, from a design handoff: below `md` the page's Browse
+keys stop being pushed to the right edge and follow the readout they sit beside;
+`/manager`'s readout spells `Manager` at every width instead of falling back to
+`Mgr`; and the tool tray is regrouped into three bays and remade out of billet.
+Nothing on the wire moved — no route, no query, no contract type, no payload
+field, no migration.
+
+**The first two are the same measurement seen twice.** The rack read
+`brand · groove · readout ……… caps · tray` below `md`, and the reason was one
+`mr-auto` on the left-hand cluster: with the tray's own margin gated at
+`md:ml-auto`, the cluster's margin was the only one live on a phone, and it
+pushed *both* control groups to the right edge. So the readout naming the tool
+sat at one end of the row and the two caps that act on the page it names sat at
+the other, with all the slack in between — where `md` has read
+`readout · caps ……… tray` since the rack landed.
+
+**The margin is the tray's now, at every width, and that is why the cluster's
+own argument could be answered rather than overruled.** That comment said the
+margin could not sit on any one of brand, groove or readout because which of
+them is last depends on the route — `/logs` has no readout, `/tools` has neither
+readout nor groove — and it is right about those three. It is also exactly the
+reason the margin *can* be the tray's: the tray is unconditionally last, so
+there is no conditional to be wrong about. The theme pad took an `ml-auto` of
+its own on the same terms, being the last thing in the row on the one route that
+renders no tray; the two are mutually exclusive by construction, so there is
+still exactly one auto margin per row at every width.
+
+**Nothing changed width, so the rack's measured 390px fit is untouched** — only
+where the row spends what it has left over. Verified: at 390 the gap from the
+readout to the caps is the pill's own 9px column gap to the tenth of a pixel,
+and the whole of the slack is between the caps and the tray.
+
+**`Manager` costs exactly what `Lineups` costs, and that is the finding the
+second change turns on.** The handoff argues it from a character count — seven
+against seven, and `Lineups` already sits in the tightest row either control
+page produces. Measured, the two are identical: **10.5px of slack at 390 on
+both**, against the ~9.4 the wordmark's gate was set from. So `short: "Mgr"`
+came off the registry and the readout's existing two-span branch falls through
+to `text` with no component change. `Tool.short` keeps one reader and stays in
+the type: `Lineup Checker` is fourteen characters and wants ~65px the row does
+not have, and the only way to pay for it is dropping the wordmark below 390,
+which is a worse trade than a name that page's own billet eyebrow already
+abbreviates the same way.
+
+#### The tray is a part, and its groups are holes
+
+The tray was a `--key-bg` panel with flat rows — a *surface* with a list on it,
+five tools of equal weight in one column, with no way to say that two of them
+answer a question about your account and two read the whole crawled corpus. It
+is billet stock now with a bay cut into its face per group and a brushed key
+seated in each: three holes in one part, where three runs of rows on one panel
+would be one list with rules across it.
+
+**`Tool.group` is one field rather than three arrays, and it is read as a *run*
+rather than as a key.** The tray cuts a bay wherever the value changes down the
+list, so the registry's own order is what puts a tool in a bay and nothing
+sorts — which is what keeps the tray and the `/tools` grid, which renders the
+same list in the same order and draws no bays at all, from disagreeing about
+where a tool lives. An entry out of step with its neighbours opens a bay of its
+own rather than being teleported into a matching one elsewhere in the tray,
+which is the honest reading of a list whose order is also its meaning. The
+registry is reordered to match — Manager, Lineup Checker, Pick Tracker, Comps,
+Trades — and the grid follows, which the handoff names as intended.
+
+**The bays carry `role="group"`, and a plain wrapper would have cost the menu
+its own items.** A `role="menu"` owns `menuitem`s, and an intervening generic
+box breaks that ownership. `group` is one of the roles a menu may own and is
+also the honest one: a bay *is* a group, and it is the whole of what this pass
+added, so a reader who cannot see the three holes is told about them rather than
+handed a flat list. Deliberately unlabelled — the design gives a bay no visible
+name either, and inventing one here would be a claim it does not make.
+
+**Five tokens, and the key face is one of them because of a measurement.** The
+handoff's table says the rows are a `--key-metal` face and its own legibility
+revision says the faces were darkened and the vertical brush taken off, which
+is not the same surface. The revision is right and the number says why: solid
+`--billet-name` on `--key-metal`'s top stop is **3.53:1**, under the floor a
+legend owes, and lost in the brush besides. `--rack-tray-key-bg` is that family
+with the brush off and the stops darkened — 5.25:1 at the top stop, and
+7.7–10.6:1 across the band a `--fs-11` legend in a 9px-padded row actually
+occupies. The riser is `--key-shadow` unchanged, which is already exactly the
+three layers the design drew, so a key here is this face in the console's own
+standard travel rather than a second kind of key.
+
+**The handoff's own figure for the lit row is measured at the wrong band, and
+the row passes anyway.** It reports the lit ink clearing the floor on `#31474b`,
+which is the face's 60% stop; at the *top* stop the same ink is 3.82:1. Neither
+is the number that matters — a row padded 9px puts its cap-height ink between
+roughly 32% and 65% of its own height, where `--readout-text` measures
+**5.4–8.7:1**. That is the same error `--billet-label` records from the other
+direction, and it is why every figure above is quoted against the band the ink
+lands on rather than against a stop.
+
+`--rack-tray-shadow` is `--standing-strip-shadow`'s chamfer under a heavier
+cast, spelled whole because a shadow list is atomic — a caller appending a cast
+to that token would *replace* the chamfer rather than add to it, which is the
+trap `CONSOLE_BILLET_FACE` exists beside `CONSOLE_BILLET` for. `--rack-tray-bay-bg`
+is the face's gradient *inverted*, the recess cue `--billet-well-bg` already
+runs on, and cut deeper than that well because what sits in it is a part rather
+than a reading. Every light half is derived: the chamfer inverts and its casts
+go slate, the bay stays a recess by darkening against a near-white face, and the
+lit face is **lightened** where the dark one is darkened, since the ink inverts
+with it — its stops are chosen so `--readout-text` clears 4.5:1 on *every* band
+including the bottom one (4.66–6.0:1), because the light scheme has no
+`--readout-text-glow` to carry a thin reading the way the dark one does.
+
+**The theme row is stamped on the bare billet face rather than seated in a
+bay**, which is now what says it is not navigation: it is the one row in the
+tray that is not a key in a hole. It is still the one row that does not dismiss
+the tray, and its two inks are the billet's own label-and-reading pair.
+
+`CONSOLE_BILLET_FACE` joined the `features/shared` barrel for this — a second
+reader outside that folder, on the line `CONSOLE_KEY` and `ManagerPlate` moved
+on.
+
+#### Verified
+
+Driven over CDP against `next dev` with no `DATABASE_URL` — the boot hook skips
+migrations and the loops log their refusals, which is the server coming up
+healthy against nothing — at 360, 375, 390, 412, 768 and 1280 in both schemes on
+`/manager`, `/lineupchecker`, `/trades` and `/tools`. The mechanics are the ones
+this file records: `--no-proxy-server`, `localhost` rather than `127.0.0.1`, a
+phone viewport from `Emulation.setDeviceMetricsOverride` with `mobile: true`,
+`data-theme` rather than `prefers-color-scheme`, the
+`--blink-settings=availablePointerTypes=4,…` flags, and a CDP client over Node's
+own `WebSocket` since Playwright is not installed here. **One mechanic is this
+pass's own and it cost a run:** a fixed `--remote-debugging-port` is answered by
+a previous Chrome that has not finished dying, so the new process silently fails
+to bind and the run drives the *old* profile — which put a light-scheme render
+under a `theme: "dark"` request. A fresh port per run is the fix, and writing
+`localStorage` as well as the attribute is the other half, since `ThemeToggle`
+re-applies the stored value in a layout effect.
+
+Every arm landed. The row reads `brand groove readout browse tray` at every
+width on both control pages, one row at every one (all five objects on a shared
+vertical centre), with **exactly one object absorbing the slack and it is the
+tray** — 10.5px at 390, 113px at 768, 512px at 1280 on `/manager`. The gap from
+the readout to the caps is the container's own column gap to within 0.6px at
+every width (9px below `md`, 16 above). `/manager`'s readout reads `MANAGER` and
+`/lineupchecker`'s `LINEUPS`; the wordmark draws at 390 and up on both and is
+dropped below it, which is `wordmarkFace` unchanged. Slack at 360/375/390/412 is
+67.1 / 82.1 / 10.5 / 32.5px on both pages — the two jumps being the wordmark's
+gate — and nothing overflows the pill's padding box at any of them.
+
+The tray: **244 × three bays** at radius 14 / padding 6, each bay radius 11 /
+padding 5 / gap 5 with **12px of bare billet between them**, holding
+`Manager + Lineup Checker | Pick Tracker | Comps + Trades`. Rows are radius 7,
+padding 9/11, weight 500, tracking 0.11em of their own 12.54px — 1.379px,
+measured. Exactly one lit row, it is Manager, and it carries the accent rim, the
+halo and the lamp while no other row carries any of them; the lit and unlit
+faces resolve to different gradients in both schemes. `BilletFinish` draws its
+two overlays, the tray clips, and the whole thing sits inside the viewport at
+390 (x=124, right=368). The menu owns three groups holding 2/1/2 menuitems with
+**zero** orphaned items and exactly one `aria-current="page"`.
+
+Behaviour is unchanged and was driven with real input: the key opens and reports
+`aria-expanded`, Escape closes and returns focus to it, a `pointerdown` outside
+closes, a navigation row closes, and **the theme row flips the theme and leaves
+the tray open**. `/tools` still renders no `<nav>`, its theme pad carries the
+auto margin (180.4px) and sits flush right, and its grid reads
+`Manager | Lineup Checker | Pick Tracker | Comps | Trades`.
+
+At every width and in both schemes: `document.documentElement.scrollWidth` no
+greater than the viewport, **zero** elements painted past it, exactly one `<h1>`,
+one `<nav>` where a tray renders, and **no console output of any kind** beyond
+the dev server's own React-DevTools and HMR lines. 2,060 unit tests pass;
+`lint`, `typecheck` and `build` are clean.
+
+**Not verified against real data**, which is the gap to close first: the pages
+behind the rack could not load a league from here, so what was driven is the
+rack over an error state. Three things a render cannot check — whether the
+10.5px of slack at 390 survives the next entry in `tools.ts`, which is the whole
+margin both the wordmark's gate and this pass's readout change are set against;
+whether three bays read as three *groups* to somebody who has not been told what
+the grouping is, rather than as a list with wider gaps; and whether the light
+bay reads as a recess on a real page, where its floor and the near-white key
+faces it holds are within a few percent of each other at their bottom stops —
+the same closeness `--billet-well-bg` already lives with one part over, and the
+one thing a contrast figure cannot answer.
 
 ### The rank is the reading, and the denominator is the config window's
 
@@ -8030,6 +8212,12 @@ a hover, so on a coarse pointer it is a composited plane per card with nothing t
 spend it on. The `<li>`'s `perspective` went with it.
 
 #### The rack's wordmark, and the short tool names
+
+**`Mgr` is gone since** — see The slack moved behind the controls, and the tray
+became a part, above, where the phone row is remeasured and `/manager` turns out
+to cost exactly what `/lineupchecker` does. The rule below is unchanged and
+`Lineups` is what still lives by it; what this section says about *`/manager`'s*
+width is the part that no longer holds.
 
 `Tool.short` is new — `Mgr` and `Lineups` — and it lives in the registry rather
 than being truncated in `ToolsMenu`, because a short name is a fact about the
