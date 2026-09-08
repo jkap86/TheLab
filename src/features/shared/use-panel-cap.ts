@@ -109,7 +109,35 @@ export function usePanelCap<T extends HTMLElement>(
   open: boolean,
   /** Whether it is closing: open for as long as the collapse takes. */
   closing: boolean,
-): { ref: RefObject<T | null>; style: CSSProperties | undefined } {
+): {
+  ref: RefObject<T | null>;
+  style: CSSProperties | undefined;
+  /**
+   * Whether the caller should render the panel's **contents**.
+   *
+   * **A closed card's expanded half must not be in the document**, and that is
+   * a budget rather than a tidiness. A `<details>` hides its body rather than
+   * unmounting it, so every card on the page was mounting a full twelve-team
+   * browser to draw nothing: measured on a hundred-card fixture, **489 nodes a
+   * card and 48,890 in the document**, against 13,090 with the closed ones
+   * empty. Every style recalculation and every layout during the open and the
+   * close walks that document, which is why the press blocked the main thread
+   * for 255ms at a hundred cards and 59ms at twenty-five — a cost that scales
+   * with the *list*, not with the card being opened, and the reason the
+   * animation ran at about six frames.
+   *
+   * The deliberate cost is that the browser's own state — the selected team,
+   * the lens, the metric column, an opened history rail — does not survive a
+   * card being closed and reopened, and that the trade card's per-league read
+   * is asked again on a second open (its route answers `private, max-age=60`,
+   * so that is usually the browser's cache rather than the database). Both are
+   * worth a document four times smaller.
+   *
+   * It stays mounted through the collapse, because the panel has to be on
+   * screen for as long as it is animating off it.
+   */
+  mounted: boolean;
+} {
   const ref = useRef<T | null>(null);
   const [fit, setFit] = useState<PanelFit | null>(null);
   /**
@@ -147,8 +175,15 @@ export function usePanelCap<T extends HTMLElement>(
       panel.getBoundingClientRect().top - card.getBoundingClientRect().top;
 
     let next: PanelFit;
-    const shell = panel.closest("[data-card-shell]");
-    if (shell instanceof HTMLElement) {
+    // **Parked is read off the stage, not off the list.** The list is marked
+    // constantly (`data-card-list`) so the stylesheet can reach it without a
+    // render; what says the shell is *standing* is the one attribute
+    // `useActiveCard` writes on the `<main>`, which is also the only thing that
+    // changes when the page parks.
+    const shell = panel.closest("[data-card-list]");
+    const parked =
+      shell?.closest("main")?.getAttribute("data-card-stage") === "parked";
+    if (parked && shell instanceof HTMLElement) {
       // `clientHeight` is the shell's content box, so it carries the plate's
       // overhang as padding — which is why that padding is subtracted here
       // rather than the constant: the shell is the one that set it, and this
@@ -188,24 +223,26 @@ export function usePanelCap<T extends HTMLElement>(
     wasOpen.current = open;
     if (!open || !panel) return;
 
-    // Read at the content's own height: `fit` is still null on the render that
-    // opened the disclosure, so nothing is capping it yet.
-    const natural = panel.getBoundingClientRect().height;
+    // `measure()` runs before paint, so the cap lands on the same frame the
+    // disclosure opened rather than a frame later — measured after paint, the
+    // panel stood at its whole content height for a frame and then snapped to
+    // the cap, which is a pop on every open.
     const next = measure();
     if (!arrived || !next) return;
 
     motion.current?.cancel();
-    const target = next.floored ? next.minHeight : Math.min(natural, next.cap);
-    const marginTop = Number.parseFloat(getComputedStyle(panel).marginTop) || 0;
+    // **The box does not move, and that is the whole of it.** Growing
+    // `max-height` re-laid the panel's own subtree on every frame — a
+    // twelve-team browser is ~490 nodes — so the unfold ran at about six
+    // frames however short its duration was. Nothing needs to watch it grow:
+    // the only thing under an opening card is the rest of the list, which is
+    // fading out and about to be `display: none`. So the panel stands at its
+    // final size from the first frame and the reveal is opacity and a short
+    // rise, which are compositor work and cannot be blocked by layout.
     const animation = panel.animate(
       [
-        { maxHeight: "0px", minHeight: "0px", marginTop: "0px", opacity: 0 },
-        {
-          maxHeight: `${Math.round(target)}px`,
-          minHeight: `${next.minHeight}px`,
-          marginTop: `${marginTop}px`,
-          opacity: 1,
-        },
+        { opacity: 0, transform: "translateY(-8px)" },
+        { opacity: 1, transform: "none" },
       ],
       { duration: prefersReducedMotion() ? 0 : EXPAND_MS, easing: EXPAND_EASE },
     );
@@ -299,7 +336,7 @@ export function usePanelCap<T extends HTMLElement>(
 
   const phase: Phase = !open ? "shut" : closing ? "collapse" : "open";
 
-  return { ref, style: styleFor(phase, fit) };
+  return { ref, style: styleFor(phase, fit), mounted: open };
 }
 
 function styleFor(phase: Phase, fit: PanelFit | null): CSSProperties | undefined {

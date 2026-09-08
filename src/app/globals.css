@@ -1314,49 +1314,36 @@ html {
  * a `:not(:has())` over a child, and spelled as a utility that is a class
  * attribute nobody can read.
  */
-[data-card-shell] > li:not(:has(> details[open])) {
-  display: none;
-}
-
 /*
- * Either side of the park, the rest of the page is on its way rather than
- * there or gone.
+ * The page while a card has the screen, in one attribute.
  *
- * `data-card-settling` is the list during the walk into place and
- * `data-card-returning` the list during the walk back; `.lab-stand-down` and
- * `.lab-stand-back` are the same two stages on the page's own header, rule and
- * pills, which are not in the list and so cannot be reached from it. The other
- * cards fade *out* during the settle, so they are already invisible when the
- * shell makes them `display: none`, and fade *in* over the return, so the
- * un-park is not a page appearing around a card. The return is an animation
- * rather than a transition because the element it runs on has just come back
- * from `display: none`, which a transition cannot start from.
+ * `data-card-stage="parked"` is written on the `<main>` by `useActiveCard` and
+ * is the only thing that moves as a card opens and closes again. It used to be
+ * a set of React props — a `data-*` on the list and a class on each piece of
+ * the page's own chrome, through four stages — which meant every step of the
+ * open and the close re-rendered a page that is one card per league. Measured
+ * on a hundred-card fixture, one such render blocked the main thread for
+ * 50-90ms and a close spent four of them, so the animation ran at about six
+ * frames. Written here, a stage change costs no render at all.
  *
- * The durations are `STAND_DOWN_MS` and `STAND_BACK_MS` in `panel-cap.ts`, and
- * the two spellings have to agree: the hook clears the returning stage on its
- * own clock, and a fade still running when the attribute goes would cut.
+ * The list carries a constant `data-card-list` and the page's header, rule and
+ * pills a constant `lab-card-chrome`, so neither element changes as the stage
+ * does. Which card survives is still read from the disclosure that is actually
+ * open, so there is no second per-card attribute to keep in step with it — and,
+ * on a board that appends a hundred trade cards at a time, no prop change that
+ * would drop `TradeCard`'s memo for every row rather than for the two that
+ * moved.
  *
- * Under reduced motion none of this applies — the settle is instant there, so
- * the cards go straight to `display: none` and straight back, which is the
- * behaviour the preference asks for.
+ * **The rest of the page goes at once rather than fading**, which is a budget
+ * as much as a decision: a fade has to keep a hundred cards laid out and
+ * composited for the length of it, which is the per-device cost the league
+ * card's own `pointer-fine:` gate exists to refuse. What carries the moment
+ * instead is the card itself, which flies from where it was pressed to the line
+ * it parks on — see `FLIGHT_MS`.
  */
-@media (prefers-reduced-motion: no-preference) {
-  [data-card-settling] > li:not(:has(> details[open])),
-  .lab-stand-down {
-    opacity: 0;
-    transition: opacity 240ms ease-out;
-  }
-
-  [data-card-returning] > li:not(:has(> details[open])),
-  .lab-stand-back {
-    animation: stand-back 360ms ease-out both;
-  }
-}
-
-@keyframes stand-back {
-  from {
-    opacity: 0;
-  }
+[data-card-stage="parked"] [data-card-list] > li:not(:has(> details[open])),
+[data-card-stage="parked"] .lab-card-chrome {
+  display: none;
 }
 
 /*

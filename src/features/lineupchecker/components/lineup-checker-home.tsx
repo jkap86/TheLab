@@ -468,7 +468,7 @@ function Checker({
           key that used to stand at its far end is on the plate now, beside the
           key that set the filter in the first place. */}
       <div
-        className={`relative my-6 flex-wrap items-center gap-3 sm:my-9 ${card.parked ? "hidden" : `hidden sm:flex ${card.chromeClass}`}`}
+        className={`relative my-6 hidden flex-wrap items-center gap-3 sm:my-9 sm:flex ${card.chromeClass}`}
       >
         <WeekStepper week={check?.week ?? null} onChange={onWeek} />
         <div

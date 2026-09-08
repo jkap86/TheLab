@@ -132,10 +132,11 @@ export const LineupCheckCard = memo(function LineupCheckCard({
   // its own. This is a measurement of the box below and nothing else; see
   // `usePanelCap`, which is a hook rather than a wrapper component precisely so
   // this half can keep its own inset.
-  const { ref: panelRef, style: panelStyle } = usePanelCap<HTMLDivElement>(
-    open,
-    open && !lit,
-  );
+  const {
+    ref: panelRef,
+    style: panelStyle,
+    mounted: panelMounted,
+  } = usePanelCap<HTMLDivElement>(open, open && !lit);
 
   const gap = gapCell(entry);
   const kickoff = kickoffCell(entry);
@@ -265,6 +266,12 @@ export const LineupCheckCard = memo(function LineupCheckCard({
           // would be a number nothing obeyed.
           className={`${CONSOLE_HOUSING_INSET} lab-scroll-glass mt-3 min-h-0 overflow-y-auto px-3 pb-3 pt-3.5 font-mono sm:px-[1.125rem] sm:pb-[1.125rem] sm:pt-4`}
         >
+          {/* **Nothing is rendered while the card is shut**, which is the same
+              bound `ExpandedPanel` takes one tool over — see `usePanelCap`'s
+              `mounted`. Two full lineups per card times a hundred cards is a
+              document nothing can lay out at speed. */}
+          {!panelMounted ? null : (
+          <>
           {/* Above the panes rather than in the summary: a `<summary>` is a
               leaf button to assistive technology, so a control nested in one is
               unreliably reachable and a live region inside it is swallowed into
@@ -293,6 +300,8 @@ export const LineupCheckCard = memo(function LineupCheckCard({
             <p className="relative m-0 font-mono text-[length:var(--fs-11)] uppercase tracking-[0.16em] text-readout-label">
               No lineup read for this league this week
             </p>
+          )}
+          </>
           )}
         </div>
       </details>

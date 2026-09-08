@@ -9319,6 +9319,126 @@ the radius off the element rather than spelling it — and a real 113-league
 page, where what a fixture cannot say is whether a one-off opacity transition
 on a hundred `<li>`s is inside a phone's budget.
 
+### The animation was a document problem, not a curve
+
+The pass above made the open and the close continuous and they still stuttered,
+because everything it measured was measured on a **six-card fixture**. On a
+hundred — the shape of a real account — the numbers are different in kind:
+
+| | before | after |
+|---|---|---|
+| document nodes | 48,890 | 12,980 |
+| open, main thread blocked | 255ms, in bursts *through* the motion | 69ms, one burst before it |
+| close, main thread blocked | 402ms | 217ms, all of it after the collapse |
+
+**The cost scaled with the *list*, not with the card being opened** — 0ms at
+four cards, 59ms at twenty-five, 255ms at a hundred — which is what said the
+problem was never the animation. Nothing on the wire moved for any of this: no
+route, no query, no contract type, no payload field, no migration.
+
+**A closed card was mounting its whole expanded half.** A `<details>` hides its
+body rather than unmounting it, so every card on `/manager` mounted a full
+twelve-team browser to draw nothing: **489 nodes a card, 48,890 in the
+document.** Every style recalculation and every layout during the open and the
+close walked all of it. `usePanelCap` answers `mounted` now and all three cards
+gate their contents on it. The deliberate cost is that the browser's own state —
+selected team, lens, metric column, an open history rail — does not survive a
+card being closed and reopened, and that the trade card asks its per-league read
+again on a second open (its route answers `private, max-age=60`, so usually from
+the browser's cache). Both are worth a document a quarter the size.
+
+**The stage was React state, so every step of it re-rendered the page.** A page
+is one card per league, and one such render blocked for 50–90ms; a close spent
+four. `settling`/`parked`/`returning` are one attribute on the `<main>` now
+(`data-card-stage`), written imperatively, with a constant `data-card-list` on
+the list and a constant `lab-card-chrome` on the page's header, rule and pills.
+The stylesheet does the rest and a stage change costs no render at all — which
+is the argument the scroll lock and the shell's box were already DOM writes by.
+`active` and `closing` are the only state left, and they are the two things that
+genuinely change what React renders.
+
+**Neither animation moves a box.** The unfold grew `max-height` from nothing,
+which re-laid the panel's own ~490 nodes every frame — driven, it managed six
+distinct heights across its whole duration. Nothing needs to watch it grow: the
+only thing under an opening card is the rest of the list, which the park has
+already taken off the screen. The panel stands at its final size from the first
+frame and both directions are opacity, a small rise and a clip.
+
+**The park happens on the press, and the card flies.** The page used to be
+scrolled to the card over ~340ms and the list stood down at the end of it, which
+put the list's own layout *inside* the animation — 139ms landing at +283ms and
++361ms of a 340ms walk. The park is one discrete layout and cannot be made
+cheap, so it is spent in the commit that opens the card, and what moves
+afterwards is a `translateY` on the one card, from where it was pressed to where
+it now stands. Compositor work, which no amount of list can block. `walkTo`,
+`scrollEase`, `PARK_SETTLE_MS`, the settle window and the bottom-slack lending
+all went with it.
+
+**Closing moves nothing at all, and that is the only way that direction can be
+smooth.** The page has to come *back* — a hundred cards laid out and painted
+again is 217ms — so any motion started into that spends itself inside it;
+driven, a return flight hung for 333ms and then slid. So the page is scrolled to
+whatever leaves the card on the line it is already standing on, and the list
+grows back around it. The reader ends on the card they were reading rather than
+the row they pressed, which is the same place seen from the list rather than
+from the screen. Only a card too near the top of the document for that scroll to
+be reachable moves at all, by less than the park's own offset, and that is what
+the flight is kept for.
+
+**Two bugs fell out of driving it**, both of the same shape — reading a rect at a
+moment the element is not rendered. The return looked its card up by `seen`,
+which the URL clears the moment a close begins (a press writes it away; the
+browser's own Back delivers `popstate` about 220ms later), so it found nothing
+and the card jumped. And once it found one, `getBoundingClientRect()` on it
+answered four zeroes, because by then the card's disclosure is shut and the
+parked rule has taken it off the page — which put every close 81px out. Both are
+read in the collapse's own effect now, the one place every kind of close passes
+through and the last moment the card is still on screen.
+
+**The shell's scroller is the flight's to grant.** A scroll container clips a
+translated child and a card starts its flight offset by however far it has to
+travel, so the list runs `visible` until the flight lands. `panelFit`'s floor is
+the only case that ever needs to scroll, and it needs it after the motion.
+
+#### Verified
+
+Driven over CDP against a **production** build served from `.next` by a
+twenty-line file server, since `next start` refuses to boot without
+`DATABASE_URL` — the dev server double-renders every component and inflates
+exactly the numbers this pass is about. A hundred-card fixture page mounting the
+real `LeagueCard`, `LineupCheckCard`, `useActiveCard` and `PageShell`, then
+deleted. Long tasks came from a `PerformanceObserver` injected with
+`Page.addScriptToEvaluateOnNewDocument`, since a patch applied after load does
+not survive the reload.
+
+The measurements are the table above. The card's own travel was sampled per
+frame: opening from a scroll of 6,000 it moves 3820 → 3032 → 2348 → … → 81 over
+~390ms in eighteen distinct positions, with one 88ms burst at +2ms and nothing
+after it. Closing, it reads **81 at every sample** — it does not move — and the
+page lands at a scroll that leaves it there.
+
+Every behaviour holds: at rest no stage and no panel content mounted; open parks
+with one card visible, the page locked, `?league=` naming it and the panel
+mounted; close restores all hundred cards, unlocks and unmounts; Escape closes;
+the browser's Back closes and Forward re-opens; switching cards keeps exactly one
+parked; a close 80ms into an open ends at rest; a deeplink parks without a press
+and closes cleanly. The lineup checker's own gate was driven separately — its
+panel is empty while shut and carries its sync key and its empty-state line when
+open. Under `prefers-reduced-motion: reduce` every animation is created at zero
+duration and the card still parks and returns. At 1280 and 390,
+`documentElement.scrollWidth <= clientWidth` with **zero unclipped** elements
+past the viewport (the 200 that are past it are the cards' own graticule and
+glow spans, inside the wrapper that clips them) and exactly one `<h1>`.
+
+1,803 unit tests pass; `lint`, `typecheck` and `build` are clean.
+
+**Not verified against real data**, which is the gap to close first: the fixture
+is a hundred invented leagues with one twelve-team entry shared between them. Two
+things it cannot check — what the open's single burst actually costs on a 113-league
+account whose panels hold real solves, and whether unmounting a closed card's
+browser is felt as losing the selected team on a card a reader opens, closes and
+opens again.
+
 ## The identity plate became a billet, and the win rate the hero
 
 `/manager`'s header was the one object on the page not made of metal. Every

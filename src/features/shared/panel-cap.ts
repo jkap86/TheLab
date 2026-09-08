@@ -52,65 +52,38 @@ export const RACK_BREATH = 6;
 export const SHELL_BREATH = 16;
 
 /**
- * The smooth scroll's own settle: how long after a press the list stands down.
+ * The card's flight: how long it takes to reach the park line, and to come
+ * back.
  *
- * It is a wait rather than a `scrollend` listener because the scroll may have
- * nowhere to go — a card already at the offset gets no scroll and therefore no
- * event — and a park that never happened is worse than one that happened a
- * frame early.
+ * **It is a transform on one card, not a scroll of the page.** The page used to
+ * be walked to the card over this time and the list stood down at the end of
+ * it, which put the list's own layout — hiding a hundred cards, then showing
+ * them again — *inside* the animation. Measured on a hundred-card fixture:
+ * 139ms of blocked main thread landing at +283ms and +361ms of a 340ms walk,
+ * and the same again on the way back, so the motion ran at about six frames.
+ * The park is one discrete layout and cannot be made cheap, so it happens once,
+ * on the press, and the card is flown from where it was to where it now is —
+ * compositor work, which no amount of list is able to block.
  */
-export const PARK_SETTLE_MS = 340;
+export const FLIGHT_MS = 340;
+export const FLIGHT_EASE = "cubic-bezier(0.22, 1, 0.36, 1)";
 
 /**
- * The panel's unfold on open, and its collapse on close.
+ * The panel's reveal on open, and its collapse on close.
  *
- * **The two are different animations and not one reversed**, and the reason is
- * what each has to move. The unfold grows the panel's *box* — the cards under
- * it slide down as it takes its room, and the opacity ramp hides the first few
- * frames, in which a housing forty pixels tall is laying out a rail, two ledges
- * and a pair of pinned bars on top of each other. The collapse moves no box at
- * all: the panel keeps its laid-out height and a clip sweeps its bottom edge up
- * under the summary while it fades, which runs on the compositor and never
- * re-solves the two panes. A max-height fold re-laid a twelve-team table on
- * every frame and the pinned bars rode its edge up; measured, that was the
- * roughness a reader saw as the collapse rather than the cut after it.
- *
- * Both are a little longer than the 260ms the collapse used to run: a panel
- * most of a screen tall folding in a quarter of a second reads as vanishing.
+ * **Neither moves a box, and that is what makes them smooth.** The unfold used
+ * to grow `max-height` from nothing, which re-laid the panel's own subtree — a
+ * twelve-team browser is ~490 nodes — on every frame, so it ran at about six
+ * frames however short its duration was. Nothing needs to watch it grow: the
+ * only thing under an opening card is the rest of the list, and the park has
+ * already taken that off the screen. So the panel stands at its final size from
+ * its first frame, and both directions are opacity, a small rise and a clip —
+ * all of which the compositor owns.
  */
-export const EXPAND_MS = 320;
+export const EXPAND_MS = 260;
 export const EXPAND_EASE = "cubic-bezier(0.2, 0.8, 0.2, 1)";
-export const COLLAPSE_MS = 300;
+export const COLLAPSE_MS = 240;
 export const COLLAPSE_EASE = "cubic-bezier(0.4, 0, 0.2, 1)";
-
-/**
- * How long the rest of the page takes to stand down around a card, and to come
- * back around it.
- *
- * The stand-down runs inside the settle, so it is shorter than `PARK_SETTLE_MS`
- * by a margin: the other cards and the header are already gone when the list
- * becomes the shell and they go `display: none`, which is what turns that cut
- * into nothing a reader can see. The return runs over the walk back to where
- * the reader pressed, and is the same length as it.
- */
-export const STAND_DOWN_MS = 240;
-export const STAND_BACK_MS = 360;
-
-/**
- * The scroll's own curve, for the walk into place and the walk back.
- *
- * A function rather than `behavior: "smooth"`, and the difference is a bug that
- * has no symptom: the browser clamps a smooth scroll's destination to the
- * document *as it stands when the call is made*. On a press the panel is still
- * unfolding, so a card near the foot of the page asks for a line the document
- * cannot yet reach, the scroll stops short, and the park then snaps the card
- * the rest of the way. Driven a frame at a time against a destination re-read
- * each frame, the walk lands where the card actually is.
- */
-export function scrollEase(progress: number): number {
-  const p = Math.min(1, Math.max(0, progress));
-  return p < 0.5 ? 4 * p * p * p : 1 - Math.pow(-2 * p + 2, 3) / 2;
-}
 
 /**
  * The floor: **what the panel's own parts need, not a round number.** The
