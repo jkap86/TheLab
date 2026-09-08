@@ -1,5 +1,6 @@
 export { runMigrations } from "./migrate";
-export { pool } from "./pool";
+export { pool, poolStats } from "./pool";
+export type { PoolStats } from "./pool";
 export { dbSsl, resolveSslMode, caCertificate, SSL_MODES } from "./ssl";
 export type { SslMode, SslEnv } from "./ssl";
 export { resolveDatabaseUrl, DATABASE_URL_ENV } from "./config";

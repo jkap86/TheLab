@@ -48,6 +48,8 @@ database fails until it is set (in production a missing one is fatal instead).
 | `npm run comps:load-corpus` | Load historical player-seasons for `/comps` (see below) |
 | `npm run migrate:up` / `migrate:down` | Apply or roll back one migration |
 | `npm run migrate:create <name>` | New SQL migration in `db/migrations` |
+| `npm run verify:manager-scope` | The manager scope end to end against a throwaway Postgres (needs `DATABASE_URL` and `ALLOW_DESTRUCTIVE=1`) |
+| `npm run verify:crawl-pressure` | The crawler's resource guard end to end against a throwaway Postgres — same two variables. Checks the thing a unit test cannot: that a tick which stands down mid-batch leaves the leagues it never reached unclaimed |
 
 If `npm run typecheck` fails on a file under `.next/types/`, the generated route
 validator is stale rather than the code being wrong — `rm -rf .next` and run it
@@ -64,6 +66,15 @@ matters for anything that reads the database; the rest are optional.
 | `DATABASE_SSL_MODE` | `disable` for localhost, else `verify-full` | `disable`, `verify-full`, or `insecure-require` (TLS without verifying the certificate). Pair `verify-full` against a managed provider with `DATABASE_CA_CERT`. |
 | `DATABASE_POOL_MAX` | `10` | Connections one process may hold. |
 | `MANAGER_SYNC_LIMIT` | `3` | Manager syncs one process runs at once. It *requests* a bound and cannot raise one — clamped to a third of the pool, because a sync holds an advisory-lock session across its whole Sleeper fan-out. |
+| `CRAWLER_MEMORY_GUARD_ENABLED` | on | `false`/`off` restores the league crawler's unguarded behaviour exactly. On, the crawler reads its own RSS before every tick and between every batch and stands down as memory rises — wherever it runs, so under `APP_PROCESS_ROLE=all` it is yielding to the request handlers beside it and on a `worker` it is bounding that process — see The crawler's resource guard in CLAUDE.md. Anything that is not a recognised on/off word leaves it **on** and says so once. |
+| `CRAWLER_MEMORY_NORMAL_MB` | `300` (`900` in development) | RSS below which the crawler runs at full width. |
+| `CRAWLER_MEMORY_THROTTLE_MB` | `350` (`1050`) | RSS at which it drops to its minimum width and stops discovering new leagues. |
+| `CRAWLER_MEMORY_STOP_MB` | `400` (`1200`) | RSS at which it admits no new league work at all. Sized for a 512 MB Heroku Basic dyno; development gets three times the headroom because `next dev` sits past the production numbers doing nothing. |
+| `CRAWLER_MEMORY_RESUME_MB` | `340` (`1020`) | RSS a crawler that stood down must fall back below before it works again — the hysteresis that stops it oscillating around the stop threshold. Must be below `CRAWLER_MEMORY_STOP_MB`; a set that is not ordered (`resume < stop`, `normal <= throttle < stop`) is discarded whole for the defaults, with one warning. |
+| `CRAWLER_MEMORY_NORMAL_CONCURRENCY` | `CRAWL_CONCURRENCY` (4) | Leagues the crawler syncs at once at full width. Clamped downward only. |
+| `CRAWLER_MEMORY_THROTTLED_CONCURRENCY` | half the above (2) | Width under moderate pressure. |
+| `CRAWLER_MEMORY_HIGH_CONCURRENCY` | `1` | Width under high pressure. |
+| `CRAWLER_MEMORY_FAKE_RSS_MB` | unset | **Development only** — a fake RSS reading, so the pressure levels can be driven without exhausting a machine's memory. Ignored in production, where the real reading is the only honest one. |
 | `NFL_SEASON_OVERRIDE` | unset | Forces the active season. Read fresh on every call, so it takes effect on a running process. Overrides Sleeper's `state/nfl`. |
 | `SLEEPER_MAX_CONCURRENCY` | `24` | Ceiling on how many requests one process may have open to Sleeper at once. The knob to reach for on a 429, and the one to lower before touching any per-caller number — it is the only bound that applies to the process rather than to one call site. |
 | `COMPS_CORPUS_LOAD` | on | Set to `off` to stop the app loading the comps corpus on boot. The loop checks daily and loads only the seasons `player_seasons` is missing, so an ordinary boot fetches nothing; turn it off to keep the corpus entirely under `npm run comps:load-corpus`. |

@@ -49,6 +49,11 @@ const globalForPool = globalThis as unknown as { pgPool?: Pool };
  * `pool.connect()` that queued past {@link CONNECTION_TIMEOUT_MS} surfaced in
  * the sync as a *league* failure and on the page as staleness, naming the pool
  * nowhere. Move this number and those four move with it.
+ *
+ * The crawler's resource guard can narrow its share of that budget and never
+ * widen it — see `shared/manager/crawl-pressure`, which reads {@link poolStats}
+ * as a secondary signal and hands width back when interactive traffic is queued
+ * here — so the arithmetic above stays the ceiling it always was.
  */
 const DEFAULT_POOL_MAX = 10;
 
@@ -130,3 +135,37 @@ function createPool(): Pool {
 }
 
 export const pool: Pool = (globalForPool.pgPool ??= createPool());
+
+/**
+ * The pool's own counters, as a background workload reads them.
+ *
+ * `pg` publishes these already; what this adds is one reading site and a name
+ * for what they are for. The league crawler asks between batches so it can hand
+ * width back to interactive traffic that is queueing for a connection — see
+ * `shared/manager/crawl-pressure`, where `waiting > 0` is the direct evidence
+ * that somebody is already paying for the crawler's share of the pool.
+ *
+ * Synchronous, allocation-cheap and taking nothing: it reads counters rather
+ * than connecting, so asking costs no connection and reserves none. A guard that
+ * held a connection back to prove the pool was healthy would be spending the
+ * thing it is trying to protect.
+ */
+export type PoolStats = {
+  /** Connections open, idle and busy together. */
+  total: number;
+  /** Of those, how many are checked in. */
+  idle: number;
+  /** Callers queued for one — the number that means contention. */
+  waiting: number;
+  /** The ceiling this process was configured with. */
+  max: number;
+};
+
+export function poolStats(): PoolStats {
+  return {
+    total: pool.totalCount,
+    idle: pool.idleCount,
+    waiting: pool.waitingCount,
+    max: pool.options.max,
+  };
+}

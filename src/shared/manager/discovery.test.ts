@@ -5,6 +5,7 @@ import {
   remainingDue,
   selectDiscoveryLeagues,
   stampableManagers,
+  unrecordedDiscoveries,
   unrecordedFailures,
 } from "./discovery.ts";
 
@@ -233,4 +234,59 @@ test("remainingDue retires both refreshed and tombstoned leagues", () => {
   assert.equal(remainingDue(20, 5, 3), 12); // mixed
   assert.equal(remainingDue(20, 0, 0), 20); // failures stay due
   assert.equal(remainingDue(2, 5, 5), 0); // never negative
+});
+
+
+/*
+ * What a tick that stood down for resource pressure must not do.
+ *
+ * A league the crawler never started is neither loaded nor failed, so to
+ * `stampableManagers` it is indistinguishable from a success — which would stamp
+ * the manager who was waiting on it, suppress them for `CRAWL_MANAGER_TTL_MS`,
+ * and leave the league unknown to everybody until some other member of it
+ * happened to come up. That is the difference between deferring discovery work
+ * and losing it, and it is silent: the summary line reports a healthy tick.
+ */
+test("a league the tick never started holds its managers exactly as a failure does", () => {
+  const selection = selectDiscoveryLeagues(
+    ["u1", "u2"],
+    enumerated({ u1: ["a"], u2: ["b"] }),
+    new Set(),
+    10,
+  );
+
+  // Nothing failed and nothing was recorded — `b` was simply never admitted.
+  const blocked = unrecordedDiscoveries([], new Set(), ["b"]);
+  assert.deepEqual(blocked, new Set(["b"]));
+  assert.deepEqual(stampableManagers(selection, blocked), ["u1"]);
+});
+
+test("unattempted leagues compose with unrecorded failures rather than replacing them", () => {
+  const blocked = unrecordedDiscoveries(["a", "b"], new Set(["b"]), ["c"]);
+  assert.deepEqual(blocked, new Set(["a", "c"]));
+});
+
+test("no unattempted leagues is the pre-guard behaviour, unchanged", () => {
+  assert.deepEqual(
+    unrecordedDiscoveries(["a", "b"], new Set(["b"]), []),
+    unrecordedFailures(["a", "b"], new Set(["b"])),
+  );
+});
+
+test("an unattempted league is not double-counted when it also failed", () => {
+  // It cannot be both in practice — a league that failed was started — but the
+  // set must be a set either way, so the manager is held once and released once.
+  assert.deepEqual(unrecordedDiscoveries(["a"], new Set(), ["a"]), new Set(["a"]));
+});
+
+test("the deferred league comes straight back on the next tick", () => {
+  // The manager was not stamped, so `pendingManagers` returns them again — and
+  // nothing was written for the league, so it is still unknown and still theirs
+  // to select. That is the whole "deferred, never lost" claim.
+  const first = selectDiscoveryLeagues(["u1"], enumerated({ u1: ["x"] }), new Set(), 10);
+  assert.deepEqual(stampableManagers(first, unrecordedDiscoveries([], new Set(), ["x"])), []);
+
+  const second = selectDiscoveryLeagues(["u1"], enumerated({ u1: ["x"] }), new Set(), 10);
+  assert.deepEqual(second.leagues.map((l) => l.league_id), ["x"]);
+  assert.deepEqual(stampableManagers(second, unrecordedDiscoveries([], new Set(["x"]), [])), ["u1"]);
 });
