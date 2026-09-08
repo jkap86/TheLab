@@ -11,6 +11,7 @@ import {
   CONSOLE_METAL_TRACK_SM,
   LeagueFiltersDialog,
   LineupColumnsDialog,
+  slotsInHand,
   ManagerBillet,
   matchesFilters,
   matchesSubjects,
@@ -209,6 +210,22 @@ export function LeaguesHome({
   const leagueFiltered = useMemo(
     () => leagues.filter((league) => matchesFilters(league, filters)),
     [leagues, filters],
+  );
+  /**
+   * The starting seats this account's leagues actually run — the columns
+   * picker's Slot vocabulary.
+   *
+   * **The unfiltered list, deliberately.** A column is a device preference that
+   * outlives any narrowing — the same four bays answer every card on the page —
+   * so a vocabulary that moved with the Filters dialog would take keys off a
+   * track for a reason the panel cannot state, and a reader who had narrowed to
+   * redraft would find the superflex seat they were comparing had gone. It is
+   * the same population `cold` and the `useManagerLineups` gate read, and for
+   * the same kind of reason.
+   */
+  const seatsInHand = useMemo(
+    () => slotsInHand(leagues.map((league) => league.roster_positions)),
+    [leagues],
   );
   // The two populations this page can answer a subject from, behind the
   // resolver `matchesSubjects` takes. The two kinds it does *not* answer for —
@@ -457,6 +474,7 @@ export function LeaguesHome({
             <LineupColumnsDialog
               columns={columns}
               ktc={lineups?.ktc ?? []}
+              slots={seatsInHand}
               triggerClassName={CONSOLE_KEY}
             />
           </div>

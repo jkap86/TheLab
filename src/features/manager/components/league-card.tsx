@@ -23,6 +23,7 @@ import {
   ordinal,
   ordinalParts,
   positionsLabel,
+  slotsLabel,
   qbBoardWord,
   Scanlines,
   StandingBay,
@@ -711,9 +712,11 @@ function RankWindow({
  * knows its own league. A second spelling of either rule is a label naming a
  * board the figure under it was not read on.
  *
- * The second half is `positionsLabel`, slash-joined and never in press order,
- * which is the same string the picker's bay prints — one spelling, so the
- * control and the tile cannot describe one column two ways.
+ * The second half is the narrowing, `slotsLabel` then `positionsLabel`, both
+ * slash-joined and never in press order — the same strings the picker's bay
+ * prints, so the control and the tile cannot describe one column two ways. The
+ * seats come first because they come first in the reading: a slot picks which
+ * starting seats are counted and a position picks who, in them, is counted.
  *
  * **They do not both fit on a phone, and which one goes is the whole of why
  * this returns a pair.** At 390 the label box is 65px and this line runs at
@@ -721,17 +724,19 @@ function RankWindow({
  * sixteen and `Dyn·SF · QB/TE` fourteen. Truncated, what a reader loses is the
  * *tail* — the narrowing, which is both the newer fact and the one that most
  * changes the figure under it, where the scope is at least implied by the unit
- * above. So a narrowed column keeps its positions alone below `sm` and the
+ * above. So a narrowed column keeps its narrowing alone below `sm` and the
  * whole line from `sm` up, where the box is ~225px and sixteen characters is
- * comfortable. An un-narrowed column is unchanged at every width, which is
+ * comfortable. A column narrowed both ways can still outrun a phone —
+ * `FLEX/SF · WR` is twelve — and truncates there, which is the same trade one
+ * clause deeper rather than a new one. An un-narrowed column is unchanged at every width, which is
  * every column any existing reader holds.
  */
 function tileScope(
   column: LineupColumn,
   league: ManagerLeague,
 ): { wide: string; phone: string } {
-  const scope = LINEUP_METRIC_LABELS[column.metric].scope;
-  const setting = isKtcMetric(column.metric)
+  const ktc = isKtcMetric(column.metric);
+  const board = ktc
     ? ktcBoardLabel(
         // `leagueType` rather than a read of `settings.type`, on that helper's
         // own terms: Sleeper omits the field on a standard redraft league, and a
@@ -751,13 +756,35 @@ function tileScope(
       // byte-identical to the one it always drew, and the board appears exactly
       // when it is the thing telling two capital tiles apart.
       column.lineup === "auto"
-      ? scope
-      : `${scope}·${qbBoardWord(column.lineup === "sf")}`;
+      ? ""
+      : qbBoardWord(column.lineup === "sf");
+
+  // **The seats replace the scope word rather than following it**: `FLEX/SF`
+  // already says these are starting seats, where `Starters · FLEX/SF` spends a
+  // third of a 65px line saying it twice. A KeepTradeCut tile has no scope word
+  // to replace — its line is the board pair — so the seats join it spaced, and
+  // a forced capital board joins tight, which is the same distinction this line
+  // already draws between a reading and a narrowing about it.
+  const seats = slotsLabel(column.slots);
+  const counted = seats || LINEUP_METRIC_LABELS[column.metric].scope;
+  const head = ktc
+    ? seats
+      ? `${board} · ${seats}`
+      : board
+    : board
+      ? `${counted}·${board}`
+      : counted;
+
   const narrowed = positionsLabel(column.positions);
-  if (!narrowed) return { wide: setting, phone: setting };
+  // The narrowing alone, seats then the players in them — the half a phone
+  // keeps. It is one string here and in the wide arm, so the two cannot come to
+  // join the two axes differently.
+  const narrowing =
+    seats && narrowed ? `${seats} · ${narrowed}` : seats || narrowed;
+  if (!narrowed) return { wide: head, phone: narrowing || head };
   return {
-    wide: setting ? `${setting} · ${narrowed}` : narrowed,
-    phone: narrowed,
+    wide: head ? `${head} · ${narrowed}` : narrowed,
+    phone: narrowing,
   };
 }
 

@@ -17,13 +17,20 @@ import {
   LINEUP_METRIC_LABELS,
   LINEUP_POSITION_LABELS,
   LINEUP_POSITIONS,
+  LINEUP_SLOT_GROUPS,
+  LINEUP_SLOT_LABELS,
+  LINEUP_SLOTS,
   MAX_LINEUP_COLUMNS,
   metricAt,
   metricAxes,
+  narrowingClause,
   normalizeLineupColumns,
   positionGapReason,
   positionsClause,
   positionsLabel,
+  slotGapReason,
+  slotsInHand,
+  slotsLabel,
 } from "./lineup-columns.ts";
 import {
   isKtcMetric,
@@ -505,5 +512,127 @@ describe("the value × scope grid", () => {
     // that *can* answer it.
     assert.equal(cellGapReason("projection", "all"), null);
     assert.match(cellGapReason("capital", "picks")!, /KeepTradeCut/);
+  });
+});
+
+describe("the slot axis", () => {
+  test("only a starters column can carry a seat", () => {
+    // A seat is a thing only a starting lineup has: a bench player occupies
+    // none, a whole-roster total spans both halves, and a pick is not a player.
+    // Forced in the one constructor, so a press and a stored value cannot
+    // disagree — and so `lineupColumnKey` can fold the axis out of every column
+    // that cannot read it.
+    assert.deepEqual(
+      column("ros_starters", "auto", "auto", [], ["FLEX"]).slots,
+      ["FLEX"],
+    );
+    assert.deepEqual(
+      column("capital_starters", "auto", "auto", [], ["FLEX"]).slots,
+      ["FLEX"],
+    );
+    assert.deepEqual(
+      column("ktc_starters", "auto", "auto", [], ["FLEX"]).slots,
+      ["FLEX"],
+    );
+    for (const metric of LINEUP_METRIC_IDS) {
+      if (metricAxes(metric).scope === "starters") continue;
+      assert.deepEqual(
+        column(metric, "auto", "auto", [], ["FLEX"]).slots,
+        [],
+        `${metric} counts no seats`,
+      );
+    }
+  });
+
+  test("a stored value that predates the axis reads as no narrowing", () => {
+    // The same legacy read one axis over: slots did not exist when it was
+    // written, and "every seat" is what the page was doing anyway.
+    const [first] = normalizeLineupColumns([{ metric: "ros_starters" }]);
+    assert.deepEqual(first.slots, []);
+  });
+
+  test("a hand-edited seat on a bench column cannot become a second copy", () => {
+    // Without the forcing this stores as two columns whose keys differ, one of
+    // them ranked on a narrowing that counts nobody.
+    const stored = normalizeLineupColumns([
+      { metric: "ros_bench" },
+      { metric: "ros_bench", slots: ["FLEX"] },
+    ]);
+    assert.equal(stored.filter((c) => c.metric === "ros_bench").length, 1);
+  });
+
+  test("the set is sorted and validated through the one constructor", () => {
+    assert.deepEqual(
+      column("ros_starters", "auto", "auto", [], ["SUPER_FLEX", "QB", "BN" as never])
+        .slots,
+      ["QB", "SUPER_FLEX"],
+    );
+  });
+
+  test("the axis is in force on the starters scope alone", () => {
+    assert.equal(slotGapReason("starters"), null);
+    for (const scope of ["bench", "all", "picks"] as const) {
+      assert.equal(
+        slotGapReason(scope),
+        "Only a starters column counts slots",
+        `${scope} counts no seats`,
+      );
+    }
+  });
+
+  test("every slot has a key label and a run to sit in", () => {
+    // Two exhaustive `Record`s over the union, so a slot the solver learns has
+    // to be named and placed before this compiles — the assertion is that the
+    // ordered list and the two agree about the same fourteen.
+    for (const slot of LINEUP_SLOTS) {
+      assert.ok(LINEUP_SLOT_LABELS[slot], `${slot} has no key label`);
+      assert.ok(LINEUP_SLOT_GROUPS[slot], `${slot} sits in no run`);
+    }
+    assert.equal(LINEUP_SLOT_LABELS.SUPER_FLEX, "SF");
+  });
+});
+
+describe("slotsInHand", () => {
+  test("offers the seats this account's leagues actually start", () => {
+    // A key for a seat no league starts is a narrowing that could never seat
+    // anybody, which is the rule the position axis's own list lives by.
+    assert.deepEqual(
+      slotsInHand([["QB", "RB", "SUPER_FLEX", "BN"], ["QB", "FLEX", "BN"], null]),
+      ["QB", "RB", "FLEX", "SUPER_FLEX"],
+    );
+  });
+});
+
+describe("slotsLabel and narrowingClause", () => {
+  test("the label is slash-joined and tight, the tile's own line", () => {
+    assert.equal(slotsLabel([]), "");
+    assert.equal(slotsLabel(["FLEX", "SUPER_FLEX"]), "FLEX/SF");
+  });
+
+  test("the two narrowings are one clause, because they are one intersection", () => {
+    // Two sentences would read as two independent filters a reader has to
+    // multiply out; what this says is that the seats are picked first and the
+    // players in them second.
+    assert.equal(
+      narrowingClause(["FLEX", "SUPER_FLEX"], ["WR"]),
+      " In the FLEX and superflex seats, WR only.",
+    );
+  });
+
+  test("the seat is singular where one is lit", () => {
+    assert.equal(
+      narrowingClause(["SUPER_FLEX"], []),
+      " In the superflex seat only.",
+    );
+    assert.equal(
+      narrowingClause(["FLEX", "SUPER_FLEX"], []),
+      " In the FLEX and superflex seats only.",
+    );
+  });
+
+  test("with no seat it is the position clause verbatim", () => {
+    // One spelling, so the window cannot word an un-narrowed column two ways.
+    assert.equal(narrowingClause([], ["QB", "TE"]), positionsClause(["QB", "TE"]));
+    assert.equal(narrowingClause([], []), "");
   });
 });

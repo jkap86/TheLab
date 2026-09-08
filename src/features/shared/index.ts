@@ -80,6 +80,8 @@ export {
   MAX_LINEUP_COLUMNS,
   positionsLabel,
   qbBoardWord,
+  slotsInHand,
+  slotsLabel,
   storeLineupColumns,
   useLineupColumns,
 } from "./lineup-columns";

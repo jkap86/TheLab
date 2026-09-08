@@ -23,6 +23,7 @@ export {
   type LeagueLineup,
   type LineupMetricId,
   type LineupPosition,
+  type LineupSlot,
   type MetricRank,
   type LineupRanks,
   type ColumnRanks,
