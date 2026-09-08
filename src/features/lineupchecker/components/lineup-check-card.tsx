@@ -541,10 +541,11 @@ function MetricTile({
   // is being handed — so they are struck the same way, in the red the page
   // reads as "this tile is saying something"; `clear` is the mark, and `none`
   // is the em dash. The union stays four-way regardless, because
-  // `needsAttention` and `attentionByReason` read `alert` alone: an open
-  // roster spot still sends nobody to a league that is in good order, which is
-  // the whole reason `count` exists and is a question about the header rather
-  // than about this tile's ink.
+  // `needsAttention` and `attentionByReason` read `alert` alone, which is a
+  // question about the header rather than about this tile's ink. (An open
+  // roster spot is an alert now — see `rosterCell` — so nothing answers `count`
+  // today; the tone is kept for the next figure that is a reading rather than
+  // a fault.)
   const figure =
     cell.state === "none"
       ? // No answer at all: the muted ink, flat, and no extrusion — a struck
