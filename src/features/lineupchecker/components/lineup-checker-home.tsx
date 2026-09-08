@@ -316,13 +316,41 @@ function Checker({
     return subject.id;
   };
 
+  /**
+   * **An open card is the screen, and it is a link** — `?league=<id>`, beside
+   * the `?week=` the stepper writes. The park, the lock and the param are
+   * `useActiveCard`'s; this page owns which rows may be opened and standing its
+   * own header down while one is.
+   *
+   * `ids` is the narrowed list for `LeaguesHome`'s reason: a filter or a subject
+   * that takes the open league off the page closes the card rather than parking
+   * a shell around a league nobody can see, and it is what re-validates a
+   * deeplink as the leagues stream fills in.
+   */
+  const listRef = useRef<HTMLUListElement | null>(null);
+  const ids = useMemo(() => visible.map((l) => l.league_id), [visible]);
+  const card = useActiveCard({ param: "league", ids, listRef });
+  // Read out so the handler below can depend on it by name — see `LeaguesHome`,
+  // where the same pair sits for the same reason.
+  const { close: closeCard } = card;
+
   // Latch and open in one handler — never during render. It is a `useCallback`
   // because it crosses the rack seam below, where a new identity every render
   // would re-publish on every render and set an ancestor's state in a loop.
-  const openDrawer = useCallback((kind: Subject["kind"]) => {
-    setOpened((prev) => (prev.has(kind) ? prev : new Set(prev).add(kind)));
-    setDrawer(kind);
-  }, []);
+  //
+  // **It closes the open card first**, on `LeaguesHome`'s argument and for the
+  // same drawers one grain over: Starters and Opponents pick a subject, a
+  // subject narrows the grid, and a parked card *is* the screen — the page is
+  // locked and every league but the open one is `display: none`, so there is
+  // no grid on screen to be narrowed. A press with no card open is a no-op.
+  const openDrawer = useCallback(
+    (kind: Subject["kind"]) => {
+      closeCard();
+      setOpened((prev) => (prev.has(kind) ? prev : new Set(prev).add(kind)));
+      setDrawer(kind);
+    },
+    [closeCard],
+  );
 
   usePublishRackControls({
     keys: BROWSE_KEYS,
@@ -354,21 +382,6 @@ function Checker({
   );
 
   const name = user ? user.display_name || user.username : username;
-
-  /**
-   * **An open card is the screen, and it is a link** — `?league=<id>`, beside
-   * the `?week=` the stepper writes. The park, the lock and the param are
-   * `useActiveCard`'s; this page owns which rows may be opened and standing its
-   * own header down while one is.
-   *
-   * `ids` is the narrowed list for `LeaguesHome`'s reason: a filter or a subject
-   * that takes the open league off the page closes the card rather than parking
-   * a shell around a league nobody can see, and it is what re-validates a
-   * deeplink as the leagues stream fills in.
-   */
-  const listRef = useRef<HTMLUListElement | null>(null);
-  const ids = useMemo(() => visible.map((l) => l.league_id), [visible]);
-  const card = useActiveCard({ param: "league", ids, listRef });
 
   return (
     <div className="relative">

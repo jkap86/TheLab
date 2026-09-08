@@ -407,14 +407,55 @@ export function LeaguesHome({
   // everywhere this pair is shown.
   const name = user ? user.display_name || user.username : username;
 
+  /**
+   * **An open card is the screen, and it is a link** — `?league=<id>`. The
+   * park, the lock and the param are all `useActiveCard`'s; what this page owns
+   * is which rows it is allowed to open (`ids`) and standing its own header
+   * down while one is.
+   *
+   * `ids` is the **narrowed** list, deliberately, and it is the one place the
+   * two populations this file keeps apart come together: a filter or a subject
+   * that takes the open league off the page closes the card rather than parking
+   * a shell around a league nobody can see. It is also what re-validates a
+   * deeplink as the stream fills in — an id that matches nothing on mount can
+   * match a minute later, which on a route fed by NDJSON is the ordinary case
+   * rather than an edge.
+   */
+  const listRef = useRef<HTMLUListElement | null>(null);
+  const ids = useMemo(() => visible.map((l) => l.league_id), [visible]);
+  const card = useActiveCard({ param: "league", ids, listRef });
+  // Read out so the handler below can depend on it by name: `close` is a
+  // `useCallback` over a literal `param` and a stable helper, which is what
+  // keeps `openDrawer` stable in turn.
+  const { close: closeCard } = card;
+
   // Latch and open in one handler — never during render. It is a `useCallback`
   // because it crosses the rack seam below, where a new identity every render
   // would re-publish on every render and set an ancestor's state in a loop; see
   // `usePublishRackControls`.
-  const openDrawer = useCallback((kind: Subject["kind"]) => {
-    setOpened((prev) => (prev.has(kind) ? prev : new Set(prev).add(kind)));
-    setDrawer(kind);
-  }, []);
+  //
+  // **It closes the open card first, and that is the point of the press rather
+  // than tidiness.** These two drawers exist to *narrow the grid* — a player
+  // row or a leaguemate row is a subject, and picking one leaves the leagues
+  // they are in. While a card is parked there is no grid to narrow: the page is
+  // locked, the header has stood down and every league but the open one is
+  // `display: none`, so the reader picked a subject and watched one card that
+  // may or may not still be in the selection, with the count that would have
+  // told them off screen. The drawer is a modal over a page in the wrong state.
+  //
+  // So the press does what the reader means by it — take me back to the list I
+  // am about to filter — and the collapse runs behind the drawer's own
+  // backdrop, so the grid is standing again by the time they have picked. A
+  // press with no card open is a no-op: `close` reads the URL and returns when
+  // it names no card.
+  const openDrawer = useCallback(
+    (kind: Subject["kind"]) => {
+      closeCard();
+      setOpened((prev) => (prev.has(kind) ? prev : new Set(prev).add(kind)));
+      setDrawer(kind);
+    },
+    [closeCard],
+  );
   // The drawers' three handlers, stable for the page's life: each is a
   // functional update on a setter and closes over nothing else, and each is a
   // prop of a drawer that stays mounted and holds several hundred memo'd rows
@@ -439,21 +480,6 @@ export function LeaguesHome({
   // next reader of either file.
   usePublishRackControls({ keys: BROWSE_KEYS, drawer, onOpenDrawer: openDrawer });
 
-  /**
-   * **An open card is the screen, and it is a link** — `?league=<id>`. The
-   * park, the lock and the param are all `useActiveCard`'s; what this page owns
-   * is which rows it is allowed to open (`ids`) and standing its own header
-   * down while one is.
-   *
-   * `ids` is the **narrowed** list, deliberately, and it is the one place the
-   * two populations this file keeps apart come together: a filter or a subject
-   * that takes the open league off the page closes the card rather than parking
-   * a shell around a league nobody can see. It is also what re-validates a
-   * deeplink as the stream fills in — an id that matches nothing on mount can
-   * match a minute later, which on a route fed by NDJSON is the ordinary case
-   * rather than an edge.
-   */
-  const listRef = useRef<HTMLUListElement | null>(null);
   /**
    * What to say, and what to offer, when the grid narrows to nothing.
    *
@@ -498,9 +524,6 @@ export function LeaguesHome({
       clear: () => setFilters(DEFAULT_LEAGUE_FILTERS),
     };
   }, [filters, filtersActive, subjectsActive]);
-
-  const ids = useMemo(() => visible.map((l) => l.league_id), [visible]);
-  const card = useActiveCard({ param: "league", ids, listRef });
 
   return (
     <div className="relative">

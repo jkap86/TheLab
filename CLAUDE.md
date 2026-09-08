@@ -341,6 +341,83 @@ answer. It is a plain factory with a four-line `useState` wrapper so the
 acceptance rule runs under Node's own runner; a ref would be read during render,
 which is what `react-hooks/refs` exists to stop.
 
+### A Browse key takes the reader back to the grid
+
+The two Browse keys open drawers that exist to **narrow the league grid** — a
+player row or a leaguemate row is a subject, and picking one leaves the leagues
+they are in. While a card is parked there is no grid to narrow: the page is
+locked, the header has stood down and every league but the open one is
+`display: none`, so the reader picked a subject and watched one card that may or
+may not still be in the selection, with the count that would have told them off
+screen. The drawer was a modal over a page in the wrong state.
+
+**So the press closes the card as it opens the drawer**, which is what the
+reader means by it — take me back to the list I am about to filter — and the
+collapse runs behind the drawer's own backdrop, so the grid is standing again by
+the time they have picked. A press with no card open is a no-op on that half:
+`close` reads the URL and returns when it names no card.
+
+**It lives in the page's `openDrawer`, which is the only thing that can see
+both.** The rack is mounted in `layout.tsx` above `{children}` and cannot see
+the card; `useActiveCard` knows nothing about drawers. So the two pages that
+publish Browse keys each read `close` out of their own card and call it — which
+also required `useActiveCard` to move above `openDrawer` in both files, since
+the handler now depends on it. `close` is a `useCallback` over a literal `param`
+and a stable helper, which is what keeps `openDrawer` stable in turn and is the
+requirement `usePublishRackControls` states rather than a courtesy: a handler
+rebuilt each render republishes each render and sets an ancestor's state in a
+loop.
+
+**Both league tools took it, and that is the point rather than scope creep.**
+`/manager`'s Players and Leaguemates and `/lineupchecker`'s Starters and
+Opponents are the same drawers over the same card, and a key that returned to
+the grid on one page and opened over a locked one on the other is exactly the
+drift the two cards were converged to remove.
+
+What the drawer being above a *parked* card is now is a **window** rather than a
+state: the URL lets the card go on the press and the collapse runs on for
+~300ms, so for that long both are true. The Escape guard in `useActiveCard`
+still defers to the modal, and its note says so.
+
+#### Verified
+
+Rendered through a temporary `/preview` route mounting the real
+`useActiveCard`, `usePublishRackControls`, `PageShell`, `ConsoleGround` and
+`SharesDrawer` — with the **real app rack** drawing the published keys, since it
+is mounted in `layout.tsx` — then driven over CDP at 1280 in dark and 390 in
+light and deleted. The mechanics are the ones this file records:
+`--no-proxy-server`, `localhost` rather than `127.0.0.1`, a phone viewport from
+`Emulation.setDeviceMetricsOverride` with `mobile: true`, `data-theme` rather
+than `prefers-color-scheme`, `--disable-features=OverlayScrollbar`, the
+`--blink-settings=availablePointerTypes=4,…` flags, a **client-component**
+harness, and a CDP client over Node's own `WebSocket` since Playwright is not in
+this project's `node_modules`.
+
+Every arm landed, at both widths. Parked, the page reads stage `parked`,
+`?league=L4`, `overflow: hidden`, **1 of 8 cards visible** and the header
+`display: none`. 150ms after the press the URL already names no card, the drawer
+is up and `:modal`, and the stage is still `parked` — the transient window
+above. Settled, the stage is gone, `overflow` is `visible`, **all 8 cards are
+back**, the header is back, and the drawer is still open over the grid. A real
+Escape closes the drawer and leaves the page at rest; the Leaguemates key does
+the same; and a press with no card open opens the drawer and moves nothing else.
+`document.documentElement.scrollWidth` equals the viewport at both widths, and
+there is **no console output of any kind** across the whole interaction.
+
+**The before-state was reproduced in the same harness** by commenting out the
+one call, which is the check that the fix is doing something: the drawer opened
+`:modal` over a page still holding `?league=L4`, still `overflow: hidden`, still
+**1 of 8 cards visible** and still headerless — the bug exactly.
+
+2,087 unit tests pass; `lint`, `typecheck` and `build` are clean.
+
+**Not verified against real data**: no database is reachable from where this was
+built, so the harness's cards are eight bare `<li>`s rather than solved leagues
+and its drawer holds two fixture rows. What that cannot check is the one thing a
+real page would — whether the collapse behind the drawer's backdrop reads as
+intended on a hundred-league account, where the un-park is a hundred cards
+laid out again rather than eight.
+
 ### The reads that could not ask again
 
 **The shares drawers were latched into their own failures.** `enabled` goes true

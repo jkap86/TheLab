@@ -670,9 +670,13 @@ export function useActiveCard({
     if (active === null) return;
     const onKey = (event: KeyboardEvent) => {
       if (event.key !== "Escape") return;
-      // A modal on top owns Escape — a shares drawer opened from the rack sits
-      // above a parked card, and closing the card out from under it would leave
-      // the reader in a dialog over a page they did not ask to return to.
+      // A modal on top owns Escape, and closing the card out from under one
+      // would leave the reader in a dialog over a page they did not ask to
+      // return to. The two league tools' Browse keys close the card as they
+      // open their drawer — see `LeaguesHome` — so what this guards there is
+      // the window where both are true at once: the drawer is up and the
+      // card's collapse has not run out. It stays general because the guard is
+      // about *a* modal rather than about that one.
       if (document.querySelector("dialog[open]")) return;
       close();
     };
