@@ -30,6 +30,7 @@ import {
   PLATE_KEY,
   removeSubject,
   setSubjectMode,
+  shortName,
   SubjectTokens,
   toggleSubject,
   type LeagueSubjects,
@@ -52,7 +53,11 @@ import {
   useManagerLeaguemates,
   useManagerPlayers,
 } from "../hooks/use-manager-shares";
-import { modeRolls, leaguematePlayerRolls } from "../helpers/leaguemate-rosters";
+import {
+  leagueOwners,
+  modeRolls,
+  leaguematePlayerRolls,
+} from "../helpers/leaguemate-rosters";
 import { LeaguematesMark, PlayersMark } from "./browse-marks";
 import { LeagueCard } from "./league-card";
 import { LeaguemateSharesDrawer } from "./leaguemate-shares-drawer";
@@ -218,10 +223,21 @@ export function LeaguesHome({
     opened.has("player"),
     ktcBoard,
   );
+  // **Latched on either drawer, like the rosters read below it**, and for the
+  // same kind of reason one step further on. Its `users` map is the only place
+  // a user id becomes a name and a face on this page, and the card's ownership
+  // readout wants exactly that for a subject picked in the *players* panel —
+  // where this drawer has never been opened. Gated on its own drawer alone, a
+  // reader who narrowed to the leagues somebody else holds a player in would
+  // get a billet naming a raw Sleeper id on every card.
+  //
+  // It is the cheap one of the three to widen: ~1,300 member ids and ~720 user
+  // rows on a 113-league account, against every roster of every league for the
+  // read below. See `ManagerLeaguematesPayload`.
   const leaguemates = useManagerLeaguemates(
     username,
     state.season,
-    opened.has("leaguemate"),
+    opened.has("leaguemate") || opened.has("player"),
   );
   // **Latched on either drawer**, which is the one of the three that is: the
   // leaguemate panel's rail wants it on open, and the players panel's three
@@ -295,6 +311,73 @@ export function LeaguesHome({
         : null,
     [holdsCombo, leaguemateRosters.data],
   );
+
+  /**
+   * The one player whose owner the cards may name, or null.
+   *
+   * **Exactly one subject, of kind `player`, on the `taken` narrowing.** Each
+   * of the three is a real bound rather than a convenience:
+   *
+   * - The billet names *one* player's owner, so two picked subjects would have
+   *   it silently answer for whichever came first. A second bay is what that
+   *   case wants and it is unbuilt — deliberately, rather than implied.
+   * - `taken` is the only mode with an owner to name. On `owned` the manager
+   *   holds him, and on `available` nobody does; a readout for either would be
+   *   a claim the reader did not ask for, and the `You` / `Free` variants an
+   *   earlier design pass carried were cut for exactly that.
+   * - A leaguemate pick narrows to a *person*, not a player, so there is no
+   *   subject for an owner to be the owner of.
+   */
+  const takenSubject =
+    subjects.subjects.length === 1 &&
+    subjects.subjects[0].kind === "player" &&
+    subjects.subjects[0].mode === "taken"
+      ? subjects.subjects[0].id
+      : null;
+
+  /**
+   * League id → who holds him there, resolved to the name and face the billet
+   * draws.
+   *
+   * **The rule is `leagueOwners`' and the names are the leaguemates payload's**,
+   * which is the seam this keeps on the right side of: one spelling of *who
+   * holds him* — the same fold the drawer's `Taken` count is read from, so the
+   * card and the drawer cannot come to disagree — and one spelling of *who that
+   * person is*, which is the map every other row on this page already names
+   * people through.
+   *
+   * A stored row with no display name falls back to the id, on `PlayerShare`'s
+   * rule that a token beats a blank; a person the users map has not named yet
+   * does the same, which is what the frame between the two reads landing looks
+   * like.
+   *
+   * Counted over `leagueFiltered` on the module's own population rule, and it
+   * is a superset of the cards on screen either way.
+   */
+  const owners = useMemo(() => {
+    if (takenSubject == null || !leaguemateRosters.data) return null;
+    const users = leaguemates.data?.users;
+    const out = new Map<string, { name: string; avatarUrl: string | null }>();
+    for (const [leagueId, userId] of leagueOwners(
+      leagueFiltered,
+      takenSubject,
+      leaguemateRosters.data.rosters,
+      user?.user_id ?? null,
+    )) {
+      const row = users?.[userId];
+      out.set(leagueId, {
+        name: shortName(row?.display_name ?? userId),
+        avatarUrl: row?.avatar_url ?? null,
+      });
+    }
+    return out;
+  }, [
+    takenSubject,
+    leagueFiltered,
+    leaguemateRosters.data,
+    leaguemates.data,
+    user?.user_id,
+  ]);
 
   const rolls = useCallback<SubjectRolls>(
     (kind, mode) => {
@@ -875,6 +958,17 @@ export function LeaguesHome({
                   // a roster in, so that card's summary is null for as long as
                   // the page is open. See `ManagerLineupsState.pending`.
                   ranksPending={ranksPending}
+                  // Who holds the picked player here, where a leaguemate does.
+                  // **Two primitives rather than the row itself**, because the
+                  // card is `memo`'d over every league on the account and an
+                  // object built in this render would be a new reference on
+                  // each one — see `LeagueCard`'s own note. Null on every card
+                  // whenever there is no such narrowing, which is the resting
+                  // state of this page.
+                  ownerName={owners?.get(league.league_id)?.name ?? null}
+                  ownerAvatarUrl={
+                    owners?.get(league.league_id)?.avatarUrl ?? null
+                  }
                   // The three that decide which boards a *past* stop is priced
                   // on. They are the same three the lineups read above was
                   // asked for the present, which is the whole point: a rewound
