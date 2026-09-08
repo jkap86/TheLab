@@ -356,8 +356,9 @@ function Checker({
           hidden element's margins collapse with it.
 
           It stands down while a card is parked — `display: none` rather than
-          unmounted, so the filters dialog it holds keeps its draft. */}
-      <header className={`relative mb-6 sm:mb-0 ${card.parked ? "hidden" : ""}`}>
+          unmounted, so the filters dialog it holds keeps its draft — and
+          `chromeClass` fades it either side of that, with the other cards. */}
+      <header className={`relative mb-6 sm:mb-0 ${card.chromeClass}`}>
         <ManagerPlate
           name={name}
           avatarUrl={user?.avatar_url ?? null}
@@ -467,7 +468,7 @@ function Checker({
           key that used to stand at its far end is on the plate now, beside the
           key that set the filter in the first place. */}
       <div
-        className={`relative my-6 flex-wrap items-center gap-3 sm:my-9 ${card.parked ? "hidden" : "hidden sm:flex"}`}
+        className={`relative my-6 flex-wrap items-center gap-3 sm:my-9 ${card.parked ? "hidden" : `hidden sm:flex ${card.chromeClass}`}`}
       >
         <WeekStepper week={check?.week ?? null} onChange={onWeek} />
         <div

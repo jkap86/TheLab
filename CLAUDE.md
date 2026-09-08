@@ -9209,6 +9209,116 @@ pixels tall and the memo is doing its work against a real payload. And whether
 fixture list is complete on the first render, which is the one case the
 re-validation is *not* written for.
 
+### The open and the close are continuous
+
+The park was right and it cut. Pressing a card popped the panel in at its full
+height, and 340ms later every other card and the page's header went
+`display: none` in one frame; closing folded the panel in 260ms and then the
+whole list came back in one frame, with a scroll to the top of the page
+painted for a frame before the walk back began. **Nothing cuts now**, on all
+three tools, and nothing on the wire moved — no route, no query, no contract
+type, no payload field, no migration. The diff is the hook, the panel hook,
+one stylesheet block and the three pages composing a class.
+
+**The panel unfolds and then collapses, and they are two different animations
+rather than one reversed.** The unfold grows the box — `max-height` from
+nothing to what the panel will stand at, with an opacity ramp over the first
+frames in which a forty-pixel housing is laying a rail, two ledges and a pair
+of pinned bars on top of each other — so the cards under it slide down as it
+takes its room. **The collapse moves no box.** The panel keeps its cap and its
+flex, and a `clip-path` sweeps its bottom edge up under the summary while it
+fades: compositor work, and the two panes are never re-solved. Folding
+`max-height` re-laid a twelve-team table on every frame with the pinned bars
+riding the edge, which was the roughness a reader saw *as* the collapse. It
+fills forwards, because it ends a frame before the timer that closes the
+disclosure. Both are `Animation`s started in layout effects, on
+`use-panel-cap.ts`'s existing terms; `openBox` is gone, since nothing needs the
+height any more.
+
+**The first measurement is a layout effect, not a frame later.** Measured after
+paint, the panel stood at its content height for a frame and then snapped to
+the cap — a jump on every open that the unfold would only have made more
+visible. It is `measure()` returning the fit as well as setting it, so the
+unfold knows its target before the re-render that carries it.
+
+**The rest of the page fades either side of the park.** The hook has a stage —
+`idle`, `settling`, `parked`, `returning` — and the list carries it as
+`data-card-settling` / `data-card-shell` / `data-card-returning`, while the
+page's own header, rule and pills take `chromeClass` (`lab-stand-down`,
+`hidden`, `lab-stand-back`) in place of the `parked ? "hidden" : ""` they
+composed before. The other cards fade out *during* the settle, so they are
+already invisible when the shell makes them `display: none`, and fade in over
+the walk back. The return is an animation rather than a transition because a
+transition cannot start from `display: none`. The two `contents` wrappers on
+`/manager` and `/trades` become blocks while they fade — opacity has no effect
+on an element with no box, and a padding-less block lays its children out
+exactly as `contents` did. All of it sits under
+`prefers-reduced-motion: no-preference`, so the preference gets the instant
+cut it asks for.
+
+**The walk is a frame-by-frame tween, not `behavior: "smooth"`**, and that is
+a bug with no symptom rather than a preference: the browser clamps a smooth
+scroll's destination to the document *as it stands when the call is made*, and
+on a press the document is still growing under the unfold — so a card near the
+foot of the page asked for a line it could not yet reach, stopped short, and
+the park snapped it the rest of the way. `walkTo` re-reads its destination
+every frame and clamps to what the document can reach *now*. It reports its
+arrival, which is what the settle timer became.
+
+**The park and the return are layout effects.** A passive effect runs after
+paint, so the render that stood the list down painted once as a shell with no
+height and no lock — the card at the top of the page — before the writes
+landed; and the render that un-parked painted the document at scroll 0 with a
+hundred cards above the one being read. Inside one commit the order is what
+carries it: the shell attribute and the siblings' display change in the
+mutation phase, the park effect's cleanup hands the `<main>` and the list their
+boxes back in the same phase, and only then does the return effect read the
+card's line and land the page on it.
+
+**A card near the foot of the page is lent the slack it is short.** Un-parked,
+the document under such a card is too short to keep it at the park line, so it
+dropped down the screen the instant the list came back — the one cut the
+return would still have had, and one the old code had too. The return pads the
+`<main>` by exactly the shortfall for the length of the walk, and its
+destination is always reachable without it (a line the page stood at before,
+or the card's own rest for a deeplink), so taking the slack away at the end
+moves nothing. A deeplinked card, which has no press to walk back to, is walked
+to that rest rather than dropped there.
+
+#### Verified
+
+Driven over CDP against `next dev` through a temporary `/preview` route
+mounting the real `LeagueCard`, `useActiveCard` and `PageShell` against eight
+fixture leagues of twelve solved rosters, then deleted. The mechanics are the
+ones this file records — `--no-proxy-server`, `localhost`, a phone viewport
+from `Emulation.setDeviceMetricsOverride`, and the
+`--blink-settings=availablePointerTypes=4,…` flags — driven from a
+sixty-line CDP client over Node's own `WebSocket`, since Playwright is not
+installed here.
+
+At 1280×900 and 390×844, every arm landed. On a press from a scroll of 700 the
+panel carried a `maxHeight/opacity/minHeight/marginTop` animation from its
+first sample and grew 26 → 549px over the settle while the siblings and the
+header fell 1 → 0.04 under `data-card-settling`; the park then landed the card
+at **81px against a freeze line of 81** (69 against 69 on the phone) with
+`docH === viewport`. On the close the collapse was `clipPath/opacity/transform`
+with the box **held at 563px through every sample**, opacity 1 → 0.05, the
+chrome unlit from its first frame and the card at 81 throughout; the first
+returning sample had the siblings and the header back at opacity 0 under
+`data-card-returning`, the disclosure closed, and the card still at 81; 500ms
+later the page was at 700 with every attribute and class cleared and the lock
+released. A close inside the settle never parked and ended idle at 700. A
+deeplink parked without an unfold and, closed, walked to its rest without a
+jump. Under `prefers-reduced-motion: reduce` the press parked at once, both
+animations ran at zero duration, and no fade rule applied. No horizontal
+overflow at either width, and no console output but the dev server's own.
+
+**Not driven**: the lineup checker's and the trade card's expanded halves,
+which mount the same hook with a different inset and radius — the clip reads
+the radius off the element rather than spelling it — and a real 113-league
+page, where what a fixture cannot say is whether a one-off opacity transition
+on a hundred `<li>`s is inside a phone's budget.
+
 ## The identity plate became a billet, and the win rate the hero
 
 `/manager`'s header was the one object on the page not made of metal. Every

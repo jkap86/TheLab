@@ -183,8 +183,14 @@ export function TradesHome({
           One wrapper rather than a class on each of the six, and
           `display: contents` off it — so the page's own layout is byte for byte
           what it was when nothing is open, and none of these is unmounted: the
-          two dialogs keep their drafts and the search panel its query. */}
-      <div className={card.parked ? "hidden" : "contents"}>
+          two dialogs keep their drafts and the search panel its query.
+
+          `chromeClass` rather than `parked`: it fades the six out during the
+          settle and in again on the return, and is `hidden` in between. It is a
+          block while it fades, since opacity has no effect on an element with
+          no box, and a block wrapper with neither padding nor border lays its
+          children out exactly as `contents` did. */}
+      <div className={card.chromeClass || "contents"}>
         <header className="relative flex flex-wrap items-center gap-4">
           <div className="min-w-0">
             {heading}

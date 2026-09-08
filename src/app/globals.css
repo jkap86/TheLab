@@ -1319,6 +1319,47 @@ html {
 }
 
 /*
+ * Either side of the park, the rest of the page is on its way rather than
+ * there or gone.
+ *
+ * `data-card-settling` is the list during the walk into place and
+ * `data-card-returning` the list during the walk back; `.lab-stand-down` and
+ * `.lab-stand-back` are the same two stages on the page's own header, rule and
+ * pills, which are not in the list and so cannot be reached from it. The other
+ * cards fade *out* during the settle, so they are already invisible when the
+ * shell makes them `display: none`, and fade *in* over the return, so the
+ * un-park is not a page appearing around a card. The return is an animation
+ * rather than a transition because the element it runs on has just come back
+ * from `display: none`, which a transition cannot start from.
+ *
+ * The durations are `STAND_DOWN_MS` and `STAND_BACK_MS` in `panel-cap.ts`, and
+ * the two spellings have to agree: the hook clears the returning stage on its
+ * own clock, and a fade still running when the attribute goes would cut.
+ *
+ * Under reduced motion none of this applies — the settle is instant there, so
+ * the cards go straight to `display: none` and straight back, which is the
+ * behaviour the preference asks for.
+ */
+@media (prefers-reduced-motion: no-preference) {
+  [data-card-settling] > li:not(:has(> details[open])),
+  .lab-stand-down {
+    opacity: 0;
+    transition: opacity 240ms ease-out;
+  }
+
+  [data-card-returning] > li:not(:has(> details[open])),
+  .lab-stand-back {
+    animation: stand-back 360ms ease-out both;
+  }
+}
+
+@keyframes stand-back {
+  from {
+    opacity: 0;
+  }
+}
+
+/*
  * The rack's two other heights. Declared here rather than beside the token
  * because Tailwind's `@theme` block sits between them and a media query cannot
  * live inside it; the breakpoints are `sm` (40rem) and `md` (48rem), spelled to

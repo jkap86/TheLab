@@ -151,7 +151,7 @@ import {
  * off `[open]` would hold its border, halo and edge light through the whole
  * collapse and let go afterwards. `data-lit` is what every one of those
  * variants reads instead, so the card lets go *as* the panel closes — its own
- * 450ms transitions running out under the 260ms collapse.
+ * 450ms transitions running out under the 300ms collapse.
  *
  * **`memo`'d, and that is what the driven disclosure costs.** Opening a card
  * used to be a native `<details>` toggle: zero renders, whatever the list's
