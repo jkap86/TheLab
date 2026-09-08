@@ -52,13 +52,20 @@ import { stopSummary, type TimelineStop } from "../../timeline";
 export function TimelineRail({
   stop,
   moves,
+  boundaries,
   players,
   onChange,
 }: {
   /** Where the rail is now — see {@link TimelineStop}. */
   stop: TimelineStop;
-  /** How many moves the rail spans; the far end is the league before the oldest. */
+  /** How far back the rail runs; the far end is the oldest stop it can reach. */
   moves: number;
+  /**
+   * Every `back` at which the rail crosses into an earlier season, so the
+   * channel can mark it — see {@link timelineSeasonBoundaries}. Empty on a
+   * single-season league, which is what draws nothing.
+   */
+  boundaries: readonly number[];
   /** Names for the players a move touched, for the slider's own announcement. */
   players: Readonly<Record<string, PlayerSummary>>;
   /** Move to a stop, counted back from now. */
@@ -73,7 +80,16 @@ export function TimelineRail({
   const atNow = stop.back === 0;
   const atOrigin = stop.back >= moves;
   const fill = moves === 0 ? 100 : (position / moves) * 100;
-  const moment = atNow ? "Now" : formatInstantDate(stop.at);
+
+  // **A season's end has no date, so the year is the reading.** Inside a season
+  // the date carries the moment; at the boundary there is nothing a move
+  // stamped, and printing the last move's date would put a day on a state that
+  // outlived it by months. See `timelineStop`.
+  const moment = atNow
+    ? "Now"
+    : stop.kind === "season-end"
+      ? `${stop.season} end`
+      : formatInstantDate(stop.at);
 
   return (
     <>
@@ -124,6 +140,24 @@ export function TimelineRail({
             className="block h-1.5 rounded-full bg-[image:var(--lit-bar-bg)] shadow-[var(--lit-bar-shadow)]"
             style={{ width: `${fill}%` }}
           />
+          {/* **A year boundary is a notch in the channel**, because it is the
+              one place on this rail where the next stop is not the last one
+              with a move undone: rosters carry over between seasons through no
+              transaction at all, so crossing it is a jump. Marking it is what
+              stops a reader reading two years as one continuous log.
+
+              Drawn from the same `--groove` every cut on this card is, and
+              `aria-hidden` for the reason the channel under it is: the slider
+              carries the whole control's semantics, and a screen reader hears
+              which season it is in from `aria-valuetext` rather than from a
+              tick it cannot feel. */}
+          {boundaries.map((at) => (
+            <span
+              key={at}
+              className="absolute top-1/2 h-2.5 w-px -translate-y-1/2 bg-[image:var(--groove)]"
+              style={{ left: `${((moves - at) / moves) * 100}%` }}
+            />
+          ))}
         </span>
         <input
           type="range"
@@ -187,7 +221,7 @@ export function TimelineRail({
         className="inline-flex shrink-0 gap-[3px] rounded-full sm:bg-[color:var(--recess-bg)] sm:p-[3px] sm:shadow-[var(--track-shadow)]"
       >
         <EndKey
-          title="The league as it stood before the oldest move on file"
+          title="The oldest moment this league's stored seasons reach"
           on={atOrigin}
           onClick={() => onChange(moves)}
         >

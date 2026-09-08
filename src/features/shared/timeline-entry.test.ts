@@ -48,41 +48,46 @@ const pricing: NonNullable<RosterTimelinePayload["pricing"]> = {
 const payload: RosterTimelinePayload = {
   timeline: {
     league_id: "L1",
-    rosters: [
+    earlier_league_id: null,
+    seasons: [
       {
-        roster_id: 1,
-        name: "Alpha",
-        user_id: "u1",
-        players: ["scrub"],
-        picks: [{ season: "2027", round: 1, roster_id: 1 }],
-      },
-      {
-        roster_id: 2,
-        name: "Beta",
-        user_id: "u2",
-        players: ["star"],
-        picks: [
-          { season: "2027", round: 1, roster_id: 2 },
-        ],
-      },
-    ],
-    events: [
-      {
-        transaction_id: "t1",
-        type: "trade",
-        at: 1_000,
-        roster_ids: [1, 2],
-        // Alpha received the scrub and Beta the star, so before this Alpha held
-        // the star. The pick went to Beta the same way.
-        adds: { scrub: 1, star: 2 },
-        drops: { scrub: 2, star: 1 },
-        draft_picks: [
+        league_id: "L1",
+        season: "2026",
+        rosters: [
           {
-            season: "2027",
-            round: 1,
+            roster_id: 1,
+            name: "Alpha",
+            user_id: "u1",
+            players: ["scrub"],
+            picks: [{ season: "2027", round: 1, roster_id: 1 }],
+          },
+          {
             roster_id: 2,
-            owner_id: 2,
-            previous_owner_id: 1,
+            name: "Beta",
+            user_id: "u2",
+            players: ["star"],
+            picks: [{ season: "2027", round: 1, roster_id: 2 }],
+          },
+        ],
+        events: [
+          {
+            transaction_id: "t1",
+            type: "trade",
+            at: 1_000,
+            roster_ids: [1, 2],
+            // Alpha received the scrub and Beta the star, so before this Alpha
+            // held the star. The pick went to Beta the same way.
+            adds: { scrub: 1, star: 2 },
+            drops: { scrub: 2, star: 1 },
+            draft_picks: [
+              {
+                season: "2027",
+                round: 1,
+                roster_id: 2,
+                owner_id: 2,
+                previous_owner_id: 1,
+              },
+            ],
           },
         ],
       },
@@ -213,6 +218,88 @@ describe("timelineEntry", () => {
         [null, null, null],
         [null, "Roster 2", null],
       ],
+    );
+  });
+});
+
+/**
+ * The same league with 2025 behind it, where the manager holds a **different
+ * roster id** — the case a chain makes possible and a roster-id join gets wrong.
+ */
+const chained: RosterTimelinePayload = {
+  ...payload,
+  timeline: {
+    league_id: "L1",
+    earlier_league_id: null,
+    seasons: [
+      payload.timeline!.seasons[0],
+      {
+        league_id: "L2025",
+        season: "2025",
+        rosters: [
+          {
+            roster_id: 1,
+            // Somebody else's team that year, on the id the manager holds now.
+            name: "Gamma",
+            user_id: "u9",
+            players: ["star"],
+            picks: [],
+          },
+          {
+            roster_id: 2,
+            name: "Alpha (2025)",
+            // `u1` is the manager — on roster 2 that year, not roster 1.
+            user_id: "u1",
+            players: ["scrub"],
+            picks: [],
+          },
+        ],
+        events: [],
+      },
+    ],
+  },
+};
+
+describe("timelineEntry across a season boundary", () => {
+  test("the manager is followed by person, not by roster id", () => {
+    // Roster 1 is the manager's *this* year; in 2025 they held roster 2, and a
+    // bare roster-id comparison would mark a team that was never theirs.
+    const entry = timelineEntry(chained, 3, 1);
+    assert.deepEqual(
+      entry?.teams.map((t) => [t.roster_id, t.is_manager]).sort(),
+      [
+        [1, false],
+        [2, true],
+      ],
+    );
+  });
+
+  test("that season's own rosters are what is solved and ranked", () => {
+    const entry = timelineEntry(chained, 3, 1);
+    // 2025's rosters, not 2026's carried back: the star sits on Gamma.
+    assert.deepEqual(
+      teamOf(entry, 1)?.lineup.starters.map((seat) => seat.player?.player_id),
+      ["star"],
+    );
+    assert.equal(teamOf(entry, 2)?.name, "Alpha (2025)");
+    // Ranked, which is what says the manager was found at all.
+    assert.equal(entry?.ranks.ros_starters !== null, true);
+  });
+
+  test("a manager who was not in that season marks nobody and ranks nothing", () => {
+    // Roster 9 exists in neither year, so there is no user to follow.
+    const entry = timelineEntry(chained, 3, 9);
+    assert.equal(
+      entry?.teams.some((t) => t.is_manager),
+      false,
+    );
+    assert.equal(entry?.ranks.ros_starters, null);
+  });
+
+  test("the head season is unchanged by having a chain behind it", () => {
+    assert.deepEqual(
+      timelineEntry(chained, 1, 1)?.teams.map((t) => [t.roster_id, t.is_manager]),
+      timelineEntry(payload, 1, 1)?.teams.map((t) => [t.roster_id, t.is_manager]),
     );
   });
 });
