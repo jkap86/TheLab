@@ -14,11 +14,17 @@ import { BilletFinish, MilledHairline } from "./card-plate";
  * for the same reason: two hand-copied identity plates are two chances for one
  * of them to stop matching the console around it.
  *
- * **`/manager` no longer draws this.** It draws {@link ManagerBillet} below,
- * which is the same content milled out of the stock its league cards are made
- * of; the lineup checker still draws the plate, which is why both are here and
- * why the billet is a sibling rather than an edit to this box. See that
- * component for the argument.
+ * **Nothing draws this any more.** `/manager` moved to {@link ManagerBillet}
+ * below — the same content milled out of the stock its league cards are made
+ * of — and the lineup checker followed it one pass later, so a reader walking
+ * between the two tools sees one console. The billet was written as a sibling
+ * rather than an edit to this box precisely so the checker's header would not
+ * move without anybody asking; now that it has, this is the `peekActiveSeason`
+ * case — a component with no caller, kept for the argument it carries. The
+ * plate is the recessed, chrome-engraved treatment, and every decision below
+ * about the bezel, the groove, the two-copy engraving and the `children` seam
+ * is what the billet was measured against. Delete it when the argument has
+ * been rehoused, not before.
  *
  * The same plate as the tools page's `LabWordmark`, with two differences that
  * follow from the content rather than from taste. The bezel holds the
@@ -163,9 +169,11 @@ export function ManagerPlate({
  * recessed plate — `/manager`'s header.
  *
  * **It is a sibling of {@link ManagerPlate} rather than a variant of it**, and
- * the reason is the checker: that page draws the plate and is not part of this
- * design, so editing the box in place would have moved its header without
- * anybody asking. What the two share is the content and the two seams; what
+ * the reason was the checker: that page drew the plate and was not part of the
+ * billet's design, so editing the box in place would have moved its header
+ * without anybody asking. It draws the billet now too — with a week's figures
+ * through `children` and the four reasons through `controls` — and the plate
+ * has no caller. What the two share is the content and the two seams; what
  * they do not share is a single surface, a padding, a gap or a type size, which
  * is what makes a `variant` prop a `?:` on every line rather than a switch at
  * the top.
@@ -280,8 +288,15 @@ export function ManagerBillet({
             page's — the page hands over `Manager` as an unstyled node and this
             says what ink a caption stamped on metal is. Written on the row
             rather than on the node, so the season beside it cannot come to be
-            inked differently from the word it qualifies. */}
-        <span className="flex items-baseline gap-1.5 font-mono text-[length:var(--fs-9)] uppercase tracking-[0.14em] text-[color:var(--billet-label)] [text-shadow:var(--standing-label-shadow)] sm:gap-2 sm:text-[length:var(--fs-10)]">
+            inked differently from the word it qualifies.
+
+            `flex-wrap`, so that where the phone row's name column cannot hold
+            the whole eyebrow the season drops to a second line *whole*, with
+            its middot, rather than the row squeezing a break into the middle
+            of a page's own copy. `/manager`'s never wraps; the lineup
+            checker's is what found it, and that page shortens its copy below
+            `sm` so this is the fallback rather than the arrangement. */}
+        <span className="flex flex-wrap items-baseline gap-x-1.5 font-mono text-[length:var(--fs-9)] uppercase tracking-[0.14em] text-[color:var(--billet-label)] [text-shadow:var(--standing-label-shadow)] sm:gap-x-2 sm:text-[length:var(--fs-10)]">
           {eyebrow}
         </span>
         <h1 className="m-0 truncate font-display text-[length:var(--fs-21)] font-semibold uppercase leading-none tracking-[0.05em] text-[color:var(--billet-name)] [text-shadow:var(--billet-name-shadow)] sm:text-[length:var(--fs-24)] sm:tracking-[0.06em]">

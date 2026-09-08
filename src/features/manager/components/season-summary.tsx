@@ -1,4 +1,4 @@
-import { MilledHairline, Scanlines } from "@/features/shared";
+import { MilledHairline, Scanlines, StampedCount } from "@/features/shared";
 import type { ManagerLeague } from "@/shared/contract";
 
 import {
@@ -107,17 +107,18 @@ export function SeasonSummary({
         because the gauge is what the row builds up to.
       */}
       <div className="relative order-2 flex min-w-0 flex-1 flex-col justify-center gap-1.5 rounded-[0.4375rem] bg-[image:var(--billet-well-bg)] px-3 py-2 shadow-[var(--standing-well-shadow)] lg:order-none lg:flex-none lg:gap-1 lg:px-3.5 lg:py-[0.4375rem]">
-        <Count label="Leagues">
+        <StampedCount label="Leagues">
           {narrowing ? `${summary.leagues} / ${total}` : String(total)}
-        </Count>
+        </StampedCount>
         {/* The cut between the two counts: the same milled line the row's
             vertical hairlines are, turned on its side. It is drawn here rather
-            than by {@link Count} because it belongs between two of them. */}
+            than by {@link StampedCount} because it belongs between two of
+            them. */}
         <span
           aria-hidden
           className="h-px bg-[color:var(--milled-hairline)] shadow-[0_1px_0_rgba(255,255,255,0.07)]"
         />
-        <Count label="Record">{formatCombinedRecord(summary)}</Count>
+        <StampedCount label="Record">{formatCombinedRecord(summary)}</StampedCount>
       </div>
 
       {/* Gone below `sm`, where the two wells are on their own row with a gap
@@ -187,30 +188,5 @@ export function SeasonSummary({
         </dd>
       </dl>
     </div>
-  );
-}
-
-/**
- * One count: a stamped label and its figure, on one baseline in the well they
- * share.
- *
- * A `<dl>` per count rather than one list holding both, because the cut between
- * them is not list content: a definition list may hold only `dt`, `dd` and the
- * `div`s grouping them. One name and one value is exactly what a `<dl>` is for,
- * so two of them is the reading that keeps the semantics without wrapping a
- * milled hairline in a group it does not belong to.
- */
-function Count({ label, children }: { label: string; children: string }) {
-  return (
-    <dl className="m-0 flex items-baseline justify-between gap-3 lg:gap-4">
-      <dt className="whitespace-nowrap font-mono text-[length:var(--fs-10)] uppercase tracking-[0.12em] text-[color:var(--billet-label)] [text-shadow:var(--standing-label-shadow)]">
-        {label}
-      </dt>
-      {/* `nowrap`: the en dash in `8–5` is a line-break opportunity, and a
-          record split across two lines reads as two numbers. */}
-      <dd className="m-0 whitespace-nowrap font-display text-[length:var(--fs-21)] font-semibold leading-[1.1] tracking-[-0.015em] tabular-nums text-[color:var(--billet-figure)] [text-shadow:var(--standing-engrave)]">
-        {children}
-      </dd>
-    </dl>
   );
 }

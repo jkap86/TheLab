@@ -3166,7 +3166,11 @@ rule, and stays a direct child of the `<summary>` — a wrapper there is a flat
 rendering context and every `translateZ` under it collapses with no error to
 say so.
 
-**The header took `/manager`'s own pass.** `ManagerPlate` gets children for the
+**The header took `/manager`'s own pass — and has since taken its next one.**
+The plate described here is gone: the checker draws `ManagerBillet` now, with
+the count stamped beside the record and the four reasons on a strip of their
+own; see The checker's header on the billet, below, which supersedes this
+paragraph and the two after it. `ManagerPlate` gets children for the
 first time on this page, which is what switches it from `inline-flex` to the
 full-width row — the seam that component's note has described since the manager
 header merged. `WeekSummary` is `season-summary.tsx` with a week's figures:
@@ -3248,6 +3252,155 @@ plausible.
 The superflex finding has no row-level mark in the expanded lineup table. The
 `sit`/`start`/`move_to` marks are the precedent — a `non-qb` mark on the SF seat
 row would let a reader act without counting seats.
+
+### The checker's header on the billet
+
+`/lineupchecker/[username]` and `/manager/[username]` draw the same account and
+the same league card, and until this landed they drew two headers: `/manager`
+on `ManagerBillet`, the checker still on `ManagerPlate` — a recessed plate with
+the name engraved in chrome and the week's figures on the same engraving, with
+the attention count in a lit glass window at the row's end. A reader walking
+between the two tools saw one account drawn as two objects. The checker draws
+the billet now, and **nothing about `/manager` changes**. Applied from a design
+handoff, its `1c`, on its `milled` arm. Nothing on the wire moved — no route,
+no query, no contract type, no payload field, no migration — and no token was
+added.
+
+**It is `ManagerBillet` with a week's figures through `children` and the four
+reasons through `controls`.** The billet was written as a sibling of the plate
+precisely so the checker's header would not move without anybody asking; now
+that it has, `ManagerPlate` has no caller and is kept on `peekActiveSeason`'s
+terms, for the argument its note carries. The controls strip is `/manager`'s
+own to the class — `PLATE_KEY` in `BILLET_KEY_CHROME` in a
+`CONSOLE_METAL_TRACK_SM`, the sentence in `--billet-accent` — and the page's
+eyebrow lost its own ink for the reason that page's did: the billet inks the
+whole row, so the season cannot come to be drawn differently from the word it
+qualifies.
+
+**`Need a look` moved into the counts well, and that is the one content
+change.** It was the headline of the glass window, over the four reasons; it is
+a stamped count beside `Proj rec` now, `3 / 12` in `--error` above zero and the
+billet's figure ink at zero, `—` until the check lands, `aria-live` on the
+figure, the sentence in its `title`. The window did not fit: with a 108px
+gauge, the counts well, the keys and a name column that must not truncate, a
+`min-w-[12.5rem]` window does not fit a 1092px content box. **So the four
+reasons became a full-width milled strip under the row** — `AttentionStrip`,
+cut into the same part rather than a window bolted to it, which is the whole
+point of the change stated at the strip's grain. Every rule survived: the em
+dash before the check, the lit error tone above zero, the billet's own inks at
+zero, the unlit lamp on `--pip-unlit-bg` (the token that exists so an unlit pip
+is not painted near-black on metal), and the fact that the four do not sum to
+the count in the well.
+
+**`Count` was lifted out of `season-summary.tsx` as `StampedCount`**, in
+`features/shared/ui`, because two spellings of a stamped count is a header
+whose two tools set the same reading in different type. It took a `tone` on
+`StandingBay`'s terms — a colour, not a state, composed onto
+`--standing-engrave` through `style` — plus `live` and `title`, and
+`SeasonSummary` reads it back unchanged.
+
+**The gauge reads `66.7%`, not `.667`, and the six-character step-down stays.**
+That is the handoff's one open question, answered on its own default: a week's
+projection is quoted as a percentage where a season's record is a share, and
+the unit is the page's rather than the surface's. What it costs is the step the
+share never needed. `100.0%` — what a small account projects when every league
+is a win — is the reading that clips, and a window is a circle: measured, the
+108px window's chord at the figure's own height is ~74px against ~83 for
+`100.0%` at `--fs-21` and ~67 at `--fs-17`; the 84px window is the same sum one
+size down (`--fs-17` → `--fs-13`). Both were checked as pixels at 4× rather
+than as boxes, and both clear. `66.7%` at the compact size clears its 60px
+window by about 2px a side, which is the margin to know about if the type scale
+moves. `formatWinShare` is one import away if matching `/manager` digit for
+digit ever matters more.
+
+**Two things changed against the handoff, each because a render showed it.**
+
+- **The eyebrow's copy is two spellings switched by the cascade** — `Lineups`
+  below `sm`, `Lineup Checker` from it — which is the rack's own `Tool.short`
+  rule at the eyebrow's grain, and the word the rack's readout already uses at
+  exactly those widths. Below `lg` the name column shares its row with the
+  Filters and Clear keys and is 116px at 390, where `Lineup Checker · 2026`
+  wants ~150: rendered, it broke *inside* the tool's name and left the middot
+  orphaned on the line above the year. The billet's eyebrow row gained
+  `flex-wrap` at the same time, so that where a column cannot hold the whole
+  eyebrow the season drops to a second line whole rather than the row squeezing
+  a break into a page's own copy. `/manager`'s never wraps.
+- **The week is not a third eyebrow field.** The handoff offers `· Week 14` and
+  calls it optional; the stepper directly under this header names the week in a
+  lit readout at every width, and a second copy two lines above it is the same
+  news in two places — the argument that took the `WIN` caption out of the
+  dial's window.
+
+**The stepper has one copy again, in the row under the header at every
+width.** It rode the plate's bottom strip below `sm` because that strip had
+slack a phone's row did not; the billet has no bottom strip — its controls are
+items of its own row, beside the name on a phone — and a stepper wedged in
+beside them would be the name losing its line. The row keeps its hairline from
+`sm` up, where there is a page for it to run across, and is the stepper alone
+below it.
+
+**The phone strip is one line of four short bays with no cuts.** The handoff
+says to render it and decide between two lines of two and dropping the
+hairlines; measured at 390 the four `short` bays fit one line in the 322px
+strip with room, so the cuts go below `sm` (a vertical cut across a wrap is a
+stub hanging off the line above) and the bays are `flex-auto` — basis auto,
+which is what lets a flex row wrap at all where `flex-1`'s zero basis never
+does, the trap this file has recorded at three other grains.
+
+#### Verified
+
+Rendered through a temporary `/preview` route against the real `ManagerBillet`,
+`WeekSummary`, `AttentionStrip`, `LeagueFiltersDialog` and `WeekStepper`, the
+real tokens and the real Tailwind build — the method the console-card, shares,
+rack and timeline passes established, since no database is reachable from
+where this was built — then driven over CDP at **1280, 768, 640, 390 and 375 in
+both schemes** and deleted. The mechanics are the ones this file records:
+`--no-proxy-server`, `localhost` rather than `127.0.0.1`, a phone viewport from
+`Emulation.setDeviceMetricsOverride`, `data-theme` rather than
+`prefers-color-scheme`, the `--blink-settings=availablePointerTypes=4,…` flags,
+a client-component harness, and a CDP client over Node's own `WebSocket`, since
+Playwright is not installed here. The fixtures are four headers: a manager
+three of twelve leagues off with a filter on, a long display name with the
+check pending, an all-wins account, and one with no leagues.
+
+Every arm landed. At 1280 the wide row is the `1c` drawing: avatar, name,
+counts well, hairline, `Proj win` beside a 108px gauge, hairline, the keys in
+their metal track — with the strip and the sentence on their own full-width
+lines under it. The name has 308px beside a lit Filters key and Clear (`SlimJim`
+unclipped), the long fixture name truncates at 468, and the header with no
+leagues draws the billet alone with no well, no gauge, no strip and no keys. The
+inks resolve to the tokens: `Need a look` and the lit figures and lamps at
+`rgb(252,165,165)`, the unlit lamp at `--pip-unlit-bg`, the sentence at
+`--billet-accent`, the keys on `--key-metal` from `sm` and etched
+(`background-image: none`, the track's recess computing away) below it. The
+compact arm at 390 reads name row → milled cut → gauge well beside the counts
+well → one line of `Pts · Kick · SF · Roster` → the sentence, 271px tall with a
+filter on and 237 without. The pending header draws `—` for every figure and
+`Week —` in the stepper. Pressing Filters opened a `:modal` dialog named
+`League filters`, Escape closed it, and Clear took the sentence and itself off
+the row.
+
+At every width and in both schemes: `document.documentElement.scrollWidth`
+equal to the viewport, **zero** elements past it, nothing clipped inside the
+billet but the deliberately long fixture name, exactly one `<h1>` per header,
+one stepper in the DOM, and **no console output of any kind** beyond the dev
+server's own React-DevTools and HMR lines. 1,803 unit tests pass; `lint`,
+`typecheck` and `build` are clean.
+
+**One finding at 375, reported rather than patched.** With Filters *and* Clear
+beside it the name column is 101px there, `Lineups · 2026` drops its season to
+a second line and `SlimJim` clips by 7px. It is `/manager`'s own recorded state
+at that width — the same row, the same two keys — and 375 is below the repo's
+390 bar.
+
+**Not verified against real data**, which is the gap to close first: every
+number above is a fixture. Three things a render cannot check — whether a real
+account's display names sit acceptably in the 116px the phone row gives them
+once Clear joins Filters; whether the four reasons read as one strip on a page
+where the count in the well is usually zero and the strip usually dark; and
+whether `66.7%` is the reading a manager expects on a gauge that reads `.583`
+one tool over, which is the handoff's own open question and is answered here
+on its default rather than settled.
 
 ### The week view, and the seat that answers back
 
@@ -9452,9 +9605,11 @@ design handoff, its `2b` and that option's `3a` compact arm. Nothing on the wire
 moved — no route, no query, no contract type, no payload field, no migration —
 and no token was added.
 
-**It is a sibling of `ManagerPlate`, not a variant of it**, and the reason is
-`/lineupchecker`: that page draws the same plate and is not part of this design,
+**It is a sibling of `ManagerPlate`, not a variant of it**, and the reason was
+`/lineupchecker`: that page drew the same plate and was not part of this design,
 so editing the box in place would have moved its header without anybody asking.
+(It has since taken the billet on a pass of its own — see The checker's header
+on the billet — and the plate has no caller.)
 What the two share is the content and the two seams (`children`, `controls`);
 what they do not share is a single surface, padding, gap or type size, which is
 what makes a `variant` prop a `?:` on every line rather than a switch at the

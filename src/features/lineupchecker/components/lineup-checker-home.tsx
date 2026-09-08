@@ -12,17 +12,15 @@ import {
   activeFilterCount,
   DEFAULT_LEAGUE_FILTERS,
   filterSummary,
-  CONSOLE_KEY,
-  CONSOLE_KEY_PILL,
-  CONSOLE_TRACK,
-  CONSOLE_WINDOW,
+  BILLET_KEY_CHROME,
+  CONSOLE_METAL_TRACK_SM,
   LeagueFiltersDialog,
-  ManagerPlate,
+  ManagerBillet,
   matchesFilters,
   matchesSubjects,
   NO_SUBJECTS,
+  PLATE_KEY,
   removeSubject,
-  Scanlines,
   SubjectTokens,
   toggleSubject,
   type LeagueSubjects,
@@ -45,10 +43,10 @@ import { useLineupCheck } from "../hooks/use-lineup-check";
 import {
   attentionByReason,
   needsAttention,
-  type AttentionReasons,
 } from "../helpers/lineup-check-metrics";
 import type { WeekLineupEntry } from "../helpers/starter-shares";
 import { weekSummary } from "../helpers/week-summary";
+import { AttentionStrip } from "./attention-strip";
 import { OpponentsMark, StartersMark } from "./browse-marks";
 import { LineupCheckCard, LineupMarkDefs } from "./lineup-check-card";
 import { OpponentSharesDrawer } from "./opponent-shares-drawer";
@@ -99,15 +97,27 @@ const NO_LEAGUES: Record<string, never> = {};
  * them, rather than the page waiting on the slower of the two. It is also what
  * makes a failed check cost the week's numbers and not the list.
  *
- * The plate and the card are the leagues console's. A reader arriving from
+ * The header and the card are the leagues console's. A reader arriving from
  * `/manager` is looking at the same leagues, and a second vocabulary for them
- * would be a second chance for one to drift — which is why this page took that
- * one's header pass whole: the figures are engraved on the identity plate
- * rather than standing beside it in a housing of their own, and the Filters key
- * and the sentence saying what it narrowed are a strip along the plate's foot.
- * What differs is only the figures themselves, because a week is not a season:
- * a projected record and a projected win rate where `/manager` carries the
- * standing ones, with the attention window at the plate's right end.
+ * would be a second chance for one to drift — which is why this page draws
+ * `ManagerBillet`, the identity milled out of the same stock its league cards'
+ * strips are made of, and not the recessed `ManagerPlate` it drew until the
+ * billet pass reached it. For as long as it did, a reader walking between the
+ * two tools saw one account drawn as two objects: chrome engraved into a plate
+ * here, ink stamped on metal there. What differs now is only the figures,
+ * because a week is not a season: a projected record and a projected win rate
+ * where `/manager` carries the standing ones, the count of lineups wanting a
+ * press stamped beside the record, and the four reasons on a milled strip of
+ * their own under the row — see `WeekSummary` and `AttentionStrip` for what
+ * moved where, and why the reasons could not stay on the row.
+ *
+ * **The week stepper has one copy again**, in the row under the header at
+ * every width. It rode the plate's bottom strip below `sm` because that strip
+ * had slack a phone's row did not; the billet has no bottom strip — its
+ * controls are items of its own row, beside the name on a phone — and a
+ * stepper wedged in beside them would be the name losing its line to a dial.
+ * The row keeps its hairline from `sm` up, where there is a page for it to
+ * run across, and is the stepper alone below it.
  *
  * **The panel is gone, for the reason it went there.** This page used to draw
  * a rounded, bordered panel with `--background` showing around it; the ground
@@ -351,23 +361,22 @@ function Checker({
 
   return (
     <div className="relative">
-      {/* The bottom margin is the header's own below `sm`, because the stepper
-          row that used to carry it (`my-9`) is `display: none` there and a
-          hidden element's margins collapse with it.
-
-          It stands down while a card is parked — `display: none` rather than
+      {/* It stands down while a card is parked — `display: none` rather than
           unmounted, so the filters dialog it holds keeps its draft — and
           `chromeClass` fades it either side of that, with the other cards. */}
-      <header className={`relative mb-6 sm:mb-0 ${card.chromeClass}`}>
-        <ManagerPlate
+      <header className={`relative ${card.chromeClass}`}>
+        <ManagerBillet
           name={name}
           avatarUrl={user?.avatar_url ?? null}
           /*
-            **The Filters key sits on the plate**, the arrangement `/manager`
+            **The Filters key sits on the header**, the arrangement `/manager`
             arrived at: up in the rack the key said "a filter is on" and nothing
             said *what* was narrowed, while the sentence that said so stood on a
             line of its own under the header. Here the key, the key that undoes
-            it and the sentence are one object.
+            it and the sentence are one object — and, since the billet, so are
+            the four reasons, which is why they are `controls` rather than
+            `children`: DOM order is the wide row's read order, and the strip
+            has to come after the keys to take the line under them.
 
             `leagues` is the **unfiltered** list deliberately — it is the
             population every count inside the dialog is taken over, and handing
@@ -377,12 +386,22 @@ function Checker({
           controls={
             leagues.length > 0 ? (
               <>
-                <span className={`${CONSOLE_TRACK} flex items-center gap-1.5 p-1`}>
+                {/* The keys are an item of the billet's own row: `order-3` puts
+                    them beside the name on a phone, where `ml-auto` pins them
+                    to the row's far end, and DOM order puts them at the end of
+                    the desktop row after the gauge. The track is the *metal*
+                    one, and below `sm` there is no raised key to recess — the
+                    keys are etched into the face there, so the recess goes
+                    with them. See `BILLET_KEY_CHROME`. */}
+                <span
+                  className={`relative order-3 ml-auto flex items-center gap-1.5 self-center sm:self-auto sm:p-1 lg:order-none lg:ml-0 ${CONSOLE_METAL_TRACK_SM}`}
+                >
                   <LeagueFiltersDialog
                     filters={filters}
                     onChange={setFilters}
                     leagues={leagues}
-                    triggerClassName={`${CONSOLE_KEY_PILL} inline-flex items-center`}
+                    triggerClassName={PLATE_KEY}
+                    triggerChrome={BILLET_KEY_CHROME}
                   />
                   {/* Only while there is something to clear: a key that is a
                       no-op three quarters of the time is a key a reader stops
@@ -391,89 +410,73 @@ function Checker({
                     <button
                       type="button"
                       onClick={() => setFilters(DEFAULT_LEAGUE_FILTERS)}
-                      className={CONSOLE_KEY}
+                      className={`${PLATE_KEY} ${BILLET_KEY_CHROME} border-foreground/10 text-foreground/80 hover:text-readout`}
                     >
                       Clear
                     </button>
                   )}
                 </span>
-                {/*
-                  **The week stepper rides the strip below `sm`, and the row
-                  under the plate from `sm` up.** On a phone that row was the
-                  stepper and then a hairline with almost nothing on its far
-                  side — 36px of control and a rule across the rest of a 390px
-                  screen — while the strip beside it had slack. Above `sm` the
-                  hairline has a page to run across and the row earns itself.
-
-                  It is rendered twice, which every other two-position control
-                  in this app refuses to do — and the two facts that make it
-                  safe here are worth stating, because neither holds for the
-                  dialogs that established the rule. `WeekStepper` holds **no
-                  state**: the week comes off the payload and the handler is the
-                  page's, so two copies cannot disagree. And both gates are
-                  `display: none`, which takes an element out of the
-                  accessibility tree entirely — so the `aria-live` readout
-                  inside it exists exactly once at any width, and nothing is
-                  announced twice. What it costs is one duplicated control in
-                  the DOM, where `LeagueTeams`' `lg:contents` rule is about
-                  hundreds of rows.
-                */}
-                <span className="sm:hidden">
-                  <WeekStepper week={check?.week ?? null} onChange={onWeek} />
-                </span>
-                {/* `flex-[1_1_12rem]` is what lets the sentence take the rest of
-                    the strip and then drop to its own line rather than
-                    truncating the moment the keys grow. */}
+                {/* The four reasons, on a strip of their own under the row —
+                    `w-full`, so the billet's own `flex-wrap` gives it a line. */}
+                <AttentionStrip reasons={reasons} pending={check === null} />
+                {/* The filter summary in words. `w-full` at every width, where
+                    on the plate it took the strip's slack: the billet's row is
+                    a name column, a well, a 108px gauge and the keys, and there
+                    is no slack for a sentence to take. Its ink is
+                    `--billet-accent` rather than `text-active` for the reason
+                    every ink on this part is — it is stamped on metal, and the
+                    page's accent is drawn for the ground behind it. */}
                 {narrowing && (
-                  <p className="m-0 min-w-0 flex-[1_1_12rem] truncate font-mono text-[length:var(--fs-11)] uppercase tracking-[0.16em] text-active">
+                  <p className="relative order-6 m-0 w-full min-w-0 truncate font-mono text-[length:var(--fs-10)] uppercase tracking-[0.16em] text-[color:var(--billet-accent)] lg:order-none">
                     {filterSummary(filters)} · {visible.length} of {leagues.length}
                   </p>
                 )}
               </>
             ) : undefined
           }
+          /* The copy is the page's and the *treatment* is the billet's — see
+             `ManagerBillet`, which inks the whole eyebrow row so the season
+             cannot come to be drawn differently from the word it qualifies.
+
+             The week is deliberately *not* a third field here, though the
+             handoff offers one: the stepper directly under this header names
+             it in a lit readout at every width, and a second copy two lines
+             above it is the same news in two places — the argument that took
+             the `WIN` caption out of the dial's window. */
           eyebrow={
-            <span className="flex items-baseline gap-2">
+            <>
               {heading}
-              {state.season && (
-                <span className="font-mono text-[length:var(--fs-11)] uppercase tracking-[0.16em] text-foreground/60">
-                  · {state.season}
-                </span>
-              )}
-            </span>
+              {state.season && <span>· {state.season}</span>}
+            </>
           }
         >
-          {/* The week is engraved on the plate rather than standing beside it,
-              and the attention window rides at its right end — the header pass
-              `/manager` took, applied to the figures this page has. Passing
-              children is what switches `ManagerPlate` to its full-width box;
-              with no leagues there is nothing to sum and the plate stays the
-              `inline-flex` it has always been here. */}
+          {/* The week's figures, milled into the billet — and only once there
+              is an account's worth of leagues to sum. They read off `visible`,
+              the list as narrowed, with `answered` as the attention count's
+              denominator; see {@link WeekSummary}. */}
           {leagues.length > 0 ? (
-            <WeekSummary summary={summary}>
-              <AttentionWindow
-                attention={attention}
-                of={answered}
-                reasons={reasons}
-                pending={check === null}
-              />
-            </WeekSummary>
+            <WeekSummary
+              summary={summary}
+              attention={attention}
+              of={answered}
+              pending={check === null}
+            />
           ) : undefined}
-        </ManagerPlate>
+        </ManagerBillet>
       </header>
 
-      {/* The stepper keeps the row and the hairline fills the rest of it, from
-          `sm` up — below it the stepper is on the plate's own strip and this
-          row would be a rule with nothing on its far side. The `Clear filters`
-          key that used to stand at its far end is on the plate now, beside the
-          key that set the filter in the first place. */}
+      {/* The stepper keeps the row under the header at every width, and the
+          hairline fills the rest of it from `sm` up — below that the row is
+          the stepper alone, a rule across the rest of a phone's width having
+          nothing on its far side to lead to. See the module note for why the
+          strip-mounted copy went with the plate. */}
       <div
-        className={`relative my-6 hidden flex-wrap items-center gap-3 sm:my-9 sm:flex ${card.chromeClass}`}
+        className={`relative my-6 flex flex-wrap items-center gap-3 sm:my-9 ${card.chromeClass}`}
       >
         <WeekStepper week={check?.week ?? null} onChange={onWeek} />
         <div
           aria-hidden
-          className="h-px flex-1 bg-gradient-to-r from-active/35 via-foreground/5 to-transparent"
+          className="hidden h-px flex-1 bg-gradient-to-r from-active/35 via-foreground/5 to-transparent sm:block"
         />
       </div>
 
@@ -595,157 +598,6 @@ function Checker({
         />
       )}
     </div>
-  );
-}
-
-/**
- * How many of these lineups want a press, and what for.
- *
- * **One lit window, where it used to be a plate holding a readout.** The plate
- * went with the header pass: the identity plate is the instrument now and this
- * is a window set into it, the same surface every other reading on the console
- * is drawn on.
- *
- * The count is over *leagues* — a league with both a gap and a re-seat is one
- * league, and one trip to Sleeper. The four rows underneath are over *reasons*,
- * and **they do not sum to it**, which is why the count is stated separately
- * and the rows are labelled by reason rather than presented as a breakdown a
- * reader could add up. See `attentionByReason`.
- *
- * Before the check lands there is no number at all: an em dash rather than a
- * zero, which would read as "all clear" for the length of a round trip, and no
- * rows, because four zeroes make the same claim four times. `aria-live` is on
- * the count so the answer is announced when it arrives.
- *
- * **Below `sm` it shares the dial's line rather than taking one of its own,
- * and the four rows become one wrapping row of pips.** The `min-w-[12.5rem]`
- * this used to carry unconditionally was the whole of the problem: with the
- * 88px dial and the `Proj rec` figure beside it, 200px does not fit a 336px
- * plate, so the window wrapped and the plate became four rows — 385px of a
- * phone screen before a single card. It is `min-w-0 flex-1` there and the
- * floor comes back at `sm`, where there is room for it.
- *
- * The rows keep every rule they had: the em dash before the check lands, the
- * lit error tone above zero, the muted ink at zero. What changes below `sm` is
- * that they flow rather than stack, and each carries a short label — the
- * `Tool.short` argument at a row's grain, and spelled as two spans switched by
- * the cascade rather than by state, because this is rendered above the fold on
- * every visit and must not wait for hydration to learn its width.
- */
-function AttentionWindow({
-  attention,
-  of,
-  reasons,
-  pending,
-}: {
-  attention: number;
-  of: number;
-  reasons: AttentionReasons;
-  pending: boolean;
-}) {
-  return (
-    <div
-      className={`${CONSOLE_WINDOW} flex min-w-0 basis-full flex-col justify-center gap-2 rounded-[0.625rem] px-3 py-2.5 font-mono sm:basis-auto sm:gap-[0.4375rem] sm:min-w-[12.5rem]`}
-      title={`${attention} of ${of} league${of === 1 ? "" : "s"} checked need a look`}
-    >
-      <Scanlines />
-      <span className="relative flex items-baseline justify-between gap-2.5">
-        <span className="text-[length:var(--fs-9)] uppercase tracking-[0.18em] text-readout-label">
-          Need a look
-        </span>
-        <span
-          aria-live="polite"
-          className={`text-[length:var(--fs-17)] leading-none tabular-nums ${
-            !pending && attention > 0
-              ? "text-error [text-shadow:0_0_12px_rgba(252,165,165,0.45)]"
-              : "text-readout [text-shadow:var(--readout-text-glow)]"
-          }`}
-        >
-          {pending ? "—" : `${attention} of ${of}`}
-        </span>
-      </span>
-
-      <span
-        aria-hidden
-        className="relative block h-px bg-[color-mix(in_srgb,var(--readout-label)_26%,transparent)]"
-      />
-
-      <div className="relative flex flex-wrap items-center gap-x-2.5 gap-y-1 sm:flex-col sm:items-stretch sm:gap-[0.4375rem]">
-        <ReasonRow
-          label="Points left"
-          short="Pts"
-          count={pending ? null : reasons.points}
-        />
-        <ReasonRow
-          label="Kickoff order"
-          short="Kick"
-          count={pending ? null : reasons.kickoff}
-        />
-        <ReasonRow
-          label="Superflex"
-          short="SF"
-          count={pending ? null : reasons.superflex}
-        />
-        <ReasonRow
-          label="Roster slots"
-          short="Roster"
-          count={pending ? null : reasons.roster}
-        />
-      </div>
-    </div>
-  );
-}
-
-/**
- * One reason, and how many leagues are off for it.
- *
- * A row above zero is lit in the error tone, pip included; a zero row is the
- * window's muted ink throughout, so the eye finds the reasons that want a press
- * without reading four numbers. `null` is the state before the check lands —
- * the em dash, never a zero, for the reason the count above draws one.
- *
- * `short` is the label below `sm`, where the four of these flow along one line
- * inside a window sharing its row with a dial. Both are rendered and the
- * cascade picks one, never state — see the window's own note.
- */
-function ReasonRow({
-  label,
-  short,
-  count,
-}: {
-  label: string;
-  short: string;
-  count: number | null;
-}) {
-  const lit = count !== null && count > 0;
-  return (
-    <span className="flex items-center gap-1.5 sm:gap-2">
-      <span
-        aria-hidden
-        className={`size-1.5 shrink-0 rounded-full ${
-          lit
-            ? "bg-error shadow-[0_0_10px_rgba(252,165,165,0.5)]"
-            : "bg-readout-muted"
-        }`}
-      />
-      <span
-        className={`whitespace-nowrap text-[length:var(--fs-10)] uppercase tracking-[0.14em] sm:flex-1 ${
-          lit ? "text-readout-line" : "text-readout-muted"
-        }`}
-      >
-        <span className="sm:hidden">{short}</span>
-        <span className="hidden sm:inline">{label}</span>
-      </span>
-      <span
-        className={`text-[length:var(--fs-13)] leading-none tabular-nums ${
-          lit
-            ? "text-error [text-shadow:0_0_10px_rgba(252,165,165,0.5)]"
-            : "text-readout-muted"
-        }`}
-      >
-        {count ?? "—"}
-      </span>
-    </span>
   );
 }
 
