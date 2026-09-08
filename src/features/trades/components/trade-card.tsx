@@ -331,8 +331,11 @@ export const TradeCard = memo(function TradeCard({
             // container, so `flex: 1 1 0%` would shrink this below its own
             // content height and its content would paint over the expanded
             // half — which is exactly what hid the history rail during design.
-            // The manager card can say `flex-1` because there the flex it fills
-            // is the grid row's, not a column of its own.
+            // The two league cards say `flex-1` for their *closed* state and
+            // `group-open/card:flex-none` for this one: a header that grows
+            // into the panel's slack is also a header the panel is measured
+            // against, which is a loop rather than a measurement. See
+            // `usePanelCap`.
             "pointer-fine:[transform-style:preserve-3d] " +
             "focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-active/60"
           }

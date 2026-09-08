@@ -356,7 +356,23 @@ export const LeagueCard = memo(function LeagueCard({
           // housing's context down to the windows' `translateZ`), and the
           // focus ring, since the summary is the element a keyboard lands on.
           className={
-            "relative flex flex-1 cursor-pointer list-none flex-col font-mono " +
+            // **`flex-1` while shut and `flex-none` while open**, and the
+            // second half is what keeps the panel's own measurement honest
+            // rather than being a layout preference. The `<details>` is a
+            // column flex container, so a header that grows absorbs whatever
+            // slack the panel does not take — and the panel is sized from
+            // `panel.offsetTop`, which *is* the header's height. Left growing,
+            // the two feed each other: the room reads back as whatever the
+            // panel happens to be, every value of which is self-consistent,
+            // and around `MIN_PARKED` two of them alternate forever. Driven,
+            // a card opened before its lineups landed strobed at 60fps between
+            // a 107px panel under a 694px header and a 320px panel under a
+            // 481px one, and the empty state's line jumped 200px with it. At
+            // its natural height the header is a constant the panel is
+            // measured against, which is what {@link usePanelCap} has always
+            // assumed and what the trades board's own summary spells as
+            // `shrink-0`.
+            "relative flex flex-1 cursor-pointer list-none flex-col font-mono group-open/card:flex-none " +
             // **The gutter is 14px below `sm`**, where the card takes 18px from
             // `sm` up. Four windows across a 362px card is what asks for it —
             // the strip is the card's full width less this inset, and the four

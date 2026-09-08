@@ -170,7 +170,16 @@ export const LineupCheckCard = memo(function LineupCheckCard({
             // this card's expanded half is still its own housing under the
             // summary rather than the same stock under a groove, so there is
             // no seam here to close.
-            `lab-card-3d ${CONSOLE_CARD_SHELL} pb-[1.125rem] pt-[1.875rem] sm:pt-[2.125rem] flex flex-1 cursor-pointer list-none flex-col font-mono ` +
+            //
+            // **`flex-1` while shut and `flex-none` while open.** The
+            // `<details>` is a column flex container and the expanded half
+            // below is sized from this header's height (`panel.offsetTop`, in
+            // {@link usePanelCap}) — so a header that grows absorbs the
+            // panel's slack and the measurement reads back the panel's own
+            // size. Around `MIN_PARKED` that has two self-consistent answers
+            // and it alternates between them forever; the manager card carries
+            // the same rule and the driven figures for it.
+            `lab-card-3d ${CONSOLE_CARD_SHELL} pb-[1.125rem] pt-[1.875rem] sm:pt-[2.125rem] flex flex-1 group-open/card:flex-none cursor-pointer list-none flex-col font-mono ` +
             // **The gutter is 14px below `sm`**, where the card takes 18px from
             // `sm` up. Four tiles across a 362px card is what asks for it — the
             // strip is the card's full width less this inset, and the four
