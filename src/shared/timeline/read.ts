@@ -1,4 +1,4 @@
-import { getLeagueLineupRow } from "@/shared/manager";
+import { getLeagueChain, getLeagueLineupRows } from "@/shared/manager";
 import type { ManagerLeagueRow } from "@/shared/manager";
 import { pool } from "@/shared/db";
 import { asNumber, isRecord, items, numbers } from "@/shared/trades/jsonb";
@@ -7,19 +7,20 @@ import { TRADE_SORT_SQL } from "@/shared/trades/sql";
 import type { RewindTransaction } from "./rewind";
 
 /**
- * The stored halves of a league's replay: the league as a solve reads it, and
- * every move that got its rosters where they are.
+ * The stored halves of a league's replay: each season it has run, as a solve
+ * reads it, and every move that got that season's rosters where they ended up.
  *
  * **It reads stored rows and fetches nothing from Sleeper.** `transactions`,
  * `rosters`, `traded_picks` and `drafts` are what the league crawler and the
  * manager sync already wrote, so a league neither has reached comes back with
  * no timeline rather than being synced on demand — the rule every route but the
- * two documented exceptions keeps.
+ * documented exceptions keeps. Growing the corpus by one earlier season is a
+ * `POST`, and is the timeline route's own sibling.
  *
- * **The league row is `getLeagueLineupRow`'s and not this module's own**, which
- * is what lets a past stop be priced by the same solve the card in front of the
- * rail is drawn by: the rewind starts from that row's rosters and pick grid, and
- * `./pricing` puts today's boards over it.
+ * **The league rows are `getLeagueLineupRows`' and not this module's own**,
+ * which is what lets a past stop be priced by the same solve the card in front
+ * of the rail is drawn by: each rewind starts from that row's rosters and pick
+ * grid, and `./pricing` puts today's boards over it.
  */
 
 /** One move, narrowed to what the payload promises. */
@@ -43,55 +44,124 @@ export type TimelinePick = {
   previous_owner_id: number | null;
 };
 
-/** Everything a timeline replays. */
-export type LeagueTimeline = {
-  /** The league as a solve reads it — rosters, members, picks, drafts. */
+/**
+ * One season of a league: the league as it ran that year, and its own moves.
+ *
+ * **A season is a self-contained replay**, which is the whole of why the
+ * timeline is a list of these rather than one long log — see
+ * {@link getLeagueTimeline}.
+ */
+export type TimelineSeason = {
   league: ManagerLeagueRow;
-  /** Its completed moves, newest first — see {@link readTimelineEvents}. */
+  /** Which year this league ran — `leagues.season`, off the chain read. */
+  season: string;
+  /** That season's completed moves, newest first — see {@link readTimelineEvents}. */
   events: TimelineEvent[];
 };
 
+/** Everything a timeline replays, plus where the stored copy of it runs out. */
+export type LeagueTimeline = {
+  /**
+   * The league's seasons, **newest first** — the one asked for, then each
+   * earlier one this database holds.
+   */
+  seasons: TimelineSeason[];
+  /**
+   * The season before the oldest stored one, when Sleeper names one and this
+   * database does not hold it. Null where the chain is complete.
+   */
+  earlierLeagueId: string | null;
+};
+
 /**
- * One league's rosters at any moment from its **oldest stored move** to today.
+ * One league's rosters at any moment its stored seasons can reach.
  *
- * **"All the way back" is this league id's log and no further, which is a real
- * limit rather than a shortcut.** A Sleeper league id *is* one season, and a
- * dynasty chain links seasons through `previous_league_id` — so the obvious
- * extension is to keep walking into last year. It is not sound: rosters carry
- * over between seasons through no transaction at all, so there is nothing to
- * reverse across the boundary and a walk that crossed it would report last
- * season's league as though this season's roster had always been on it. The
- * honest far end is the first move this league recorded, which is roughly the
- * post-draft roster — subject to the two limits `./rewind` documents, of which
- * "a draft is not a transaction" is the one that bites hardest at exactly that
- * end of the rail.
+ * **A season is rewound from its own stored rosters, and that is what makes
+ * crossing a year sound.** This module used to stop at one league id on the
+ * argument that a dynasty chain cannot be walked: rosters carry over between
+ * seasons through no transaction at all, so there is nothing to reverse across
+ * the boundary and a walk that crossed it would report last season's league as
+ * though this season's roster had always been on it. **That argument is intact,
+ * and it is an argument against continuing one walk** — not against running a
+ * second. Sleeper keeps each season as a league of its own, with its own
+ * `rosters` frozen at that year's end and its own transaction log, so last
+ * season's replay starts from last season's rosters and never mentions this
+ * one's. Two reconstructions, each honest about its own year.
  *
- * Null on three terms, none an error and none stopping the league being shown
- * as it stands:
+ * **The join between them is therefore a jump rather than a move**, and the rail
+ * says so: the newest stop of an earlier season is that season as it *ended*,
+ * which is not the oldest stop of the season after it. What happened in between
+ * — a rookie draft, an offseason of drops, a league that changed size — is
+ * exactly what this database has no transactions for, and presenting the two as
+ * adjacent notches without marking the boundary would be the same claim in a
+ * new place. See `features/shared/timeline` for how a stop names its season.
+ *
+ * **Where the corpus stops is a different fact from where the league began**,
+ * and both are reported: nothing here follows `previous_league_id` to *fetch* a
+ * league, so `earlierLeagueId` names the season a reader can ask for and
+ * `seasons` is what is already in hand.
+ *
+ * Null on three terms, none an error and none stopping the league being shown as
+ * it stands:
  *
  * - **No such live league stored.** One the crawler has never reached, or one
  *   Sleeper stopped serving.
- * - **No rosters stored.** There is nothing to rewind *from*, and synthesising
- *   empty rosters is the claim this module refuses everywhere else.
- * - **No dated completed moves.** A league nobody has moved a player in has no
- *   rail to draw, and drawing an empty one would be a control that explains
- *   itself instead of doing anything.
+ * - **No rosters stored on the league asked for.** There is nothing to rewind
+ *   *from*, and synthesising empty rosters is the claim this module refuses
+ *   everywhere else.
+ * - **Nothing to scrub and nothing to offer** — a league nobody has moved a
+ *   player in, whose earlier seasons are all in hand or absent from Sleeper.
+ *   Drawing an empty rail would be a control that explains itself instead of
+ *   doing anything. A league with no moves but an earlier season to load is
+ *   deliberately *not* this case: there is something to ask for, so there is
+ *   something to draw.
  */
 export async function getLeagueTimeline(
   leagueId: string,
 ): Promise<LeagueTimeline | null> {
-  const [league, events] = await Promise.all([
-    getLeagueLineupRow(leagueId),
-    readTimelineEvents(leagueId),
-  ]);
-  if (!league || league.rosters.length === 0 || events.length === 0) return null;
+  const chain = await getLeagueChain(leagueId);
+  if (chain.links.length === 0) return null;
 
-  return { league, events };
+  const leagueIds = chain.links.map((link) => link.league_id);
+  const [leagues, eventsByLeague] = await Promise.all([
+    getLeagueLineupRows(leagueIds),
+    readTimelineEvents(leagueIds),
+  ]);
+  const seasonOf = new Map(
+    chain.links.map((link) => [link.league_id, link.season]),
+  );
+
+  // A season with no stored rosters is dropped rather than carried empty — it
+  // has nothing to rewind from, which is the same reading the head's own guard
+  // takes one line down. Dropping it in the middle of a chain leaves a gap
+  // between two years that the rail's own boundary marking already tells the
+  // reader about.
+  const seasons: TimelineSeason[] = leagues
+    .filter((league) => league.rosters.length > 0)
+    .map((league) => ({
+      league,
+      season: seasonOf.get(league.league_id) ?? "",
+      events: eventsByLeague.get(league.league_id) ?? [],
+    }));
+
+  // The league asked for has to be the head. Without its rosters there is no
+  // present to rewind from, and an earlier season standing alone would be a rail
+  // whose right-hand end is not the card it sits above.
+  if (seasons[0]?.league.league_id !== leagueId) return null;
+
+  const stops = seasons.reduce((sum, season) => sum + season.events.length + 1, 0);
+  if (stops <= 1 && chain.earlier_league_id === null) return null;
+
+  return { seasons, earlierLeagueId: chain.earlier_league_id };
 }
 
 /**
- * Every completed move in the league, newest first, with the timestamp the rail
- * labels each stop by.
+ * Every completed move in each of these leagues, newest first within a league,
+ * with the timestamp the rail labels each stop by.
+ *
+ * **One round trip for the whole chain**, keyed back out by league: a chain is a
+ * handful of seasons and the alternative is a query per season on a read that is
+ * already the heaviest thing the manager page makes.
  *
  * Four things about the shape of this read:
  *
@@ -106,21 +176,34 @@ export async function getLeagueTimeline(
  * - **The trades board's own ordering.** The walk is only correct on a total
  *   order, and `TRADE_SORT_SQL` is the one the board is already read in; two
  *   spellings of it is how a stop ends up taken at a different point in the log
- *   from the trade a reader is looking at one page over.
+ *   from the trade a reader is looking at one page over. It orders **within** a
+ *   league here rather than across the chain, which is the same distinction the
+ *   seasons themselves draw: two leagues' logs are two orders, not one.
  */
-async function readTimelineEvents(leagueId: string): Promise<TimelineEvent[]> {
-  const { rows } = await pool.query<RewindTransaction & { at: number }>(
-    `SELECT t.transaction_id, t.type, t.roster_ids, t.adds, t.drops,
-            t.draft_picks,
+async function readTimelineEvents(
+  leagueIds: readonly string[],
+): Promise<Map<string, TimelineEvent[]>> {
+  const { rows } = await pool.query<
+    RewindTransaction & { at: number; league_id: string }
+  >(
+    `SELECT t.league_id, t.transaction_id, t.type, t.roster_ids, t.adds,
+            t.drops, t.draft_picks,
             coalesce(t.status_updated, t.created)::float8 AS at
        FROM transactions t
-      WHERE t.league_id = $1
+      WHERE t.league_id = ANY($1::varchar[])
         AND t.status = 'complete'
         AND coalesce(t.status_updated, t.created) IS NOT NULL
-      ORDER BY ${TRADE_SORT_SQL} DESC, t.transaction_id DESC`,
-    [leagueId],
+      ORDER BY t.league_id, ${TRADE_SORT_SQL} DESC, t.transaction_id DESC`,
+    [[...leagueIds]],
   );
-  return rows.map(narrowEvent);
+
+  const byLeague = new Map<string, TimelineEvent[]>();
+  for (const row of rows) {
+    let list = byLeague.get(row.league_id);
+    if (!list) byLeague.set(row.league_id, (list = []));
+    list.push(narrowEvent(row));
+  }
+  return byLeague;
 }
 
 /**

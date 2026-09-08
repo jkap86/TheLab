@@ -1,8 +1,12 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
-import type { KtcBoardChoice, RosterTimelinePayload } from "@/shared/contract";
+import type {
+  KtcBoardChoice,
+  LeagueHistoryPayload,
+  RosterTimelinePayload,
+} from "@/shared/contract";
 
 import { apiFetch } from "./api";
 import { errorMessage } from "./error-message";
@@ -66,6 +70,25 @@ export type TimelineState = {
   payload: RosterTimelinePayload | null;
   loading: boolean;
   error: string | null;
+  /**
+   * Fetch the season before the oldest one on the rail, then re-read.
+   *
+   * A no-op where the payload names none — the far end of a complete chain — and
+   * while a press is already in flight. Stable, so the key holding it does not
+   * re-render the rail on every scrub.
+   */
+  loadEarlier: () => void;
+  /** Whether that press is in flight. */
+  loadingEarlier: boolean;
+  /**
+   * Why the last press did nothing, or null.
+   *
+   * A *sentence rather than a status*, because the four arms that fail are four
+   * different pieces of news to a reader — a chain that has ended, a season
+   * Sleeper no longer serves, somebody else already doing the work, and a fetch
+   * that did not come back whole — and the key has one line to say which.
+   */
+  earlierError: string | null;
 };
 
 export function useTimeline(
@@ -75,6 +98,17 @@ export function useTimeline(
   const [payload, setPayload] = useState<RosterTimelinePayload | null>(null);
   const [error, setError] = useState<string | null>(null);
   const inFlight = useRef<AbortController | null>(null);
+
+  // **A re-read counter, and it is deliberately not part of the subject key.**
+  // Loading an earlier season makes the rail longer without changing what it is
+  // a rail *of*, so blanking the payload for the round trip would collapse the
+  // control under the reader's finger and send them back to "now" — where a
+  // subject change genuinely must blank it, because the old board's prices under
+  // the new board's name is a wrong number rather than a stale one.
+  const [reads, setReads] = useState(0);
+  const [loadingEarlier, setLoadingEarlier] = useState(false);
+  const [earlierError, setEarlierError] = useState<string | null>(null);
+  const pressed = useRef(false);
 
   const { leagueId, season, username, board } = subject;
 
@@ -87,6 +121,7 @@ export function useTimeline(
     setRenderedKey(key);
     setPayload(null);
     setError(null);
+    setEarlierError(null);
   }
 
   useEffect(() => {
@@ -117,7 +152,42 @@ export function useTimeline(
     })();
 
     return () => controller.abort();
-  }, [leagueId, season, username, board, enabled]);
+  }, [leagueId, season, username, board, enabled, reads]);
+
+  // **The press is not on the house's abort lineage**, which is the one place
+  // this hook diverges from every other read on the page — and it is
+  // `useLeagueRefresh`'s divergence, for its reason. The POST fills *shared
+  // Postgres state* rather than this component's answer, so cancelling because
+  // a card was collapsed would throw away Sleeper budget already spent and leave
+  // a season half-fetched for the next reader to pay for again. The guard is a
+  // ref rather than `loadingEarlier`, since that is a value the render closed
+  // over and a double press would slip past it inside one frame.
+  const loadEarlier = useCallback(() => {
+    if (pressed.current) return;
+    pressed.current = true;
+    setLoadingEarlier(true);
+    setEarlierError(null);
+
+    void (async () => {
+      try {
+        const res = await apiFetch(
+          `/api/league/${encodeURIComponent(leagueId)}/timeline`,
+          { method: "POST", fallbackError: EARLIER_FALLBACK },
+        );
+        const result = (await res.json()) as LeagueHistoryPayload;
+        // A tombstoned season is re-read too, and that is the arm worth keeping:
+        // nothing was added, but the chain now ends one link earlier, so the
+        // re-read is what takes the key off a rail that can no longer grow.
+        if (result.loaded || result.status === "gone") setReads((n) => n + 1);
+        setEarlierError(earlierNote(result.status));
+      } catch (err: unknown) {
+        setEarlierError(errorMessage(err, EARLIER_FALLBACK));
+      } finally {
+        pressed.current = false;
+        setLoadingEarlier(false);
+      }
+    })();
+  }, [leagueId]);
 
   return {
     payload,
@@ -126,5 +196,36 @@ export function useTimeline(
     // it can be left true by a path that forgot to clear it.
     loading: enabled && payload === null && error === null,
     error,
+    loadEarlier,
+    loadingEarlier,
+    earlierError,
   };
+}
+
+const EARLIER_FALLBACK = "Could not load the earlier season";
+
+/**
+ * What a press that added nothing has to say for itself.
+ *
+ * Null for the two arms that worked — an added season and one a racing caller
+ * added first — because the rail getting longer *is* the answer and a note on
+ * top of it would be the key congratulating itself, which is the rule
+ * `syncStatusNote` already keeps one card over. Every arm that leaves the screen
+ * as the reader found it speaks, since those are otherwise indistinguishable
+ * from a dead key.
+ */
+function earlierNote(status: LeagueHistoryPayload["status"]): string | null {
+  switch (status) {
+    case "added":
+    case "fresh":
+      return null;
+    case "none":
+      return "This is the league's first season";
+    case "gone":
+      return "Sleeper no longer has that season";
+    case "locked":
+      return "Already loading — try again in a moment";
+    case "failed":
+      return EARLIER_FALLBACK;
+  }
 }

@@ -799,6 +799,184 @@ export async function getLeagueLineupRow(
 }
 
 /**
+ * How many seasons back a chain walk will follow before it stops.
+ *
+ * It is a **cycle guard first and a budget second**, which is why it exists at
+ * all: `previous_league_id` is a value Sleeper hands out rather than a foreign
+ * key this schema enforces, so nothing in the database stops a row pointing at
+ * itself or at a descendant, and a recursive walk over one of those does not
+ * terminate. A depth bound is the one guard that holds whatever the data says.
+ *
+ * Twelve is far past any real dynasty league — Sleeper itself is younger than
+ * that — so the budget half never binds in practice, which is deliberate: the
+ * one thing a reader must not hit is a cap that silently truncates their
+ * league's own history.
+ */
+const MAX_LEAGUE_CHAIN = 12;
+
+/**
+ * A league and every earlier season it was rolled over from, newest first.
+ *
+ * **A Sleeper league id is one season**, and a league that continues links back
+ * through `previous_league_id`. So a dynasty league's history is not one id but
+ * a chain of them, and this is the walk of it — bounded by
+ * {@link MAX_LEAGUE_CHAIN}, and by what this database actually holds.
+ *
+ * **It stops where the corpus stops, and says so rather than pretending the
+ * chain ended.** Nothing in this app follows `previous_league_id` to *fetch* a
+ * league: `getUserLeagues` is season-scoped and the crawler discovers through
+ * `league_users`, so an earlier season is stored only if somebody asked for that
+ * season by name. The two endings are therefore different facts and are
+ * reported as two fields — `links` is what is here, and
+ * `earlier_league_id` is the season before the oldest of them, which exists and
+ * is not stored. A reader is entitled to tell "this is where the league began"
+ * from "this is where our copy of it begins".
+ */
+export type LeagueChain = {
+  /**
+   * Newest first, starting with the league asked for. Empty if it is not stored.
+   *
+   * The season rides along because `LINEUP_LEAGUE_COLUMNS_SQL` deliberately does
+   * not carry one — a solve has no use for the year — and naming a stop does.
+   * Reading it here rather than widening {@link ManagerLeagueRow} keeps a field
+   * only one caller wants off the row three reads share.
+   */
+  links: LeagueChainLink[];
+  /**
+   * The season before the oldest stored one, when Sleeper names one and this
+   * database does not hold it — what a `POST` to the timeline route would add.
+   *
+   * Null both when the oldest stored league is the league's first season and
+   * when the walk stopped on {@link MAX_LEAGUE_CHAIN}, which is the one case
+   * where this understates what could be loaded. At twelve seasons that is a
+   * league older than Sleeper.
+   */
+  earlier_league_id: string | null;
+};
+
+/** One season of a league chain: which league id ran it, and which year it was. */
+export type LeagueChainLink = { league_id: string; season: string };
+
+/**
+ * Sleeper's own two spellings of "there is no earlier season".
+ *
+ * It writes `previous_league_id` as an empty string on some leagues and the
+ * literal `"0"` on others, and both mean the same thing — the pair
+ * `STARTUP_LEAGUE_SQL` already tests for, spelled here in the same place for
+ * the same reason.
+ */
+const NO_PREVIOUS_LEAGUE = new Set(["", "0"]);
+
+/** That test, applied to a column read back rather than in SQL. */
+function namesAnEarlierLeague(previous: string | null): previous is string {
+  return previous !== null && !NO_PREVIOUS_LEAGUE.has(previous);
+}
+
+/**
+ * The chain above, read in one round trip.
+ *
+ * `LIVE_LEAGUE_SQL` is applied at **every** link and not just the first: a
+ * tombstoned league's rows are frozen rather than cleared, so one in the middle
+ * of a chain would otherwise contribute a season nobody can open — and, worse,
+ * would let the walk continue *past* it and present two segments as adjacent
+ * years when a year between them is missing. Stopping at the tombstone is the
+ * honest reading, and the `earlier_league_id` it leaves behind is what offers to
+ * fetch it again.
+ *
+ * An unknown or tombstoned head answers an empty chain, which every caller reads
+ * as "nothing to say" rather than as an error — {@link getLeagueLineupRow}'s own
+ * rule one grain up.
+ */
+export async function getLeagueChain(leagueId: string): Promise<LeagueChain> {
+  const { rows } = await pool.query<{
+    league_id: string;
+    season: string;
+    previous_league_id: string | null;
+  }>(
+    `WITH RECURSIVE chain AS (
+       SELECT l.league_id, l.season, l.previous_league_id, 0 AS depth,
+              ARRAY[l.league_id]::text[] AS seen
+         FROM leagues l
+        WHERE l.league_id = $1
+          AND ${LIVE_LEAGUE_SQL}
+       UNION ALL
+       SELECT p.league_id, p.season, p.previous_league_id, c.depth + 1,
+              c.seen || p.league_id::text
+         FROM chain c
+         JOIN leagues p ON p.league_id = c.previous_league_id
+        WHERE c.depth + 1 < $2
+          AND coalesce(c.previous_league_id, '') NOT IN ('', '0')
+          AND p.gone_at IS NULL
+          -- The path, not just the depth: a depth bound stops a cycle running
+          -- forever and does nothing about what it produces. A league whose
+          -- previous_league_id points at itself walked twelve times and came
+          -- back as twelve copies of one season, which is a rail showing one
+          -- year a dozen times over. Sleeper writes that column and nothing
+          -- here enforces it, so a season already on the path is not an
+          -- earlier one.
+          AND NOT (p.league_id = ANY(c.seen))
+     )
+     SELECT league_id, season, previous_league_id FROM chain ORDER BY depth`,
+    [leagueId, MAX_LEAGUE_CHAIN],
+  );
+
+  const oldest = rows[rows.length - 1];
+  const previous = oldest?.previous_league_id ?? null;
+  const walked = new Set(rows.map((row) => row.league_id));
+
+  // **Only where the walk ran out of *corpus*.** It can stop for four reasons
+  // and just one of them is something a reader can do anything about: the next
+  // season is not stored. At the depth cap the next league may well be here
+  // already, and on a cycle the league it names certainly is — offering either
+  // is a key that spends eleven Sleeper requests to change nothing on screen,
+  // and on the cycle it would never stop offering.
+  const offerable =
+    rows.length < MAX_LEAGUE_CHAIN &&
+    namesAnEarlierLeague(previous) &&
+    !walked.has(previous);
+
+  return {
+    links: rows.map((row) => ({ league_id: row.league_id, season: row.season })),
+    earlier_league_id: offerable ? previous : null,
+  };
+}
+
+/**
+ * {@link getLeagueLineupRow} for several leagues at once, in the order asked.
+ *
+ * The timeline's read: a chain is a handful of leagues and each needs exactly
+ * what a solve needs, so one round trip over `= ANY($1)` rather than one per
+ * season. **The same `LINEUP_LEAGUE_COLUMNS_SQL`**, which is the whole reason
+ * this sits beside its single-league sibling: a field added to
+ * {@link ManagerLeagueRow} arrives on all three reads or on none.
+ *
+ * **Ordered in TypeScript rather than in SQL**, because the order that matters
+ * is the caller's chain — newest season first — which is a fact about the walk
+ * that produced the ids and not one any column here carries. A league that has
+ * gone missing between the two reads is dropped rather than left as a hole, on
+ * the same terms the single-league read answers null.
+ */
+export async function getLeagueLineupRows(
+  leagueIds: readonly string[],
+): Promise<ManagerLeagueRow[]> {
+  if (leagueIds.length === 0) return [];
+
+  const { rows } = await pool.query<ManagerLeagueRow>(
+    `SELECT ${LINEUP_LEAGUE_COLUMNS_SQL}
+       FROM leagues l
+      WHERE l.league_id = ANY($1::varchar[])
+        AND ${LIVE_LEAGUE_SQL}`,
+    [[...leagueIds]],
+  );
+
+  const byId = new Map(rows.map((row) => [row.league_id, row]));
+  return leagueIds.flatMap((id) => {
+    const row = byId.get(id);
+    return row ? [row] : [];
+  });
+}
+
+/**
  * Average draft position over the drafts already synced for this manager's
  * leagues, split into the boards that can legitimately be pooled — the
  * superflex predicate's two populations, and rookie drafts apart from full ones.
