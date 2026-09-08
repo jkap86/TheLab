@@ -2213,18 +2213,41 @@ html {
  * over `text-[length:var(--fs-13)]` without the escalation `.lab-anim` needs
  * for inline styles.
  *
- * `max(1rem, 16px)` rather than a flat `16px`: Safari measures against an
- * absolute 16 CSS pixels, and a reader who has enlarged their root font wants
- * the controls to grow with the page rather than be pinned to the floor. In
- * one place it is a clamp rather than a floor — the account lookup's field is
- * `--fs-15`, 17.1px, and comes down to 16 — which is the only control in the
- * app that declares more than the floor and a pixel nobody can see. One that
- * ever wants to stay larger declares its size inside this media query.
+ * **A literal 17px, where this was `max(1rem, 16px)` and still zoomed.** That
+ * spelling was wrong twice over, and both faults are invisible from a desktop
+ * browser — driven under an emulated coarse pointer every control in the app
+ * computed to exactly 16px, which is the rule working and the zoom persisting
+ * anyway.
  *
- * **What it costs is width**, and only in the two places a control is narrow
- * enough to feel it: the expanded card's pane ledges. Both compensate with
- * their tracking under the same `pointer-coarse:` gate — see `league-teams`
- * for the measurement.
+ * It sat *on* the threshold rather than above it. Safari zooms a form control
+ * whose font size is below 16px, so 16 is the smallest value that can work and
+ * has no margin at all: anything that rounds the used value down by a hair —
+ * a scale, a percentage inherited from an ancestor, a future engine's own
+ * arithmetic — lands under the line, and what a reader sees is the slight zoom
+ * this rule exists to prevent. 17px is the same fix with a pixel to spare, and
+ * a pixel is what it costs: see the one control that pays for it, below.
+ *
+ * And it was a math function. Safari's auto-zoom is a layout-time heuristic
+ * rather than a style query, and a `max()` is the one thing between the
+ * declaration and the number it reads. That may resolve on every device in
+ * use; it is not worth finding out through a reader, because the value it
+ * bought cannot be collected here. `1rem` is only ever more than 16px for a
+ * reader who has enlarged their root font, and a root font is enlarged from
+ * browser settings that phones and tablets — every device this media query
+ * matches — do not offer. So the branch protected nobody and the function
+ * reached Safari on everybody.
+ *
+ * The consequence to keep is that this is an override rather than a floor: it
+ * *sets* 17px, so a control declaring more would be brought down to it. Only
+ * the account lookup ever has (`--fs-15`, 17.1px, and a tenth of a pixel is
+ * nobody's reading). One that genuinely wants to stay larger declares its size
+ * inside this media query, where nothing above overrides it.
+ *
+ * **What it costs is width**, and only where a control is narrow enough to
+ * feel it: the expanded card's pane ledges. The lens key is the one that pays,
+ * and it spends its tracking under the same `pointer-coarse:` gate rather than
+ * its word — see `league-teams` for the arithmetic, which the extra pixel here
+ * is what moved.
  *
  * The excluded types have no text to zoom to: a range is the two sliders
  * `.lab-rail` and `.lab-range` draw, and a checkbox and a radio are boxes.
@@ -2239,6 +2262,6 @@ html {
   input:not([type="range"]):not([type="checkbox"]):not([type="radio"]):not([type="button"]):not([type="submit"]):not([type="reset"]),
   select,
   textarea {
-    font-size: max(1rem, 16px);
+    font-size: 17px;
   }
 }

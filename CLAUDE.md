@@ -12332,15 +12332,17 @@ Two rules for adding to it:
   type colours (`--readout-line`, `--readout-label`, `--readout-muted`) are
   tokens rather than alphas over `--color-readout`.
 
-### No control renders under 16px on a touch device
+### No control renders under 17px on a touch device
 
 iOS Safari zooms the page in when a text-entry control or a `<select>` under 16
 CSS pixels takes focus, and it does not zoom back out — the reader is left
 panning a page wider than the viewport with nothing on screen saying why. The
 only lever is the control's own font size; a `maximum-scale` on the viewport
 meta would fix it by taking pinch-zoom from everybody. So one unlayered rule at
-the foot of `globals.css` floors every input, select and textarea at
-`max(1rem, 16px)` under `@media (pointer: coarse)`.
+the foot of `globals.css` sets every input, select and textarea to a literal
+**17px** under `@media (pointer: coarse)`. It read `max(1rem, 16px)` and still
+zoomed — see The floor sat on the threshold, below, for why both halves of that
+spelling were wrong and why neither is visible from a desktop browser.
 
 **The gate is the pointer, not a width, and that is the whole of the fix.**
 Seven controls already carried a `text-[16px]` stepped back down at `sm` or
@@ -12363,21 +12365,23 @@ exclusions**, not as the types that zoom: an `<input>` with no `type` at all is
 a text field and `picktracker-search`'s is exactly that, so a positive list
 would miss it silently. Range, checkbox and radio have no text to zoom to, and
 `<button>` is absent because a key grown to 16px would resize half the console.
-In one place it is a clamp rather than a floor — the account lookup's field is
-`--fs-15`, 17.1px, and comes down to 16, which is the only control declaring
-more than the floor and a pixel nobody can see.
+It is an override rather than a floor, so a control declaring more is brought
+down to it — the account lookup's field is the only one that ever has
+(`--fs-15`, 17.1px, and a tenth of a pixel is nobody's reading). One that
+genuinely wants to stay larger declares its size inside the media query.
 
 **What it costs is width, and only where a control is narrow enough to feel
-it.** The expanded card's two pane ledges are the case: at 390 the sort key's
-`ROS starters` was already truncating at 8 of 12 characters and the lens key's
-`Points` fitted whole. Both compensate with their tracking under the same
-`pointer-coarse:` gate, which is principled rather than a patch — tracking is a
-small-type affordance and at 16px it is pure width. Measured: `Points` needs
-69.1px of the 62 it has at `0.12em` and reads `Point…`, and 60.5 of 64 at
-`0.03em`, which is the word; the caret gutter gives the last four of those
-pixels. It buys the sort key one character back of the two the floor costs it
-(8 → 7, against 6 uncompensated), and that one stays truncated at any tracking,
-which is the reading it already ships at this width.
+it.** The expanded card's roster pane ledge is the case, and its lens key is the
+one control in the app that pays: at 390 that key has ~64px, and `Points` sets
+69.1px of the 62 it would have at the design's `0.12em`. It spends its tracking
+under the same `pointer-coarse:` gate rather than its word, which is principled
+rather than a patch — tracking is a small-type affordance and at this size it is
+pure width. Measured in the app's own IBM Plex Mono: 60.5px at 16px with
+`0.03em`, **64.3 at 17px with it** — over the 64, and the word truncates — and
+**61.2 at 17px with none**, which fits with nearly three pixels to spare. So the
+extra pixel here is what spent the last of that tracking. The standings pane's
+sort key is no longer a `<select>` at all (the standings column became a key
+opening its own dialog), so nothing else compensates.
 
 #### Verified
 
@@ -12409,6 +12413,80 @@ exactly at 16.00px. The controls behind a database (`shares-drawer`, the filter
 dialog's rule bay, `/logs`, the trades search panel) were reasoned from their
 class strings rather than rendered; all four already drew at 16px on a phone
 before this, so the floor changes nothing about them.
+
+### The floor sat on the threshold, and was a math function
+
+The rule above was `font-size: max(1rem, 16px)` and the page still zoomed on a
+phone — slightly, on the search fields. Both faults are invisible from the
+desktop browser these pages are checked in, and the first one is invisible from
+a coarse-pointer render too: driven under an emulated coarse pointer at 375,
+390, 430 and 768, **every zoomable control in the app computed to exactly
+16px**, which is the rule working and the zoom persisting anyway. The served
+CSS is what named the problem — the declaration reaches the browser verbatim,
+`max(1rem, 16px)`, and 16 is the smallest number that can possibly work.
+
+**It sat on the threshold rather than above it.** Safari zooms a control whose
+font size is *below* 16px, so 16 is correct in principle and has no margin at
+all: anything that rounds the used value down by a hair lands under the line,
+and a hair under is exactly the slight zoom that was reported. 17px is the same
+fix with a pixel to spare. That pixel is not free — it is what spent the last of
+the lens key's tracking, above — which is the whole of what it costs.
+
+**And it was a math function.** Safari's auto-zoom is a layout-time heuristic
+rather than a style query, and a `max()` is the one thing standing between the
+declaration and the number that heuristic reads. It may well resolve on every
+device in use; the point is that the value it bought could never be collected
+here, so there is nothing on the other side of the question. `1rem` exceeds 16px
+only for a reader who has enlarged their root font, and a root font is enlarged
+from browser settings that phones and tablets — every device `(pointer: coarse)`
+matches — do not offer. The branch protected nobody and the function reached
+Safari on everybody, so a literal is strictly better even if the heuristic
+handles both.
+
+**The previous pass predicted this and could not close it.** Its own note ends
+"what a headless Chrome emulating a coarse pointer cannot confirm is Safari's
+own threshold behaviour on the four controls that sit exactly at 16.00px" —
+which is this bug, named, a pass early. The lesson to keep is that a
+coarse-pointer render answers *what the value is* and never *whether Safari
+accepts it*, so this rule wants margin rather than the minimum, and a literal
+rather than an expression.
+
+#### Verified
+
+Driven over CDP against `next dev` with no `DATABASE_URL` at **375, 390, 430 and
+768** with a coarse pointer, and at 1280 with a fine one, on `/tools`,
+`/picktracker`, `/comps` and `/logs`. The mechanics are the ones this file
+records, including the inverted pointer flags
+(`availablePointerTypes=2,primaryPointerType=2,availableHoverTypes=1,`
+`primaryHoverType=1`), without which headless Chrome reports `pointer: none` and
+the rule silently tests nothing.
+
+Every zoomable control is **17px** at every coarse width — the two search
+fields, both `<select>`s on `/comps`, all three facet menus on `/logs`, the
+account lookup and `picktracker-search`'s untyped input — while every
+`input[type=range]` stays at its own 16px, which is the exclusion list doing its
+job on a control with no text to zoom to. At each width
+`document.documentElement.scrollWidth` equals the viewport, no element is
+painted past it, and **no control is clipped** (`scrollWidth <= clientWidth` on
+every one). The fine-pointer render is unchanged: 15.08, 12.76 and 17.4px, each
+control at its own design size.
+
+The lens key's arithmetic was measured directly in the app's own font stack
+rather than estimated, since `/manager` needs a database: `Points` uppercase in
+IBM Plex Mono is **60.48px** at 16px/`0.03em` — the 60.5 the previous pass
+recorded, to the tenth — **64.27px** at 17px/`0.03em`, and **61.20px** at
+17px/`normal`. Against that key's ~64px that is the fit, the clip and the fix,
+in order. 2,087 unit tests pass; `lint` and `typecheck` are clean.
+
+**Not verified on a device**, which is the gap and is the same one as last time:
+no iOS Safari was in the loop, so what a render still cannot confirm is that 17
+is accepted where 16 was not. What is different is that the change no longer
+depends on that being the reason — it removes the math function *and* the
+zero-margin threshold, so it is correct under either explanation. The controls
+behind a database (the shares drawer's search and sort, the filter dialog's rule
+bay, the trades search panel and its seek date) were not rendered; they carry no
+font size of their own inside the media query, so they take the same 17px as
+everything else, and only the lens key was narrow enough to need re-measuring.
 
 ### The toggle
 

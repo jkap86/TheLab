@@ -519,12 +519,18 @@ function LensControl({
         </span>
         <span className="sr-only">Value lens</span>
         <span className="relative flex min-w-0 flex-1 items-center">
-          {/* Tracking off on a coarse pointer, where the 16px control floor
-              applies — see the sort key above for the measurement. */}
+          {/* Tracking spent entirely on a coarse pointer, where the control
+              floor in `globals.css` sets 17px to clear Safari's zoom threshold
+              with a pixel to spare. The pane is ~165px below `lg` and this key
+              has ~64px of it: `Points` sets 57.6px at 16px, so 61.2 at 17, and
+              0.03em of tracking over six glyphs is another 3.1 — 64.3 of 64,
+              which truncates the one word the key exists to say. Tracking is a
+              small-type affordance and at 17px it is width, so it is the thing
+              to give up; the word is not. */}
           <select
             value={lens}
             onChange={(e) => onChange(e.target.value as Lens)}
-            className="min-w-0 flex-1 cursor-pointer appearance-none truncate rounded-full bg-[image:var(--key-bg)] py-[5px] pl-[9px] pr-5 font-mono text-[length:var(--fs-10)] uppercase tracking-[0.12em] text-readout shadow-[var(--key-shadow)] [text-shadow:var(--readout-text-glow)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-active/60 pointer-coarse:pr-[18px] pointer-coarse:tracking-[0.03em]"
+            className="min-w-0 flex-1 cursor-pointer appearance-none truncate rounded-full bg-[image:var(--key-bg)] py-[5px] pl-[9px] pr-5 font-mono text-[length:var(--fs-10)] uppercase tracking-[0.12em] text-readout shadow-[var(--key-shadow)] [text-shadow:var(--readout-text-glow)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-active/60 pointer-coarse:pr-[18px] pointer-coarse:tracking-normal"
           >
             {LENSES.map((option) => (
               <option key={option} value={option}>
