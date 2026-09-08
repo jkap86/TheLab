@@ -16,6 +16,7 @@ export {
   CONSOLE_CARD_SHELL,
   CONSOLE_CHIP,
   CONSOLE_CHIP_TRAY,
+  CONSOLE_FIGURE_WELL,
   CONSOLE_GLASS,
   CONSOLE_HOUSING,
   CONSOLE_HOUSING_INSET,
@@ -58,7 +59,13 @@ export {
 } from "./trade-freshness";
 export type { TradeDataStamp } from "./trade-freshness";
 export { KtcBoardKeys } from "./ui/ktc-board-keys";
-export { formatInstantDate, formatInstantTime, ordinal, ordinalParts } from "./format";
+export {
+  formatInstantDate,
+  formatInstantTime,
+  ordinal,
+  ordinalParts,
+  shortName,
+} from "./format";
 // The rank ramp and its two readings. The trades board joined the manager
 // card as a reader when its asset values gained a place in their own league:
 // a bar and a hue drawn from one rank on two pages must come off one module.
@@ -173,6 +180,7 @@ export {
   CardBilletRow,
   CardPlateRow,
   CardRule,
+  DateBillet,
   LeagueBillet,
   LeaguePlate,
   LedgeBay,
@@ -218,5 +226,12 @@ export {
 export { LeagueTeams } from "./ui/league-teams";
 // What game a league is playing, as one lit window — read by the manager card
 // and the trade card, which is what brought it here from `features/manager`.
-export { LeagueChipRail, LeagueConfigWindow } from "./ui/league-config-window";
+// `LeagueFormatTags` is that strip's format group alone — what the trade
+// card's open header keeps once the panel below it states the scale and the
+// lineup by construction. Read from the strip's own rules, never re-derived.
+export {
+  LeagueChipRail,
+  LeagueConfigWindow,
+  LeagueFormatTags,
+} from "./ui/league-config-window";
 export { PageShell } from "./ui/page-shell";

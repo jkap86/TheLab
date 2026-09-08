@@ -306,6 +306,52 @@ export function LeagueConfigWindow({
   );
 }
 
+/**
+ * The format group of the strip, on its own — what a card keeps saying once the
+ * strip itself is spent.
+ *
+ * **The trade card's open header draws this on the rule row instead of the
+ * whole strip**, and the argument is what the panel below states by
+ * construction: twelve standings rows *are* the team count and nine seat rows
+ * *are* the starters, so the scale group and the lineup group are both said
+ * twice while the card is open — 42px of card (a 30px strip and its 12px
+ * margin) spent restating the table underneath it. What no table states is
+ * which game is being played, so the format group is what survives, and it
+ * moves onto a row that was carrying a 92px hairline and nothing else.
+ *
+ * **It is the strip's own group, read from the strip's own rules**, rather than
+ * two tags assembled at the call site: {@link readLeagueConfig} is this
+ * module's whole promise, and a card that stated "Dynasty" from one derivation
+ * while its closed half stated it from another would be the drift that function
+ * exists to prevent.
+ *
+ * **The wide spelling at every width.** The strip abbreviates because it is
+ * twelve readings on one line; this is three tags on an otherwise empty row,
+ * and `Dyn · Mgd` where there is room for the words is an abbreviation of
+ * nothing.
+ *
+ * **The Superflex tag comes with them**, which is the one thing here the
+ * handoff's "two lit tags" does not name and which follows from the group being
+ * kept whole. It is drawn on exactly the disagreement the ladders cannot state
+ * — see {@link isUnnamedSuperflex} — and while the card is open there are no
+ * ladders at all, so this is the only thing left that could say it. It renders
+ * on the shape and on nothing else, so an ordinary league is the two tags the
+ * handoff draws.
+ */
+export function LeagueFormatTags({ league }: { league: ManagerLeague }) {
+  const config = readLeagueConfig(league);
+
+  return (
+    <>
+      <Tag lit wide={config.format} narrow={config.format} />
+      <Tag wide={config.lineup} narrow={config.lineup} />
+      {isUnnamedSuperflex(config) && (
+        <Tag lit wide="Superflex" narrow="Superflex" />
+      )}
+    </>
+  );
+}
+
 /** No answer for a field, in the app's own grammar: never a zero. */
 const NO_FIGURE = "—";
 

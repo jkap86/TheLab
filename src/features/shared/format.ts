@@ -75,3 +75,24 @@ export function formatInstantTime(at: number | null): string {
     minute: "2-digit",
   });
 }
+
+/**
+ * A player's name as an initial and a surname — `Ja'Marr Chase` → `J. Chase`.
+ *
+ * **A ~136px name column at `--fs-13` does not hold "Amon-Ra St. Brown", and an
+ * ellipsis eats the surname** — which is the half of a player's name a reader
+ * identifies him by. So the two readers that have that width take the short
+ * form and the wide arms keep the whole name.
+ *
+ * A one-word name (a team defence, an id with no name on the feed) is returned
+ * whole: there is no first initial to take.
+ *
+ * It began module-private in `lineup-breakdown.tsx`, for the seat rows below
+ * `lg`; the trade card's condensed bays are the second reader — a 134px bay at
+ * 390 is the same measurement one card over — and a second spelling of "initial
+ * and surname" is exactly the drift this module exists to prevent.
+ */
+export function shortName(name: string): string {
+  const space = name.indexOf(" ");
+  return space > 0 ? `${name.charAt(0)}. ${name.slice(space + 1)}` : name;
+}

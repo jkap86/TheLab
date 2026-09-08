@@ -23,18 +23,21 @@ import {
   CardBilletRow,
   CardRule,
   CONSOLE_CARD_SHELL,
+  CONSOLE_FIGURE_WELL,
   CONSOLE_METAL,
   CONSOLE_WINDOW,
+  DateBillet,
   ExpandedPanel,
   formatInstantDate,
   formatInstantTime,
   LeagueConfigWindow,
+  LeagueFormatTags,
   LeagueBillet,
   rankColor,
   rankFill,
   rankPercentile,
-  ReadingPlate,
   Scanlines,
+  shortName,
   useLeagueLineup,
 } from "@/features/shared";
 
@@ -230,6 +233,10 @@ export const TradeCard = memo(function TradeCard({
   // which resolve the reader's market against it — see `SideColumn`. Null
   // until the leagues request lands.
   const type = leagueType(league);
+  // Whether the two hauls are drawn as one exchange window rather than as two
+  // windows in a grid — see the note at the call site for why a third side is
+  // not one of these.
+  const exchange = open && trade.sides.length === 2;
 
   return (
     // The `perspective` makes each `<li>` its own stacking context, so a card
@@ -354,21 +361,61 @@ export const TradeCard = memo(function TradeCard({
                 has one size, and takes it here deliberately: the three league
                 cards are kept in sync by the same handoff, and a league drawn
                 one size on `/manager` and another here is the drift that pass
-                exists to remove. The date plate opposite keeps its width and
-                the name truncates into what is left, which is the row's own
-                recorded rule. */}
+                exists to remove.
+
+                **The name has most of the row now**, which is the date's doing
+                rather than this part's: the date was a `ReadingPlate` — one
+                pill, one line — and it is a `DateBillet` stacking the minute
+                under the day, so the ledge opposite is roughly half the width
+                it was and the name truncates into what is left far less often.
+                The row's rule is unchanged: the ledge keeps its width and the
+                name gives. See {@link DateBillet}. */}
             <LeagueBillet
               name={league?.name ?? trade.league_id}
               avatarUrl={league?.avatar_url}
             />
-            <ReadingPlate>
-              <span className="font-mono text-[length:var(--fs-10)] uppercase tracking-[0.16em] tabular-nums text-foreground/60">
-                <TradeDate at={trade.completed_at} />
-              </span>
-            </ReadingPlate>
+            <TradeDate at={trade.completed_at} />
           </CardBilletRow>
 
-          <CardRule />
+          {/* The hairline, and — while the card is open — the format the
+              settings strip below it is no longer there to state.
+
+              **The strip collapses onto this row rather than being kept.** It
+              is a 30px part plus its 12px margin, and eleven of its twelve
+              readings are said again by the panel under the seam *by
+              construction*: twelve standings rows are the team count and nine
+              seat rows are the starters. What no table below states is which
+              game is being played, so the format group moves onto a row that
+              was carrying a 92px hairline and nothing else, and the card is
+              ~20px of its 42 up on the deal. It is
+              `LeagueConfigWindow`'s own group, read from the same rules — see
+              `LeagueFormatTags` — never two tags assembled here.
+
+              This is the same "spent once open" argument the give track and
+              `DisclosureHint` are already gated on, and it is gated the same
+              way: on `open`, which is a prop this card already has, so nothing
+              new drops the `memo` for every row on the board.
+
+              The row is only a row while the tags are on it; closed, the rule
+              is the single child it has always been. */}
+          {league && open ? (
+            // **The row carries `preserve-3d` and no transform of its own, and
+            // each child names its own plane.** A plain wrapper is a flat
+            // rendering context, so a `translateZ` written here would collapse
+            // `CardRule`'s own 36px into it and the hairline would sit at the
+            // tags' depth — with no error to say so, which is the failure this
+            // card's decorative layer and the manager card's tile row are both
+            // arranged around. The rule keeps the plane it has closed; the tags
+            // take the strip's 18px, which is what they stand in for.
+            <div className="relative flex items-center gap-[9px] pointer-fine:[transform-style:preserve-3d]">
+              <CardRule />
+              <span className="relative ml-auto inline-flex shrink-0 items-center gap-[5px] whitespace-nowrap pointer-fine:[transform:translateZ(18px)]">
+                <LeagueFormatTags league={league} />
+              </span>
+            </div>
+          ) : (
+            <CardRule />
+          )}
 
           {/* What game this league is playing, directly under the plate that
               names it — where it used to sit under the hauls. It is a property
@@ -394,26 +441,85 @@ export const TradeCard = memo(function TradeCard({
               has not answered yet. The card would state "Redraft · Managed"
               over a dynasty league for as long as `/api/trades/leagues` took,
               then silently correct itself. Nothing is the honest reading, and
-              it is the same beat the league's name spends showing its id. */}
-          {league && (
+              it is the same beat the league's name spends showing its id.
+
+              **And only while the card is closed**, per the rule row above. */}
+          {league && !open && (
             <LeagueConfigWindow
               league={league}
               className="mt-3 sm:mt-3.5 pointer-fine:[transform:translateZ(18px)]"
             />
           )}
 
-          <div className="relative mt-3.5 grid gap-4 sm:grid-cols-2 pointer-fine:[transform:translateZ(22px)]">
-            {trade.sides.map((side) => (
-              <SideColumn
-                key={side.roster_id}
-                trade={trade}
-                side={side}
-                view={view}
-                leagueType={type}
-                condensed={open}
-              />
-            ))}
-          </div>
+          {/* The hauls.
+
+              **Open and two-sided, they are one window cut into two bays**, and
+              the reason is a reading rather than the 5px of content one border
+              and one pair of insets buys back: two windows side by side are two
+              instruments competing, where a trade is *one exchange*. It is the
+              same argument `Pane` makes for the two panes below the seam.
+
+              **A three-way keeps two windows — or three — and that is a
+              measurement.** The groove is `left-1/2`, which lands on the
+              boundary only because two bays are exactly equal; three bays at
+              390 is ~89px of content each, which the two-line row below will
+              not hold, and a clipped surname is the failure this whole pass
+              exists to remove. So the exchange window is drawn for exactly two
+              sides and a three-way keeps the arrangement it has always had —
+              stacked below `sm`, two-up above — which is also the arrangement
+              its own missing gives already made it a different card in. Flagged
+              in the handoff as wanting a decision; this is it, and horizontally
+              scrolling bays is the alternative if a third bay is ever wanted.
+
+              Closed, both arms are the grid: a card in a list is read side by
+              side above `sm` and stacked below it, which is the width every
+              window on this board has always had. */}
+          {exchange ? (
+            <section
+              className={`${CONSOLE_WINDOW} mt-3.5 rounded-[0.6875rem] px-2.5 pb-[13px] pt-3 pointer-fine:[transform:translateZ(22px)]`}
+            >
+              <Scanlines />
+              {/* `items-stretch` so both bays are the groove's full height
+                  whatever either holds, and `relative` for the groove itself. */}
+              <div className="relative flex items-stretch">
+                {trade.sides.map((side) => (
+                  <SideColumn
+                    key={side.roster_id}
+                    trade={trade}
+                    side={side}
+                    view={view}
+                    leagueType={type}
+                    condensed
+                    bay
+                  />
+                ))}
+                {/* **One absolutely-positioned child of the row, never a border
+                    on either bay.** Absolute so it consumes no width — which is
+                    what keeps the two bays exactly equal — and `left-1/2` lands
+                    it on the boundary *because* they are. A border on one bay
+                    would make that bay 1px narrower than the other, and the two
+                    hauls would set at two different widths on a card whose
+                    whole point is that they are one exchange. */}
+                <span
+                  aria-hidden
+                  className="absolute bottom-0 left-1/2 top-0 w-px bg-[image:var(--groove)] shadow-[var(--groove-highlight)]"
+                />
+              </div>
+            </section>
+          ) : (
+            <div className="relative mt-3.5 grid gap-4 sm:grid-cols-2 pointer-fine:[transform:translateZ(22px)]">
+              {trade.sides.map((side) => (
+                <SideColumn
+                  key={side.roster_id}
+                  trade={trade}
+                  side={side}
+                  view={view}
+                  leagueType={type}
+                  condensed={open}
+                />
+              ))}
+            </div>
+          )}
 
           {/* **Not drawn while the card is open**, and it is the second of the
               two removals that shorten the parked header. It is the affordance
@@ -660,25 +766,38 @@ function TradeLeague({
  * reads as a rendering fault.
  */
 function TradeDate({ at }: { at: number | null }) {
-  if (at === null) return <>Undated</>;
+  // No well at all rather than an empty one: a drawn-and-empty recess where
+  // every other card carries a figure reads as a rendering fault, which is the
+  // same argument the word itself is here for.
+  if (at === null) return <DateBillet day="Undated" />;
+
   return (
-    <>
-      {/* **The year comes off the plate below `sm`**, which a render at 390
-          forced: the plate is ~172px of a 322px row there, and the league name
-          opposite truncates to five characters. The board answers one season by
-          construction, so the year is the most redundant token on the plate —
-          drawn as two spans and switched by the cascade rather than by state,
-          which keeps this component free of a breakpoint it would have to
-          hydrate to learn. */}
-      <span className="sm:hidden">{formatInstantDate(at, { year: false })}</span>
-      <span className="hidden sm:inline">{formatInstantDate(at)}</span>
-      {" · "}
-      {/* The two halves are formatted separately and joined on the console's
-          own separator rather than taken from one `toLocaleString`, which
-          glues them with a second comma — `Aug 28, 2026, 9:42 PM` reads as a
-          three-part list where the plate is saying two things. */}
-      {formatInstantTime(at)}
-    </>
+    <DateBillet
+      day={
+        <>
+          {/* **The year comes off the face below `sm`**, which a render at 390
+              forced back when this was a plate: the board answers one season by
+              construction, so the year is the most redundant token on it. The
+              billet has bought most of that width back and the rule is kept
+              anyway — the day is the coarse half of a two-part reading, and a
+              third token on it is width the league's name is still paying for.
+              Drawn as two spans and switched by the cascade rather than by
+              state, which keeps this component free of a breakpoint it would
+              have to hydrate to learn. */}
+          <span className="sm:hidden">
+            {formatInstantDate(at, { year: false })}
+          </span>
+          <span className="hidden sm:inline">{formatInstantDate(at)}</span>
+        </>
+      }
+      // The two halves are formatted separately rather than taken from one
+      // `toLocaleString`, which glues them with a second comma — `Aug 28, 2026,
+      // 9:42 PM` reads as a three-part list where the part is saying two
+      // things. They used to be joined on the console's own separator; the
+      // billet is what separates them now, which is the whole of it: the day is
+      // stamped on the face and the minute is dropped into a well cut under it.
+      minute={formatInstantTime(at)}
+    />
   );
 }
 
@@ -689,8 +808,40 @@ function TradeDate({ at }: { at: number | null }) {
  * is the whole of what shortens the parked header — see `TradeCard`'s note on
  * departure 1. The give track and the rule above it are not drawn, the padding
  * and the header's own margin come in by two pixels each, and the list becomes
- * a 78px scroller. Everything the window *says* about the haul it keeps: the
- * manager, the unit, the total, and every asset's name and figure.
+ * a fixed-height scroller. Everything the window *says* about the haul it
+ * keeps: the manager, the unit, the total, and every asset's name and figure.
+ *
+ * **A bay is that reading again with the chrome taken off**, because the two
+ * hauls of a two-sided open card are one window rather than two — see the
+ * exchange window at the call site. It is the same component and not a second
+ * one for the reason the window and the chip rail are two arrangements of one
+ * `readLeagueConfig`: a haul stated one way in a window and another in a bay is
+ * a card that would drift the first time either was edited. What differs is a
+ * surface (no border, no ground, no scanlines of its own — the window carries
+ * one for both bays) and, below `lg`, a set of two-line rows.
+ *
+ * **The two-line arm turns at `md`, and that number is measured rather than
+ * borrowed from the panes.** The header is the question — the rows fit long
+ * before it does — and what one line of it needs is the manager's name at the
+ * window's own `0.12em`, the unit, the total and two gaps: **259.8px**. Against
+ * the bay's own content box:
+ *
+ * | viewport | bay content | one line needs |
+ * | --- | --- | --- |
+ * | 390 | 136.4 | 259.8 — two lines |
+ * | 640 | **249.0** | 259.8 — **short by 10.8**, two lines |
+ * | 768 | **313.6** | 259.8 — clears by 53.8, one line |
+ * | 1024 | 442.7 | 259.8 |
+ *
+ * So `sm` is the arm that looks right and is ten pixels wrong, and `lg` — the
+ * breakpoint the seat rows and the standings rows below the seam turn on —
+ * leaves a 768px card stacking a figure under a name in a 314px bay, which is a
+ * bay half empty. `md` is the first width the reading actually fits.
+ *
+ * The one-line arm is the window's own header, so a name longer than the
+ * fixture's truncates there exactly as it always has in a window; what the
+ * threshold buys is that the *ordinary* name is whole. Below it nothing
+ * truncates at all — see `shortName`.
  */
 function SideColumn({
   trade,
@@ -698,6 +849,7 @@ function SideColumn({
   view,
   leagueType,
   condensed,
+  bay = false,
 }: {
   trade: Trade;
   side: TradeSide;
@@ -706,6 +858,14 @@ function SideColumn({
   leagueType: number | null;
   /** The card is open — see `AssetTrack` for what the word buys. */
   condensed: boolean;
+  /**
+   * This haul is a bay of the one exchange window rather than a window of its
+   * own. Implies {@link condensed} — only an open card draws bays — but is a
+   * second boolean because it names a second thing: `condensed` is *what the
+   * haul says*, and this is *what it is drawn in*. A three-way open card is
+   * condensed and has no bays.
+   */
+  bay?: boolean;
 }) {
   // The reader's basis and market land here — the consumer that computes a
   // figure — rather than on the card, so a flip of either re-renders these two
@@ -726,33 +886,72 @@ function SideColumn({
   const received = receivedBundle(side);
   const given = givenBundle(trade, side);
 
+  const Housing = bay ? "div" : "section";
+
   return (
-    <section
+    <Housing
       className={
-        `${CONSOLE_WINDOW} min-w-0 rounded-[0.6875rem] px-[15px] ` +
-        // Two pixels off each of the vertical insets, which is four of the
-        // ~173 this window sheds. Written as two whole strings rather than a
-        // base plus an override: `pt-3.5` and `pt-3` are two base utilities of
-        // the same specificity, so which one won would be Tailwind's emit
-        // order rather than the ternary — the trap `CONSOLE_CARD_SHELL` and
+        // **Three whole strings, never a base plus overrides.** A bay and a
+        // window differ in surface, radius, padding and flex, and two base
+        // utilities of the same specificity are decided by Tailwind's emit
+        // order rather than by the ternary — the trap `CONSOLE_CARD_SHELL` and
         // `CONSOLE_KEY_PILL` are both split to keep a part out of.
-        (condensed ? "pb-[13px] pt-3" : "pb-[15px] pt-3.5")
+        //
+        // A bay's own insets are 10px against a window's 15: that is what a bay
+        // *inside a window* costs where a window inside a housing costs 15, and
+        // it is where the 5px of content the single window buys back comes
+        // from. `flex-1` with `min-w-0` is what makes the two exactly equal,
+        // which is what lets the groove sit at `left-1/2`.
+        bay
+          ? "flex min-w-0 flex-1 flex-col px-2.5"
+          : `${CONSOLE_WINDOW} min-w-0 rounded-[0.6875rem] px-[15px] ` +
+            // Two pixels off each of the vertical insets, which is four of the
+            // ~173 this window sheds when the card opens.
+            (condensed ? "pb-[13px] pt-3" : "pb-[15px] pt-3.5")
       }
     >
-      <Scanlines />
+      {/* The bays share the exchange window's one overlay — see the call site.
+          A second copy inside each would double the scanlines' opacity on the
+          two thirds of the window they cover. */}
+      {!bay && <Scanlines />}
 
       <header
         className={
-          "relative flex min-w-0 items-baseline gap-2.5 " +
-          (condensed ? "mb-2.5" : "mb-[13px]")
+          // **A bay's header takes two lines below `lg`** — the manager on the
+          // first, the unit and the total on the second — because 134px sets
+          // one of the three and not all of them. At `lg` it is the window's
+          // own one-line header again, through `md:contents` on the wrapper
+          // holding the second line: rendering both shapes and hiding one would
+          // put every header in the DOM twice and read each of them twice to
+          // anything listening.
+          "relative flex min-w-0 " +
+          (bay
+            ? "flex-col gap-[3px] mb-2.5 md:flex-row md:items-baseline md:gap-2.5"
+            : "items-baseline gap-2.5 " + (condensed ? "mb-2.5" : "mb-[13px]"))
         }
       >
-        <span className="min-w-0 truncate font-mono text-[length:var(--fs-12)] uppercase tracking-[0.12em] text-readout">
+        <span
+          className={
+            "min-w-0 truncate font-mono text-[length:var(--fs-12)] uppercase text-readout " +
+            // **The tracking is the first thing a narrow bay gives up**, which
+            // is the letter-spacing-first rule `DRAWER_BAR` already records:
+            // `Sunday Scaries` at `--fs-12` needs 138px of a 134px bay at
+            // `0.12em` and 116 at `0.04em`, so four hundredths of an em is a
+            // name that fits against a name that is cut. The window's own
+            // spacing comes back with the room at `lg`.
+            (bay ? "tracking-[0.04em] md:tracking-[0.12em]" : "tracking-[0.12em]")
+          }
+        >
           {/* Sleeper lets a display name go missing and leaves orphan rosters
               with no owner at all, so the roster number is the fallback — a
               real label, not a placeholder. */}
           {manager?.display_name ?? `Roster ${side.roster_id}`}
         </span>
+        <span
+          className={
+            bay ? "flex min-w-0 items-baseline gap-1.5 md:contents" : "contents"
+          }
+        >
         {/* The unit, because the three bases are three scales and a figure
             that changed when the reader flipped the panel would otherwise be
             indistinguishable from one that moved. It is the same rule the
@@ -768,7 +967,16 @@ function SideColumn({
             it in full for a reader who opens it. */}
         <span
           title={TRADE_BASIS_NOTES[lens.basis]}
-          className="ml-auto shrink-0 font-mono text-[length:var(--fs-9)] uppercase tracking-[0.18em] text-readout-label"
+          className={
+            "shrink-0 font-mono text-[length:var(--fs-9)] uppercase tracking-[0.18em] text-readout-label " +
+            // On a bay's second line the unit *leads* and the total is what is
+            // pushed right; on the one-line header it is the unit that takes
+            // the slack after the name. So the auto margin swaps sides with the
+            // layout — and it swaps as a responsive variant of the same
+            // property rather than as two base utilities, which is what makes
+            // the media query, not the emit order, decide.
+            (bay ? "md:ml-auto" : "ml-auto")
+          }
         >
           {TRADE_BASIS_UNITS[lens.basis]}
         </span>
@@ -780,7 +988,13 @@ function SideColumn({
             its league's; a coloured total would be a statement about who won
             the trade, which this card rules out by name above. */}
         <span
-          className="shrink-0 font-mono text-[length:var(--fs-18)] tabular-nums text-readout"
+          className={
+            "shrink-0 font-mono text-[length:var(--fs-18)] tabular-nums text-readout " +
+            // `leading-none` on the stacked arm: the figure is the tallest
+            // thing on the bay's second line, and its own line box is what
+            // would otherwise set that line's height.
+            (bay ? "ml-auto leading-none md:ml-0" : "")
+          }
           // **Struck into the glass rather than printed on it**, which is the
           // one thing about this figure the console-card pass left flat: every
           // other headline reading in the app is engraved (`--figure-engrave`)
@@ -798,6 +1012,7 @@ function SideColumn({
             bundleValue(trade.league_id, received, view.assetValues, lens),
           )}
         </span>
+        </span>
       </header>
 
       <AssetTrack
@@ -808,6 +1023,7 @@ function SideColumn({
         view={view}
         lens={lens}
         condensed={condensed}
+        bay={bay}
       />
       {/* **The give track and the rule above it are the parked header's
           largest single saving, and dropping them costs a two-sided card
@@ -840,7 +1056,7 @@ function SideColumn({
           />
         </>
       )}
-    </section>
+    </Housing>
   );
 }
 
@@ -900,6 +1116,7 @@ function AssetTrack({
   view,
   lens,
   condensed,
+  bay = false,
 }: {
   direction: "in" | "out";
   bundle: TradeBundle;
@@ -915,16 +1132,33 @@ function AssetTrack({
    * rule these lines are drawn by.
    */
   condensed: boolean;
+  /** These lines are in a bay of the exchange window — see `SideColumn`. */
+  bay?: boolean;
 }) {
   const inbound = direction === "in";
+  const tone = inbound ? "text-readout-line" : "text-readout-muted";
   // Two rows per line on the take track: the line itself, and a meter under the
   // figure. `items-baseline` on a two-row grid would align the meter to the
   // text baseline of a row it is not on, so the alignment moves onto the cells
   // that need it. Condensed there is no meter, so there is no second row for a
   // `gap-y` to open.
-  const row = `grid grid-cols-[11px_minmax(0,1fr)_auto] gap-x-2 text-[length:var(--fs-13)] ${
-    condensed ? "" : "gap-y-[5px] "
-  }${inbound ? "text-readout-line" : "text-readout-muted"}`;
+  //
+  // **A bay's line takes two lines below `lg`** — the sign and the name on the
+  // first, the figure right-aligned in its own well on the second — because a
+  // 134px bay sets one of the three and not all of them. It is a flex column
+  // there and a flex row at `lg`, with no grid on either arm: the grid's whole
+  // job was the meter's `col-start-2 col-span-2`, and a condensed line has no
+  // meter. See `AssetFigure`.
+  const row = bay
+    ? `flex min-w-0 flex-col gap-0.5 text-[length:var(--fs-13)] md:flex-row md:items-baseline md:gap-2 ${tone}`
+    : `grid grid-cols-[11px_minmax(0,1fr)_auto] gap-x-2 text-[length:var(--fs-13)] ${
+        condensed ? "" : "gap-y-[5px] "
+      }${tone}`;
+  // The sign and the name are one node with two layouts, on the `contents`
+  // trick the seat rows below the seam already turn (at their own `lg`):
+  // rendering both shapes and hiding one would put every asset in the DOM twice
+  // and read each of them twice to anything listening.
+  const line = bay ? "flex min-w-0 items-baseline gap-1.5 md:contents" : "contents";
   const signTone = inbound ? "text-active" : "text-readout-muted";
   const sign = inbound ? "+" : "−";
 
@@ -948,8 +1182,16 @@ function AssetTrack({
         // is the same flip on one axis over. `.lab-scroll-glass` is the
         // console's own glass scrollbar — see `globals.css`; it is not
         // restyled here.
+        // **108px in a bay below `lg`, 78 everywhere else it is condensed**,
+        // and both are fixed `height`s for the reason this component's note
+        // gives: the property is that the parked header does not move with the
+        // trade's contents, and a height that turns on a *width* keeps it —
+        // `usePanelCap` re-measures on a resize either way. 108 is two of the
+        // taller two-line rows and most of a third, which is the same reading
+        // 78 gives of the one-line ones.
         condensed
-          ? "lab-scroll-glass relative m-0 flex h-[78px] list-none flex-col gap-[7px] overflow-x-hidden overflow-y-auto pb-0 pl-0 pr-[7px] pt-0"
+          ? "lab-scroll-glass relative m-0 flex list-none flex-col gap-[7px] overflow-x-hidden overflow-y-auto pb-0 pl-0 pr-[7px] pt-0 " +
+            (bay ? "h-[108px] md:h-[78px]" : "h-[78px]")
           : "relative m-0 flex list-none flex-col gap-[9px] p-0"
       }
     >
@@ -957,25 +1199,42 @@ function AssetTrack({
         const player = view.players[id];
         return (
           <li key={`p${id}`} className={row}>
-            <span aria-hidden className={`font-mono ${signTone}`}>
-              {sign}
-            </span>
-            <span className="truncate">
-              {/* The id is the fallback rather than a blank: it is a visible,
-                  searchable token when the stored players map is behind
-                  Sleeper's. */}
-              {player?.name ?? id}
-              {inbound && !condensed && player?.position && (
-                <span className="ml-[7px] font-mono text-[length:var(--fs-10)] uppercase tracking-[0.14em] text-readout-label">
-                  {player.position}
-                  {player.team ? ` · ${player.team}` : ""}
-                </span>
-              )}
+            <span className={line}>
+              <span aria-hidden className={`shrink-0 font-mono ${signTone}`}>
+                {sign}
+              </span>
+              <span className="min-w-0 truncate">
+                {/* The id is the fallback rather than a blank: it is a visible,
+                    searchable token when the stored players map is behind
+                    Sleeper's. */}
+                {bay && player?.name ? (
+                  // **An initial and a surname in a narrow bay**, and the whole
+                  // name where there is room for it: a 134px bay does not hold
+                  // "Amon-Ra St. Brown" and an ellipsis eats the surname, which
+                  // is the half a reader identifies him by. It is the seat
+                  // rows' own rule and `shortName` is the seat rows' own
+                  // function — see `features/shared/format`. A pick label is
+                  // not a name and never takes it.
+                  <>
+                    <span className="md:hidden">{shortName(player.name)}</span>
+                    <span className="hidden md:inline">{player.name}</span>
+                  </>
+                ) : (
+                  (player?.name ?? id)
+                )}
+                {inbound && !condensed && player?.position && (
+                  <span className="ml-[7px] font-mono text-[length:var(--fs-10)] uppercase tracking-[0.14em] text-readout-label">
+                    {player.position}
+                    {player.team ? ` · ${player.team}` : ""}
+                  </span>
+                )}
+              </span>
             </span>
             <AssetFigure
               price={assetPrice(trade.league_id, id, view.assetValues, lens)}
               lit={inbound}
               condensed={condensed}
+              bay={bay}
             />
           </li>
         );
@@ -1009,24 +1268,28 @@ function AssetTrack({
             key={`k${pick.season}-${pick.round}-${pick.roster_id}-${i}`}
             className={row}
           >
-            <span aria-hidden className={`font-mono ${signTone}`}>
-              {sign}
-            </span>
-            <span className="truncate">
-              {pickLabel(pick, slot)}
-              {inbound && !condensed && origin !== null && (
-                <span className="ml-[7px] font-mono text-[length:var(--fs-10)] uppercase tracking-[0.14em] text-readout-label">
-                  {/* Named as a *person*: "from" points at who traded it away,
-                      where the side header prefers whatever the manager is
-                      called. A roster with no stored owner keeps its number. */}
-                  from {from?.display_name ?? `Roster ${pick.roster_id}`}
-                </span>
-              )}
+            <span className={line}>
+              <span aria-hidden className={`shrink-0 font-mono ${signTone}`}>
+                {sign}
+              </span>
+              <span className="min-w-0 truncate">
+                {pickLabel(pick, slot)}
+                {inbound && !condensed && origin !== null && (
+                  <span className="ml-[7px] font-mono text-[length:var(--fs-10)] uppercase tracking-[0.14em] text-readout-label">
+                    {/* Named as a *person*: "from" points at who traded it
+                        away, where the side header prefers whatever the manager
+                        is called. A roster with no stored owner keeps its
+                        number. */}
+                    from {from?.display_name ?? `Roster ${pick.roster_id}`}
+                  </span>
+                )}
+              </span>
             </span>
             <AssetFigure
               price={assetPrice(trade.league_id, pick, view.assetValues, lens)}
               lit={inbound}
               condensed={condensed}
+              bay={bay}
             />
           </li>
         );
@@ -1034,16 +1297,23 @@ function AssetTrack({
 
       {bundle.faab > 0 && (
         <li className={row}>
-          <span aria-hidden className={`font-mono ${signTone}`}>
-            {sign}
+          <span className={line}>
+            <span aria-hidden className={`shrink-0 font-mono ${signTone}`}>
+              {sign}
+            </span>
+            {/* In the league's own units, which Sleeper does not name — so the
+                figure carries the label rather than a currency symbol. */}
+            <span className="min-w-0 truncate">{bundle.faab} FAAB</span>
           </span>
-          {/* In the league's own units, which Sleeper does not name — so the
-              figure carries the label rather than a currency symbol. */}
-          <span className="truncate">{bundle.faab} FAAB</span>
           {/* A dash rather than a number, permanently and on every basis: FAAB
               is a league's own currency, and neither a market, a draft board
               nor a projection prices one. */}
-          <AssetFigure price={null} lit={inbound} condensed={condensed} />
+          <AssetFigure
+            price={null}
+            lit={inbound}
+            condensed={condensed}
+            bay={bay}
+          />
         </li>
       )}
     </ul>
@@ -1081,12 +1351,15 @@ function AssetFigure({
   price,
   lit,
   condensed,
+  bay = false,
 }: {
   price: { value: number; rank: MetricRank | null } | null;
   /** The take track. A give line carries the figure and nothing else. */
   lit: boolean;
   /** The card is open — the meter is not drawn. See `AssetTrack`. */
   condensed: boolean;
+  /** The line is a bay's — the figure sits in a milled well. */
+  bay?: boolean;
 }) {
   const rank = lit ? (price?.rank ?? null) : null;
   const percentile = rankPercentile(rank);
@@ -1095,7 +1368,22 @@ function AssetFigure({
   return (
     <>
       <span
-        className="font-mono text-[length:var(--fs-12-5)] tabular-nums"
+        className={
+          "font-mono text-[length:var(--fs-12-5)] tabular-nums " +
+          // **A bay's figure sits in a milled well, at every width.** Below
+          // `lg` it is on a line of its own under the name and a bare number
+          // hanging there reads as an orphan; at `lg` it is the last cell of a
+          // row, which is exactly where the standings rows and the seat rows
+          // below the seam already put theirs. One treatment rather than a
+          // breakpoint's worth of resets, and the one the rest of the console
+          // already uses for a figure at the end of a row.
+          //
+          // `ml-auto` and not `self-end`, because it has to push right in both
+          // directions: an auto margin absorbs the free space on the cross axis
+          // of a column flex exactly as it does on the main axis of a row, so
+          // one declaration serves the stacked arm and the inline one.
+          (bay ? `${CONSOLE_FIGURE_WELL} ml-auto shrink-0 px-[5px] py-px` : "")
+        }
         style={
           lit && percentile !== null
             ? { color: colour, textShadow: `0 0 10px ${rankColor(percentile, 0.55)}` }

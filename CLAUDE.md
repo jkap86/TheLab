@@ -5639,6 +5639,180 @@ scrollbar press is likeliest to reach the DOM; and how a parked card reads on a
 real hundred-row board where the panel below the seam is a twelve-team solve
 rather than an error line.
 
+### The hauls became one exchange, and the date a billet
+
+The parked header condensed to the take track and then stopped: below `sm` the
+two hauls still **stacked**, which is 300px of a phone's card before the seam
+and leaves the opened league about four standings rows and three seats. They are
+one window cut into two bays at every width now, the format the settings strip
+was stating moves onto the rule line while the card is open, and the date ledge
+becomes a milled billet — which is where the league's name gets its width back.
+Applied from a design handoff, its changes 1–3, with 2 superseding 1 as that
+handoff asks. Nothing on the wire moved — no route, no query, no contract type,
+no payload field, no migration — and **no token was added**: every surface below
+already had one, light half included.
+
+**The two hauls are one exchange, and the 5px is not the reason.** One border
+and one pair of insets instead of two buys a bay 134px of content where two
+windows gave 129, which is worth having and is not the argument: two windows
+side by side are two instruments competing for a reading, where a trade is one
+exchange. It is what `Pane` already says for the two panes below the seam.
+
+**The groove is one absolutely-positioned child of the bay row, never a border
+on either bay.** Absolute so it consumes no width — which is what keeps the two
+bays exactly equal — and `left-1/2` lands it on the boundary *because* they are.
+A border on one bay would make that bay a pixel narrower than the other, and the
+two hauls would set at two different widths on a card whose whole point is that
+they are one thing. Measured: 333.6/333.6 at 768 and 534.9/534.9 at 1280, with
+the groove within 0.1px of the section's midline at every width driven.
+
+**A three-way keeps a window per side, and that is the handoff's own open
+question answered by measurement.** Three bays at 390 is ~89px of content each,
+which the two-line row below will not hold, and a clipped surname is the failure
+this whole pass exists to remove; the alternative it names — bays that scroll
+horizontally — is a second way to read a card that no other card on the board
+has. So the exchange window is drawn for exactly two sides, which is also the
+arm `givenBundle` already makes a different card of: a three-way has no knowable
+gives and has always drawn the take column alone. `bay` is therefore a second
+boolean beside `condensed` rather than a synonym for it — `condensed` is *what
+the haul says* and `bay` is *what it is drawn in*, and a three-way open card is
+the one combination that has the first without the second.
+
+**The two-line arm turns at `md`, and that number is neither of the two the
+handoff guessed at.** The header is the question — the rows fit long before it
+does — and one line of it wants the manager's name at the window's own `0.12em`,
+the unit, the total and two gaps: **259.8px**. Against the bay's own content box:
+390 gives **136.4**, 640 gives **249.0** — short by 10.8 — 768 gives **313.6**,
+and 1024 gives 442.7. So `sm` is the arm that looks right and is ten pixels
+wrong, and `lg` — the breakpoint the seat rows and the standings rows below the
+seam turn on, and the one this shipped with until it was driven — leaves a 768px
+card stacking a figure under a name in a 314px bay, which is a bay half empty.
+The one-line arm *is* the window's own header, so a name longer than the fixture
+truncates there exactly as it always has in a window; what the threshold buys is
+that the ordinary name is whole. Below it nothing truncates at all, because the
+name is set short.
+
+**`shortName` moved to `features/shared/format.ts`.** It was module-private in
+`lineup-breakdown.tsx` for the seat rows below `lg`; a 134px bay is the same
+measurement one card over, and a second spelling of "initial and surname" is the
+drift that module exists to prevent. A one-word name — a team defence, an id
+with no name on the feed — is returned whole, which is the rule visible on the
+`Denver` row.
+
+**A bay's figure sits in a milled well at every width**, where the window's is
+bare ink. Below `md` it is on a line of its own under the name and a bare number
+hanging there reads as an orphan; at `md` it is the last cell of a row, which is
+exactly where the standings rows and the seat rows below the seam already put
+theirs. One treatment rather than a breakpoint's worth of resets — and `ml-auto`
+rather than `self-end`, because an auto margin absorbs the free space on the
+*cross* axis of a column flex exactly as it does on the main axis of a row, so
+one declaration serves both arms.
+
+**The settings strip collapses onto the rule while the card is open.** It is a
+30px part plus its 12px margin, and eleven of its twelve readings are stated
+again by the panel under the seam *by construction*: twelve standings rows are
+the team count and nine seat rows are the starters. What no table below states
+is which game is being played, so `LeagueFormatTags` — the strip's own format
+group, read from the same `readLeagueConfig` and never re-derived — moves onto a
+row that was carrying a 92px hairline and nothing else. It is gated on `open`,
+threaded as the prop this card already has, on the same "spent once open"
+argument the give track and `DisclosureHint` already live by; and the
+`{league && …}` gate stays, so an absent league row draws nothing rather than
+claiming `Redraft · Managed`.
+
+**The Superflex tag comes with them**, which the handoff's "two lit tags" does
+not name and which follows from keeping the group whole: it is drawn on exactly
+the disagreement the ladders cannot state, and while the card is open there are
+no ladders at all, so it is the only thing left that could say it. An ordinary
+league still draws the two tags the handoff shows.
+
+**The rule row carries `preserve-3d` and no transform, and each child names its
+own plane.** A plain wrapper is a flat rendering context, so a `translateZ`
+written on the row would collapse `CardRule`'s own 36px into it and the hairline
+would sit at the tags' depth — with nothing to say so. Measured after: row
+`preserve-3d` with `transform: none`, rule at 36, tags at the strip's 18, window
+at 22.
+
+**The date ledge is a billet, and that is where the width goes.** It was a
+`ReadingPlate` — one pill, one line, one ink — and the widest object in the
+billet row after the league's own name, which is what paid for it. **A plate
+carrying two readings on a line pays for the second in width; a billet pays for
+it in height**, and height is the one thing nothing on that row competes for.
+`PlateBay`'s own argument, one part further out. The day is stamped on the face
+and the minute dropped into a well cut in the same part, because the minute is
+the reading — `TradeDate`'s own note. It is a new export rather than a `well`
+arm on `ReadingPlate`, which has a second caller on the lineup checker's card
+whose reading is a separate question with its own measurement.
+
+Measured against the plate it replaces, rendered side by side: **164.5px → 78.6
+at 390** and **227.9 → 121** from `sm` up, which is the handoff's 165 → 79 and
+228 → 121 to the pixel. The league's name goes **103.5px → 189.4** of the 234
+`Dynasty Warehouse` wants at 390 — a gain of 85.9 against the handoff's 86 —
+and is unclipped at 317.8 of 318 from 640 up. It applies to a **closed** card
+too, which is the one part of this pass that is not about the open one.
+
+**`CardRule` gained `shrink-0`** for the one reader that now stands something
+beside it: a 1px hairline left shrinkable on a flex main axis is the first thing
+to give under pressure, and it would go without a trace. On the two league
+cards it is the only child of a column flex and the declaration is a no-op.
+
+#### Verified
+
+Rendered through a temporary `/preview` route against the real `TradeCard`,
+`useActiveCard` and `PageShell`, the real tokens and the real Tailwind build —
+the method the console-card, shares, rack and timeline passes established, since
+no database is reachable from where this was built — then driven over CDP at
+**390, 640, 768 and 1280 in both schemes** and deleted. The mechanics are the
+ones this file records: `--no-proxy-server`, `localhost` rather than
+`127.0.0.1`, a phone viewport from `Emulation.setDeviceMetricsOverride` with
+`mobile: true`, `data-theme` rather than `prefers-color-scheme`,
+`--disable-features=OverlayScrollbar`, the
+`--blink-settings=availablePointerTypes=4,…` flags without which every
+`pointer-fine:` rule on this card is inert, a **client-component** harness, and
+a CDP client over Node's own `WebSocket` since Playwright is not in this
+project's `node_modules`. The fixtures are four trades: a six-for-two with two
+picks and a FAAB leg, a one-for-one, a three-way with a side that took nothing
+back, and one with no league row and no date.
+
+Every arm landed. The open two-sided card is **one** window with two equal bays
+at a 10px inset, one `<Scanlines />` for both, and the groove absolute on the
+boundary; the rule row carries `["Dynasty","Managed"]` at `--billet-accent` in
+dark and its light counterpart in light, and no settings strip is drawn. The
+track is the 108px arm at 390 and 640 and the 78px arm at 768 and 1280, with the
+header and the asset rows turning with it. Every bay figure computes
+`--figure-well-bg` at a 5px radius under `--figure-well-shadow`, and the names
+read `J. Chase` / `A. St. Brown` / `K. Williams` below `md` and whole above it,
+with `Denver` whole at both.
+
+**The constancy claim holds**: a six-for-two and a one-for-one both park at
+**253.3px** at 390, which is the property the fixed height exists for. Against a
+baseline taken by disabling the two gates in place, the parked header goes
+**415.5px → 253.3 at 390** and **268.3 → 207.3 at 1280**.
+
+The three-way draws three windows on the 78px arm with nothing clipped; the
+league-less, undated card draws no settings strip, keeps the rule as the lone
+child of its row, and reads `Undated` on the billet's face with **no well**. The
+**closed** card is untouched — two windows, the settings strip, both give
+tracks, no fixed heights, the two-column grid — but for the date ledge, which is
+the one change that reaches it.
+
+At every width and in both schemes: `document.documentElement.scrollWidth` equal
+to or under the viewport, **zero unclipped elements past it**, exactly one
+`<h1>`, nothing clipped inside a card but the deliberately long fixture league
+name at 390, and **no console output of any kind**. 2,060 unit tests pass;
+`lint`, `typecheck` and `build` are clean.
+
+**Not verified against real data**, which is the gap to close first: every
+number above is a fixture. Four things a render here cannot check — how much of
+the panel's room the 162px actually buys on a real card, since the fixture's
+expanded half is an error line rather than a twelve-team solve; whether a real
+board's display names sit in a 313.6px bay at 768 as the fixture's does, which
+is the whole of what the `md` threshold is set against; whether the corpus holds
+a two-bare-`QB` league, which is what decides whether the third tag on the rule
+row ever renders; and how often a three-way actually appears on this board,
+which is what decides whether the arm kept out of the exchange window is a case
+or a guard.
+
 ## Comping a player
 
 `/comps` was the one tool the rack named and the app did not have. It is a
