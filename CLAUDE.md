@@ -11728,6 +11728,189 @@ widely on a real projections span as it is on the fixture, where the last real
 week's row is what names it; and whether the engraved name holds its hierarchy
 over a hundred billets rather than four.
 
+## The card's controls stopped costing the lists their height
+
+Two height reductions inside an expanded league card, from a design handoff:
+the lineup checker's per-league **Sync** strip, and the manager card's two pane
+ledges — the `Column` picker on the standings and the `Value in` lens on the
+roster. Nothing else about either card changes: same panes, same rows, same
+figures, same ink, same behaviour. Nothing on the wire moved — no route, no
+query, no contract type, no payload field, no migration — and no token was
+added.
+
+**Both are the same argument at two grains.** A capped panel is a fixed budget
+and every pixel a control takes is a row the reader does not get, so a control
+earns its surface or gives it back. The sync strip's recess and the ledges'
+`Column` / `Value in` legends were the two places on these cards where a control
+was drawn *twice* — once as itself and once as the box around it.
+
+### The sync strip hangs on the seam
+
+It was a 32px recess pill above the panes, on the stock the manager card's
+history rail stands in, with 10px under it: **42px** of panel spent on one key
+and a status note. The recess is the right surface for a *rail* — a thing a
+reader drives — and it is the wrong one for a key that says what it does on its
+own face.
+
+So the key is **etched** (`--recess-bg` under an inset white lip, the surface
+`BILLET_KEY_CHROME` names for a key on a machined face), it sits on the seam
+line with a hairline running out to the panel's right edge, and the row is
+**22px with 6px under it — 28px, measured, against 42**. The `translateZ` and
+the track shadow went with the recess: what carried the plane *was* the recess,
+and a key hanging on a hairline is flat by construction.
+
+**The hairline takes what the key and the note leave**, rather than a width of
+its own, which is what lets the note grow without pushing anything off the
+panel: measured, it runs 1004 → 927 → 884px as the note goes from absent to
+`Syncing…` to `Couldn't sync`, and **the strip stays 22px through all of it**.
+
+**The key composes `CONSOLE_KEY_PILL_BARE`, not the shell** — the constant
+carries shape and travel and names neither a size nor a padding. The shell's
+`text-[length:var(--fs-11)]` and `tracking-[0.16em]` are arbitrary values, so a
+caller writing `--fs-10` beside them is decided by Tailwind's emit order rather
+than by the class attribute; it is the trap the padding split already exists
+for, one property over. `CONSOLE_KEY_PILL_BARE` joined the `features/shared`
+barrel for it.
+
+**22px is under the 24px a coarse pointer wants, so it grows there.**
+`pointer-coarse:h-7` on the key and on the row — the cheap arm the handoff
+names, rather than keeping a second recess-pill layout below `sm`. Driven under
+a genuinely coarse pointer, both measure **28px**. It is still short of 44, and
+that is the trade every control on a pane ledge one seam down already makes.
+
+What is untouched: `aria-disabled` rather than the `disabled` attribute (a key
+that goes `disabled` under its own focus dumps a keyboard reader to `<body>`),
+the always-mounted `role="status"` region, the `aria-label` beginning "Sync",
+and the `answer.synced` gate on `onSynced`.
+
+### The pane ledges became one row
+
+Each ledge was a `CONSOLE_PANE_TRACK` carrying a legend and a control, over a
+column-head row: **measured at 82.75px and 81.02px** on the two panes — where
+the handoff's own estimate was ~66. It is **32px** now, on both, and the two
+panes' glass starts on the same line where it did not before.
+
+**The control takes the head row's own slot.** The `#` head and the mark's 20px
+spacer are dropped — place and mark are labelled by their shape, which is the
+argument the pane already makes for its sub-`lg` arm — and the legend and its
+track go with them, because a key whose face reads `ROS starters` does not need
+`Column` stamped beside it and a recess drawn around a key that is already
+raised is a channel with one thing in it.
+
+**One node with two layouts through `lg:contents`**, the trick the app rack's
+brand row and `DrawerRow` both turn: above `lg` the two inner boxes stop
+generating a box and their children become items of one row. Rendering the two
+arrangements separately would mount `TeamsColumnDialog` — and the `<dialog>`
+inside it — twice.
+
+**Below `lg` nothing moves.** A ~165px pane has no room for the one-line
+version, and `LensControl`'s `<select>` arm and the two-line head row are
+untouched: driven, the sub-`lg` ledges measure `4px 6px 5px` and 67.22 / 65.22px
+before *and* after, to the hundredth.
+
+**The column key is sized to the row rather than to what is left of it** —
+`lg:h-6 lg:flex-[0_1_190px]`, where it was `flex-1`. Sharing a line with the
+pane's name, a growing key would take that name's width. The basis is 190 and
+not 168 because `ROS starters` clips at 168, and it is `0 1 190px` rather than
+`0 0 190px` so a narrow card shrinks it instead of overflowing.
+
+**`LineupLensKeys` carries its own track now, where the caller used to.** With
+the `Value in` caption gone the recess held one thing, so the recess *is* the
+control — and that settles the emit-order question the split would otherwise
+raise, since a track's `gap-[3px]` and the group's own gap are the same property
+at the same specificity. The caller owns only the display arm
+(`hidden lg:inline-flex`), which is the one thing the track cannot know about
+itself. It has exactly one caller, so nothing else moved with it.
+
+**`PaneLedge` took a `tight` prop rather than a tighter padding**, and that is
+the one place this parts company with the handoff's own suggestion. That
+component is read by the lineup checker's week view too, whose ledge is still a
+track *over* a head row and wants the breath it has — and the prototype's
+checker artboard draws it unchanged. Editing the constant would move that tool's
+two panes by 3px apiece for a change made to neither. **The two arms are two
+whole strings**: `lg:py-1` beside `lg:pb-1.5 lg:pt-[5px]` is a shorthand against
+two longhands of the same specificity, and this project's own build emits the
+longhands *after* the shorthand (`lg:py-1` at byte 124,883, `lg:pb-1.5` at
+125,115) — so a base-plus-override would silently keep the old height at both
+ends.
+
+#### Verified
+
+Driven over CDP against `next dev` with no `DATABASE_URL` — the boot hook skips
+migrations and the loops log their refusals, which is the server coming up
+healthy against nothing — through a temporary `/preview` route mounting the
+**real** `LineupCheckCard`, `LeagueTeams`, `PaneLedge`, `TeamsColumnDialog`,
+`LineupLensKeys` and `PageShell` against fixtures, then deleted. The mechanics
+are the ones this file records: `--no-proxy-server`, `localhost` rather than
+`127.0.0.1`, a phone viewport from `Emulation.setDeviceMetricsOverride` with
+`mobile: true`, `data-theme` rather than `prefers-color-scheme`,
+`--disable-features=OverlayScrollbar`, a **client-component** harness, and a CDP
+client over Node's own `WebSocket` since Playwright is not in this project's
+`node_modules`.
+
+**One mechanic cost a run and is worth writing down: the
+`--blink-settings=availablePointerTypes=…` flags must be built as a template
+literal, not a plain string.** Assembled with `${}` inside double quotes the
+value reaches Blink as the literal text, Blink discards the whole switch, and
+every media query reports `pointer: none` — which matches neither `pointer-fine`
+nor `pointer-coarse`, so both arms are inert and the run silently measures a
+third thing. `matchMedia('(pointer: fine)')` is the assertion to make before
+trusting a number.
+
+Every arm landed, at 1024, 1152, 1280, 1440 and 1600 in both schemes plus 390.
+The strip is **22px + 6px** with `background-color: rgba(0,0,0,0)` and
+`box-shadow: none` — the recess gone — the key 22px on `--recess-bg` under the
+inset lip at `--fs-10`/`0.14em`, the rotor 12×12, and the hairline a
+left-to-right accent gradient. Both ledges are **32px** at `padding: 4px 7px`
+with their glass tops identical (977.2 / 977.2), the column key **190×24** at
+`flex: 0 1 190px`, and the lens track **209.6×24** holding three 20px keys.
+
+**The before-state was reproduced in the same harness** by stashing the diff,
+which is the check that the change is doing something: strip `32px + 10px`
+(30 + 8 below `sm`) on `rgba(0,0,0,0.32)`, ledges 82.75 and 81.02px with the two
+panes' glass **2px out of step**, and the sub-`lg` arm identical to the pixel.
+
+Behaviour was driven with real input. Pressing Sync gave `aria-disabled="true"`
+with no `disabled` attribute, a spinning rotor, `Syncing…` at 11.6px and
+`Re-reading this league from Sleeper` in the live region; it settled (no
+database) to `Couldn't sync` in `rgb(252,165,165)`, unclipped, with
+`Failed to refresh league` announced. Pressing each lens key moved
+`aria-pressed`, rewrote the column key's face (`ROS starters` → `KTC starters` →
+`Starter capital`), its `sr-only` sentence, the unit head (`Proj pts` →
+`KTC start` → `Draft cap`) and every figure in the table (`1375.0` → `32,200` →
+`32,300`) — the lens-writes-the-column path end to end — with the ledge at 32px
+throughout. The column key opened a `:modal` dialog named `Teams column` and
+Escape closed it. Four controls remain focusable in the two ledges: the column
+key and the three lens keys.
+
+The lineup checker's **own** pane ledges are unmoved: `5px 7px 6px` over a
+34.17px `LedgeTrack` at `lg` and `4px 6px 5px` over 32.16 below it, both panes
+identical — which is what the `tight` prop exists to guarantee.
+
+At every width and in both schemes: `document.documentElement.scrollWidth`
+within the viewport, exactly one `<h1>`, the two elements painted past the
+viewport both clipped by an ancestor and both present in the before-state, and
+**no console output of any kind** beyond the sandbox's cert refusals for the
+headshot CDN. 2,087 unit tests pass; `lint`, `typecheck` and `build` are clean.
+
+**One finding, reported rather than patched.** At the 190px basis the column
+key's face clips `Starter capital` by 8px (138 needed of 130) at every width —
+the longest of the ten column names, on a key deliberately sized to the row so
+the pane's name keeps its width. It truncates honestly and the whole name is in
+the key's `sr-only` sentence; widening the basis would take those 8px off the
+name opposite, which is the trade the fixed basis was chosen to make. It is a
+designer's call rather than a silent edit.
+
+**Not verified against real data**, which is the gap to close first: every
+number above is a fixture. Three things a render here cannot check — whether a
+real account's team names sit acceptably in the 157px the roster ledge gives
+them at 1024, which is the width the one-row arrangement costs; whether 22px
+reads as a *key* rather than as a caption on a page of a hundred cards, where
+the strip is the only etched thing on an otherwise raised surface; and what the
+reclaimed height is actually worth, which is 14px of panel on the checker and
+~50px per pane on the manager card and only a real twelve-team solve can say how
+many rows that buys.
+
 ## The identity plate became a billet, and the win rate the hero
 
 `/manager`'s header was the one object on the page not made of metal. Every

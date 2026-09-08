@@ -73,11 +73,35 @@ export function Pane({ children }: { children: ReactNode }) {
  * up: a control on the same surface as the rows it orders is a peer of them,
  * and a control on a ledge above them is plainly *theirs*. That is the whole of
  * why the shared `Rank by` / lens row was dissolved.
+ *
+ * **`tight` is the manager card's one-row `lg` arm, and it is a prop rather
+ * than an edit to the padding here because this component is read by two
+ * tools.** The manager pane folds its control into its head row above `lg`, so
+ * 11px of vertical padding around one 24px row reads as a ledge with a hole in
+ * it; the lineup checker's ledge is still a track *over* a head row and wants
+ * the breath it has. Changing the constant would move the checker's two panes
+ * by 3px apiece for a change made to neither.
+ *
+ * **The two arms are two whole strings, never a base plus an override.**
+ * `lg:py-1` beside `lg:pb-1.5 lg:pt-[5px]` is a shorthand against two longhands
+ * of the same specificity, and Tailwind emits longhands *after* shorthands — so
+ * the default would win at both ends whatever the ternary said, and the ledge
+ * would silently keep its old height. It is the trap `CONSOLE_KEY_PILL_SHELL`
+ * and `CONSOLE_CARD_SHELL` are split for, one property over.
  */
-export function PaneLedge({ children }: { children: ReactNode }) {
+export function PaneLedge({
+  children,
+  tight = false,
+}: {
+  children: ReactNode;
+  /** Above `lg`, 4px of padding for a ledge that is one row — see above. */
+  tight?: boolean;
+}) {
   return (
     <div
-      className={`${CONSOLE_WINDOW_LEDGE} shrink-0 rounded-lg px-1.5 pb-[5px] pt-1 lg:px-[7px] lg:pb-1.5 lg:pt-[5px]`}
+      className={`${CONSOLE_WINDOW_LEDGE} shrink-0 rounded-lg px-1.5 pb-[5px] pt-1 lg:px-[7px] ${
+        tight ? "lg:py-1" : "lg:pb-1.5 lg:pt-[5px]"
+      }`}
     >
       {children}
     </div>

@@ -1,6 +1,6 @@
 "use client";
 
-import { CONSOLE_KEY_PILL_SHELL } from "@/features/shared";
+import { CONSOLE_KEY_PILL_BARE } from "@/features/shared";
 
 import { syncStatusNote } from "../helpers/sync-status-note";
 import { useLeagueRefresh } from "../hooks/use-league-refresh";
@@ -41,18 +41,29 @@ import { useLeagueRefresh } from "../hooks/use-league-refresh";
  * back. `WeekStepper` keeps real `disabled` because its states are stable facts
  * about the week bounds rather than a momentary one about a request.
  *
- * **It stands in a 32px recess strip and owns no margin of its own**, since the
- * expanded-half convergence: the card puts card-scoped controls where the
- * manager card's history rail puts its own, so the two open halves read as one
- * object. The row that used to wrap under a `mb-3.5` is one line inside that
- * strip, and the key shrank to fit it.
+ * **It hangs on the seam line and owns no margin of its own.** It stood in a
+ * 32px recess strip until the panel's height was counted: a recess is the stock
+ * a *rail* is cut into, and 42px of a capped panel on one key and a status note
+ * is height the two lists under it want more. So the key is **etched** —
+ * `--recess-bg` under a hairline lip, the surface `BILLET_KEY_CHROME` names for
+ * a key on a machined face — with a rule running out to the panel's right edge
+ * to close the row, and the strip is 22px.
  *
- * **The key composes the padding-free pill shell**, not `CONSOLE_KEY`.
+ * **The key composes the *bare* pill, not the shell and not `CONSOLE_KEY`.**
  * Appending a smaller padding to that constant's `px-4 py-2` is decided by
  * Tailwind's emit order rather than by the class attribute — and the scale is
- * emitted ascending, so the *larger* value wins whatever is written. It is the
- * trap the shell exists to keep a key out of, and `TimelineView`'s `History`
- * key is the same measurement one tool over.
+ * emitted ascending, so the *larger* value wins whatever is written. The shell
+ * is the same trap one property over: its `text-[length:var(--fs-11)]` and
+ * `tracking-[0.16em]` are arbitrary values, so a caller writing `--fs-10`
+ * beside them is a coin flip too. The bare shape names neither, which is what
+ * it exists for.
+ *
+ * **22px is under the 24px a coarse pointer wants, so it grows there** —
+ * `pointer-coarse:h-7` on the key and on the row that holds it, which is the
+ * cheap arm rather than keeping a second recess-pill layout below `sm`. It is
+ * still short of 44px, which is the same trade every control on a pane ledge
+ * one seam down already makes: a card's own controls are read at arm's length
+ * beside the lists they act on, and a 44px floor here is 22px off both.
  */
 export function LeagueSyncKey({
   leagueId,
@@ -78,7 +89,7 @@ export function LeagueSyncKey({
   };
 
   return (
-    <div className="flex min-w-0 flex-1 items-center gap-2 sm:gap-2.5">
+    <div className="flex min-w-0 flex-1 items-center gap-2">
       <button
         type="button"
         onClick={() => void press()}
@@ -87,7 +98,7 @@ export function LeagueSyncKey({
         // and a reader speaking the words on screen still hits this control.
         aria-label={`Sync ${leagueName} from Sleeper`}
         title="Re-read this league's rosters and this week's lineup from Sleeper"
-        className={`${CONSOLE_KEY_PILL_SHELL} inline-flex items-center gap-2 border-foreground/10 bg-[image:var(--key-bg)] px-3 py-[3px] text-foreground/80 shadow-[var(--key-shadow)] hover:text-readout aria-disabled:cursor-default aria-disabled:text-foreground/40 aria-disabled:shadow-[var(--key-shadow-pressed)] aria-disabled:active:translate-y-0`}
+        className={`${CONSOLE_KEY_PILL_BARE} inline-flex h-[22px] items-center gap-1.5 border-foreground/10 bg-[color:var(--recess-bg)] px-[9px] text-[length:var(--fs-10)] tracking-[0.14em] text-foreground/80 shadow-[inset_0_1px_0_rgba(255,255,255,0.07)] hover:text-readout aria-disabled:cursor-default aria-disabled:text-foreground/40 aria-disabled:active:translate-y-0 pointer-coarse:h-7`}
       >
         <SyncMark spinning={pending} />
         Sync
@@ -99,7 +110,7 @@ export function LeagueSyncKey({
         <span
           aria-hidden
           title={note.title}
-          className={`min-w-0 truncate font-mono text-[length:var(--fs-11)] uppercase tracking-[0.14em] ${
+          className={`min-w-0 truncate font-mono text-[length:var(--fs-10)] uppercase tracking-[0.14em] ${
             note.alert ? "text-error" : "text-foreground/60"
           }`}
         >
@@ -118,6 +129,16 @@ export function LeagueSyncKey({
       <span role="status" className="sr-only">
         {note?.title ?? ""}
       </span>
+
+      {/* The rule that closes the row. It is what the recess used to do — say
+          where the strip ends — spent as a line rather than as a surface, and
+          it takes whatever the key and the note leave rather than a width of
+          its own, so a long note shortens it instead of pushing it off the
+          panel. */}
+      <span
+        aria-hidden
+        className="h-px min-w-0 flex-1 bg-gradient-to-r from-active/35 via-foreground/5 to-transparent"
+      />
     </div>
   );
 }
@@ -133,7 +154,7 @@ function SyncMark({ spinning }: { spinning: boolean }) {
     <svg
       aria-hidden
       viewBox="0 0 16 16"
-      className={`size-3.5 shrink-0 ${spinning ? "animate-spin motion-reduce:animate-none" : ""}`}
+      className={`size-3 shrink-0 ${spinning ? "animate-spin motion-reduce:animate-none" : ""}`}
       fill="none"
       stroke="currentColor"
       strokeWidth="1.6"

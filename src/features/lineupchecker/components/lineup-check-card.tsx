@@ -320,17 +320,26 @@ export const LineupCheckCard = memo(function LineupCheckCard({
             panes would compute their `translateZ` against no projection at all,
             with no error to say so. The fragment below is not an element. */}
         <ExpandedPanel open={open} closing={open && !lit}>
-          {/* Card-scoped controls, in the recess the manager card's history
-              rail stands in — same height, same stock, same place, so a reader
-              crossing between the two tools finds the card's own controls where
-              they left them.
+          {/* Card-scoped controls, **on the seam line rather than in a recess
+              of their own**. The strip used to be a 32px pill on the stock the
+              manager card's history rail stands in, which is the right surface
+              for a rail — a rail is a control a reader drives — and is 42px of
+              a capped panel spent on one key and a status note. Etched onto the
+              seam instead, with a hairline running out to the panel's right
+              edge, the row is 22px and the 16px it gives back goes to the two
+              lists below, which is the point.
+
+              No `translateZ` and no track shadow with it: what carried the
+              plane was the recess, and a lit key hanging on a hairline is flat
+              by construction — the idiom `BILLET_KEY_CHROME` and the week
+              stepper's own hairline already use one plane up.
 
               Above the panes rather than in the summary: a `<summary>` is a
               leaf button to assistive technology, so a control nested in one is
               unreliably reachable and a live region inside it is swallowed into
               the disclosure's name. It also lands beside the empty state below,
               which is the case a sync most often fixes. */}
-          <div className="mb-2 flex h-[30px] shrink-0 flex-nowrap items-center gap-1.5 rounded-full bg-[color:var(--recess-bg)] pl-1.5 pr-3.5 shadow-[var(--track-shadow)] sm:mb-2.5 sm:h-8 sm:gap-2.5 sm:pr-4 pointer-fine:[transform:translateZ(4px)]">
+          <div className="mb-1.5 flex h-[22px] shrink-0 items-center gap-2 pointer-coarse:h-7">
             <LeagueSyncKey
               leagueId={league.league_id}
               leagueName={league.name}

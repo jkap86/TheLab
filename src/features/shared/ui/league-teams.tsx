@@ -338,60 +338,73 @@ export function LeagueTeams({
     <div className="flex min-h-0 flex-1 flex-col pointer-fine:[transform-style:preserve-3d]">
       <div className="flex min-h-0 flex-1 items-stretch gap-1.5 sm:gap-2.5 lg:gap-3.5 pointer-fine:[transform:translateZ(7px)]">
         <Pane>
-          <PaneLedge>
-            {/* A labelled recess with the picker's key raised out of it, on the
-                pane it orders. The legend is the control's name and the key
-                carries its own `sr-only` sentence, so the recess needs no
-                `<label>`: what sits in it is a button that opens a dialog, not
-                a form control a name has to be associated with. */}
-            <div
-              className={`${CONSOLE_PANE_TRACK} flex min-w-0 items-center gap-1.5 p-[3px] pl-[9px] lg:gap-2.5 lg:pl-3`}
-            >
-              <span
-                aria-hidden
-                className="shrink-0 font-mono text-[length:var(--fs-9)] uppercase tracking-[0.16em] text-[color:var(--billet-label)] lg:text-[length:var(--fs-10)]"
-              >
-                {/* `Col` on a phone, where the track is ~165px and the key
-                    inside it is what a reader actually reads — the rule the
-                    `Sort`/`Sort by` legend this replaces already lived by. */}
-                <span className="lg:hidden">Col</span>
-                <span className="hidden lg:inline">Column</span>
-              </span>
-              <TeamsColumnDialog
-                column={column}
-                onChange={storeTeamsColumn}
-                ktc={ktc}
-                slots={slots}
-              />
-            </div>
+          <PaneLedge tight>
+            {/* **One row above `lg`, two below it**, and the row is the head row
+                — the control takes the slot the pane's `#` head had and the
+                pane's name keeps its own. Two lines of ledge over a capped panel
+                is 66px of height the twelve teams under it want more, and the
+                legend and the track that carried it were the redundant half: a
+                key whose face reads `ROS starters` does not need `Column`
+                stamped beside it, and a recess drawn around a key that is
+                already raised is a channel with one thing in it.
 
-            {/* The column heads, in the rows' own widths. Below `lg` the pane
-                is ~165px and the only head worth the line is the list's own
-                name — the place and the total are labelled by their shape. */}
-            <div className="mt-1.5 flex items-center gap-[9px] px-[3px] lg:mt-0 lg:px-1 lg:pb-px lg:pt-[7px]">
-              <span
-                aria-hidden
-                className="hidden w-10 shrink-0 text-center font-mono text-[length:var(--fs-10)] tracking-[0.14em] text-[color:var(--billet-label)] lg:block"
+                **One node with two layouts through `lg:contents`**, the trick
+                the app rack's brand row and `DrawerRow` both turn: the two inner
+                boxes stop generating a box above `lg` and their children become
+                items of this row directly. Rendering the two arrangements
+                separately would mount `TeamsColumnDialog` — and the `<dialog>`
+                inside it — twice.
+
+                Below `lg` nothing moves: a ~165px pane has no room for the
+                one-line version, and the head row there already drops every
+                head but the list's own name. */}
+            <div className="lg:flex lg:min-w-0 lg:items-center lg:gap-2.5">
+              {/* The recess, and the picker's key raised out of it. The legend
+                  is the control's name and the key carries its own `sr-only`
+                  sentence, so the recess needs no `<label>`: what sits in it is
+                  a button that opens a dialog, not a form control a name has to
+                  be associated with. */}
+              <div
+                className={`${CONSOLE_PANE_TRACK} flex min-w-0 items-center gap-1.5 p-[3px] pl-[9px] lg:contents`}
               >
-                #
-              </span>
-              <span aria-hidden className="hidden w-5 shrink-0 lg:block" />
-              <PaneHead className="min-w-0 flex-1">Teams</PaneHead>
-              {/* **The unit, where this said `Total`.** A literal was honest
-                  while the pane read one metric at a time and is not now: a
-                  column can be draft capital on the superflex board narrowed to
-                  the flex seats, and `Total` says nothing about which of those
-                  the figures under it are. The unit is the same word the card's
-                  own tile prints over the same number, which is what keeps the
-                  strip above and the table below reading as one instrument.
-                  Truncated at `lg`'s 78px cell rather than abbreviated, since
-                  what it clips is the qualifier and not the noun. */}
-              <span
-                aria-hidden
-                className="hidden w-[78px] shrink-0 truncate text-right font-mono text-[length:var(--fs-10)] uppercase tracking-[0.1em] text-[color:var(--billet-label)] lg:block"
-              >
-                {LINEUP_METRIC_LABELS[metric].unit}
-              </span>
+                <span
+                  aria-hidden
+                  className="shrink-0 font-mono text-[length:var(--fs-9)] uppercase tracking-[0.16em] text-[color:var(--billet-label)] lg:hidden"
+                >
+                  Col
+                </span>
+                <TeamsColumnDialog
+                  column={column}
+                  onChange={storeTeamsColumn}
+                  ktc={ktc}
+                  slots={slots}
+                />
+              </div>
+
+              {/* The column heads, in the rows' own widths. Below `lg` the pane
+                  is ~165px and the only head worth the line is the list's own
+                  name — the place and the total are labelled by their shape,
+                  which is the argument that also drops the `#` head and the
+                  mark's spacer above `lg` now that the row is shared with a
+                  control. */}
+              <div className="mt-1.5 flex items-center gap-[9px] px-[3px] lg:contents">
+                <PaneHead className="min-w-0 flex-1">Teams</PaneHead>
+                {/* **The unit, where this said `Total`.** A literal was honest
+                    while the pane read one metric at a time and is not now: a
+                    column can be draft capital on the superflex board narrowed to
+                    the flex seats, and `Total` says nothing about which of those
+                    the figures under it are. The unit is the same word the card's
+                    own tile prints over the same number, which is what keeps the
+                    strip above and the table below reading as one instrument.
+                    Truncated at `lg`'s 78px cell rather than abbreviated, since
+                    what it clips is the qualifier and not the noun. */}
+                <span
+                  aria-hidden
+                  className="hidden w-[78px] shrink-0 truncate text-right font-mono text-[length:var(--fs-10)] uppercase tracking-[0.1em] text-[color:var(--billet-label)] lg:block"
+                >
+                  {LINEUP_METRIC_LABELS[metric].unit}
+                </span>
+              </div>
             </div>
           </PaneLedge>
 
@@ -445,19 +458,25 @@ export function LeagueTeams({
         </Pane>
 
         <Pane>
-          <PaneLedge>
-            <LensControl lens={lens} onChange={pressLens} />
-            {/* Whose roster the seats below belong to. It is the pane's own
-                head rather than a comparison of two teams: the ghost column
-                that needed attributing went with the bars. */}
-            <div className="mt-1.5 flex items-baseline gap-[9px] px-[3px] lg:mt-0 lg:px-1 lg:pb-px lg:pt-[7px]">
-              <PaneHead className="min-w-0 flex-1">{selected.name}</PaneHead>
-              <span
-                aria-hidden
-                className="hidden shrink-0 font-mono text-[length:var(--fs-10)] uppercase tracking-[0.14em] text-[color:var(--billet-label)] lg:block"
-              >
-                Starters
-              </span>
+          <PaneLedge tight>
+            {/* One row above `lg` and two below it — the teams pane's own
+                arrangement, cell for cell, so the two ledges are one height and
+                the two lists start on the same line. See that pane for the
+                `lg:contents` and for what the second line costs. */}
+            <div className="lg:flex lg:min-w-0 lg:items-center lg:gap-2.5">
+              <LensControl lens={lens} onChange={pressLens} />
+              {/* Whose roster the seats below belong to. It is the pane's own
+                  head rather than a comparison of two teams: the ghost column
+                  that needed attributing went with the bars. */}
+              <div className="mt-1.5 flex items-baseline gap-[9px] px-[3px] lg:contents">
+                <PaneHead className="min-w-0 flex-1">{selected.name}</PaneHead>
+                <span
+                  aria-hidden
+                  className="hidden shrink-0 font-mono text-[length:var(--fs-10)] uppercase tracking-[0.14em] text-[color:var(--billet-label)] lg:block"
+                >
+                  Starters
+                </span>
+              </div>
             </div>
           </PaneLedge>
 
@@ -541,17 +560,17 @@ function LensControl({
         </span>
       </label>
 
-      <div
-        className={`${CONSOLE_PANE_TRACK} hidden min-w-0 items-center gap-2 p-[3px] pl-3 lg:flex`}
-      >
-        <span
-          aria-hidden
-          className="shrink-0 font-mono text-[length:var(--fs-10)] uppercase tracking-[0.16em] text-[color:var(--billet-label)]"
-        >
-          Value in
-        </span>
-        <LineupLensKeys lens={lens} onChange={onChange} className="min-w-0 flex-1" />
-      </div>
+      {/* **The `Value in` legend is dropped and the keys are the track**, which
+          is the same argument the teams pane's `Column` legend goes by: three
+          words that name the three readings are their own legend, and a caption
+          beside them spends a third of a one-row ledge saying what the lit key
+          already says. The group keeps its `aria-label`, so nothing is lost to a
+          reader who cannot see the three. */}
+      <LineupLensKeys
+        lens={lens}
+        onChange={onChange}
+        className="hidden lg:inline-flex"
+      />
     </>
   );
 }
