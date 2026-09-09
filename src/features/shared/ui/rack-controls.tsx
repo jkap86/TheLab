@@ -14,6 +14,12 @@ import {
 // legal values were spelled out here instead. It moved here with the shares
 // drawer, and the spelled-out copy went with it.
 import type { SubjectKind } from "../league-subjects";
+// Mounted here because this provider already wraps every page from
+// `layout.tsx` and is already a client component, so the hook needs neither a
+// second provider nor a new client boundary in the layout. It publishes
+// `--vvh` for the two modal panels to cap themselves against; nothing in this
+// file reads it.
+import { useVisualViewportHeight } from "../use-visual-viewport";
 
 /**
  * Everything the app rack needs to draw a page's Browse controls.
@@ -109,6 +115,7 @@ const WriteContext = createContext<
 >(null);
 
 export function RackControlsProvider({ children }: { children: ReactNode }) {
+  useVisualViewportHeight();
   const [controls, setControls] = useState<RackControls | null>(null);
   return (
     <WriteContext.Provider value={setControls}>

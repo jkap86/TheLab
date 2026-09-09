@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { IBM_Plex_Mono, IBM_Plex_Sans } from "next/font/google";
 import { RackControlsProvider, THEME_BOOT_SCRIPT } from "@/features/shared";
 import { AppRack } from "@/features/tools";
@@ -51,6 +51,32 @@ const plexMono = IBM_Plex_Mono({
  */
 const site = resolveSiteUrl(process.env, process.env.NODE_ENV === "production");
 if (site.warning) console.warn(`[metadata] ${site.warning}`);
+
+/**
+ * Stated rather than left to Next's default, for the one field that is not the
+ * default: `interactiveWidget`.
+ *
+ * `resizes-content` makes the software keyboard shrink the **layout** viewport,
+ * which fixes natively the class of bug `use-visual-viewport` exists for — a
+ * panel sized in a keyboard-blind unit, and a browser that pans and scales the
+ * visual viewport because it has nothing else to scroll a focused field into
+ * view with. **Chrome on Android honours it and iOS Safari ignores it**, which
+ * is why the hook is still required: Android takes the cheap path here and iOS
+ * takes the hook.
+ *
+ * `width` and `initialScale` are Next's own defaults, restated because writing
+ * this export at all replaces them.
+ *
+ * Deliberately **not** here: `maximumScale` or `userScalable`. Either would
+ * mask a focus zoom by taking pinch-zoom from every reader, which is a WCAG
+ * 1.4.4 regression — the same argument the `touch:` font floor in
+ * `globals.css` is written under.
+ */
+export const viewport: Viewport = {
+  width: "device-width",
+  initialScale: 1,
+  interactiveWidget: "resizes-content",
+};
 
 export const metadata: Metadata = {
   metadataBase: new URL(site.url),
