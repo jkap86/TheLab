@@ -190,7 +190,25 @@ export const LeagueFiltersDialog = memo(function LeagueFiltersDialog({
         onClick={(e) => {
           if (e.target === e.currentTarget) ref.current?.close();
         }}
-        className="m-auto max-h-[min(88vh,46rem)] w-[min(64rem,calc(100vw-2rem))] overflow-hidden rounded-3xl border border-foreground/12 bg-background bg-[image:var(--panel-bg)] p-0 text-foreground shadow-[var(--panel-shadow),0_24px_60px_-34px_var(--surface-shadow)] backdrop:bg-black/60"
+        // The cap is 88% of the *visual* viewport, which is the one measure
+        // that sees the software keyboard: `vh` is the large viewport and
+        // ignores it outright, `dvh` tracks the URL bar and not the keyboard.
+        // Uncapped against it this panel stays full height behind a keyboard
+        // covering half the screen, and iOS Safari — with the page behind a
+        // modal inert and nothing else to scroll — pans and scales the visual
+        // viewport to reveal the focused rule row instead, an offset that
+        // outlives the blur. Capped, the body scroller below is a real scroll
+        // target and Safari uses it. `use-visual-viewport` publishes `--vvh`.
+        //
+        // **The 88% multiplies the variable rather than riding the fallback**,
+        // which reads like a longer spelling of `min(var(--vvh,88vh),46rem)`
+        // and is not: every desktop browser has a `visualViewport`, so the
+        // fallback is never taken there and that spelling would cap the panel
+        // at the *whole* window — losing, on any window under ~836px, exactly
+        // the margin `m-auto` spends this 12% on. Written this way the
+        // unset case is `min(88vh,46rem)` to the pixel and the keyboard case
+        // keeps the same proportion of what is left visible.
+        className="m-auto max-h-[min(calc(var(--vvh,100vh)*0.88),46rem)] w-[min(64rem,calc(100vw-2rem))] overflow-hidden rounded-3xl border border-foreground/12 bg-background bg-[image:var(--panel-bg)] p-0 text-foreground shadow-[var(--panel-shadow),0_24px_60px_-34px_var(--surface-shadow)] backdrop:bg-black/60"
       >
         <span
           aria-hidden

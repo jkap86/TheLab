@@ -628,7 +628,7 @@ export function SharesDrawer({
         // landed outside the panel.
         if (e.target === e.currentTarget) close();
       }}
-      className={`${SIDES[side].dialog} h-dvh max-h-dvh w-[min(34rem,calc(100vw-1.5rem))] max-w-full overflow-hidden bg-transparent text-foreground backdrop:bg-[radial-gradient(130%_100%_at_50%_0%,rgba(0,0,0,0.5),rgba(0,0,0,0.78))] backdrop:backdrop-blur-[2.5px]`}
+      className={`${SIDES[side].dialog} h-[var(--vvh,100dvh)] max-h-[var(--vvh,100dvh)] w-[min(34rem,calc(100vw-1.5rem))] max-w-full overflow-hidden bg-transparent text-foreground backdrop:bg-[radial-gradient(130%_100%_at_50%_0%,rgba(0,0,0,0.5),rgba(0,0,0,0.78))] backdrop:backdrop-blur-[2.5px]`}
     >
       <div
         ref={panelRef}
