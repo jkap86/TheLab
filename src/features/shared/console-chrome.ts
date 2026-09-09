@@ -134,11 +134,19 @@ export const CONSOLE_CHANNEL =
  * four keys on a panel — which is the whole of how that rack states its budget,
  * since with every bay always set there is no count to state instead.
  *
+ * **Eased once, and the reason is what it now sits in.** The picker's own body
+ * used to be the case's face; it is a hole cut in that case, and a hole inside
+ * a hole is the one arrangement where a floor this dark stops reading as a
+ * floor at all — the tray and the well it sits in were within a few percent of
+ * each other. The alphas below are one step back from what they were
+ * (`0.46 → 0.42`, both `0.9` insets to `0.85`, the lip `0.07 → 0.08`), which is
+ * what keeps the rack a hole in the well rather than a continuation of it.
+ *
  * No radius, on {@link CONSOLE_BILLET}'s terms: the caller states its own.
  */
 export const CONSOLE_PART_TRAY =
-  "bg-black/46 " +
-  "shadow-[inset_0_7px_16px_rgba(0,0,0,0.9),inset_0_1px_0_rgba(0,0,0,0.9),inset_0_-1px_0_rgba(255,255,255,0.07)]";
+  "bg-black/42 " +
+  "shadow-[inset_0_7px_16px_rgba(0,0,0,0.85),inset_0_1px_0_rgba(0,0,0,0.85),inset_0_-1px_0_rgba(255,255,255,0.08)]";
 
 /**
  * The same channel, from `sm` up only.

@@ -103,12 +103,20 @@ type ColumnsDialogProps = {
  * another bay — checked against the whole column rather than the metric, since
  * two bays holding one metric on two boards is the comparison a dynasty reader
  * opens this panel to make. That was the right rule for a panel that wrote on
- * every press and it is the wrong one for a panel that saves: a duplicate is no
- * longer a press to refuse but a save to resolve, and it resolves by
- * **exchange** — the bay that already held the column takes what this one held,
- * so nothing is lost and the rack still holds four distinct readings. What is
- * still greyed is the grid's own hole (`cellGapReason`), because that is a
- * reading which cannot exist rather than one a sibling bay is sitting on.
+ * every press and it is the wrong one for a panel that seats on the way out: a
+ * duplicate is no longer a press to refuse but a departure to resolve, and it
+ * resolves by **exchange** — the bay that already held the column takes what
+ * this one held, so nothing is lost and the rack still holds four distinct
+ * readings. What is still greyed is the grid's own hole (`cellGapReason`),
+ * because that is a reading which cannot exist rather than one a sibling bay is
+ * sitting on.
+ *
+ * **And the exchange is shown rather than narrated**, which is the one job
+ * `Save` did that survived the deferral and had to land somewhere when the key
+ * went: the bay it would trade with takes a dimmer lamp and a faint accent
+ * ring, the foot reads `Bay 03 trades places`, and that bay's own accessible
+ * name gains the same fact. A reader who could not be told would watch two
+ * tiles change for one departure.
  *
  * **The bay is the preview.** An earlier direction drew a preview tile under the
  * composer; here the selected bay updates on every press and is already drawn as
@@ -136,14 +144,36 @@ type ColumnsDialogProps = {
  * every step of the way, and each intermediate column was a real selection the
  * cards behind the dialog re-ranked for. A press edits a **draft** of the
  * selected bay now; the tracks and the housing header read it, and the four
- * tiles hold still until `Save` seats it. The store is still written on Save
- * alone, so `storeLineupColumns` and the socket order below are unchanged —
- * they just run once per save instead of once per press.
+ * tiles hold still until it is seated. That argument survives this file's
+ * history verbatim, and it is why nothing below moved when `Save` went:
+ * `storeLineupColumns`, `arrangeLineupColumns` and the socket order are
+ * untouched.
  *
- * **A draft belongs to the bay it was made in**, so selecting another abandons
- * it. The two alternatives — a pending mark on the tile, or refusing to move —
- * both make the rack carry state about an edit nobody has committed, which is
- * the thing the deferral exists to take *off* it.
+ * **What changed is when a draft is seated, and it is now every way out of a
+ * bay**: selecting another, `Done`, Esc, and a backdrop click. That is one
+ * write per bay visit, which is exactly the count one `Save` press per visit
+ * produced — so the deferral keeps everything it was for and loses the failure
+ * it shipped with. `Save` was the smallest key on the panel, `--fs-9` beside a
+ * `--fs-15` name, and dark most of the time it was on screen, which is a key a
+ * reader stops reading: readers changed a column, pressed `Done`, and lost the
+ * edit with nothing saying so. Three of the four exits are `showModal()`'s
+ * rather than this file's, which is why the seat is wired to the dialog's own
+ * `close` event ({@link ColumnPanel.onClose}) rather than to three call sites —
+ * one of them missed is the same silent loss with a smaller mouth.
+ *
+ * **So a draft is carried out of the bay it was made in, and this file used to
+ * say the opposite.** It argued that an edit belongs to its bay and that
+ * selecting another should abandon it, on the grounds that carrying one across
+ * would put a composed column into a socket the reader never opened it in —
+ * which is right, and is not what happens here: {@link save} seats it *in the
+ * bay being left* before {@link select} moves, so nothing crosses. What goes
+ * with that rule is the cost it accepted, a half-composed column lost to a
+ * stray press on a neighbouring tile.
+ *
+ * **What it trades away is backing out**, and that is the smaller loss: a
+ * column is four visible axes, so pressing back is trivial, where losing an
+ * edit you thought you had made is not. It is the trade this panel already made
+ * when it deleted `Clear`.
  *
  * **Nothing on this panel appears or disappears under a press**, which is the
  * rule the three narrowing and pricing tracks now live by: `Market`, `QB board`
@@ -152,8 +182,7 @@ type ColumnsDialogProps = {
  * and resized the case mid-sitting. They keep their places and go **out of
  * force** instead — dimmed keys, a dimmed legend and the reason in every key's
  * title — and the row that explains each dim is the unlit key one or two tracks
- * above it. `Save` is a key on the same terms: dark and unpressable with
- * nothing to seat rather than absent.
+ * above it.
  *
  * **The KeepTradeCut board lives in the bay, not in this panel's foot.** A global
  * board key is contradicted by a column that names its own: the market is not a
@@ -258,8 +287,8 @@ export const LineupColumnsDialog = memo(function LineupColumnsDialog({
   /**
    * The edit in progress on the selected bay, or null where there is none.
    *
-   * **A press writes this and `Save` writes the store**, which is what keeps the
-   * rack still while a reader crosses the grid: every intermediate column on the
+   * **A press writes this and leaving the bay writes the store**, which is what
+   * keeps the rack still while a reader crosses the grid: every intermediate column on the
    * way from `Proj · Starters` to `KTC · Picks` used to be a real selection, so
    * the tile under their finger moved on each step and the cards behind the
    * dialog re-ranked for a column nobody wanted. Held here, the four tiles are
@@ -286,7 +315,7 @@ export const LineupColumnsDialog = memo(function LineupColumnsDialog({
   const bays = arrangeLineupColumns(canonical, sockets);
   const bay = Math.min(Math.max(active, 0), bays.length - 1);
   /** What the selected bay currently holds — what the rack draws, and what
-   * `Save` compares against. */
+   * {@link save} compares against. */
   const seated = bays[bay];
   /** What the tracks and the housing read: the edit in progress, else the seated
    * column. Every axis below is a fact about *this*, never about the rack. */
@@ -296,12 +325,14 @@ export const LineupColumnsDialog = memo(function LineupColumnsDialog({
   /**
    * Which other bay already holds the column being composed, or -1.
    *
-   * **It words the Save key's title and disables nothing**, which is the whole
-   * of what the collision rule became: a duplicate is resolved by exchange on
-   * save rather than refused on press, so the only thing left to do about one is
-   * to say what pressing `Save` will do — that the other bay takes what this one
-   * held. A reader who could not be told that would watch two tiles change for
-   * one press.
+   * **It marks a bay and disables nothing**, which is the whole of what the
+   * collision rule became: a duplicate is resolved by exchange on the way out
+   * rather than refused on press, so the only thing left to do about one is to
+   * say that it is coming. It used to be said in `Save`'s `title`, which is a
+   * sentence only a reader who hovered a key they could not press would ever
+   * read; it is the marked bay's own lamp and ring, the foot's line, and that
+   * bay's accessible name now. A reader who could not be told would watch two
+   * tiles change for one departure.
    */
   const duplicate = bays.findIndex(
     (one, i) => i !== bay && lineupColumnKey(one) === lineupColumnKey(col),
@@ -321,9 +352,24 @@ export const LineupColumnsDialog = memo(function LineupColumnsDialog({
    * The keys are taken from `all` rather than from the store's answer because
    * `all` *is* the arrangement: reading them back would be reading the canonical
    * order, which is the re-sort this exists to keep off the rack.
+   *
+   * **It is a helper the exits call rather than a key's handler**, and it is
+   * called on every one of them — {@link select}, `Done`, Esc and a backdrop
+   * click. Three of those are `showModal()`'s, which is why the last three are
+   * one `onClose` on the dialog rather than three wirings that can be two.
+   *
+   * **The draft is dropped whether or not there was anything to seat**, and the
+   * guard being inside rather than around is the whole of why: a press can
+   * compose a column back to the one the bay already holds, which is a draft in
+   * hand with `dirty` false, and an early return would carry it into the next
+   * bay a reader selected — where `col` would read a column that bay does not
+   * hold and every axis under it would be a fact about the wrong socket.
    */
   const save = () => {
-    if (!dirty) return;
+    if (!dirty) {
+      setDraft(null);
+      return;
+    }
     const all = bays.map((c, i) => (i === bay ? col : c));
     // **The exchange.** A duplicate is not a press to refuse but a save to
     // resolve: the bay that already held this column takes what this one held,
@@ -340,19 +386,22 @@ export const LineupColumnsDialog = memo(function LineupColumnsDialog({
   };
 
   /**
-   * Move to another bay, abandoning whatever was in hand.
+   * Seat what is in hand, then move to another bay.
    *
-   * **An edit belongs to the bay it was made in.** Carrying a draft across would
-   * put a composed column into a socket the reader never opened it in; keeping
-   * one per bay would make the rack carry state about four edits nobody has
-   * committed, which is exactly what the deferral exists to take off it. The
-   * cost is that a half-composed column is lost to a stray press on a
-   * neighbouring tile, and the panel's own history is what argues for taking it:
-   * nothing here has ever asked a reader to confirm.
+   * **The order is the whole of it.** {@link save} reads the bay being *left* —
+   * `bay`, `seated` and `duplicate` are all this render's — so seating before
+   * the move puts the column in the socket the reader composed it in, and
+   * nothing crosses. Written the other way round it would seat into whichever
+   * bay was arrived at, which is the failure this file's own note used to
+   * argue against carrying a draft at all.
+   *
+   * Both are state setters in one handler, so they batch: the store write and
+   * the socket order land with the new selection in one commit, and the rack
+   * never paints a frame of the seated column under the old bay's highlight.
    */
   const select = (index: number) => {
+    save();
     setActive(index);
-    setDraft(null);
   };
 
   /**
@@ -367,9 +416,9 @@ export const LineupColumnsDialog = memo(function LineupColumnsDialog({
    * re-order, so it is the one moment an index has to chase what it points at.
    */
   const open = () => {
-    // The *seated* column, not the draft: an unsaved edit does not outlive the
-    // sitting it was made in, so what the re-opened panel follows is the column
-    // the bay actually holds.
+    // The *seated* column, not the draft — and with every close seating, there
+    // is no longer a draft that could survive one: what this reads is what the
+    // bay holds, by construction rather than by choosing between two.
     const key = lineupColumnKey(seated);
     const landed = canonical.findIndex((c) => lineupColumnKey(c) === key);
     setSockets(null);
@@ -404,8 +453,17 @@ export const LineupColumnsDialog = memo(function LineupColumnsDialog({
         // move is which slot you are inside.
         reading={`Bay ${bayNumber(bay)} / ${String(MAX_LINEUP_COLUMNS).padStart(2, "0")}`}
         copy="Pick a bay to set what it reads."
-        wideCopy="Save seats it — a column another bay holds trades places."
+        wideCopy="Leaving a bay seats it — a column another bay holds trades places."
         ktc={ktc}
+        // The foot's other reading. Not a `title` on a key nobody presses: the
+        // exchange is the one thing about a departure a reader cannot guess,
+        // and it has to be on screen before they leave.
+        warning={
+          duplicate >= 0 ? `Bay ${bayNumber(duplicate)} trades places` : undefined
+        }
+        // Esc, the backdrop and `Done` all reach `close`, so one handler is all
+        // three — see {@link save}.
+        onClose={save}
       >
         {/* **A deep hole holding four raised parts**, and the depth is the
             argument: a tray holding controls is a surface, a tray holding
@@ -428,6 +486,7 @@ export const LineupColumnsDialog = memo(function LineupColumnsDialog({
                 index={i}
                 column={entry}
                 active={i === bay}
+                marked={i === duplicate}
                 onSelect={() => select(i)}
               />
             </li>
@@ -435,24 +494,15 @@ export const LineupColumnsDialog = memo(function LineupColumnsDialog({
         </ul>
 
         <ColumnAxes
-          chip={`Bay ${bayNumber(bay)}`}
+          // **The chip names the state, since nothing else on the ledge does
+          // any more.** With `Save` gone the housing has one lit reading, and a
+          // draft in hand is the thing worth spending it on — the accent ring
+          // that comes up with it is the same fact drawn as a part.
+          chip={`Bay ${bayNumber(bay)}${dirty ? " · Edit" : ""}`}
           column={col}
           slots={slots}
           dirty={dirty}
-          // The only place the exchange can be stated. A reader can guess what
-          // seating a column does; nobody can guess that the bay already
-          // holding it will take what this one held, and watching two tiles
-          // change for one press without having been told is the panel doing
-          // something behind them.
-          saveTitle={
-            !dirty
-              ? "No change to save"
-              : duplicate >= 0
-                ? `Seat this column — bay ${bayNumber(duplicate)} takes what this one held`
-                : `Seat this column in bay ${bayNumber(bay)}`
-          }
           onChange={setDraft}
-          onSave={save}
         />
       </ColumnPanel>
     </>
@@ -490,6 +540,15 @@ function columnsDialogPropsEqual(
  * as one-of-four rather than as a grid of four equals, and it is why the housing
  * below needs no heading naming which bay it edits beyond its own chip.
  *
+ * **A marked bay is the second reading, and it is deliberately quieter than the
+ * first.** It is the bay that already holds the column being composed, so
+ * leaving trades the two — a lamp at 55% of the accent under a 26% ring, where
+ * the active bay's are full and 50. Neither is a state a reader chose, which is
+ * why the mark says *this tile is in the trade* and stops there: **its own two
+ * lines do not change**. Nothing moves until the reader leaves, and a tile that
+ * previewed what it was about to become would be a rack showing five columns
+ * across four sockets.
+ *
  * Two stacked surfaces inside it — the `CONSOLE_WINDOW_LEDGE` grammar the league
  * card already uses — so the *words* sit on metal and only the *setting* is on
  * glass. The bay number and its lamp belong to the part; what the column reads
@@ -505,11 +564,14 @@ function BayKey({
   index,
   column: col,
   active,
+  marked = false,
   onSelect,
 }: {
   index: number;
   column: LineupColumn;
   active: boolean;
+  /** This bay already holds the column being composed, so leaving trades the two. */
+  marked?: boolean;
   onSelect: () => void;
 }) {
   const words = LINEUP_METRIC_LABELS[col.metric];
@@ -530,8 +592,13 @@ function BayKey({
       onClick={onSelect}
       aria-pressed={active}
       // The name is the whole bay, spoken: a button reading "KTC" in a row of
-      // four numbered sockets says nothing about which socket it is.
-      aria-label={`Bay ${bayNumber(index)}, ${words.column}${second ? `, ${second}` : ""}`}
+      // four numbered sockets says nothing about which socket it is — and it
+      // carries the same fact the lamp and the ring do, which is the one place
+      // a reader who cannot see either meets the exchange before it happens.
+      aria-label={
+        `Bay ${bayNumber(index)}, ${words.column}${second ? `, ${second}` : ""}` +
+        (marked ? " — trades places on leaving" : "")
+      }
       className={
         `${CONSOLE_BILLET_FACE} lab-anim relative flex w-full flex-col rounded-[0.6875rem] text-left ` +
         "transition-[transform,box-shadow] duration-[160ms] " +
@@ -552,11 +619,15 @@ function BayKey({
       />
       {/* The accent hairline, as a child rather than an `outline`: it has to
           paint over the ledge and the glass, and it must not be the thing a
-          focus ring then has to argue with. */}
-      {active && (
+          focus ring then has to argue with. One span for both readings, at two
+          alphas of the same accent — a second element for the mark would be a
+          second thing to keep in step with the first. */}
+      {(active || marked) && (
         <span
           aria-hidden
-          className="pointer-events-none absolute inset-px z-[1] rounded-[0.625rem] border border-active/50"
+          className={`pointer-events-none absolute inset-px z-[1] rounded-[0.625rem] border ${
+            active ? "border-active/50" : "border-active/26"
+          }`}
         />
       )}
       <span
@@ -567,12 +638,15 @@ function BayKey({
           {bayNumber(index)}
         </span>
         {/* Resting is a dark unlit slot rather than a missing element: a lamp
-            that disappeared would say the socket had lost a part. */}
+            that disappeared would say the socket had lost a part. Marked sits
+            between the two — lit, and visibly not the bay being edited. */}
         <span
           className={`size-[0.3125rem] shrink-0 rounded-full ${
             active
               ? "bg-active shadow-[0_0_7px_var(--accent-glow)]"
-              : "bg-black/40 shadow-[inset_0_1px_1px_rgba(0,0,0,0.6)]"
+              : marked
+                ? "bg-active/55 shadow-[0_0_5px_var(--accent-glow)]"
+                : "bg-black/40 shadow-[inset_0_1px_1px_rgba(0,0,0,0.6)]"
           }`}
         />
       </span>

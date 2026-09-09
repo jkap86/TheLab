@@ -15,11 +15,7 @@ import { isKtcMetric, readsQbBoard } from "@/shared/ktc/columns";
 // Relative rather than through this folder's own barrel — the rule
 // `lineup-columns-dialog.tsx` beside it already lives by: a module inside
 // `features/shared` reaches its siblings directly.
-import {
-  CONSOLE_BILLET_FACE,
-  CONSOLE_GLASS,
-  CONSOLE_KEY_PILL_BARE,
-} from "../console-chrome";
+import { CONSOLE_GLASS } from "../console-chrome";
 import {
   adpBoardLabel,
   cellGapReason,
@@ -47,7 +43,7 @@ import {
   type ColumnValue,
   type SlotGroup,
 } from "../lineup-columns";
-import { Scanlines } from "./card-plate";
+import { BilletFinish, Scanlines } from "./card-plate";
 import { KtcBoardKeys, KtcLineupKeys, SwitchTrack } from "./ktc-board-keys";
 
 /**
@@ -66,8 +62,8 @@ import { KtcBoardKeys, KtcLineupKeys, SwitchTrack } from "./ktc-board-keys";
  *
  * So the two panels differ in exactly what they *are*, and share everything
  * they look like: one edits a rack of four bays and the other edits one column,
- * so the rack is the caller's; the case, the header band, the copy line, the
- * axes housing and the foot are here.
+ * so the rack is the caller's; the case, its heading, the well, the axes
+ * housing and the foot are here.
  */
 
 /**
@@ -146,13 +142,23 @@ const MARKET_OFF = "Only a KeepTradeCut column reads a market";
 const QB_BOARD_OFF = "A projection is not priced on a draft board";
 
 /**
- * The picker's case: a native `<dialog>` carrying a header band, a line of
- * copy, whatever the caller puts in it, and the foot.
+ * The picker's case: a native `<dialog>` carrying a heading, one hole holding
+ * everything a reader touches, and a foot.
+ *
+ * **It is a milled part on top of the page rather than a patch of it**, and
+ * that is the whole of what this case is for. It used to paint in
+ * `--panel-bg` — which is the page, since `ConsoleGround` paints the same
+ * radial — so the two bottomed out on the same `#08090a` and the lower two
+ * thirds of the case's edge simply were not there. A backdrop alpha cannot
+ * separate two identical gradients; a *part* can, so the case is billet stock
+ * chamfered on all four edges, and the well cut in it is what says the panel
+ * is standing on the page without spending a shadow on saying it.
  *
  * `showModal()` is the caller's — it owns the ref and the trigger — which is
  * what keeps this a shape rather than a controller. Closing on a backdrop click
  * is here, because it is a property of the case: the dialog element is only
- * ever the click target when the click landed outside the panel.
+ * ever the click target when the click landed outside the panel. What that
+ * close *means* is the caller's again, through {@link ColumnPanel.onClose}.
  */
 export function ColumnPanel({
   dialogRef,
@@ -162,35 +168,61 @@ export function ColumnPanel({
   copy,
   wideCopy,
   ktc,
+  warning,
+  onClose,
   children,
 }: {
   dialogRef: RefObject<HTMLDialogElement | null>;
   /** The dialog's accessible name. */
   label: string;
-  /** The header band's own heading. */
+  /** The case's own heading. */
   title: string;
   /**
-   * The lit readout at the band's right end, and the one thing on the panel
+   * The lit readout at the header's right end, and the one thing on the panel
    * that moves under a press — which is why it is `aria-live` and why it is
    * drawn on glass rather than as loose mono.
    */
   reading: string;
-  /** The line under the band: what this panel is for. */
+  /** The line at the top of the well: what this panel is for. */
   copy: string;
   /** What is appended to it from `sm`, where there is a line's room for it. */
   wideCopy: string;
   /** Which markets answered and when each was scraped; empty when none could. */
   ktc: ManagerLineupsPayload["ktc"];
+  /**
+   * What leaving will do to a *second* bay, where the draft is a column one
+   * already holds — `Bay 03 trades places`, and absent where there is nothing
+   * to trade.
+   *
+   * **It is the foot's other reading rather than a line added beside one.** The
+   * exchange used to be stated in `Save`'s `title`, which is the one thing that
+   * key did that survived the deferral; with every exit seating there is no
+   * key to hang it on, so it is shown here and marked on the bay itself rather
+   * than narrated by a control nobody has hovered.
+   */
+  warning?: string;
+  /**
+   * Every way out of the case, as one handler.
+   *
+   * `close` fires for Esc, for `.close()` from `Done` **and** for the backdrop
+   * path below, which is why this is one prop on the element rather than three
+   * wirings at three call sites: two of those exits are `showModal()`'s rather
+   * than the caller's, so a panel that seated on its own key alone would have
+   * moved the trap rather than removed it.
+   */
+  onClose?: () => void;
   children: ReactNode;
 }) {
   return (
     <dialog
       ref={dialogRef}
       // Closing on a backdrop click: the dialog element itself is only ever
-      // the click target when the click landed outside the panel.
+      // the click target when the click landed outside the panel. It goes
+      // through `.close()`, so it reaches `onClose` with the other two.
       onClick={(e) => {
         if (e.target === e.currentTarget) dialogRef.current?.close();
       }}
+      onClose={onClose}
       aria-label={label}
       // 560px, which is what ten position keys need to keep their legends —
       // a 448px case gave `DEF` three characters.
@@ -200,123 +232,167 @@ export function ColumnPanel({
       // puts *Done* somewhere no scroll can reach the day a reader's own type
       // scale or a long metric name pushes it over — which is the state one
       // rewrite of this panel already found it in. `overflow-y-auto` still
-      // clips to the radius, which is what the hidden was doing the rest of
-      // its work for.
+      // clips to the radius, which is the whole of what the finish overlays
+      // below need and the reason no `overflow-hidden` is written beside it:
+      // a shorthand and a longhand for one property, at one specificity, is
+      // the emit-order coin flip this file's constants are split apart to
+      // avoid — and the side that loses here is the panel's ability to scroll.
       //
-      // **The shadow replaces `--panel-shadow` rather than joining it**: it is
-      // the billet chamfer read at case scale — bright top, dark underside,
-      // lit left, shaded right — over a two-stage cast, and it is written as
-      // one list because a shadow list is atomic. A second `shadow-[…]` beside
-      // it would not add four insets, it would replace them, and which one
-      // won would be Tailwind's emit order.
+      // **The case is billet stock, not `--panel-bg`.** That token is the page
+      // — `ConsoleGround` paints the same radial — so a dialog wearing it
+      // bottoms out on the ground's own `#08090a` and the lower two thirds of
+      // its edge disappear. No backdrop alpha separates two identical
+      // gradients; a case that is a *part* does, and `--panel-case-shadow` is
+      // that part's chamfer read at case scale over a two-stage cast. It is
+      // one list because a shadow list is atomic: a second `shadow-[…]` beside
+      // it would replace the four insets rather than add to them.
+      //
+      // The colour under the image is a fallback nothing paints over — the
+      // gradient covers the border box — and it is a *case* colour rather than
+      // `--background` on purpose: if it ever showed, a flat case is a worse
+      // drawing and a page-coloured one is the bug this replaced.
       className={
         "lab-scroll m-auto max-h-[calc(100dvh-2rem)] w-[min(35rem,calc(100vw-2rem))] " +
-        "overflow-y-auto overscroll-contain rounded-[1.75rem] bg-background " +
-        "bg-[image:var(--panel-bg)] p-0 text-foreground backdrop:bg-black/60 " +
-        "shadow-[inset_0_2px_0_rgba(255,255,255,0.22),inset_0_-2px_0_rgba(0,0,0,0.85),inset_2px_0_0_rgba(255,255,255,0.05),inset_-2px_0_0_rgba(0,0,0,0.55),0_2px_0_rgba(255,255,255,0.05),0_26px_44px_-22px_rgba(0,0,0,0.9),0_70px_130px_-46px_#000]"
+        "overflow-y-auto overscroll-contain rounded-[1.75rem] bg-[#2e3f45] " +
+        "bg-[image:var(--panel-case-bg)] p-0 text-foreground backdrop:bg-black/80 " +
+        "shadow-[var(--panel-case-shadow)]"
       }
     >
-      {/* The ring and the grain wrap the *content* rather than the dialog's
-          own box, which is the same call the panel grain has always made
-          here: an `inset` overlay on a scroll container is positioned against
-          the padding box at its unscrolled origin, so on a scrolled panel it
-          would end at the fold. Wrapping the content, it frames whatever the
-          case actually holds. */}
+      {/* The finish wraps the *content* rather than the dialog's own box, which
+          is the same call the panel grain has always made here: an `inset`
+          overlay on a scroll container is positioned against the padding box at
+          its unscrolled origin, so on a scrolled panel it would end at the
+          fold. Wrapping the content, it frames whatever the case actually
+          holds. */}
       <div className="relative">
-        {/* **A machined bezel ring, as a child rather than a second border.**
-            The case's own chamfer is four insets of one atomic shadow list, so
-            a ring written as a border would have to fight it for one colour;
-            a child cannot. It is the reason every lit window carries its
-            scanlines as a child too. */}
-        <span
-          aria-hidden
-          className="pointer-events-none absolute inset-1.5 z-10 rounded-[1.375rem] border border-[rgba(255,255,255,0.055)] shadow-[inset_0_1px_0_rgba(0,0,0,0.5)]"
-        />
+        {/* **The grain and the raking specular are what make a pale face read
+            as milled** rather than as a flat fill, and at case scale that is
+            the difference between a part and a panel. They are the league
+            card's own two overlays, unchanged — there is no case finish, only
+            a billet's seen larger.
 
-        {/* **The header band is a part bolted on, not a coloured region**, and
-            the cast under it is the whole of what says so — the chamfer, a
-            hard dark edge, then a shadow thrown onto the body below. Above the
-            body in stacking order so that cast lands on it. Composed whole for
-            the case's reason: `CONSOLE_BILLET` carries `--billet-shadow` on
-            its own, and a second `shadow-[…]` beside it replaces rather than
-            extends, so what is reached for here is the face alone. */}
-        <div
-          className={`${CONSOLE_BILLET_FACE} relative z-[2] px-5 py-[0.9375rem] shadow-[var(--billet-shadow),0_2px_0_rgba(0,0,0,0.85),0_10px_20px_-8px_rgba(0,0,0,0.9)]`}
-        >
-          <span
-            aria-hidden
-            className="pointer-events-none absolute inset-0 bg-[image:var(--billet-grain)]"
-          />
-          <span
-            aria-hidden
-            className="pointer-events-none absolute inset-0 bg-[image:var(--billet-specular)]"
-          />
-          {/* The specular hairline along the band's own top edge: the light
-              catching a milled corner, inset either side so it reads as a
-              chamfer rather than as a rule drawn across the panel. */}
-          <span
-            aria-hidden
-            className="pointer-events-none absolute inset-x-[6%] top-0 h-px bg-[image:linear-gradient(to_right,transparent,rgba(255,255,255,0.65),transparent)]"
-          />
-          <div className="relative flex items-center justify-between gap-3.5">
-            {/* Ink on metal, not the readout's mint: a label stamped into a
-                machined face is the metal's own colour lightened, and drawing
-                it in mint would say the band was a window. */}
-            {/* **The band is one line at every width, and both halves of that
-                are load-bearing.** The heading never wraps and never shrinks;
-                the readout takes whatever is left and truncates into it. The
-                alternative is what a render found: at 390 the band's content
-                box is ~320px, a two-word heading takes ~155 of it and a reading
-                naming a setting takes ~155 more, so the row wrapped — and a
-                22px band is 13px past the case's own `100dvh - 2rem` cap, which
-                is a panel that grows under the press that lengthened its
-                reading. Nothing on this panel may move under a press; that is
-                the rule the three out-of-force tracks keep their places for and
-                the rule the `Reads` window reserves its lines for, and this is
-                the one part where a *variable* reading could break it.
+            The bezel ring that used to sit here is gone with the dark case it
+            was drawn for: a 5.5% white hairline inset from the edge reads as a
+            scratch on light stock, and the case's own 3px chamfer is the edge
+            now. */}
+        <BilletFinish />
 
-                Truncation costs nothing that is not on screen: what the
-                reading names in four characters, the `Reads` window below
-                states in a sentence, and the `aria-live` text is whole
-                whatever the box does to it. */}
-            <h2 className="m-0 shrink-0 whitespace-nowrap font-display text-[length:var(--fs-15)] font-semibold uppercase tracking-[0.13em] text-[color:var(--billet-name)] [text-shadow:var(--billet-name-shadow)]">
-              {title}
-            </h2>
+        {/* **The header band is gone and the title sits on the case itself.**
+            A billet bolted to a billet says nothing — the case *is* the part
+            now, so what was a band standing proud of a dark body is a heading
+            stamped into the face it stands on, and the hairline below is the
+            only cut it needs. */}
+        <div className="relative flex items-center justify-between gap-3.5 px-5 pb-[0.8125rem] pt-4">
+          {/* Ink on metal, not the readout's mint: a label stamped into a
+              machined face is the metal's own colour lightened, and drawing it
+              in mint would say the case was a window. */}
+          {/* **The row is one line at every width, and both halves of that are
+              load-bearing.** The heading never wraps and never shrinks; the
+              readout takes whatever is left and truncates into it. The
+              alternative is what a render found: at 390 the row's content box
+              is ~320px, a two-word heading takes ~155 of it and a reading
+              naming a setting takes ~155 more, so the row wrapped — and the
+              case grew 13px past its own `100dvh - 2rem` cap under the press
+              that lengthened its reading. Nothing on this panel may move under
+              a press; that is the rule the three out-of-force tracks keep their
+              places for and the rule the `Reads` window reserves its lines for,
+              and this is the one part where a *variable* reading could break
+              it.
+
+              Truncation costs nothing that is not on screen: what the reading
+              names in four characters, the `Reads` window below states in a
+              sentence, and the `aria-live` text is whole whatever the box does
+              to it. */}
+          <h2 className="m-0 shrink-0 whitespace-nowrap font-display text-[length:var(--fs-15)] font-semibold uppercase tracking-[0.13em] text-[color:var(--billet-name)] [text-shadow:var(--billet-name-shadow)]">
+            {title}
+          </h2>
+          <span
+            className={`${CONSOLE_GLASS} inline-flex min-w-0 items-center gap-[0.4375rem] rounded-lg border border-black/70 px-2.5 py-[0.3125rem]`}
+          >
+            <Scanlines />
             <span
-              className={`${CONSOLE_GLASS} inline-flex min-w-0 items-center gap-[0.4375rem] rounded-lg border border-black/70 px-2.5 py-[0.3125rem]`}
+              aria-hidden
+              className="relative size-[0.3125rem] shrink-0 rounded-full bg-active shadow-[0_0_6px_var(--accent-glow)]"
+            />
+            <span
+              aria-live="polite"
+              className="relative truncate font-mono text-[length:var(--fs-10)] uppercase tracking-[0.16em] tabular-nums text-readout [text-shadow:var(--readout-text-glow)]"
             >
-              <Scanlines />
-              <span
-                aria-hidden
-                className="relative size-[0.3125rem] shrink-0 rounded-full bg-active shadow-[0_0_6px_var(--accent-glow)]"
-              />
-              <span
-                aria-live="polite"
-                className="relative truncate font-mono text-[length:var(--fs-10)] uppercase tracking-[0.16em] tabular-nums text-readout [text-shadow:var(--readout-text-glow)]"
-              >
-                {reading}
-              </span>
+              {reading}
             </span>
-          </div>
+          </span>
         </div>
 
-        <div className="relative px-[1.125rem] pb-[1.125rem] pt-4">
-          <span
-            aria-hidden
-            className="pointer-events-none absolute inset-0 bg-[image:var(--panel-grain)]"
-          />
-          <p className="relative m-0 font-mono text-[length:var(--fs-11)] leading-[1.5] text-foreground/62">
+        {/* The cut under the heading: a milled line with the light catching its
+            far lip, inset from both edges so it reads as a cut in the face
+            rather than as a rule drawn across the panel.
+
+            `--milled-hairline` rather than the design's own `rgba(0,0,0,0.55)`,
+            which is that value to the eye on this stock and is the half of it
+            that turns over — a cut stays a cut on a pale face, and a black
+            alpha there is the one thing it cannot be. */}
+        <span
+          aria-hidden
+          className="relative mx-4 block h-px bg-[image:linear-gradient(to_right,transparent,var(--milled-hairline),transparent)] shadow-[0_1px_0_rgba(255,255,255,0.10)]"
+        />
+
+        {/* **The well: one hole cut in the case, holding everything a reader
+            touches.** `CONSOLE_PART_TRAY`'s part-and-hole distinction at case
+            scale — the case is the part and this is the absence of one — and
+            it is what says the panel is on top of the page rather than a patch
+            of it, without spending a shadow on saying so.
+
+            **The 18px rule.** `mx-2` of margin plus `px-2.5` of padding is 18px
+            a side, which is exactly what the old body's `px-[1.125rem]` spent,
+            and it is not adjustable: `SwitchTrack`'s keys are `flex-1` from
+            `sm` up, so every key takes an identical share of its track, and the
+            track is 412px at the case's 560. A first pass spent 60px a side
+            instead, which took it to 388 and clipped `FLEX` to `FL…` on the one
+            axis whose entire point is naming a seat. Change either number and
+            change the other to keep the sum, then re-measure that the `Slot`
+            group is 412px with no key reporting `scrollWidth > clientWidth`.
+            See {@link KEYS_PER_TRACK}. */}
+        <div className="relative mx-2 mt-3.5 rounded-[1.25rem] bg-[color:var(--case-well-bg)] px-2.5 pb-[1.0625rem] pt-[0.9375rem] shadow-[var(--case-well-shadow)]">
+          {/* One step up in contrast against the darker ground it now sits on. */}
+          <p className="m-0 font-mono text-[length:var(--fs-11)] leading-[1.5] text-foreground/70">
             {copy}
             <span className="hidden sm:inline"> {wideCopy}</span>
           </p>
 
           {children}
+        </div>
 
-          <div className="relative mt-[0.9375rem] flex flex-wrap items-center justify-between gap-x-3 gap-y-2.5">
-            {/* What was read and when — silent where nothing could be, since
-                the KTC columns already say so with their em dashes. */}
-            {ktc.length > 0 && (
-              <p className="m-0 font-mono text-[length:var(--fs-10)] uppercase tracking-[0.16em] text-foreground/55">
+        {/* **The foot leaves the well and stands on the case's own face.** What
+            it holds is a reading and the one control that commits, and neither
+            is something a reader touches on the way to composing a column. */}
+        <div className="relative flex flex-wrap items-center justify-between gap-x-3 gap-y-2.5 px-5 pb-4 pt-3.5">
+          {/* **One slot, two readings**, so nothing appears or disappears under
+              a press — the rule the three out-of-force tracks and the header's
+              own reading already live by. The exchange is the louder of the two
+              and takes the slot while it is true; the scrape line has it the
+              rest of the time.
+
+              The collision is deliberately **not** a second live region. The
+              header's reading is already one, and the fact this states is
+              carried in the marked bay's own accessible name — where a reader
+              meets it on the control it is about, rather than as a second
+              announcement racing the first on every press. */}
+          {warning ? (
+            <p className="m-0 inline-flex items-center gap-2 font-mono text-[length:var(--fs-10)] uppercase tracking-[0.16em] text-readout [text-shadow:var(--readout-text-glow)]">
+              <span
+                aria-hidden
+                className="size-[0.3125rem] shrink-0 rounded-full bg-active shadow-[0_0_7px_var(--accent-glow)]"
+              />
+              {warning}
+            </p>
+          ) : (
+            // What was read and when — silent where nothing could be, since the
+            // KTC columns already say so with their em dashes. That silence is
+            // not the fluctuation the rule above forbids: the cap is `ml-auto`
+            // and taller than this line, so a foot that gains one neither moves
+            // the cap nor changes its own height.
+            ktc.length > 0 && (
+              <p className="m-0 font-mono text-[length:var(--fs-10)] uppercase tracking-[0.16em] text-[color:var(--billet-label)] [text-shadow:var(--standing-label-shadow)]">
                 KTC
                 {ktc.map((board) => (
                   <span key={board.format}>
@@ -326,17 +402,26 @@ export function ColumnPanel({
                   </span>
                 ))}
               </p>
-            )}
-            {/* The highest object in the stack, and it applies nothing: a press
-                has already written, or `Save` has already seated it. */}
-            <button
-              type="button"
-              onClick={() => dialogRef.current?.close()}
-              className="lab-anim ml-auto inline-flex shrink-0 items-center rounded-xl border border-active/60 bg-[image:var(--key-metal)] px-[1.625rem] py-2.5 font-mono text-[length:var(--fs-10)] uppercase tracking-[0.16em] text-readout [text-shadow:var(--readout-text-glow)] shadow-[inset_0_1.5px_0_rgba(255,255,255,0.45),inset_0_-1px_0_rgba(0,0,0,0.5),0_5px_0_rgba(0,0,0,0.7),0_14px_24px_-10px_rgba(0,0,0,0.95),0_0_32px_-6px_var(--accent-glow)] transition-[transform,box-shadow] duration-150 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-active/60 motion-safe:active:translate-y-0.5"
-            >
-              Done
-            </button>
-          </div>
+            )
+          )}
+          {/* **`Done` is the accent cap**, which is the rack's own rule for a
+              control that acts on the page — and this is now the only key in
+              the panel that commits, since closing is what seats. One label in
+              one state: there is no dirty arm and no `Save & close`, because
+              every exit seats and a key that describes two outcomes would be
+              describing one it cannot reach.
+
+              The shadow is composed whole in one utility on
+              `RackControlsKeys`' terms: two `shadow-[…]` of one specificity is
+              the emit-order flip, and a cap that lost its dome is its visible
+              half. */}
+          <button
+            type="button"
+            onClick={() => dialogRef.current?.close()}
+            className="lab-anim ml-auto inline-flex shrink-0 items-center rounded-xl border border-[var(--cap-accent-border)] bg-[image:var(--cap-accent-bg)] px-[1.625rem] py-2.5 font-mono text-[length:var(--fs-10)] uppercase tracking-[0.16em] text-[var(--cap-accent-ink)] [text-shadow:var(--cap-ink-emboss)] shadow-[var(--cap-accent-shadow)] transition-[transform,box-shadow] duration-150 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-active/60 motion-safe:active:translate-y-0.5"
+          >
+            Done
+          </button>
         </div>
       </div>
     </dialog>
@@ -362,17 +447,25 @@ export function ColumnPanel({
  * cursor and resized the case mid-sitting. They keep their places and go **out
  * of force** instead — dimmed keys, a dimmed legend and the reason in every
  * key's title — and the row that explains each dim is the unlit key one or two
- * tracks above it. `Save` is a key on the same terms: dark and unpressable with
- * nothing to seat rather than absent.
+ * tracks above it.
+ *
+ * **`Save` is gone from this ledge, and what it did is now what leaving
+ * does.** It was the smallest key on the panel — `--fs-9`, beside a name at
+ * `--fs-15` and under a `Done` that is the largest key in the foot — and it
+ * was dark and unpressable most of the time it was on screen, which is a key a
+ * reader stops reading. Readers changed a column, pressed `Done`, and lost the
+ * edit silently. Every exit seats now (see the two dialogs' own `save`), so
+ * there is nothing left for a key here to do, and the name takes the width it
+ * freed. What is left of it is the state: the caller's chip says `· Edit`
+ * while a draft is in hand, and the housing's own accent ring comes up with
+ * it.
  */
 export function ColumnAxes({
   chip,
   column: col,
   slots = [],
   dirty,
-  saveTitle,
   onChange,
-  onSave,
 }: {
   /** What the ledge's lit pill names — a bay's number, or the pane it configures. */
   chip: string;
@@ -391,13 +484,17 @@ export function ColumnAxes({
    * forbids: the vocabulary is a prop and cannot move under a press.
    */
   slots?: readonly LineupSlot[];
-  /** Whether there is anything to seat — what lights `Save`. */
+  /**
+   * Whether there is a draft in hand — what lifts the housing's accent ring.
+   *
+   * It outlived the `Save` key it used to light, and that is deliberate rather
+   * than a leftover: with every exit seating, the one thing left to say about
+   * an edit is that there *is* one, and the ring saying it is what makes the
+   * caller's `· Edit` chip a reading of the part rather than a word beside it.
+   */
   dirty: boolean;
-  /** What `Save` says it will do, which is the only place an exchange can be stated. */
-  saveTitle: string;
   /** A press that composed a valid column. */
   onChange: (column: LineupColumn) => void;
-  onSave: () => void;
 }) {
   const axes = metricAxes(col.metric);
   const words = LINEUP_METRIC_LABELS[col.metric];
@@ -531,7 +628,21 @@ export function ColumnAxes({
     // `border`**, so the four chamfer insets and the accent cannot fight over
     // one border colour — the emit-order flip this console's constants are
     // split apart to avoid, one property over.
-    <div className="relative mt-3.5 overflow-hidden rounded-[1.0625rem] shadow-[inset_0_1.5px_0_rgba(255,255,255,0.2),inset_0_-1.5px_0_rgba(0,0,0,0.8),inset_1px_0_0_rgba(255,255,255,0.05),inset_-1px_0_0_rgba(0,0,0,0.5),0_0_0_1px_rgba(0,255,229,0.2),0_3px_0_rgba(0,0,0,0.55),0_14px_26px_-12px_rgba(0,0,0,0.9),0_0_34px_-18px_var(--accent-glow)]">
+    //
+    // **It comes up while a draft is in hand**, which is the part of `Save`
+    // that survived the key: the ring and the caller's `· Edit` chip are the
+    // whole of what says an edit is live, so the housing itself has to carry
+    // one of them. Two whole lists rather than a lit `shadow-[…]` appended to
+    // a resting one — a shadow list is atomic, so the second would replace the
+    // four chamfer insets rather than raise the ring inside them.
+    <div
+      className={
+        "relative mt-3.5 overflow-hidden rounded-[1.0625rem] " +
+        (dirty
+          ? "shadow-[inset_0_1.5px_0_rgba(255,255,255,0.2),inset_0_-1.5px_0_rgba(0,0,0,0.8),inset_1px_0_0_rgba(255,255,255,0.05),inset_-1px_0_0_rgba(0,0,0,0.5),0_0_0_1px_rgba(0,255,229,0.35),0_3px_0_rgba(0,0,0,0.55),0_14px_26px_-12px_rgba(0,0,0,0.9),0_0_34px_-12px_var(--accent-glow)]"
+          : "shadow-[inset_0_1.5px_0_rgba(255,255,255,0.2),inset_0_-1.5px_0_rgba(0,0,0,0.8),inset_1px_0_0_rgba(255,255,255,0.05),inset_-1px_0_0_rgba(0,0,0,0.5),0_0_0_1px_rgba(0,255,229,0.2),0_3px_0_rgba(0,0,0,0.55),0_14px_26px_-12px_rgba(0,0,0,0.9),0_0_34px_-18px_var(--accent-glow)]")
+      }
+    >
       {/* The housing's own header ledge, above its body in stacking order so
           its cast lands on it — the header band's argument one grain smaller. */}
       <div
@@ -554,43 +665,14 @@ export function ColumnAxes({
             {chip}
           </span>
         </span>
-        <span className="min-w-0 flex-1 truncate font-display text-[length:var(--fs-15)] font-semibold tracking-[-0.005em] text-[color:var(--billet-name)] [text-shadow:var(--billet-name-shadow)]">
+        {/* **The name takes the width `Save` used to.** It is a step up with
+            it — `--fs-16` where the ledge's own chip stays at `--fs-10` — which
+            is what the ledge is for: one line naming the thing the six tracks
+            under it are axes of. It still truncates, on a card too narrow to
+            hold a metric's whole name. */}
+        <span className="min-w-0 flex-1 truncate font-display text-[length:var(--fs-16)] font-semibold tracking-[-0.005em] text-[color:var(--billet-name)] [text-shadow:var(--billet-name-shadow)]">
           {words.column}
         </span>
-        {/* **`Save` stands on the part a press edits.** It is always a key,
-            never appearing, on the same no-fluctuation rule as the three tracks
-            below: dark and unpressable with nothing to seat rather than absent,
-            so the ledge does not change width the moment a reader touches an
-            axis.
-
-            `aria-disabled` rather than the attribute, because this toggles
-            under a reader's own focus: a key that is the target of a press and
-            then goes `disabled` blurs to `<body>`, which on a modal is the one
-            place a keyboard reader cannot afford to be sent. The guard is the
-            caller's own `dirty` check. */}
-        <button
-          type="button"
-          onClick={onSave}
-          aria-disabled={!dirty}
-          title={saveTitle}
-          className={
-            // The bare pill, because this key is `--fs-9` where the shell is
-            // `--fs-11` — both arbitrary values, so appending one to the other
-            // is decided by Tailwind's emit order rather than by the class
-            // attribute. See `CONSOLE_KEY_PILL_BARE`.
-            `${CONSOLE_KEY_PILL_BARE} px-[0.6875rem] py-1 text-[length:var(--fs-9)] tracking-[0.14em] ` +
-            (dirty
-              ? // Composed whole rather than layered: a shadow list is atomic,
-                // so a riser written beside a resting inset would replace it
-                // rather than add to it.
-                "border-active/60 bg-[image:var(--key-metal)] text-readout [text-shadow:var(--readout-text-glow)] " +
-                "shadow-[inset_0_1px_0_rgba(255,255,255,0.45),0_2px_0_rgba(0,0,0,0.7),0_7px_12px_-6px_rgba(0,0,0,0.95),0_0_22px_-6px_var(--accent-glow)]"
-              : "cursor-not-allowed border-transparent bg-[color:var(--recess-bg)] text-foreground/34 " +
-                "shadow-[inset_0_1px_2px_rgba(0,0,0,0.6)]")
-          }
-        >
-          Save
-        </button>
       </div>
 
       <div className="relative flex flex-col gap-[0.5625rem] bg-[image:var(--key-bg)] px-3 py-[0.8125rem]">
