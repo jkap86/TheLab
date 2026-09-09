@@ -6,6 +6,13 @@ import { clientIp, recordVisit } from "@/shared/logs";
 /**
  * Records a visit, and does nothing else.
  *
+ * **It is one of the log's two writers.** What reaches here is a browser asking
+ * for a page *as a page*; an in-app press cannot be told from the prefetch that
+ * preceded it (see `isPageView`), so the other half is reported from the
+ * browser by `features/shared/visit-beacon.tsx` through `/api/logs/visit`. The
+ * two do not overlap: the beacon never reports the page it mounts on, which is
+ * the one this wrote.
+ *
  * **This is `proxy.ts`, not `middleware.ts`.** Next 16 deprecated the older name
  * and renamed the convention; the export is `proxy` and the file sits beside
  * `app/`. More usefully, Proxy now defaults to the **Node.js runtime**, which is
@@ -54,10 +61,18 @@ export function proxy(request: NextRequest, event: NextFetchEvent) {
  * log that reports visits to pages nobody visited is worse than one that
  * undercounts, because there is no reading of it that is true.
  *
- * **So a row means "a browser asked for this page as a page"** — a hard load, a
- * new tab, a bookmark, a pasted link, a refresh. In-app clicks between tools are
- * not recorded, and mostly could not be: a prefetched route is served from the
- * router cache, so the click that follows often makes no request at all.
+ * **So a row from *this* writer means "a browser asked for this page as a
+ * page"** — a hard load, a new tab, a bookmark, a pasted link, a refresh. That
+ * is the whole of what the proxy can honestly claim, and re-measured against
+ * Next 16.3.3 it still is: driven with the three request shapes, a prefetch and
+ * a soft navigation arrive here with the same nine header names and the same
+ * value for every one.
+ *
+ * **The in-app press is recorded from the browser instead**, which is the one
+ * place the two differ — a prefetch runs no code. It could never have been
+ * closed on this side even by reading a header, because a prefetched route is
+ * served from the client router cache, so the click that follows often makes no
+ * request at all. See `visit-beacon.tsx`.
  *
  * The two conditions cover each other. `next-url` is the App Router's own
  * marker and is what a stray RSC request carries when `sec-fetch-*` is absent;
@@ -100,7 +115,16 @@ function isPageView(request: NextRequest): boolean {
  * itself — which this list excludes by simply not naming it.
  *
  * `/` needs no entry: `next.config.ts` redirects it to `/tools`, and the
- * redirect is what the browser follows.
+ * redirect is what the browser follows. What that means for every redirect in
+ * that file is worth knowing rather than rediscovering — redirects are checked
+ * *before* the proxy, so what lands here is the destination and the path the
+ * reader actually asked for is never recorded. A hit on `/manager` is a `/tools`
+ * row.
+ *
+ * `shared/logs/routes.ts` is this list again as a predicate, for
+ * `/api/logs/visit` to apply to what the beacon reports. It cannot be generated
+ * from this one — matcher values have to be static constants — so
+ * `routes.test.ts` pins the two against each other by reading this file.
  */
 export const config = {
   matcher: [

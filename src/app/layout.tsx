@@ -1,6 +1,10 @@
 import type { Metadata, Viewport } from "next";
 import { IBM_Plex_Mono, IBM_Plex_Sans } from "next/font/google";
-import { RackControlsProvider, THEME_BOOT_SCRIPT } from "@/features/shared";
+import {
+  RackControlsProvider,
+  THEME_BOOT_SCRIPT,
+  VisitBeacon,
+} from "@/features/shared";
 import { AppRack } from "@/features/tools";
 import { resolveSiteUrl } from "@/shared/og/site-url";
 
@@ -105,6 +109,11 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
         {/* The rack reads the controls; the pages publish into them. Both have
             to sit under one provider, which is why it wraps here rather than
             inside either. */}
+        {/* Renders nothing. The proxy records a document request and cannot
+            see an in-app press — a prefetch and the navigation after it reach
+            it identically — so the half of the visit log that only the browser
+            can tell apart is reported from here. */}
+        <VisitBeacon />
         <RackControlsProvider>
           <AppRack />
           {children}

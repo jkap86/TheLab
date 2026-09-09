@@ -179,6 +179,7 @@ export type { RequestGuard, RequestTicket } from "./request-guard";
 export { useManagerLeagues } from "./use-manager-leagues";
 export type { ManagerLeaguesState } from "./use-manager-leagues";
 export { ThemeToggle } from "./theme-toggle";
+export { VisitBeacon } from "./visit-beacon";
 // Two identity headers, one content: the billet both `/manager` and the
 // lineup checker draw now, and the plate that has no caller since the checker
 // took the billet. Siblings rather than a variant — see the module.

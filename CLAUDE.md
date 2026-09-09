@@ -7553,10 +7553,12 @@ of `/tools` produced **six** rows, two of them for `/trades` and one for
 `/comps`, a page nobody had opened. A log reporting visits to pages nobody
 visited has no reading that is true, where one that undercounts has exactly one.
 `isPageView` therefore takes document requests only: a hard load, a new tab, a
-bookmark, a pasted link, a refresh. In-app clicks between tools are not recorded
-and mostly could not be — a prefetched route is served from the router cache, so
-the click that follows often makes no request at all. The two conditions cover
-each other: `next-url` is the App Router's own marker and catches a stray RSC
+bookmark, a pasted link, a refresh. **That is the whole of what the proxy can
+honestly claim, and the in-app press is reported from the browser instead** —
+see below; it could never have been closed on this side even by reading a
+header, because a prefetched route is served from the router cache, so the click
+that follows often makes no request at all. The two conditions cover each
+other: `next-url` is the App Router's own marker and catches a stray RSC
 request with no fetch metadata, and `sec-fetch-dest` is browser-set and cannot be
 forged, with its *absence* read as a page view so a crawler or a curl still
 counts.
@@ -7567,6 +7569,119 @@ matcher values to be static constants so they can be analysed at build time. A
 seventh tool is a line in both places. A negative pattern would avoid that and
 pay for it by logging `_next` chunks, images, every API call — and `/logs`
 itself, which this list excludes by not naming it.
+
+**And a redirect logs its destination, never the path a reader asked for.**
+Redirects are checked before the proxy, so a hit on `/manager` is a `/tools`
+row and a bookmarked `/manager/<u>/leagues` is a `/manager/<u>` one. That is
+right — those paths are not pages here — but it means the log cannot answer
+which retired URL somebody is still holding, which is the one question the
+cutover made worth asking. `app/not-found.tsx` is quieter still: its redirect
+runs on the *client*, so an unknown URL records neither the path (not in the
+list) nor, in production, the landing on `/tools`. In development that route
+answers a real 307 and the landing *is* recorded, which is a difference worth
+knowing before reading a local table as though it were the deployed one.
+
+### The in-app press is reported from the browser
+
+The proxy records a document request and that is the entry to a session; every
+step after it — the tool grid to a manager's leagues, the rack menu to the
+trades board, `Back` to the page before — is an App Router soft navigation and
+went unrecorded. On a console whose whole shape is one page per tool, that left
+the log answering "somebody arrived" and never "at what".
+
+**The proxy cannot be taught to do it, and this was re-measured rather than
+inherited.** Driven against Next 16.3.3 with the three request shapes at
+`/manager/jkap86`: a document request arrives carrying `sec-fetch-dest:
+document` and no `next-url`; a prefetch and a soft navigation arrive with the
+**same nine header names and the same value for every one**, `rsc`,
+`next-router-prefetch` and `next-router-state-tree` all stripped before the
+proxy runs. The choice on that side is still between logging both and logging
+neither, and logging both still invents visits to pages nobody opened.
+
+**A server component cannot close it either**, which is the reason worth
+keeping: a prefetched route is served out of the client router cache, so the
+press that follows frequently makes **no server request at all**. There is no
+header to read because there is no request. The browser is the only place a
+prefetch and a press differ — a prefetch runs no code — so
+`features/shared/visit-beacon.tsx` is where the other half of the log is
+written, through `POST /api/logs/visit`.
+
+**The two writers do not overlap, and the rule that guarantees it is one line.**
+The beacon holds the pathname it mounted on and reports only *changes* to it, so
+the page a reader landed on is the proxy's row and never the beacon's. That same
+ref is what makes React's development remount a no-op rather than a duplicate.
+
+**It reports the pathname and not the URL.** The open card, the week stepper and
+the timeline all live in `?league=` / `?week=`, several of them written with
+`history.pushState` directly — reading the whole URL would file a row every time
+somebody opened a card. `usePathname` excludes the query string, so a card open
+is silent; driven in a real browser, a `pushState` carrying `?league=` produces
+no report.
+
+**The port deliberately dropped an endpoint shaped like this, and four bounds
+are what make this one a different object.** TheLab2026's
+`/api/common/logs/update` takes an `ip` and a `route` from anybody over either
+method, so its table holds whatever the internet felt like putting there. Here
+the address is read from the request and never from the body (the same
+`clientIp` the proxy uses, with the same caveat about what an address *proves*);
+the route must canonicalise to one of the seven this log keeps, so the column
+cannot hold a sentence, a URL or a page this app does not serve;
+`Sec-Fetch-Site` must say `same-origin`, which is a header a page cannot forge
+and which costs a browser too old to send it its rows — the *opposite* call from
+`isPageView`'s treatment of absent fetch metadata, and right for the opposite
+reason, since there a missing header costs a visit where here it would open a
+write; and one address's report of one route is dropped for two seconds, which
+bounds what hammering it buys.
+
+**Every well-formed report is answered identically whether or not it wrote.** A
+204 for a route this log keeps, a 204 for `/logs`, a 204 for a string that is
+not a path at all — so the vocabulary cannot be learned by probing, and so the
+beacon has nothing to handle: a navigation to a page the log does not record is
+silent rather than an error in a reader's console. A 400 is reserved for a body
+this app's own client would not have sent, because reaching it means the two
+disagree about the shape, which is a bug on our side.
+
+**The vocabulary is spelled twice and pinned.** `shared/logs/routes.ts` is the
+matcher again as a predicate, and it cannot be generated from `proxy.ts` for
+that file's own reason — matcher values must be static constants — so
+`routes.test.ts` reads `src/proxy.ts`, derives the exact and prefixed routes
+from its entries, and asserts they are the two arrays here. A tool added to one
+spelling and forgotten in the other is a page whose hard loads are recorded and
+whose navigations are refused, or the reverse, with a green suite behind it
+either way. The predicate answers the *stored string* rather than a boolean,
+because canonicalising and deciding are one pass: `/manager//jkap86` and
+`/manager/jkap86/` are one page, and a row per spelling is a facet menu naming
+one manager twice.
+
+#### Verified
+
+The header measurement above is this pass's own, driven against a dev server on
+Next 16.3.3 rather than taken from the note it confirms. The endpoint's six
+decisions were then measured by *writes attempted* rather than by status code,
+since every one of them answers 204: one report of `/comps` writes, the same
+route again inside the window writes nothing, a different route in the same
+moment writes, the first route once the window passes writes again, `/logs`
+writes nothing, and a `cross-site` report writes nothing. Statuses alongside
+them: 404 with no `Sec-Fetch-Site` and with `cross-site`, 400 for a `text/plain`
+body and for one carrying no `route`, 405 with `Allow: POST` on GET.
+
+End to end in headless Chrome over CDP: a hard load of `/tools` produced **zero**
+beacon posts — the proxy's row, not duplicated — pressing the Trades card
+navigated to `/trades` and produced exactly one `POST /api/logs/visit` carrying
+`{"route":"/trades"}`, which the server answered 204 and passed to `recordVisit`,
+and a `pushState` to `/trades?league=999` produced none. `/tools` is still listed
+`○ (Static)` by the build, so mounting the beacon in the root layout did not opt
+the prerendered page out. 2,111 unit tests pass; `lint`, `typecheck` and `build`
+are clean.
+
+**Not verified against real data**: no database was reachable from where this
+was built, so what was measured is which reports reach `recordVisit` rather than
+which rows land. Three things that cannot answer for — whether the two-second
+throttle ever drops a navigation a reader would call real, how much the log
+actually fills once every in-app press is a row (which is what decides whether
+retention stops being a "deliberately not ported" line), and whether
+`Sec-Fetch-Site` is absent often enough in this audience for the same-origin
+requirement to be undercounting.
 
 ### Reading it back
 
@@ -7671,8 +7786,11 @@ clean.
 ### Deliberately not ported
 
 - **The open write endpoint.** `/api/common/logs/update` accepts any `ip` and
-  `route` from anyone, over both GET and POST. The proxy is the only writer here,
-  so there is nothing to call.
+  `route` from anyone, over both GET and POST. `POST /api/logs/visit` is this
+  app's write path and is a different object: the address comes off the request,
+  the route must be one of the seven this log keeps, the report must be
+  same-origin, and a repeat is throttled — see The in-app press is reported from
+  the browser.
 - **A user-agent column, and therefore bot filtering.** Neither app has one; this
   is named because the absence is what makes "a visit" a request rather than a
   person, and it is the first thing to add if the log ever reads as noise.
