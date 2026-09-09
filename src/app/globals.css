@@ -801,6 +801,41 @@
   --billet-well-bg: linear-gradient(180deg, #26343a, #33454b);
   --billet-well-shadow: inset 0 2px 5px rgba(0, 0, 0, 0.5),
     inset 0 -1px 0 rgba(255, 255, 255, 0.16);
+  /*
+   * The column picker's case, and the hole cut in it.
+   *
+   * **`--panel-bg` is the page**, and naming it is what this pair exists to
+   * stop the picker doing: `ConsoleGround` paints that same radial, so a
+   * dialog painted in it bottoms out on the ground's own `#08090a` and the
+   * lower two thirds of its edge disappear — a patch of ground rather than a
+   * part standing on one, which no backdrop alpha can separate, because the
+   * two surfaces are the same gradient. That token keeps every other reader;
+   * the fix is that this one stops naming it.
+   *
+   * So the case is billet stock at case scale: lighter than the ground at
+   * every band, chamfered on all four edges — bright top, dark underside, lit
+   * left, shaded right, at 3px where a part spends 1 — and casting onto the
+   * page rather than blending into it. One list, because a shadow list is
+   * atomic: a caller appending a second `shadow-[…]` would replace the four
+   * insets rather than add a cast under them.
+   */
+  --panel-case-bg: linear-gradient(180deg, #4a5c62 0%, #3b4d53 30%, #2e3f45 66%, #26343a 100%);
+  --panel-case-shadow: inset 0 3px 0 rgba(255, 255, 255, 0.55),
+    inset 0 -3px 0 rgba(0, 0, 0, 0.7), inset 3px 0 0 rgba(255, 255, 255, 0.14),
+    inset -3px 0 0 rgba(0, 0, 0, 0.42), 0 2px 4px rgba(0, 0, 0, 0.6),
+    0 26px 44px -18px rgba(0, 0, 0, 0.95), 0 80px 140px -40px #000;
+  /*
+   * The hole cut in that case, which everything a reader touches sits in.
+   *
+   * `CONSOLE_PART_TRAY`'s part-and-hole distinction at case scale: the case is
+   * the part and this is the absence of one, which is what says the panel is
+   * on top of the page without spending a shadow on saying it. It is also why
+   * the rack inside it eased its own alphas — a hole inside a hole still has
+   * to read as one.
+   */
+  --case-well-bg: #131d21;
+  --case-well-shadow: inset 0 6px 14px rgba(0, 0, 0, 0.85),
+    inset 0 1px 0 rgba(0, 0, 0, 0.8), inset 0 -1px 0 rgba(255, 255, 255, 0.1);
   /* A chip of the same billet stock, and the tray of holes they sit in. The
      tray is flat rather than a gradient because it is a hole, and a hole has
      no face to catch a light. */
@@ -1453,6 +1488,38 @@
   --billet-well-bg: linear-gradient(180deg, #b4c5cb, #dde7ea);
   --billet-well-shadow: inset 0 2px 5px rgba(15, 23, 42, 0.22),
     inset 0 -1px 0 rgba(255, 255, 255, 0.9);
+  /*
+   * The case, turned over. A part standing on the page is the surface catching
+   * the light on this side, so the stock goes near-white — `--billet-bg`'s own
+   * light argument at case scale — and the chamfer inverts with it: the top
+   * highlight stays a highlight, the underside and both casts become the slate
+   * every bevel in this file is cut with here rather than black.
+   *
+   * **The well is a shadow on stock rather than a punched hole**, and that is
+   * the one place the light half is a different *shape* and not merely
+   * different numbers. `#131d21` on a near-white case is the darkest object on
+   * a light page by a wide margin, with four pale bays floating in it — the
+   * failure `--rack-channel-bg` records one part smaller — and its answer is
+   * this one: every other recess in the light scheme is a shadow on stock, so
+   * this is too, and its lit bottom lip is what closes it.
+   *
+   * Measured against the band each ink actually lands on, since every one of
+   * them now sits on this stock or the well's rather than on `--panel-bg` —
+   * rendered, then read off the case's own gradient at that ink's height. The
+   * title is at 4% of the face and reads **17.6:1**; the copy line is over the
+   * well at 14% and reads **6.10**; the foot sits at 95% and reads **6.63** for
+   * `--billet-label` and **4.65** for a lit collision line, which is the lowest
+   * figure in the panel on either side of the theme. The dark half at the same
+   * three heights is 6.78 / 7.73 / 6.94 and 10.82.
+   */
+  --panel-case-bg: linear-gradient(180deg, #ffffff 0%, #f3f7f8 30%, #e4edef 66%, #d3dfe2 100%);
+  --panel-case-shadow: inset 0 3px 0 rgba(255, 255, 255, 0.9),
+    inset 0 -3px 0 rgba(15, 23, 42, 0.3), inset 3px 0 0 rgba(255, 255, 255, 0.7),
+    inset -3px 0 0 rgba(15, 23, 42, 0.18), 0 2px 4px rgba(15, 23, 42, 0.18),
+    0 26px 44px -18px rgba(15, 23, 42, 0.45), 0 80px 140px -40px rgba(15, 23, 42, 0.5);
+  --case-well-bg: rgba(15, 23, 42, 0.07);
+  --case-well-shadow: inset 0 6px 14px rgba(15, 23, 42, 0.16),
+    inset 0 1px 0 rgba(15, 23, 42, 0.14), inset 0 -1px 0 rgba(255, 255, 255, 0.9);
   --chip-bg: linear-gradient(180deg, #ffffff 0%, #eef3f5 55%, #dae4e8 100%);
   --chip-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.95), 0 1px 2px rgba(15, 23, 42, 0.2);
   /* Still a hole, so still darker than the housing it is cut into. */
