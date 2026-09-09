@@ -12062,7 +12062,7 @@ for, one property over. `CONSOLE_KEY_PILL_BARE` joined the `features/shared`
 barrel for it.
 
 **22px is under the 24px a coarse pointer wants, so it grows there.**
-`pointer-coarse:h-7` on the key and on the row — the cheap arm the handoff
+`touch:h-7` on the key and on the row — the cheap arm the handoff
 names, rather than keeping a second recess-pill layout below `sm`. Driven under
 a genuinely coarse pointer, both measure **28px**. It is still short of 44, and
 that is the trade every control on a pane ledge one seam down already makes.
@@ -12812,7 +12812,7 @@ panning a page wider than the viewport with nothing on screen saying why. The
 only lever is the control's own font size; a `maximum-scale` on the viewport
 meta would fix it by taking pinch-zoom from everybody. So one unlayered rule at
 the foot of `globals.css` sets every input, select and textarea to a literal
-**17px** under `@media (pointer: coarse)`. It read `max(1rem, 16px)` and still
+**17px** under the `touch:` query. It read `max(1rem, 16px)` and still
 zoomed — see The floor sat on the threshold, below, for why both halves of that
 spelling were wrong and why neither is visible from a desktop browser.
 
@@ -12846,7 +12846,7 @@ genuinely wants to stay larger declares its size inside the media query.
 it.** The expanded card's roster pane ledge is the case, and its lens key is the
 one control in the app that pays: at 390 that key has ~64px, and `Points` sets
 69.1px of the 62 it would have at the design's `0.12em`. It spends its tracking
-under the same `pointer-coarse:` gate rather than its word, which is principled
+under the same `touch:` gate rather than its word, which is principled
 rather than a patch — tracking is a small-type affordance and at this size it is
 pure width. Measured in the app's own IBM Plex Mono: 60.5px at 16px with
 `0.03em`, **64.3 at 17px with it** — over the 64, and the word truncates — and
@@ -12910,7 +12910,7 @@ declaration and the number that heuristic reads. It may well resolve on every
 device in use; the point is that the value it bought could never be collected
 here, so there is nothing on the other side of the question. `1rem` exceeds 16px
 only for a reader who has enlarged their root font, and a root font is enlarged
-from browser settings that phones and tablets — every device `(pointer: coarse)`
+from browser settings that phones and tablets — the devices this rule is for
 matches — do not offer. The branch protected nobody and the function reached
 Safari on everybody, so a literal is strictly better even if the heuristic
 handles both.
@@ -12959,6 +12959,62 @@ behind a database (the shares drawer's search and sort, the filter dialog's rule
 bay, the trades search panel and its seek date) were not rendered; they carry no
 font size of their own inside the media query, so they take the same 17px as
 everything else, and only the lens key was narrow enough to need re-measuring.
+
+### The gate described the wrong pointer
+
+The floor was right and it still zoomed on a phone — slightly, on the search
+fields. It is `@custom-variant touch` now, three queries rather than one, and
+every rule that was gated on `pointer-coarse:` moved onto it.
+
+**`pointer: coarse` describes the *primary* pointer, and what this rule cares
+about is the screen.** A tablet with a trackpad or a keyboard case attached
+reports `pointer: fine` — and still has a touchscreen, still raises a software
+keyboard, and still zooms a control under 16px. So the one query that reads most
+obviously right left a whole class of touch device taking none of this, sitting
+at its design sizes, where `--fs-13` is 15.08px and a focus is a **~6% zoom**.
+That is the size of the thing: not a rule that was off, but one that was on and
+did not apply, and small enough to be reported as *slight* rather than as
+broken. `any-pointer: coarse` is true wherever a coarse pointer is available at
+all, which is the fact being asked about; `hover: none` catches a device that
+reports neither.
+
+**The two compensations had to move with it, and that is why this is a variant
+rather than a wider media query.** The floor sets the roster pane's lens key to
+17px and the key's own `tracking` and padding come off at the same moment so the
+word still fits — 64.3px of a ~64px key with the tracking, 61.2 without. Gated
+separately, a device matching only `any-pointer` would have taken the larger
+type without the room for it and clipped `Points` to `Point…`: the larger type
+arriving alone is a worse state than the zoom, because it is silent. One variant
+is what makes them one decision, and the three `touch:h-7` touch targets on the
+lineup checker's sync key ride it for the same reason.
+
+**What it costs is a touchscreen laptop**, which now takes the touch
+affordances on controls it is mostly being used with a mouse on: a 17px input
+where it had 11.6–15.08px, a 28px key where it had 22. That is the safe
+direction — legible, and a tap does not zoom — and it is the trade the gate has
+always made, one device class wider. It also, for the first time, matches a
+device whose browser *does* offer a root-font setting, which is the one reading
+the literal 17px costs where `max(1rem, 16px)` would have given more; that is
+worth less than the certainty, and the note above it says so.
+
+#### Verified
+
+`lint`, `typecheck` and 2,095 unit tests pass, and the built CSS is what the
+change is actually about: both halves compile into **one** emitted block,
+`@media (pointer:coarse),(any-pointer:coarse),(hover:none)` carrying the
+`input:not(…),select,textarea{font-size:17px}` floor and the three
+`.touch\:*` utilities together — which is the drift this variant exists to
+prevent, checked rather than assumed, since `@custom-variant` compiling at all
+was the one mechanical unknown.
+
+**Not verified on a device**, and this is now the second pass to say so: no iOS
+Safari was in the loop, so what a build cannot confirm is that the widened query
+is what the reader's device was missing. Two things would settle it from Safari
+Web Inspector with the control focused — `matchMedia('(pointer: coarse)').matches`
+(false on the device that was zooming is the whole hypothesis) and the computed
+`font-size` (17px after this change, whatever the first answer was). If the
+first is *true* and it still zooms, the cause is not the gate and not the size,
+and the next lever is the dynamic-viewport route rather than more pixels.
 
 ### The toggle
 

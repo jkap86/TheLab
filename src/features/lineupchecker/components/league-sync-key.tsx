@@ -59,7 +59,7 @@ import { useLeagueRefresh } from "../hooks/use-league-refresh";
  * it exists for.
  *
  * **22px is under the 24px a coarse pointer wants, so it grows there** —
- * `pointer-coarse:h-7` on the key and on the row that holds it, which is the
+ * `touch:h-7` on the key and on the row that holds it, which is the
  * cheap arm rather than keeping a second recess-pill layout below `sm`. It is
  * still short of 44px, which is the same trade every control on a pane ledge
  * one seam down already makes: a card's own controls are read at arm's length
@@ -98,7 +98,7 @@ export function LeagueSyncKey({
         // and a reader speaking the words on screen still hits this control.
         aria-label={`Sync ${leagueName} from Sleeper`}
         title="Re-read this league's rosters and this week's lineup from Sleeper"
-        className={`${CONSOLE_KEY_PILL_BARE} inline-flex h-[22px] items-center gap-1.5 border-foreground/10 bg-[color:var(--recess-bg)] px-[9px] text-[length:var(--fs-10)] tracking-[0.14em] text-foreground/80 shadow-[inset_0_1px_0_rgba(255,255,255,0.07)] hover:text-readout aria-disabled:cursor-default aria-disabled:text-foreground/40 aria-disabled:active:translate-y-0 pointer-coarse:h-7`}
+        className={`${CONSOLE_KEY_PILL_BARE} inline-flex h-[22px] items-center gap-1.5 border-foreground/10 bg-[color:var(--recess-bg)] px-[9px] text-[length:var(--fs-10)] tracking-[0.14em] text-foreground/80 shadow-[inset_0_1px_0_rgba(255,255,255,0.07)] hover:text-readout aria-disabled:cursor-default aria-disabled:text-foreground/40 aria-disabled:active:translate-y-0 touch:h-7`}
       >
         <SyncMark spinning={pending} />
         Sync

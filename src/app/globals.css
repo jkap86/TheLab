@@ -1,6 +1,34 @@
 @import "tailwindcss";
 
 /*
+ * **`touch:` is the gate for anything a finger has to be able to use**, and it
+ * is three queries rather than one because `pointer: coarse` describes the
+ * *primary* pointer where what these rules care about is the screen. An iPad
+ * with a trackpad or a keyboard case attached reports `pointer: fine`, and it
+ * still has a touchscreen, still raises a software keyboard, and still zooms a
+ * form control under 16px. `any-pointer: coarse` is true wherever a coarse
+ * pointer is available at all, which is the fact being asked about, and
+ * `hover: none` catches a device that reports neither.
+ *
+ * It exists as one variant so the form-control floor at the foot of this file
+ * and the two compensations that pay for it cannot drift apart. They are one
+ * decision: the floor sets a `<select>` to 17px, and the lens key's tracking
+ * and padding come off at the same moment so the word still fits. Gated
+ * separately, a device matching only `any-pointer` would take the larger type
+ * without the room for it and clip the one word that key exists to say.
+ *
+ * What it costs is a touchscreen laptop, which now takes the touch affordances
+ * on controls it is mostly being used with a mouse on: a 17px input, a 28px
+ * key. That is the safe direction — legible, and a tap on it does not zoom —
+ * and it is the trade this gate has always made, one device class wider.
+ */
+@custom-variant touch {
+  @media (pointer: coarse), (any-pointer: coarse), (hover: none) {
+    @slot;
+  }
+}
+
+/*
  * Two themes, one set of components. **Dark is the default**, and light is
  * reached only by the toggle.
  *
@@ -2233,9 +2261,12 @@ html {
  * use; it is not worth finding out through a reader, because the value it
  * bought cannot be collected here. `1rem` is only ever more than 16px for a
  * reader who has enlarged their root font, and a root font is enlarged from
- * browser settings that phones and tablets — every device this media query
- * matches — do not offer. So the branch protected nobody and the function
- * reached Safari on everybody.
+ * browser settings that phones and tablets — the devices this rule is written
+ * for — do not offer. So the branch protected nobody and the function reached
+ * Safari on everybody. (Since the gate widened it also matches a touchscreen
+ * laptop, which does offer that setting; a reader there who has enlarged their
+ * root font now gets 17px where `max()` would have given them more. That is
+ * the one reading the literal costs, and it is worth less than the certainty.)
  *
  * The consequence to keep is that this is an override rather than a floor: it
  * *sets* 17px, so a control declaring more would be brought down to it. Only
@@ -2245,7 +2276,7 @@ html {
  *
  * **What it costs is width**, and only where a control is narrow enough to
  * feel it: the expanded card's pane ledges. The lens key is the one that pays,
- * and it spends its tracking under the same `pointer-coarse:` gate rather than
+ * and it spends its tracking under the same `touch:` gate rather than
  * its word — see `league-teams` for the arithmetic, which the extra pixel here
  * is what moved.
  *
@@ -2257,8 +2288,17 @@ html {
  * because an `<input>` with no `type` at all is a text field and
  * `picktracker-search`'s is exactly that — a positive list would miss it, and
  * miss it silently.
+ *
+ * **The query is `touch:`'s three rather than `pointer: coarse` alone**, and
+ * the widening is what closed a case the first spelling left open: a tablet
+ * with a trackpad or a keyboard case reports a *fine* primary pointer, took
+ * none of this, and sat at its design sizes — where `--fs-13` is 15.08px and
+ * a focus is the ~6% zoom that reads as *slight* rather than as the rule being
+ * off. See the variant at the head of this file for the whole argument, and
+ * note that the two compensations below ride the same gate: they have to move
+ * together or the larger type arrives without the room for it.
  */
-@media (pointer: coarse) {
+@media (pointer: coarse), (any-pointer: coarse), (hover: none) {
   input:not([type="range"]):not([type="checkbox"]):not([type="radio"]):not([type="button"]):not([type="submit"]):not([type="reset"]),
   select,
   textarea {

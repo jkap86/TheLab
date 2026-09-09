@@ -339,7 +339,7 @@ export const LineupCheckCard = memo(function LineupCheckCard({
               unreliably reachable and a live region inside it is swallowed into
               the disclosure's name. It also lands beside the empty state below,
               which is the case a sync most often fixes. */}
-          <div className="mb-1.5 flex h-[22px] shrink-0 items-center gap-2 pointer-coarse:h-7">
+          <div className="mb-1.5 flex h-[22px] shrink-0 items-center gap-2 touch:h-7">
             <LeagueSyncKey
               leagueId={league.league_id}
               leagueName={league.name}
