@@ -357,15 +357,21 @@ export const LeagueCard = memo(function LeagueCard({
             place in the card that is *before* the summary in the tree. It is
             the housing's layer now rather than the summary's, so the glow, the
             floor and the edge light cover the whole card, open half included,
-            rather than ending at the seam. First rather than last so it paints
-            under everything: a positioned `z-auto` span is painted in tree
-            order among its siblings' positioned content, and the summary and
-            the panel both come after it. (A `z-index` would have done the same
-            and needed a stacking context on the housing to be contained by;
-            `isolation: isolate` is a grouping value that flattens `preserve-3d`,
-            and the transform that would otherwise provide one is
-            `pointer-fine:` only.) The browser reads the *first summary child*
-            as the disclosure whatever precedes it.
+            rather than ending at the seam. The browser reads the *first
+            summary child* as the disclosure whatever precedes it.
+
+            **Being first in the tree is not what puts it underneath, and that
+            was the bug.** A `<details>` does not paint its children in light-DOM
+            order: the UA hoists the `<summary>` into a rendering slot of its
+            own that comes *before* the slot holding every other child, so this
+            span painted above the header however early it was written — the
+            edge light, a 1px highlight along the card's own top edge, drawn
+            straight through the engraved league name on the billet that
+            straddles that edge. Visible on any lit or hovered card, and on a
+            coarse pointer too, since the slot order has nothing to do with
+            `preserve-3d`. What holds the layer down is the `z-10` on the
+            summary below; the panel is a later sibling in the content slot and
+            was always above this.
 
             The sheen and the floor only ever move under a hover, so they stay
             out of the tree entirely on a coarse pointer rather than sitting
@@ -409,7 +415,20 @@ export const LeagueCard = memo(function LeagueCard({
             // measured against, which is what {@link usePanelCap} has always
             // assumed and what the trades board's own summary spells as
             // `shrink-0`.
-            "relative flex flex-1 cursor-pointer list-none flex-col font-mono group-open/card:flex-none " +
+            // **`z-10` is what keeps the decorative layer under the header.**
+            // A `<details>` paints the `<summary>` from a UA rendering slot of
+            // its own that comes *before* the slot holding every other child,
+            // so the decorative span above — written first precisely so it
+            // would sit underneath — painted over this header instead, running
+            // the card's 1px edge light straight through the engraved league
+            // name on the billet that straddles that edge. Tree order cannot
+            // fix it and neither can flattening the 3D context: the slot order
+            // is the UA's. A positive z-index lifts the header past every
+            // z-auto positioned child of the housing, which is the decorative
+            // layer and nothing else a header can collide with — the panel is
+            // a later sibling in the same content slot and was always above it,
+            // and the two boxes do not overlap in any case.
+            "relative z-10 flex flex-1 cursor-pointer list-none flex-col font-mono group-open/card:flex-none " +
             // **The gutter is 14px below `sm`**, where the card takes 18px from
             // `sm` up. Four windows across a 362px card is what asks for it —
             // the strip is the card's full width less this inset, and the four

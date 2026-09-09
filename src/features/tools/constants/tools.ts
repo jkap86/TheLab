@@ -46,6 +46,17 @@ export const tools: Tool[] = [
     description: "Validate that your optimal lineup is set.",
     hrefFor: (username) => `/lineupchecker/${username}`,
   },
+  // The checker's live twin, and group 1 beside it for the reason it exists:
+  // the same leagues and the same lineups, read while the games are on. No
+  // `short`: the name is one word, and the page publishes no rack controls, so
+  // the phone row has the whole Browse pair's width spare for it.
+  {
+    href: "/gametime",
+    text: "Gametime",
+    group: 1,
+    description: "Follow your lineups live: scores, clocks and live projections.",
+    hrefFor: (username) => `/gametime/${username}`,
+  },
   {
     href: "/picktracker",
     text: "Pick Tracker",

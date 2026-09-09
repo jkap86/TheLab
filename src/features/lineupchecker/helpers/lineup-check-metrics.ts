@@ -221,21 +221,11 @@ export function kickoffCell(
   };
 }
 
-/**
- * A kickoff as a short local time, or null where there is none to show.
- *
- * The reader's own zone deliberately: this is the one number on the page they
- * check against a clock on the wall, and an ET time on a Pacific afternoon is a
- * lineup set an hour late.
- */
-export function kickoffTime(at: number | null): string | null {
-  if (at === null) return null;
-  return new Intl.DateTimeFormat(undefined, {
-    weekday: "short",
-    hour: "numeric",
-    minute: "2-digit",
-  }).format(at);
-}
+// The one spelling of a kickoff as a reader's clock prints it lives in
+// `features/shared/format`, since the gametime seat rows print it too; it is
+// re-exported here so this module's readers and its test are unchanged, and
+// read relatively with `.ts` because Node's runner does not know the alias.
+export { kickoffTime } from "../../shared/format.ts";
 
 /**
  * The slots a superflex check is about: a starting seat a quarterback may fill

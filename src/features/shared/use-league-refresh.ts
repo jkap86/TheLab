@@ -3,7 +3,9 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 
 import type { LeagueSyncPayload } from "@/shared/contract";
-import { apiFetch, errorMessage, markTradeDataSynced } from "@/features/shared";
+import { apiFetch } from "./api";
+import { errorMessage } from "./error-message";
+import { markTradeDataSynced } from "./trade-freshness";
 
 export type LeagueRefreshControl = {
   /**
@@ -31,10 +33,9 @@ type Outcome = Pick<LeagueRefreshControl, "pending" | "result" | "error">;
  * the shape one would give back is the wrong one anyway: there is no key to hang
  * this on and nothing to cache — a press is an event, not a value.
  *
- * It lives in `features/lineupchecker` rather than `features/shared` on this
- * repo's own rule: only this tool presses a single league today, and "a second
- * feature reads it" is the line that moves a client piece across. It goes when
- * the manager page grows a key of its own.
+ * It lived in `features/lineupchecker` until the gametime tool became a second
+ * reader of the sync key — "a second feature reads it" is the line that moves
+ * a client piece across, and this crossed with `LeagueSyncKey`.
  *
  * Three things about it are load-bearing:
  *

@@ -13,3 +13,18 @@
 export { getWeekGames, getWeekKickoffs } from "./kickoff";
 export { openingKickoff, weekGames, weekKickoffs } from "./parse";
 export type { TeamGame } from "./parse";
+// The scoreboard read the other way — for where each game *is* rather than
+// when it starts. `game-clock.ts` is pure on `parse.ts`'s terms and is read
+// relatively by its test; `live.ts` is the wired half, on its own short clock.
+export {
+  clockSignature,
+  gameClocks,
+  gamePhase,
+  parseClock,
+  parseQuarter,
+  phaseCounts,
+  remainingShare,
+} from "./game-clock";
+export type { GameClock, GamePhase } from "./game-clock";
+export { getWeekGameClocks, LIVE_SCORES_TTL_MS } from "./live";
+export type { WeekClocksRead } from "./live";

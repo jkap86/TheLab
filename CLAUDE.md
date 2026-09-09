@@ -12179,13 +12179,10 @@ bottom edge.
 
 **The decorative layer became the details' first child, before the summary**,
 so the floor, the glow and the edge light cover the whole card rather than
-ending at the seam. First rather than last because a positioned `z-auto` span
-paints in tree order among its siblings' positioned content and both the
-summary and the panel come after it — a `z-index` would have needed a stacking
-context on the housing to be contained by, and `isolation: isolate` is a
-grouping value that flattens `preserve-3d`, while the transform that would
-otherwise provide one rides `pointer-fine:`. The browser reads the *first
-summary child* as the disclosure whatever precedes it.
+ending at the seam. The browser reads the *first summary child* as the
+disclosure whatever precedes it. **Being first is not what puts it
+underneath, though** — see The edge light was cutting the league's name, below,
+which is the correction.
 
 **An open card is flat, at `translateZ(0)`, and hovering it lifts nothing.**
 Two things followed from the whole housing being the transformed element, and
@@ -12412,6 +12409,70 @@ Three things a render cannot check: how a real twelve-team browser reads at
 widely on a real projections span as it is on the fixture, where the last real
 week's row is what names it; and whether the engraved name holds its hierarchy
 over a hundred billets rather than four.
+
+### The edge light was cutting the league's name
+
+The card's 1px top-edge highlight was drawn straight through the engraved
+league name — visible on any lit or hovered manager card and any lit or hovered
+trade card, in both schemes, at every width. It is `z-10` on the two summaries,
+and nothing else moved: no route, no query, no contract type, no payload field,
+no migration, no token, and no change to what the layer draws.
+
+**The paragraph above was the bug, stated as a design decision.** The
+decorative layer is written as the housing's *first* child on the argument that
+a positioned `z-auto` span paints in tree order among its siblings, so the
+summary and the panel both come after it. That is a true sentence about an
+ordinary element and false about a `<details>`: the UA hoists the `<summary>`
+into a rendering slot of its own that comes **before** the slot holding every
+other child, so the deco span painted *above* the header however early it was
+written. The panel, a later sibling in that same content slot, was above the
+deco all along — which is why only the header was ever wrong, and why the
+symptom was one hairline in one place rather than a card that looked broken.
+
+**The billet is what made a 1px line matter.** It straddles the card's top
+edge — half above, half below — so the edge light does not run beside the name,
+it runs through it: measured on a real card, the light at y=87 against a glyph
+band of 76–105, cutting the letters at about a third of their height. The
+plates the billet replaced were shorter and sat higher, which is why this
+survived the header pass unnoticed.
+
+**Two things it is not, both checked rather than reasoned about.** It is not
+`preserve-3d` z-fighting — forcing `transform-style: flat` on the housing left
+the line exactly where it was, so the slot order is the whole mechanism and the
+fix holds on a coarse pointer too, where there is no 3D context at all. And it
+is not the card's *border*, which is occluded by the billet's opaque gradient
+correctly and always was; a 3px red border proved that in the same pass.
+
+**`z-10` on the summary rather than on the billet**, which is the smaller
+change and the wrong one: the deco covers the whole header, and a billet lifted
+out of it would leave the next part that grows into that band to rediscover
+this. It restores exactly what the layer's own comment claims — under
+everything — and costs nothing, since the only z-auto positioned child of the
+housing a header can collide with *is* the deco layer. The two rejected
+alternatives are in the comment: a negative z-index on the deco, which paints
+behind the housing's own background on a coarse pointer where nothing
+establishes a stacking context, and insetting the edge light past the billet,
+which is a width that moves with the league's name.
+
+**The lineup checker card needed nothing**, and that is the housing split doing
+its job rather than luck: its shell is still on the `<summary>`, so its deco
+layer is a child *of the summary* sitting before the billet row, where tree
+order does decide. Verified hovered, clean.
+
+#### Verified
+
+Driven over CDP against the running dev server on the live database — a real
+113-league account rather than a fixture, which is the one thing the passes
+above could not do. The mechanism was isolated by elimination: hiding the deco
+layer cleared the line, `transform-style: flat` did not, and a 6px magenta
+stand-in for the edge light showed it crossing the glyphs before the change and
+**fully occluded by the billet after it**, reappearing only past the billet's
+right edge. Both arms landed on the manager card — lit-and-parked, and hovered
+while closed — and on the trade card, whose panel still paints correctly under
+the raised summary. `tsc --noEmit` and `eslint` clean on both files.
+
+**Not verified**: the light scheme, and 390. Neither is at risk — the change is
+a stacking order rather than a colour or a box — but neither was driven.
 
 ## The card's controls stopped costing the lists their height
 
@@ -13949,3 +14010,125 @@ contract change. True virtualization of the league list is a separate follow-up
 — containment is the low-risk half, and whether the remaining per-card cost
 warrants a virtualizer wants a measurement on a real 113-league page rather than
 an argument.
+
+## Gametime
+
+`/gametime/[username]` is the lineup checker with the week in progress: the
+same leagues, the same stored lineups and the same card, priced **live** —
+what each starter has scored, what he is on course for, and where his game is
+— and pushed to the page as the games are played rather than read once. It
+was built the day the 2026 season opened, off thelab2026's playoff scoring
+(the same two Sleeper feeds, the same `time_remaining`/`quarter_num`
+arithmetic) with the one thing that repo does not do added on top: the
+projection blended in.
+
+**The live projection is one line and it is in exactly one file**,
+`shared/manager/gametime.ts`:
+
+```
+live = scored + projected × remaining
+```
+
+`remaining` is the share of the player's game still to be played. Before
+kickoff it is the projection whole; at the final whistle it is what he scored;
+in between it is what he has done plus what he was expected to do in the time
+left. Overtime is `0` — regulation is what a projection is a projection *of*.
+Every total on the wire is a sum of that figure over the starters, so the seat
+rows add up to the plate, and `gametime.test.ts` pins that they do.
+
+**Two feeds are new and neither needed a migration.** The stat lines come
+from `api.sleeper.com/stats/nfl/<season>/<week>` — the projections endpoint's
+sibling, same envelope, `category: "stat"`, which `SleeperProjection`'s doc had
+said since it was written — so `week-stats-read.ts` folds them through the
+same `assembleWeekProjections` and scores them through the same
+`scoreStatLine`, on that function's own promise that it serves projections and
+played weeks alike. The clocks come off the scoreboard `getNflWeekScores`
+already fetched for kickoffs: `SleeperScoreGame.metadata` was typed to two
+team names and the endpoint sends `quarter_num`, `time_remaining`,
+`is_in_progress`, `is_over`, `is_overtime` and both scores (checked live on the
+opener's day and recorded on the type). `schedule/game-clock.ts` is the pure
+reading of them and `schedule/live.ts` the wired half on a **twenty-second**
+TTL beside `kickoff.ts`'s twelve hours — two caches over one fetch, because a
+schedule barely moves and a clock moves every play, and the kickoff reader is
+on the checker's request path a hundred times a page with no use for a clock.
+
+**Three readings for `remaining`, most exact first, and each a fact the row
+carries.** Quarter and clock (`(4 − q) × 900 + seconds left` over 3,600 — half
+time is exactly `0.5`); the `hasNth_quarter_started` flags where the clock is
+unreadable, counting a started quarter as spent; and `0.5` for a game that is
+running and says nothing else. A row this cannot read is a game that has not
+started, which is the reading that costs a reader least.
+
+**Null is not zero in three places per player.** `projected` is null where the
+feed has no row (a bye is a real zero). `scored` is null **before his game has
+started** — nothing has happened yet, which is a different answer from a game
+he played and scored nothing in; running or over with no line is a real zero.
+And a scoreboard that could not be read answers `1` for a player with no stat
+line and `0.5` for one with a line: a line means his game has at least
+started, and half is the reading with the least possible error against a clock
+nobody can see. The payload says which feeds failed (`stats`, `scores`) and the
+page prints the note; only a failed *projections* read empties it, the
+checker's own rule.
+
+**The scoreboard travels once, keyed by team, not on every seat.** The first
+cut put a `game` object on every player and a frame was 1.92MB on the
+116-league account; `board` on the payload halved it. **After the first frame
+a tick sends a delta** — the header and only the leagues whose own JSON moved
+(`diffLeagues`, pure) — because a Thursday-night tick touches a handful of
+leagues and a full frame every twenty seconds is a megabyte a minute per
+reader.
+
+**It streams, and the room is per week where the picktracker's is per
+league.** SSE rather than a websocket for the picktracker's reason (Sleeper has
+no push API so something polls either way, and a `ReadableStream` works today
+where an upgrade needs a custom server). `shared/gametime/live.ts` is that
+file's room — ref-counted, chained timer, linger, terminal `error` before
+close, heartbeat — with one difference that is the whole of it: the feeds are
+shared by everyone watching a week and read once per tick, but each reader's
+answer is those feeds solved against *their* stored lineups, so the payload is
+per subscriber and their Postgres rows are re-read every `LEAGUES_TTL_MS`
+(three minutes). The cadence is the board's own (`pollIntervalMs`): twenty
+seconds while a game runs, the time to the next kickoff while games are still
+to come (floored at a minute, capped at ten), and **nothing once the week is
+over** — a finished week is a fact, not a feed. The plain
+`GET /api/user/[username]/gametime` is the first paint's twin, the narrowed
+`?league=` re-read behind the Sync key, and the answer for anything that cannot
+hold a stream open; both build from one `buildGametimePayload`.
+
+**What moved to `features/shared` for a second reader**: `LeagueSyncKey` with
+`useLeagueRefresh` and `syncStatusNote`, `WeekStepper`, `kickoffTime` and
+`slotLabel` (into `format.ts`), the week-record fold (`week-record.ts` — the
+checker's `week-summary.ts` is now its join to that fold), the header gauge
+(`WeekGauge`, which the checker's `WeekSummary` wraps), `MarginBay` and
+`OutcomeChips`, `useLinkedScroll`, and the pane ledge's track and totals. The
+checker's own tests are unchanged and still pass, which is the check that
+nothing about it moved but the file a rule lives in. `currentWeek` joined
+`restOfSeasonStart` in `projections/weeks.ts` with its state reader as an
+argument, and the checker route reads it there too.
+
+**No Browse keys, deliberately.** The checker's drawers answer who you started
+and who you play, which are questions about the lineup as set; this page is
+about what that lineup is doing. They arrive if a reader asks for them.
+
+### Verified
+
+Against the dev server and the live database on the opener's day, with no game
+yet kicked off: the plain route answers 116 leagues (111 with an opponent, 52
+with a median) in 1.4s, every `scored` null, every `live` equal to its
+projection, and 16 games `pre`; `?week=abc` is a 400 and an unknown manager a
+404 on both routes; the stream sends `retry:` then the payload inside a second
+and the room logs `open 2026:1 (0 live, 16 to come, 0 final)`. Rendered in the
+preview at 390 and 1280 with a card deeplinked open: the billet reads a live
+record and win rate over `In play 0 / 116`, the readout says `Waiting · 16
+games to come`, each card carries `Live / Med / Rec` and the three windows, and
+the panes read slot, name, kickoff, an em dash and the projection per seat.
+One render changed the code — at a phone's width the clock beside the name
+left the name one character, so it joined the second line and the empty
+scored cell is dropped there. 2,158 unit tests pass; `lint` and `typecheck` are
+clean.
+
+**Not verified against a live game**, which is the gap to close first and
+closes tonight: whether Sleeper's stats feed moves during a game at the rate
+the twenty-second tick assumes, what a running tick's delta actually weighs,
+and what `quarter_num` and `time_remaining` read at halftime and in overtime
+on a live row rather than a finished one.

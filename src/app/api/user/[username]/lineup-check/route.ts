@@ -7,7 +7,7 @@ import type {
 } from "@/shared/contract";
 import { getManagerWeekLineups, solveWeekLineup } from "@/shared/manager";
 import {
-  clampWeek,
+  currentWeek,
   dayLockedPlayers,
   getWeekProjections,
   lockedPlayers,
@@ -95,7 +95,7 @@ export async function GET(
   const season = requestedSeason?.season ?? (await getActiveSeason());
 
   try {
-    const week = requestedWeek?.week ?? (await currentWeek(season));
+    const week = requestedWeek?.week ?? (await currentWeek(season, getNflState));
     if (week === null) {
       // `"ok"`: a season the NFL has finished with has no week to check, and no
       // read failed to say so. A real answer about the season, not a shortfall.
@@ -188,29 +188,4 @@ export async function GET(
     const payload: ApiErrorPayload = { error: "Failed to load lineups" };
     return NextResponse.json(payload, { status: 500 });
   }
-}
-
-/**
- * The week this page checks when the caller named none, or null when the season
- * has none to check.
- *
- * `display_week` rather than `week`: Sleeper advances it to the week whose games
- * are *next* once the current week's have been played, which is the week
- * somebody setting a lineup is asking about. A season Sleeper has moved past
- * has no lineup left to set, and a state call that fails answers week 1 — the
- * widest honest window, the same fallback the lineups route takes.
- */
-async function currentWeek(season: string): Promise<number | null> {
-  const state = await getNflState().catch(() => null);
-  if (!state) return 1;
-
-  if (state.season === season) {
-    return clampWeek(state.display_week || state.week);
-  }
-  const requested = Number(season);
-  const current = Number(state.season);
-  if (Number.isFinite(requested) && Number.isFinite(current) && requested < current) {
-    return null;
-  }
-  return 1;
 }

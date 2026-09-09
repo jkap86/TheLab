@@ -11,11 +11,11 @@ import {
   CONSOLE_METAL,
   CONSOLE_WINDOW,
   ExpandedPanel,
-  GameChip,
   LeagueConfigWindow,
   LeagueBillet,
-  RampFigure,
-  sharePercentile,
+  LeagueSyncKey,
+  MarginBay,
+  OutcomeChips,
   Scanlines,
   StandingBay,
   StandingStrip,
@@ -28,8 +28,7 @@ import {
   superflexCell,
   type MetricCell,
 } from "../helpers/lineup-check-metrics";
-import { leagueWeekRecord, type WeekGame } from "../helpers/week-summary";
-import { LeagueSyncKey } from "./league-sync-key";
+import { leagueWeekRecord } from "../helpers/week-summary";
 import { WeekPanes } from "./week-panes";
 
 /**
@@ -426,76 +425,14 @@ function ProjectionStrip({ entry }: { entry?: LineupCheckLeague | null }) {
           The bay draws no ink of its own, because each chip carries its own —
           see `StandingBay`'s `tone`. */}
       <StandingBay label="Rec" stretch>
-        <span className="inline-flex items-center gap-1">
-          {record.games.map((game) => (
-            <GameChip
-              key={game.against}
-              percentile={OUTCOME_PERCENTILE[game.result]}
-              name={`Projected ${game.result} against ${AGAINST[game.against]}`}
-            >
-              {OUTCOME_LETTER[game.result]}
-            </GameChip>
-          ))}
-        </span>
+        <OutcomeChips games={record.games} />
       </StandingBay>
     </StandingStrip>
   );
 }
 
-/**
- * One comparison, as a signed margin polished in the ramp's own hue.
- *
- * **The colour is the margin's size, not which way it went** — the chip beside
- * it already says that, and a rank ramp fed a win/lose boolean would paint a
- * 0.4-point squeaker the same green as a thirty-point rout. `sharePercentile`
- * is the scale the standings table already reads its totals on: a margin as a
- * share of what the two sides average, saturating at ±10%, which lands a dead
- * heat on the neutral and a comfortable win at the ramp's end.
- *
- * **The sign is decided after rounding**, so a margin that rounds to nothing
- * prints `0.0` rather than `−0.0` — and a `0.0` beside an `L` is true rather
- * than contradictory: the game was that close, and the chip is what settles it.
- */
-function MarginBay({
-  label,
-  mine,
-  against,
-}: {
-  label: string;
-  mine: number;
-  against: number;
-}) {
-  const margin = Number((mine - against).toFixed(1));
-  const sign = margin > 0 ? "+" : margin < 0 ? "\u2212" : "";
-
-  return (
-    <StandingBay label={label} stretch>
-      <RampFigure percentile={sharePercentile(mine, [mine, against])}>
-        {sign}
-        {Math.abs(margin).toFixed(1)}
-      </RampFigure>
-    </StandingBay>
-  );
-}
-
-/** The ramp's own ends and middle: a win, a loss, a dead heat. */
-const OUTCOME_PERCENTILE: Record<WeekGame["result"], number> = {
-  win: 100,
-  loss: 0,
-  tie: 50,
-};
-
-const OUTCOME_LETTER: Record<WeekGame["result"], string> = {
-  win: "W",
-  loss: "L",
-  tie: "T",
-};
-
-/** What each chip's sentence names, so `W W` is never announced as "W W". */
-const AGAINST: Record<WeekGame["against"], string> = {
-  opponent: "this week\u2019s opponent",
-  median: "the league median",
-};
+// `MarginBay` and the outcome chips are `features/shared`'s since the gametime
+// card became a second reader of the same strip — see `ui/margin-bay.tsx`.
 
 /**
  * One reading, as a lit window — the same surface as the console's readouts.

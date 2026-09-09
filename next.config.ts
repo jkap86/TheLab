@@ -71,6 +71,11 @@ const nextConfig: NextConfig = {
         destination: "/tools",
         permanent: true,
       },
+      {
+        source: "/gametime",
+        destination: "/tools",
+        permanent: true,
+      },
     ];
   },
 

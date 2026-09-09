@@ -173,6 +173,8 @@ export { getManagerWeekLineups } from "./queries";
 export type { ManagerWeekLineupRow } from "./queries";
 export { solveWeekLineup } from "./week-lineups";
 export type { WeekLineupLeague } from "./week-lineups";
+export { gameBoard, solveGametimeLeague } from "./gametime";
+export type { GametimeBoards } from "./gametime";
 
 // The lineup checker's per-league refresh press. Only the entry point leaves the
 // folder: the gate, the admission bound and the lock key are how it is built,

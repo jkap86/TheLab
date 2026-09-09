@@ -34,6 +34,13 @@ test("reads a username off /lineupchecker too", () => {
   });
 });
 
+test("reads a username off /gametime, the checker's live twin", () => {
+  assert.deepEqual(deriveVisit("/gametime/JKap86"), {
+    tool: "gametime",
+    subject: "jkap86",
+  });
+});
+
 test("reads a league id off /picktracker and leaves it alone", () => {
   assert.deepEqual(deriveVisit("/picktracker/1180160000000000000"), {
     tool: "picktracker",

@@ -32,6 +32,7 @@ import {
   useActiveCard,
   usePublishRackControls,
   useUrlParam,
+  WeekStepper,
   writeQueryParam,
 } from "@/features/shared";
 
@@ -53,7 +54,6 @@ import { LineupCheckCard, LineupMarkDefs } from "./lineup-check-card";
 import { OpponentSharesDrawer } from "./opponent-shares-drawer";
 import { StarterSharesDrawer } from "./starter-shares-drawer";
 import { WeekSummary } from "./week-summary";
-import { WeekStepper } from "./week-stepper";
 
 /**
  * The two Browse keys this page puts in the rack: their legends, and the

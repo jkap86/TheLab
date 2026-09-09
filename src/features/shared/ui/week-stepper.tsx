@@ -1,6 +1,6 @@
 "use client";
 
-import { CONSOLE_HOUSING, CONSOLE_KEY } from "@/features/shared";
+import { CONSOLE_HOUSING, CONSOLE_KEY } from "../console-chrome";
 import { LAST_REGULAR_WEEK } from "@/shared/projections/weeks";
 
 /**

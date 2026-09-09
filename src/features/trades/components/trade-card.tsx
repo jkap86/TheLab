@@ -317,7 +317,20 @@ export const TradeCard = memo(function TradeCard({
           // this card opens onto is the same piece of stock under a groove
           // rather than a second housing below the first.
           className={
-            "relative flex shrink-0 cursor-pointer list-none flex-col font-mono " +
+            // **`z-10` is what keeps the decorative layer under the header.**
+            // A `<details>` paints the `<summary>` from a UA rendering slot of
+            // its own that comes *before* the slot holding every other child,
+            // so the decorative span above — written first precisely so it
+            // would sit underneath — painted over this header instead, running
+            // the card's 1px edge light straight through the engraved league
+            // name on the billet that straddles that edge. Tree order cannot
+            // fix it and neither can flattening the 3D context: the slot order
+            // is the UA's. A positive z-index lifts the header past every
+            // z-auto positioned child of the housing, which is the decorative
+            // layer and nothing else a header can collide with — the panel is
+            // a later sibling in the same content slot and was always above it,
+            // and the two boxes do not overlap in any case.
+            "relative z-10 flex shrink-0 cursor-pointer list-none flex-col font-mono " +
             // The manager card's gutter, composed onto the *shell* rather than
             // appended to `CONSOLE_CARD`: two base `px-*` utilities of the same
             // specificity are decided by Tailwind's emit order rather than the

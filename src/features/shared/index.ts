@@ -67,9 +67,11 @@ export { KtcBoardKeys } from "./ui/ktc-board-keys";
 export {
   formatInstantDate,
   formatInstantTime,
+  kickoffTime,
   ordinal,
   ordinalParts,
   shortName,
+  slotLabel,
 } from "./format";
 // The rank ramp and its two readings. The trades board joined the manager
 // card as a reader when its asset values gained a place in their own league:
@@ -187,6 +189,23 @@ export { ManagerBillet, ManagerPlate } from "./ui/manager-plate";
 // One count stamped into a billet. It came out of `season-summary.tsx` when the
 // lineup checker's header took the billet — a second reader of the same well.
 export { StampedCount } from "./ui/stamped-count";
+// The week gauge those counts stand beside — the checker's header part, shared
+// since the gametime page draws it over a live record.
+export { WeekGauge } from "./ui/week-gauge";
+// A card's standing strip over a week: a signed margin in the ramp's hue and
+// the week's games as chips. The lineup checker's, shared with gametime.
+export { MarginBay, OutcomeChips } from "./ui/margin-bay";
+// The week-record fold both of those pages read their gauge and their chips
+// from — pure, and read relatively by the checker's helper for Node's sake.
+export {
+  formatRecord,
+  formatWeekRecord,
+  formatWeekWinPct,
+  outcome,
+  summariseWeekRecords,
+  weekRecordOf,
+} from "./week-record";
+export type { LeagueWeekRecord, WeekGame, WeekRecordSummary } from "./week-record";
 // The console card's header, shared by all four league cards — see the module.
 // `CardLedge` and the bays under it are the manager card's own arrangement of
 // the same header, and live beside the plates for the same reason the plates
@@ -247,7 +266,12 @@ export {
   PaneGlass,
   PaneHead,
   PaneLedge,
+  PaneLedgeTrack,
+  PaneTotal,
 } from "./ui/pane";
+// Two glass scrollers mirrored — the checker's week view and the gametime
+// panes both read their two lineups across each other.
+export { useLinkedScroll } from "./use-linked-scroll";
 export type { DrawerTray } from "./ui/pane";
 // The capped inner housing an open card's expanded half is drawn in. It came
 // here from `features/manager` when the trade card became a second reader — the
@@ -288,3 +312,13 @@ export {
   LeagueFormatTags,
 } from "./ui/league-config-window";
 export { PageShell } from "./ui/page-shell";
+// A week's two card-scoped controls, shared by the lineup checker and the
+// gametime page: the key that re-reads one league from Sleeper (with the hook
+// and the note behind it) and the stepper that names the week. Both came from
+// `features/lineupchecker` when gametime became a second reader.
+export { LeagueSyncKey } from "./ui/league-sync-key";
+export { WeekStepper } from "./ui/week-stepper";
+export { useLeagueRefresh } from "./use-league-refresh";
+export type { LeagueRefreshControl } from "./use-league-refresh";
+export { syncStatusNote } from "./sync-status-note";
+export type { SyncNote } from "./sync-status-note";

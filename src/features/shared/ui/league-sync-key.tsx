@@ -1,9 +1,8 @@
 "use client";
 
-import { CONSOLE_KEY_PILL_BARE } from "@/features/shared";
-
-import { syncStatusNote } from "../helpers/sync-status-note";
-import { useLeagueRefresh } from "../hooks/use-league-refresh";
+import { CONSOLE_KEY_PILL_BARE } from "../console-chrome";
+import { syncStatusNote } from "../sync-status-note";
+import { useLeagueRefresh } from "../use-league-refresh";
 
 /**
  * The key that re-reads one league from Sleeper, and the note beside it.
@@ -11,7 +10,9 @@ import { useLeagueRefresh } from "../hooks/use-league-refresh";
  * **A component of its own so `LineupCheckCard` stays hook-free**, which is that
  * card's stated design and `LeagueCard`'s before it: the card renders a league,
  * and the state a card needs lives below it. The card takes `onSynced` and
- * forwards it here without ever calling it.
+ * forwards it here without ever calling it. It lives in `features/shared`
+ * since the gametime card became its second reader — the line `CONSOLE_KEY`
+ * and `ManagerPlate` moved on.
  *
  * **It lives in the disclosure body, not in the `<summary>`**, and that is an
  * accessibility decision rather than a layout one. A `<summary>` maps to a leaf

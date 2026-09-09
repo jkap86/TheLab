@@ -131,6 +131,7 @@ export const config = {
     "/tools",
     "/manager/:path+",
     "/lineupchecker/:path+",
+    "/gametime/:path+",
     "/trades",
     "/picktracker",
     "/picktracker/:path+",

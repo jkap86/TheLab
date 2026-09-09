@@ -1,18 +1,10 @@
 "use client";
 
-import {
-  useEffect,
-  useId,
-  useRef,
-  useState,
-  type ReactNode,
-  type RefObject,
-} from "react";
+import { useId, useState, type ReactNode, type RefObject } from "react";
 
 import type { LineupCheckLeague, LineupCheckPlayer, LineupCheckSeat } from "@/shared/contract";
 import {
   CONSOLE_FIGURE_WELL,
-  CONSOLE_PANE_TRACK,
   CONSOLE_ROW_WELL,
   DrawerBar,
   DrawerRow,
@@ -24,7 +16,11 @@ import {
   PaneGlass,
   PaneHead,
   PaneLedge,
+  PaneLedgeTrack,
+  PaneTotal,
   rankColor,
+  slotLabel,
+  useLinkedScroll,
 } from "@/features/shared";
 
 import { kickoffTime } from "../helpers/lineup-check-metrics";
@@ -146,7 +142,7 @@ export function WeekPanes({
   // under the press, which is the one thing this interaction is arranged not to
   // do.
   const second = opponent !== null || pick !== null;
-  const { left, right } = useLinkedScroll(pick, second);
+  const { left, right } = useLinkedScroll([pick, second]);
 
   return (
     // `preserve-3d` is what carries the panel's perspective down to the two
@@ -209,60 +205,9 @@ export function WeekPanes({
   );
 }
 
-/**
- * The two panes' glass scrollers, mirrored.
- *
- * **The rows are read across**, which is what this view has always argued and
- * is the one claim per-pane scrollers put at risk: index *N* is the same seat
- * in both lineups, so a reader comparing them wants the two lists to move
- * together. Every row is one of two fixed heights and both panes take the same
- * one, so index *N* sits at the same offset in each and mirroring `scrollTop`
- * is sufficient — nothing has to be measured.
- *
- * **The guard is the whole of it.** Writing to one scroller fires the other's
- * `scroll` event, which would write back, and the two would trade events for as
- * long as the reader kept scrolling. `held` is released on the next frame
- * rather than synchronously because the event is dispatched *after* the write.
- *
- * It re-attaches on every pick, because a press replaces one pane with the
- * options list and the element that is the scroller changes with it. The
- * listeners are `passive`, since neither handler calls `preventDefault`, and
- * nothing in the subtree may take `scroll-behavior: smooth` — a smooth scroll
- * animates over frames and would fight a mirror that writes on every one.
- */
-function useLinkedScroll(
-  pick: SeatPick | null,
-  second: boolean,
-): { left: RefObject<HTMLDivElement | null>; right: RefObject<HTMLDivElement | null> } {
-  const left = useRef<HTMLDivElement | null>(null);
-  const right = useRef<HTMLDivElement | null>(null);
-
-  useEffect(() => {
-    const a = left.current;
-    const b = right.current;
-    if (!a || !b) return;
-
-    let held = false;
-    const mirror = (from: HTMLElement, to: HTMLElement) => () => {
-      if (held) return;
-      held = true;
-      to.scrollTop = from.scrollTop;
-      requestAnimationFrame(() => {
-        held = false;
-      });
-    };
-    const onLeft = mirror(a, b);
-    const onRight = mirror(b, a);
-    a.addEventListener("scroll", onLeft, { passive: true });
-    b.addEventListener("scroll", onRight, { passive: true });
-    return () => {
-      a.removeEventListener("scroll", onLeft);
-      b.removeEventListener("scroll", onRight);
-    };
-  }, [pick, second]);
-
-  return { left, right };
-}
+// The two glass scrollers are linked through `useLinkedScroll`, shared since
+// the gametime panes read across each other the same way — see that hook for
+// the guard that is the whole of it.
 
 /** One roster, as a pane draws it. */
 type PaneLineup = {
@@ -331,8 +276,8 @@ function LineupPane({
   return (
     <Pane>
       <PaneLedge>
-        <LedgeTrack side={side}>
-          <Total label="Set" value={pane.set} />
+        <PaneLedgeTrack legend={side === "mine" ? "Yours" : "Theirs"}>
+          <PaneTotal label="Set" value={pane.set} />
           {/* The error tone on `Opt` is not an alert — it is the figure the set
               lineup is being measured against, drawn in the same ink the gap
               window above the card draws its shortfall in, so the two read as
@@ -351,9 +296,9 @@ function LineupPane({
               second render, on `StandingPlate`'s rule: `display: none` takes it
               out of the accessibility tree as well as off the screen. */}
           <span className="hidden lg:contents">
-            <Total label="Opt" value={pane.optimal} tone="error" />
+            <PaneTotal label="Opt" value={pane.optimal} tone="error" />
           </span>
-        </LedgeTrack>
+        </PaneLedgeTrack>
 
         <ColumnHeads
           name={pane.title ?? pane.fallback}
@@ -494,7 +439,7 @@ function OptionsPane({
   return (
     <Pane>
       <PaneLedge>
-        <LedgeTrack side={side}>
+        <PaneLedgeTrack legend={side === "mine" ? "Yours" : "Theirs"}>
           <button
             type="button"
             onClick={onBack}
@@ -508,7 +453,7 @@ function OptionsPane({
           >
             Back
           </button>
-        </LedgeTrack>
+        </PaneLedgeTrack>
 
         <ColumnHeads
           // Whose options, said rather than left to position: the pane they
@@ -553,82 +498,8 @@ function OptionsPane({
   );
 }
 
-/**
- * The recess on a pane's ledge, and what the pane reports about itself.
- *
- * The manager card's ledge carries this pane's *control* — its column picker,
- * its lens. The checker has no pane-scoped control, because its pressable thing
- * is a seat; so the track carries the readings instead, which is the same
- * claim about ownership made with a different cargo: a figure on the ledge is
- * plainly *this list's* total, where the same figure on the card's own plate
- * would be the league's.
- *
- * **The legend drops below `lg` and the figures step down with it.** Measured
- * at 390 a pane is ~165px, and `Yours` beside two labelled figures at the
- * design's own sizes is ~205 — so the legend goes (the pane's own name is on
- * the head row 4px below, and the opponent's carries `vs`) and the figures take
- * the size the rows under them use.
- *
- * **The height is fixed rather than a floor**, which is `TimelineView`'s own
- * rule for the strip it holds one tool over and is what makes the two panes
- * read across: a track sized to its content is 31.9px holding two totals and
- * 29.8px holding a `Back` key, so opening an options pane put its rows 2px out
- * of step with the lineup opposite — the one thing this view is arranged
- * against, and invisible as anything but a slight wrongness. 32px is also the
- * card's own control recess above, so its two are one height.
- */
-function LedgeTrack({ side, children }: { side: Side; children: ReactNode }) {
-  return (
-    <div
-      className={`${CONSOLE_PANE_TRACK} flex h-8 min-w-0 items-center gap-1.5 p-[3px] pl-1.5 lg:h-[34px] lg:gap-2.5 lg:pl-3`}
-    >
-      <span
-        aria-hidden
-        className="hidden shrink-0 font-mono text-[length:var(--fs-10)] uppercase tracking-[0.16em] text-[color:var(--billet-label)] lg:inline"
-      >
-        {side === "mine" ? "Yours" : "Theirs"}
-      </span>
-      <span className="min-w-0 flex-1" />
-      {children}
-    </div>
-  );
-}
-
-/**
- * One of a pane's two totals, milled into the ledge.
- *
- * The figure sits in a `--recess-bg` cell under `--figure-well-shadow` — a hole
- * cut in *metal*, which is the same turning-over `DrawerRow` already makes
- * against the glass's own wells one surface down.
- *
- * Null draws an em dash rather than a zero, on the contract's own rule: the
- * opponent's pair is null for a future week, an unpaired week and an unstored
- * roster, and a `0.0` there is a roster projected to score nothing.
- */
-function Total({
-  label,
-  value,
-  tone,
-}: {
-  label: string;
-  value: number | null;
-  tone?: "error";
-}) {
-  return (
-    <span className="inline-flex shrink-0 items-baseline gap-[5px]">
-      <span className="font-mono text-[length:var(--fs-8)] uppercase tracking-[0.14em] text-[color:var(--billet-label)] lg:text-[length:var(--fs-9)]">
-        {label}
-      </span>
-      <span
-        className={`rounded-[5px] bg-[color:var(--recess-bg)] px-1 py-0.5 font-mono text-[length:var(--fs-11)] tabular-nums shadow-[var(--figure-well-shadow)] lg:px-1.5 lg:text-[length:var(--fs-12-5)] ${
-          tone === "error" ? "text-error" : "text-[color:var(--billet-figure)]"
-        }`}
-      >
-        {value === null ? "—" : value.toFixed(1)}
-      </span>
-    </span>
-  );
-}
+// The ledge's track and its totals are `PaneLedgeTrack` and `PaneTotal`,
+// shared with the gametime panes — see `features/shared/ui/pane.tsx`.
 
 /**
  * The pane's column heads, in the rows' own widths.
@@ -688,16 +559,6 @@ function ColumnHeads({
   );
 }
 
-/** Sleeper's slot names, shortened to fit a 38px column. Unmapped render as-is. */
-const SLOT_LABELS: Record<string, string> = {
-  SUPER_FLEX: "SF",
-  WRRB_FLEX: "W/R",
-  REC_FLEX: "W/T",
-  IDP_FLEX: "IDP",
-  FLEX: "FLX",
-};
-
-export const slotLabel = (slot: string): string => SLOT_LABELS[slot] ?? slot;
 
 /**
  * One seat, as a channel cut into the pane's glass.
