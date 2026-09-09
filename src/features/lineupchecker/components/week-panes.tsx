@@ -284,20 +284,16 @@ function LineupPane({
               one claim. A pane whose set total already equals it is simply
               level.
 
-              **It is dropped below `lg`, and that is a measurement.** A pane is
-              ~165px at 390 and its track ~148 of that; the labelled pair is
-              160px there even with the legend already gone and the figures
-              already stepped down, so it overflowed the pane's own
-              `overflow-hidden` with nothing on screen saying so. `Set` is the
-              reading the two panes are compared on and stays; the reader's own
-              `Opt` is what the card's `Vs optimal` window above already reports,
-              which is the same trade the reading plate makes when it drops a
-              field at a phone's width. `hidden`/`lg:contents` rather than a
-              second render, on `StandingPlate`'s rule: `display: none` takes it
-              out of the accessibility tree as well as off the screen. */}
-          <span className="hidden lg:contents">
-            <PaneTotal label="Opt" value={pane.optimal} tone="error" />
-          </span>
+              **It is drawn at every width now, where it used to drop below
+              `lg`.** That drop was a measurement — a pane is ~165px at 390
+              and the labelled pair was 160px of a ~148px track — and it was
+              made on the argument that the card's `Vs optimal` window above
+              already reports the reader's own `Opt`. That window folds away
+              while the card is open now, so the ledge is the one place the
+              figure survives, and the track was re-cut to hold both: see
+              `PaneLedgeTrack` and `PaneTotal` for the phone's tighter padding,
+              gaps and tracking, which is what fits the pair in. */}
+          <PaneTotal label="Opt" value={pane.optimal} tone="error" />
         </PaneLedgeTrack>
 
         <ColumnHeads
@@ -499,7 +495,8 @@ function OptionsPane({
 }
 
 // The ledge's track and its totals are `PaneLedgeTrack` and `PaneTotal`,
-// shared with the gametime panes — see `features/shared/ui/pane.tsx`.
+// shared with the gametime panes — see `features/shared/ui/pane.tsx`, which
+// carries the phone re-cut that lets both totals sit in a 390px track.
 
 /**
  * The pane's column heads, in the rows' own widths.

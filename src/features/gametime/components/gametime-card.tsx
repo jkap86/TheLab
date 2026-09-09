@@ -189,14 +189,20 @@ export const GametimeCard = memo(function GametimeCard({
           </div>
         </summary>
 
-        <ExpandedPanel open={open} closing={open && !lit}>
-          <div className="mb-1.5 flex h-[22px] shrink-0 items-center gap-2 touch:h-7">
+        {/* The sync key rides the panel's seam at its right end, the checker
+            card's own arrangement since the seam's groove became the only
+            line it needs — see `LeagueSyncKey`. */}
+        <ExpandedPanel
+          open={open}
+          closing={open && !lit}
+          seamEnd={
             <LeagueSyncKey
               leagueId={league.league_id}
               leagueName={league.name}
               onSynced={onSynced}
             />
-          </div>
+          }
+        >
 
           {entry ? (
             <LivePanes

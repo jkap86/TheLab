@@ -59,6 +59,7 @@ export function ExpandedPanel({
   children,
   open,
   closing,
+  seamStart,
   seamEnd,
 }: {
   children: ReactNode;
@@ -67,8 +68,17 @@ export function ExpandedPanel({
   /** Whether it is closing: open for as long as the collapse takes. */
   closing: boolean;
   /**
+   * A control to hang on the **left** end of the cut, inside the panel's own
+   * gutter — today the `Ranks` / `Checks` key that brings a card's folded
+   * summary readings back (`SummaryReadingsKey`). The key that acts on the
+   * *summary* leads the row, and the keys that act on the *panel* follow.
+   * Gated on `mounted` with the children, as `seamEnd` is.
+   */
+  seamStart?: ReactNode;
+  /**
    * A control to hang on the right end of the cut, inside the panel's own
-   * gutter — today the manager and trade cards' `History` key.
+   * gutter — the manager and trade cards' `History` key, and the lineup
+   * checker's `Sync` key with its status note beside it.
    *
    * **The seam is a row rather than a bare rule because of what it saves.**
    * The key it carries used to sit in a 32px recess strip of its own with a
@@ -133,12 +143,24 @@ export function ExpandedPanel({
           The margins are the breath around it: 8px either side, against the
           `12/18` and `10/14` the two halves used to spend separately. */}
       <div className="-mx-3.5 my-2 flex shrink-0 items-center gap-2.5 sm:-mx-[1.125rem] sm:gap-3">
+        {mounted && seamStart ? (
+          <span className="ml-3.5 shrink-0 sm:ml-[1.125rem]">{seamStart}</span>
+        ) : null}
         <span
           aria-hidden
           className="h-0.5 min-w-0 flex-1 bg-[image:var(--card-seam-groove)]"
         />
+        {/* **Shrinkable, where the left end is not**, and the groove is what
+            decides when. Its basis is zero, so negative free space is spent on
+            the two ends and never on it — which is right for a right end that
+            is a key alone (the keys carry `shrink-0` themselves and nothing
+            here shrinks), and is what lets the lineup checker's sync key
+            *truncate its status note* once the groove has closed to nothing,
+            rather than pushing the row past the panel. */}
         {mounted && seamEnd ? (
-          <span className="mr-3.5 shrink-0 sm:mr-[1.125rem]">{seamEnd}</span>
+          <span className="mr-3.5 flex min-w-0 items-center sm:mr-[1.125rem]">
+            {seamEnd}
+          </span>
         ) : null}
       </div>
       {/* **Nothing is rendered while the card is shut** — see `usePanelCap`'s

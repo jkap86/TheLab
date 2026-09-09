@@ -421,11 +421,20 @@ export function PaneDrawer({
  * 29.8px holding a key, so a pane whose ledge held something else put its rows
  * 2px out of step with the one opposite — invisible as anything but a slight
  * wrongness. 32px is also the card's own control recess above.
+ *
+ * **Below `lg` the track holds both totals, and the padding and gap are what
+ * were spent to fit them.** Two labelled figures together are ~139px of a
+ * ~141px content box at 390 once the track is `px-1.5` with no vertical
+ * padding (the height is fixed, so that padding bought nothing), the gap
+ * between them is 5px and each pair is set tight — see {@link PaneTotal}.
+ * Right-aligned, so the figures sit on the same edge above and below `lg`,
+ * where the `flex-1` spacer after the legend does the same job. The `lg` arm
+ * is the legend, `p-[3px] pl-3`, the 10px gap.
  */
 export function PaneLedgeTrack({ legend, children }: { legend: string; children: ReactNode }) {
   return (
     <div
-      className={`${CONSOLE_PANE_TRACK} flex h-8 min-w-0 items-center gap-1.5 p-[3px] pl-1.5 lg:h-[34px] lg:gap-2.5 lg:pl-3`}
+      className={`${CONSOLE_PANE_TRACK} flex h-8 min-w-0 items-center justify-end gap-[5px] px-1.5 lg:h-[34px] lg:gap-2.5 lg:py-[3px] lg:pl-3 lg:pr-[3px]`}
     >
       <span
         aria-hidden
@@ -449,6 +458,10 @@ export function PaneLedgeTrack({ legend, children }: { legend: string; children:
  * Null draws an em dash rather than a zero, on the contract's own rule: a
  * figure is null where there is no answer, and a `0.0` there is a roster
  * scored at nothing.
+ *
+ * **Set tight below `lg`** — a 3px gap and `0.1em` of tracking on the label —
+ * which is what two of these cost to sit in a phone's track together; see
+ * {@link PaneLedgeTrack}. From `lg` up the pair keeps its 5px and `0.14em`.
  */
 export function PaneTotal({
   label,
@@ -466,8 +479,8 @@ export function PaneTotal({
         ? "text-[color:var(--billet-accent)]"
         : "text-[color:var(--billet-figure)]";
   return (
-    <span className="inline-flex shrink-0 items-baseline gap-[5px]">
-      <span className="font-mono text-[length:var(--fs-8)] uppercase tracking-[0.14em] text-[color:var(--billet-label)] lg:text-[length:var(--fs-9)]">
+    <span className="inline-flex shrink-0 items-baseline gap-[3px] lg:gap-[5px]">
+      <span className="font-mono text-[length:var(--fs-8)] uppercase tracking-[0.1em] text-[color:var(--billet-label)] lg:text-[length:var(--fs-9)] lg:tracking-[0.14em]">
         {label}
       </span>
       <span

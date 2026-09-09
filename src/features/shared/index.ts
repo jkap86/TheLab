@@ -47,6 +47,15 @@ export {
 } from "./console-chrome";
 export { errorMessage } from "./error-message";
 export { storeKtcBoard, useKtcBoard } from "./ktc-board";
+// Whether an open card keeps its summary readings on screen — one boolean for
+// both league cards, and the fold and the key that read it. See the module.
+export {
+  storeSummaryReadings,
+  toggleSummaryReadings,
+  useSummaryReadings,
+} from "./summary-readings";
+export { SummaryFold } from "./ui/summary-fold";
+export { SummaryReadingsKey } from "./ui/summary-readings-key";
 export {
   DEFAULT_TRADE_VALUE_BASIS,
   TRADE_VALUE_BASES,
