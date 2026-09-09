@@ -42,7 +42,10 @@ import {
 // ship the rail, the rewind and the fetch hook to every page importing anything
 // shared — the trades board and the lineup checker among them, neither of which
 // draws one. Named here, the chunk belongs to this route.
-import { TimelineView } from "@/features/shared/ui/timeline";
+import {
+  TimelineHistoryKey,
+  TimelineView,
+} from "@/features/shared/ui/timeline";
 
 import {
   rankColor,
@@ -582,51 +585,106 @@ export const LeagueCard = memo(function LeagueCard({
             itself**: an open card parks under the rack and the panel caps to
             what is left of the viewport, which is two numbers no stylesheet
             can hold. That is `ExpandedPanel`, and it is a component of its own
-            so this card stays hook-free. */}
-        <ExpandedPanel open={open} closing={open && !lit}>
-          {/* **No wrapper between the housing and its parts**, and this is
-              the half of the perspective that is silent when it is missing: a
-              `perspective` projects an element's *direct children only*, and an
-              intermediate `<div>` is `transform-style: flat` — so the rail, the
-              panes and the picks would compute their `translateZ` against no
-              projection at all, and the housing would be three flat boxes with
-              a depth nobody can see and no error to say so. There was one here
-              (the old lit window needed a `relative` layer to hold its content
-              above the scanlines); the housing has no scanlines, so it is gone.
-              `LeagueTeams` carries the `preserve-3d` that reaches its own two
-              parts, for the same reason one level down. */}
-          <LeagueDetail
-            leagueId={league.league_id}
-            season={season}
-            username={username}
-            teamsColumn={teamsColumn}
-            slots={slots}
-            open={open}
-          />
-        </ExpandedPanel>
+            so this card stays hook-free — which is also why it is reached
+            through `LeagueDetail` rather than rendered here: the panel's seam
+            carries the `History` key now, and the latch behind that key has to
+            sit above both halves of it. See `LeagueDetail`. */}
+        <LeagueDetail
+          leagueId={league.league_id}
+          season={season}
+          username={username}
+          teamsColumn={teamsColumn}
+          slots={slots}
+          open={open}
+          closing={open && !lit}
+        />
       </details>
     </li>
   );
 });
 
 /**
- * The expanded half's own read: this league's twelve rosters, solved.
+ * The expanded half: the card's housing below the seam, and the one piece of
+ * state that has to straddle it.
  *
  * **It is a component so the card above stays hook-free** — that card's own
- * stated design, and `LeagueSyncKey`'s precedent — and it is the manager page's
- * half of the split the batched lineups route made. That route answers ranks
- * for a hundred leagues; the teams a browser renders are one league's, wanted
- * one league at a time, and this is where they are asked for. It is the trades
- * board's `TradeLeague` doing the same job over the same hook, and deliberately
- * so: two cards drawing one league through two reads is how the two would come
- * to disagree.
+ * stated design, and `LeagueSyncKey`'s precedent. It used to be the read alone,
+ * mounted *inside* `ExpandedPanel`; it renders the panel now, because the seam
+ * the panel draws carries the `History` key and the latch behind that key has
+ * to be above it. What it did not do is take the read up with it — see
+ * `LeagueLineup`.
+ */
+function LeagueDetail({
+  open,
+  closing,
+  ...detail
+}: {
+  leagueId: string;
+  season: string | null;
+  username: string;
+  teamsColumn: LineupColumn;
+  slots: readonly LineupSlot[];
+  open: boolean;
+  closing: boolean;
+}) {
+  // **Whether the reader has asked for this league's history**, held here
+  // because the two halves of that gate now sit on either side of the panel's
+  // seam: the key is `ExpandedPanel`'s `seamEnd` and the strip it opens is
+  // `TimelineView`'s, below the cut. One-way — once pressed there is nothing
+  // to un-press, and the request gate is still read where the rail is.
+  //
+  // **It is the one thing this outer half owns**, and that is the whole reason
+  // it was split from the read below rather than simply moved above the panel.
+  // A closed card's expanded half must not be in the document (see
+  // `usePanelCap`'s `mounted`), and everything expensive about this component
+  // — the subject, the per-league read, the store subscription — is in
+  // `LeagueLineup`, which the panel still gates. What a hundred shut cards pay
+  // for here is one boolean apiece.
+  const [historyOpen, setHistoryOpen] = useState(false);
+
+  return (
+    <ExpandedPanel
+      open={open}
+      closing={closing}
+      seamEnd={
+        historyOpen ? undefined : (
+          <TimelineHistoryKey onOpen={() => setHistoryOpen(true)} />
+        )
+      }
+    >
+      {/* **No wrapper between the housing and its parts**, and this is the
+          half of the perspective that is silent when it is missing: a
+          `perspective` projects an element's *direct children only*, and an
+          intermediate `<div>` is `transform-style: flat` — so the rail, the
+          panes and the picks would compute their `translateZ` against no
+          projection at all, and the housing would be three flat boxes with a
+          depth nobody can see and no error to say so. There was one here (the
+          old lit window needed a `relative` layer to hold its content above the
+          scanlines); the housing has no scanlines, so it is gone. `LeagueTeams`
+          carries the `preserve-3d` that reaches its own two parts, for the same
+          reason one level down. `LeagueLineup` renders a fragment, not an
+          element. */}
+      <LeagueLineup {...detail} open={open} historyOpen={historyOpen} />
+    </ExpandedPanel>
+  );
+}
+
+/**
+ * The expanded half's own read: this league's twelve rosters, solved.
  *
- * **`opened` is a one-way latch and `open` is the press.** A `<details>` hides
- * its body rather than unmounting it, so this is mounted for every league on
- * the account — a hundred of them must cost nothing until a reader opens one.
- * Once opened, closing must not throw the answer away and re-opening must not
- * pay for it again; the store behind `useLeagueLineup` keeps it, bounded, so
- * even a latch released by a re-render costs nothing.
+ * **Split from the latch above so a shut card mounts none of it** — see
+ * `LeagueDetail`, and `usePanelCap`'s `mounted` for what that is worth. It is
+ * the manager page's half of the split the batched lineups route made: that
+ * route answers ranks for a hundred leagues, where the teams a browser renders
+ * are one league's, wanted one league at a time, and this is where they are
+ * asked for. It is the trades board's `TradeLeague` doing the same job over the
+ * same hook, and deliberately so: two cards drawing one league through two
+ * reads is how the two would come to disagree.
+ *
+ * **`opened` is a one-way latch and `open` is the press.** This is mounted only
+ * while the card is open, but a card the reader closes and opens again must not
+ * pay for its answer twice; the store behind `useLeagueLineup` keeps it,
+ * bounded, so even a latch released by an unmount costs nothing.
  *
  * **The `ktc` stamp comes from this read rather than from the page's.** The
  * batched payload still carries the markets it priced its ranks on, but the
@@ -638,13 +696,14 @@ export const LeagueCard = memo(function LeagueCard({
  * league with no stored rosters gets `TimelineView`'s empty child. Collapsing
  * them would make an ordinary answer look like a fault.
  */
-function LeagueDetail({
+function LeagueLineup({
   leagueId,
   season,
   username,
   teamsColumn,
   slots,
   open,
+  historyOpen,
 }: {
   leagueId: string;
   season: string | null;
@@ -652,6 +711,7 @@ function LeagueDetail({
   teamsColumn: LineupColumn;
   slots: readonly LineupSlot[];
   open: boolean;
+  historyOpen: boolean;
 }) {
   const [opened, setOpened] = useState(open);
   if (open && !opened) setOpened(true);
@@ -692,6 +752,7 @@ function LeagueDetail({
       // two cannot disagree; null while the read is in flight, which marks no
       // team rather than the wrong one.
       managerRosterId={entry?.teams.find((t) => t.is_manager)?.roster_id ?? null}
+      historyOpen={historyOpen}
     >
       {loading ? (
         <p className="m-0 font-mono text-[length:var(--fs-11)] uppercase tracking-[0.16em] text-readout-label">

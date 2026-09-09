@@ -39,7 +39,7 @@ describe("parkedShell — the box the card stands in", () => {
 
   test("takes the rest of the viewport, less breath", () => {
     assert.equal(parkedShell(900, 81).height, 900 - 68 - SHELL_BREATH);
-    assert.equal(parkedShell(1080, 81).height, 996);
+    assert.equal(parkedShell(1080, 81).height, 1080 - 68 - SHELL_BREATH);
   });
 
   test("never answers a negative height", () => {
@@ -53,7 +53,15 @@ describe("panelRoom — what is left under the panel's own top edge", () => {
 
   test("is the shell less the overhang it padded with, less the header", () => {
     const shell = parkedShell(1080, 81);
-    assert.equal(panelRoom(shell.height, HEADER), 996 - PLATE_OVERHANG - 224);
+    // Spelled from the viewport rather than from `shell.height`, so this is
+    // the sentence rather than `panelRoom`'s own expression restated: what is
+    // left under the panel's top edge is the screen, less where the card parks,
+    // less the breath under it, less the header. The overhang cancels — the
+    // shell opens it early and pays it straight back as padding.
+    assert.equal(
+      panelRoom(shell.height, HEADER),
+      1080 - 81 - SHELL_BREATH - HEADER,
+    );
   });
 
   test("shrinks with a taller header, which is the whole point of measuring one", () => {

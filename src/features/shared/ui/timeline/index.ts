@@ -7,5 +7,5 @@
 // `local-store.ts` is, argued from the other side: there a module only the
 // barrel's siblings build on, here one whose single host names this path.
 
-export { TimelineView } from "./timeline-view";
+export { TimelineHistoryKey, TimelineView } from "./timeline-view";
 export { TimelineRail } from "./timeline-rail";

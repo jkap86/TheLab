@@ -48,8 +48,16 @@ export const RACK_BREATH = 6;
 /**
  * Under the parked shell, so the card's foot does not sit flush against the
  * fold.
+ *
+ * **It was 16, and 10px of it went to the panel.** Sixteen was chosen for the
+ * clearance alone and nothing measured it against what it cost: this is the
+ * one term in {@link parkedShell} that buys no chrome, and on a 13" laptop the
+ * expanded half is ~420px of which every ten is a standings row a reader does
+ * not get. Six still reads as clearance under a parked card — the fold is not
+ * a thing the card should touch — and hands the rest to the glass. The floor
+ * ({@link MIN_PARKED}) is unchanged, so the panel is only ever *offered* it.
  */
-export const SHELL_BREATH = 16;
+export const SHELL_BREATH = 6;
 
 /**
  * The card's flight: how long it takes to reach the park line, and to come

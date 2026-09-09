@@ -12200,6 +12200,160 @@ reclaimed height is actually worth, which is 14px of panel on the checker and
 ~50px per pane on the manager card and only a real twelve-team solve can say how
 many rows that buys.
 
+## The panes went wall to wall, and the seam took the History key
+
+Four changes to an open league card's expanded half, from a design handoff: the
+pane row bleeds to the card's own wall, the panel's foot and the seam's margins
+tighten, the parked shell's breath under the card gives 10px back, and the
+history strip is dissolved into the seam — the `History` key hangs on the right
+end of the cut, and the strip appears only once it is pressed. **Nothing on the
+wire moved** — no route, no query, no contract type, no payload field, no
+migration — and no token was added: every surface, radius, row height and cell
+width in it is what it already was.
+
+**The panes were cramped from both directions and neither was load-bearing.**
+They stopped a gutter short of the housing on each side, and a fixed run of
+chrome above them — the seam, the strip and its margin — took ~70px off a panel
+that is only ~420px tall on a 13" laptop. The four edits are one argument at four
+grains: **every pixel of this panel that is not a row is a row the reader does
+not get.**
+
+**The pane row is the one thing under the seam with nothing to line up with.**
+The panel's side padding is what puts the *summary's* rank windows on their line;
+the panes have no such neighbour, so the gutter they were paying was buying
+nothing. Bled by a negative margin — the trick the seam already turned — each
+takes it back: **+18px a side on a desktop and +14 on a phone, measured**, and
+the name column is what spends it. It is safe because the panel clips and its
+radius is the housing's own, so a row bled to the wall is cut by the card's edge:
+no second radius, no leaked shadow. The gutter is spelled in `LeagueTeams` rather
+than taken as a prop because both callers carry the same one; if that ever stops
+being true it has to come in as a prop, since a bleed against the wrong gutter is
+a pane overhanging the card with nothing on screen saying so.
+
+**`SHELL_BREATH` was 16 and nothing had measured what it cost.** It is the one
+term in `parkedShell` that buys no chrome — clearance between a parked card's
+foot and the fold — and six still reads as clearance. The floor (`MIN_PARKED`) is
+untouched, so the panel is only ever *offered* the difference. The panel's own
+foot went the same way, 14/18 → 10: the side padding lines the panes up and the
+seam's margins are the breath around the cut, but the bottom is only clearance.
+
+### The seam is a row now, and the key sits on the cut
+
+The strip was a 32px recess with a 10px margin **drawn whether or not anybody had
+ever asked for a history** — 42px of a capped panel holding one key and a
+sentence, above a seam spending 28px on a rule. Folded together they are ~41px
+once. Pressing `History` grows the chrome by the strip, which is the one moment
+there is a rail to put in it; everything after the press is what it always was.
+
+**The cut runs wall to wall and the key carries the gutter back as its own right
+margin**, which is where this parts company with the mock. The mock's seam row
+insets *both* ends by the gutter (its `margin: 8px -18px` and `padding: 0 18px`
+cancel exactly — measured on the render, the groove starts 18px in). That would
+narrow the cut on the lineup checker's card, which has no key to hang and which
+this handoff does not otherwise touch, and it would leave the rule reaching less
+far than the panes now do. So the row bleeds as the bare groove always did, and
+only the key comes back inside the gutter — the no-key case is byte-identical to
+today, and the key's right edge lands on the panel's content line exactly as the
+mock draws it.
+
+**The sentence became the key's name rather than a span beside it.** On the strip
+it was prose, dropped below `sm` where it broke mid-word; on the seam there is no
+line for it at any width. It is the accessible name and the `title` instead, so
+what a reader gets by pointing at the key or hearing it read is what the prose
+said, and the row it sat on is what the panel gets back.
+
+**`historyOpen` had to leave `TimelineView`, and that is the only structural
+change in the pass.** The key and the strip are the two halves of one gate and
+they now sit on either side of the seam, so the latch has to be above both. The
+cards stay hook-free — their own stated design — so each card's detail component
+lifted above `ExpandedPanel` and owns it: `LeagueDetail` renders the panel and
+`LeagueLineup` is the read, `TradeLeague` renders the panel and
+`TradeLeagueLineup` is the read. **The split is what keeps `usePanelCap`'s
+`mounted` honest**: everything expensive — the subject, the per-league read, the
+store subscription — stays inside the gate, and what a hundred shut cards pay for
+the outer half is one boolean apiece. The request gate did not move with the
+latch: `useTimeline(subject, historyOpen)` is still read beside the rail.
+
+`seamEnd` is gated on `mounted` with the children, so a card that has never been
+opened has no key in its document and no tab stop hidden inside a closed
+disclosure — verified at **0 buttons in a closed card**.
+
+**One redundancy fell out and was taken.** `TradeLeague` learned whether its card
+was open by seating a `display: contents` span, walking up to the `<details>` with
+`closest` and listening for `toggle`, because `TradeCard` had no reason to thread
+that state down. It threads it now, for the panel above, so the listener and the
+span are gone — a prop beside a listener would be two spellings of one fact.
+
+### Verified
+
+Rendered through a temporary `/preview` route against the real `LeagueCard`,
+`useActiveCard`, `PageShell`, `ExpandedPanel`, `TimelineView` and `LeagueTeams`,
+the real tokens and the real Tailwind build — the method the console-card,
+shares, rack and timeline passes established, since no database is reachable from
+where this was built — with `window.fetch` stubbed to answer the per-league and
+timeline reads from fixtures, then driven over CDP at 1280 and 390 in both
+schemes and deleted. The mechanics are the ones this file records:
+`--no-proxy-server`, `localhost` rather than `127.0.0.1`, a phone viewport from
+`Emulation.setDeviceMetricsOverride` with `mobile: true`, `data-theme` rather
+than `prefers-color-scheme`, `--disable-features=OverlayScrollbar`, the
+`--blink-settings=availablePointerTypes=4,…` flags without which every
+`pointer-fine:` rule on the card is inert, a **client-component** harness, and a
+CDP client over Node's own `WebSocket` since Playwright is not installed here.
+
+**The before-state was measured in the same harness** by stashing the diff, which
+is the check that the change is doing something. Against it:
+
+| | before | after |
+| --- | --- | --- |
+| Pane width, 1280 | 536.7px | **554.8px** (+18.1) |
+| Pane width, 390 | 163.8px | **177.9px** (+14.1) |
+| Pane height, 1280 | 505.5px | **550.6px** (+45.1) |
+| Pane height, 390 | 473.4px | **506.7px** (+33.3) |
+| Panel foot to fold | ~17px | **7px** |
+
+The width gains are the handoff's own +18 and +14 to the tenth. The height gains
+are under its +51 by the ~6px the app's key is taller than the mock's: the README
+prescribes `CONSOLE_KEY_PILL_SHELL` + `px-3 py-[3px]`, which at `--fs-11` is a
+27.1px key where the mock drew a 20px one, so the seam row is ~43px against its
+~37. The class string is what is normative.
+
+Every arm landed. The seam row measures **27.1px at 1280** with the groove running
+73.5 → 1067.7 (the card's own wall) and the key 1079.7 → 1173.5 — right edge on
+the panel's content line, a 12px gap between them (`sm:gap-3`); at 390 the groove
+runs 15 → 258.3 and the key ends at 361, which is 375 − 14, on a 10px gap. Pressing
+`History` took the key off the seam, put the groove back to the full 73.5 → 1191.5,
+raised the 32.1px strip, and cost the panes **16.9px once** — the "grows by the
+strip, and nothing moves after" rule end to end. A closed card draws the bare cut
+wall to wall at 2px, which is the lineup checker's own case and is what the
+deviation from the mock preserves.
+
+At both widths and in both schemes: `document.documentElement.scrollWidth` inside
+the viewport, **zero unclipped elements past it** (the three that are past it are
+the card's own sheen, glow and floor spans, each clipped by the decorative
+wrapper), exactly one `<h1>`, the key unclipped and named `History — Rewind this
+league, priced at today's values`, and no console output but the dev server's own
+React-DevTools and HMR lines plus the sandbox's cert refusals for the headshot
+CDN. 2,095 unit tests pass; `lint`, `typecheck` and `build` are clean.
+
+**Two assertions in `panel-cap.test.ts` carried the old sum as a literal** and
+were rewritten to the constants, which is what the handoff asked be checked. One
+of them is now spelled from the viewport rather than from `shell.height`, so it is
+the sentence — what is left under the panel's top edge is the screen, less where
+the card parks, less the breath under it, less the header — rather than
+`panelRoom`'s own expression restated.
+
+**Not verified against real data**, which is the gap to close first: every number
+above is a fixture, and the trade card was not driven at all — its fixtures are a
+`Trade` plus a `TradeCardView` plus a per-league fetch, so its half of the split
+is typechecked and built rather than rendered. Four things a render here cannot
+check — how many more rows the +45px actually buys on a real twelve-team solve,
+since the fixture's twelve teams already fit; whether a real account's league
+names read better for the 18px the name column gains, which is the change's whole
+claim; whether the bled panes read as *bled* rather than as a card with no gutter
+on a page of a hundred; and whether the lineup checker's own panel, which takes
+the seam and the foot but has no key, still reads as intended with its 22px sync
+row 8px under the cut.
+
 ## The identity plate became a billet, and the win rate the hero
 
 `/manager`'s header was the one object on the page not made of metal. Every

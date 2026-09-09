@@ -59,12 +59,31 @@ export function ExpandedPanel({
   children,
   open,
   closing,
+  seamEnd,
 }: {
   children: ReactNode;
   /** Whether the card's disclosure is open — see `useActiveCard`. */
   open: boolean;
   /** Whether it is closing: open for as long as the collapse takes. */
   closing: boolean;
+  /**
+   * A control to hang on the right end of the cut, inside the panel's own
+   * gutter — today the manager and trade cards' `History` key.
+   *
+   * **The seam is a row rather than a bare rule because of what it saves.**
+   * The key it carries used to sit in a 32px recess strip of its own with a
+   * 10px margin under it, present whether or not the reader had ever opened
+   * the history — 42px of a capped panel spent on one key and a sentence,
+   * against a seam that was 28px of cut and margin doing nothing else. Folded
+   * together they are ~41px once, and the ~29 that buys is two more standings
+   * rows and another seat. The strip comes back at its full height the moment
+   * the key is pressed, which is the one time it has a rail to hold.
+   *
+   * **It is gated on `mounted` with the children**, so a card that has never
+   * been opened has no key in the document and no tab stop hidden inside a
+   * closed disclosure.
+   */
+  seamEnd?: ReactNode;
 }) {
   const { ref, style, mounted } = usePanelCap<HTMLDivElement>(open, closing);
 
@@ -82,23 +101,46 @@ export function ExpandedPanel({
       // The housing is the `<details>` and this is its bottom half, so the
       // panel carries the same `14px` / `18px` the summary above it does —
       // which is what puts the panes' edges on the line the rank windows end
-      // on — and the groove below cancels it to run edge to edge. A column, so
-      // the rail holds its height, the browser takes the rest and the two
-      // panes scroll their own lists — see `Pane`.
-      className="relative box-border flex flex-col overflow-hidden px-3.5 pb-3.5 sm:px-[1.125rem] sm:pb-[18px] pointer-fine:[perspective:1400px]"
+      // on — and the seam below cancels it to run edge to edge, as the pane
+      // row inside `LeagueTeams` now does for its own reason. A column, so the
+      // rail holds its height, the browser takes the rest and the two panes
+      // scroll their own lists — see `Pane`.
+      //
+      // **The foot is 10px, where it was the gutter's own 14/18.** It is the
+      // one inset on the panel that nothing is measured against — the side
+      // padding lines the panes up with the rank windows above them, and the
+      // seam's margins are the breath around the cut, but the bottom is only
+      // clearance between the last row and the card's edge. Ten reads as that
+      // and hands the difference to the glass.
+      className="relative box-border flex flex-col overflow-hidden px-3.5 pb-2.5 sm:px-[1.125rem] pointer-fine:[perspective:1400px]"
       style={style}
     >
       {/* The seam. It is the panel's first child rather than the summary's
           last, because it exists only while the expanded half does: a closed
-          card is one housing with nothing to cut in two. Its top margin is the
-          breath the summary's bottom padding used to give the windows above it,
-          and its bottom margin is the panel's own top inset — `12px 0 18px` on
-          a desktop, `10px 0 14px` on a phone — so the two are one spelling
-          with the groove between them. */}
-      <span
-        aria-hidden
-        className="-mx-3.5 mb-2.5 mt-3 h-0.5 shrink-0 bg-[image:var(--card-seam-groove)] sm:-mx-[1.125rem] sm:mb-3 sm:mt-3.5"
-      />
+          card is one housing with nothing to cut in two.
+
+          **It is a row now, not a rule**, so a control can sit on the cut —
+          see `seamEnd` for what that folds away. The row breaks the panel's
+          padding exactly as the bare groove always did, and it is the *key*
+          that carries the gutter back as its own right margin rather than the
+          row carrying it as padding: with no key the cut runs wall to wall,
+          which is what it does today and what the lineup checker's panel — the
+          one caller with no key to hang — must keep. The mock insets both ends
+          of the cut; that would narrow it on a card this change does not
+          otherwise touch, and the panes below it now run to the wall, so the
+          rule reaching further than they do is the wrong way round.
+
+          The margins are the breath around it: 8px either side, against the
+          `12/18` and `10/14` the two halves used to spend separately. */}
+      <div className="-mx-3.5 my-2 flex shrink-0 items-center gap-2.5 sm:-mx-[1.125rem] sm:gap-3">
+        <span
+          aria-hidden
+          className="h-0.5 min-w-0 flex-1 bg-[image:var(--card-seam-groove)]"
+        />
+        {mounted && seamEnd ? (
+          <span className="mr-3.5 shrink-0 sm:mr-[1.125rem]">{seamEnd}</span>
+        ) : null}
+      </div>
       {/* **Nothing is rendered while the card is shut** — see `usePanelCap`'s
           `mounted` for the measurement. The children are still *created* by the
           caller either way, which is only a descriptor object; what this saves

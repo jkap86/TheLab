@@ -336,7 +336,25 @@ export function LeagueTeams({
     // item refuses to go below its content, the cap has nothing to bite on, and
     // a twelve-team table pushes the page exactly as it did before.
     <div className="flex min-h-0 flex-1 flex-col pointer-fine:[transform-style:preserve-3d]">
-      <div className="flex min-h-0 flex-1 items-stretch gap-1.5 sm:gap-2.5 lg:gap-3.5 pointer-fine:[transform:translateZ(7px)]">
+      {/* **The row runs to the housing wall**, which is the whole of what the
+          negative gutter is for: the panel's side padding is what lines the
+          *summary's* windows up, and the panes are the one thing under the
+          seam that has nothing above it to line up with. Bled, each pane takes
+          the gutter's width back — 18px a side on a desktop, 14 on a phone —
+          and the name column is what spends it, which at 390 is the difference
+          between a readable team name and an initial.
+
+          It is safe because the panel clips (`overflow-hidden`) and its radius
+          is the housing's own, so a row bled to the wall is cut by the card's
+          edge: no second radius, no leaked shadow. The gap between the panes
+          does not move.
+
+          The gutter is spelled here rather than taken as a prop because both
+          callers — this card and the trade card — carry the same
+          `px-3.5 sm:px-[1.125rem]`. If that ever stops being true it has to
+          come in as a prop; a bleed against the wrong gutter is a pane
+          overhanging the card with nothing on screen saying so. */}
+      <div className="-mx-3.5 flex min-h-0 flex-1 items-stretch gap-1.5 sm:-mx-[1.125rem] sm:gap-2.5 lg:gap-3.5 pointer-fine:[transform:translateZ(7px)]">
         <Pane>
           <PaneLedge tight>
             {/* **One row above `lg`, two below it**, and the row is the head row

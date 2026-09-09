@@ -1,13 +1,6 @@
 "use client";
 
-import {
-  memo,
-  useEffect,
-  useMemo,
-  useRef,
-  useState,
-  type MouseEvent,
-} from "react";
+import { memo, useMemo, useState, type MouseEvent } from "react";
 
 import type {
   LineupColumn,
@@ -46,7 +39,10 @@ import {
 // module to the bundler, so a `TimelineView` reached through the barrel would
 // ship the rail, the rewind and the fetch hook to every page importing anything
 // shared. Named here, the chunk belongs to this route.
-import { TimelineView } from "@/features/shared/ui/timeline";
+import {
+  TimelineHistoryKey,
+  TimelineView,
+} from "@/features/shared/ui/timeline";
 
 import {
   assetPrice,
@@ -543,14 +539,14 @@ export const TradeCard = memo(function TradeCard({
             roster's drawer — and now on the manager card's own sizing too. It
             used to be the one caller passing `parked={false}`; there is no
             such thing as an un-parked card any more. See `panelFit`. */}
-        <ExpandedPanel open={open} closing={open && !lit}>
-          <TradeLeague
-            leagueId={trade.league_id}
-            season={season}
-            username={username}
-            teamsColumn={teamsColumn}
-          />
-        </ExpandedPanel>
+        <TradeLeague
+          leagueId={trade.league_id}
+          season={season}
+          username={username}
+          teamsColumn={teamsColumn}
+          open={open}
+          closing={open && !lit}
+        />
       </details>
     </li>
   );
@@ -651,10 +647,9 @@ const NO_KTC: ManagerLineupsPayload["ktc"] = [];
  * league with no rosters can still have a log worth reading.
  */
 function TradeLeague({
-  leagueId,
-  season,
-  username,
-  teamsColumn,
+  open,
+  closing,
+  ...detail
 }: {
   leagueId: string;
   season: string;
@@ -669,32 +664,73 @@ function TradeLeague({
    * usable.
    */
   teamsColumn: LineupColumn;
+  /** Whether the card's disclosure is open — see `useActiveCard`. */
+  open: boolean;
+  /** Whether it is closing: open for as long as the collapse takes. */
+  closing: boolean;
+}) {
+  // **Whether the reader has asked for this league's history.** Held here for
+  // the manager card's reason, which is the same card: the key is the panel's
+  // `seamEnd` and the strip it opens is `TimelineView`'s, below the cut, so the
+  // latch has to sit above both. One-way, and the only thing this outer half
+  // owns — everything the read costs is in `TradeLeagueLineup`, which the panel
+  // still gates on `mounted`.
+  const [historyOpen, setHistoryOpen] = useState(false);
+
+  return (
+    <ExpandedPanel
+      open={open}
+      closing={closing}
+      seamEnd={
+        historyOpen ? undefined : (
+          <TimelineHistoryKey onOpen={() => setHistoryOpen(true)} />
+        )
+      }
+    >
+      <TradeLeagueLineup {...detail} open={open} historyOpen={historyOpen} />
+    </ExpandedPanel>
+  );
+}
+
+/**
+ * The read itself, and everything it draws.
+ *
+ * **Split from the latch above so a shut card mounts none of it** — see
+ * `usePanelCap`'s `mounted`. The three sentences it can say are documented on
+ * `TradeLeague`.
+ */
+function TradeLeagueLineup({
+  leagueId,
+  season,
+  username,
+  teamsColumn,
+  open,
+  historyOpen,
+}: {
+  leagueId: string;
+  season: string;
+  username: string | null;
+  teamsColumn: LineupColumn;
+  open: boolean;
+  historyOpen: boolean;
 }) {
   // **Whether the card has been opened, held here rather than in `TradeCard`**,
   // which is what keeps that component hook-free — its own stated design, and
   // `league-card.tsx`'s: the one interaction a card owns is the disclosure, and
   // the state anything *inside* it needs lives below it.
   //
-  // **One-way, like `TimelineView`'s own history gate.** Once a card has been
-  // opened the answer stands for as long as it is mounted, so closing it must
-  // not throw the read away and re-opening must not pay for it again — which is
-  // the whole reason a `<details>` hiding its body rather than unmounting it is
-  // an advantage here rather than the cost it is one paragraph up.
-  const [opened, setOpened] = useState(false);
-  const ref = useRef<HTMLSpanElement | null>(null);
-
-  useEffect(() => {
-    const card = ref.current?.closest("details");
-    if (!card) return;
-    const onToggle = () => {
-      if (card.open) setOpened(true);
-    };
-    card.addEventListener("toggle", onToggle);
-    // A card already open on mount — a re-render that remounts this subtree
-    // rather than a press — has no `toggle` coming to tell us so.
-    if (card.open) setOpened(true);
-    return () => card.removeEventListener("toggle", onToggle);
-  }, []);
+  // **One-way.** Once a card has been opened the answer stands for as long as
+  // it is mounted, so a re-render must not throw the read away and must not pay
+  // for it again; the store behind `useLeagueLineup` keeps it, bounded, so even
+  // a latch released by an unmount costs nothing.
+  //
+  // **`open` is a prop now, where this used to listen for the `<details>`' own
+  // `toggle` and find it with `closest`.** That seat existed because `TradeCard`
+  // had no reason to thread the disclosure's state down; it threads it now, for
+  // the panel above, so a listener beside the prop would be two spellings of one
+  // fact — and the `display: contents` span that anchored it is gone with it.
+  const [opened, setOpened] = useState(open);
+  if (open && !opened) setOpened(true);
 
   // `useMemo` so the identity is stable across the renders this card takes for
   // reasons that have nothing to do with its league — the subject is a
@@ -708,15 +744,11 @@ function TradeLeague({
 
   return (
     <>
-      {/* **`display: contents`, so the panel keeps laying out `TimelineView`'s
-          three parts directly.** The bay, the browser and the caveat are the
-          panel's own flex items — the rail holds its height, the browser takes
-          the rest, and the two panes scroll their own lists — and a box here
+      {/* **A fragment, never a box.** `TimelineView`'s parts are the panel's
+          own flex items — the strip holds its height, the browser takes the
+          rest, and the two panes scroll their own lists — and a wrapper here
           would make them one item and the panel a box with a scrollbar in it.
-          This is `md:contents`' trick, spent on a seat for the ref rather than
-          on a layout: the element is still in the DOM tree, so `closest` finds
-          the `<details>` above it; only its box is absent. */}
-      <span ref={ref} aria-hidden className="contents" />
+          It would flatten the housing's perspective with them. */}
       <TimelineView
         subject={subject}
         entry={payload?.entry ?? null}
@@ -734,6 +766,7 @@ function TradeLeague({
         managerRosterId={
           payload?.entry?.teams.find((t) => t.is_manager)?.roster_id ?? null
         }
+        historyOpen={historyOpen}
       >
         {loading ? (
           <p className="m-0 font-mono text-[length:var(--fs-11)] uppercase tracking-[0.16em] text-readout-label">

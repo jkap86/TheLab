@@ -52,6 +52,21 @@ import { TimelineRail } from "./timeline-rail";
  * `History` key and `useTimeline` is disabled until it is pressed. Everything
  * after the press is what it always was, so a reader who opens the history twice
  * pays once.
+ *
+ * **The key itself is no longer here, and the strip is no longer always.** Both
+ * used to be one 32px recess with a 10px margin, drawn whether or not anybody
+ * had ever asked for a history — 42px of a capped panel to hold one key and a
+ * sentence. The key is `TimelineHistoryKey` now, hung on the card's own seam
+ * (`ExpandedPanel`'s `seamEnd`), and this draws nothing at all until it is
+ * pressed. What the panel gets back is two standings rows and a seat; what it
+ * costs is that pressing grows the chrome once, by the strip, which is the one
+ * moment there is a rail to put in it.
+ *
+ * **So `historyOpen` is a prop rather than state.** The key and the strip are
+ * the two halves of one gate and they are now on either side of the seam, so
+ * the latch lives above both — in the card's own detail component. The request
+ * gate does not move with it: `useTimeline(subject, historyOpen)` is still read
+ * here, which is what keeps "what the rail costs" beside the rail.
  */
 export function TimelineView({
   subject,
@@ -60,6 +75,7 @@ export function TimelineView({
   ktc,
   slots,
   managerRosterId = null,
+  historyOpen,
   children,
 }: {
   /** Which league this replays, and which boards to price its past against. */
@@ -92,6 +108,11 @@ export function TimelineView({
    * same team the present one does. Null until the lineups read lands.
    */
   managerRosterId?: number | null;
+  /**
+   * Whether the reader has pressed {@link TimelineHistoryKey}. One-way and
+   * owned above the seam — see the note on this component.
+   */
+  historyOpen: boolean;
   /** What to draw where there is no table to draw — the card's empty state. */
   children: ReactNode;
 }) {
@@ -101,13 +122,8 @@ export function TimelineView({
   // the rail additive rather than something the body has to wait for.
   const [back, setBack] = useState(0);
 
-  // Whether the reader has asked for the history at all — see the note above.
-  // Local and one-way: once opened it stays open for the life of this card, so
-  // scrubbing never re-arms a gate.
-  const [opened, setOpened] = useState(false);
-
   const { payload, loading, error, loadEarlier, loadingEarlier, earlierError } =
-    useTimeline(subject, opened);
+    useTimeline(subject, historyOpen);
 
   const moves = timelineMoveCount(payload);
   // Memoized so the entry below can take it as a dependency and be handed it:
@@ -143,90 +159,67 @@ export function TimelineView({
 
   return (
     <>
-      {/* Five states in one seat, and the seat is **the same height in all of
-          them**, so pressing `History` moves nothing under it — which matters
-          here more than it would anywhere else, because what sits under it is a
-          twelve-row table a reader is in the middle of looking at.
+      {/* **Four states in one seat, and the seat is the same height in all of
+          them**, so nothing moves under the reader once the history is up —
+          which matters here more than it would anywhere else, because what
+          sits under it is a twelve-row table they are in the middle of reading.
 
-          Unopened is a key and nothing else: no request has been made, so there
-          is nothing yet to say about whether this league has a history. Opened
-          and still reading says so, because the read is the heaviest one this
-          page makes and a key that swallowed a press for a second would read as
-          broken. A failure says so too, for the reason `useTimeline` reports it
-          at all — a rail that opened onto nothing is otherwise indistinguishable
-          from a league with no moves.
-
-          Then: a rail where there is something to scrub, and a word where there
-          is not. A league nobody has moved a player in has no moves to reverse,
-          and a league whose rosters are not stored has nothing to rewind from;
-          both come back as no timeline. Drawing nothing at all would be right
-          for something nobody had asked for and is wrong for an answer somebody
+          There were five, and the fifth was the reason this strip was drawn at
+          all times: an unopened seat holding a `History` key and a sentence
+          about it. That key hangs on the card's seam now, so an unopened
+          history has no strip — see this component's own note for what the
+          panel gets back. What is left are the four states a press can produce.
+          Reading says so, because the read is the heaviest one this page makes
+          and a key that swallowed a press for a second would read as broken. A
+          failure says so too, for the reason `useTimeline` reports it at all —
+          a rail that opened onto nothing is otherwise indistinguishable from a
+          league with no moves. Then a rail where there is something to scrub,
+          and a word where there is not: a league nobody has moved a player in
+          has no moves to reverse, and one whose rosters are not stored has
+          nothing to rewind from. Drawing nothing for either would be right for
+          something nobody had asked for and is wrong for an answer somebody
           has — a control that vanishes on press is worse than one that says it
           found nothing.
 
           **It is one recess strip, not a well.** It was a 56px `CONSOLE_WELL`
           plus a 16px margin holding a rail that wrapped to three parts on a
           phone — ~94px of a 390px card before the first row of the table it
-          sits over. It is a 32px strip now (30 on a phone), the same
-          `--recess-bg` + `--track-shadow` the rail's own bay already wore,
-          with every part of the rail on one line; see `TimelineRail` for the
-          parts. The height is **fixed** rather than a floor, because a fixed
-          height is what makes the five states one height, and a fixed 32px is
-          what the `History` key had to shrink to fit (`py-[3px] px-3`, on the
-          padding-free pill shell — appending a smaller padding to
-          `CONSOLE_KEY_PILL`'s `px-4 py-2` is decided by Tailwind's emit order,
-          the trap that shell exists to keep a key out of). */}
-      <div
-        className="mb-2 flex h-[30px] shrink-0 flex-nowrap items-center gap-1.5 rounded-full bg-[color:var(--recess-bg)] pl-2.5 pr-[5px] shadow-[var(--track-shadow)] sm:mb-2.5 sm:h-8 sm:gap-2.5 sm:pl-3.5 sm:pr-1.5 pointer-fine:[transform:translateZ(4px)]"
-      >
-        {!opened && (
-          <>
-            <button
-              type="button"
-              onClick={() => setOpened(true)}
-              className={`${CONSOLE_KEY_PILL_SHELL} border-foreground/10 bg-[image:var(--key-bg)] px-3 py-[3px] text-foreground/80 shadow-[var(--key-shadow)] hover:text-readout`}
-            >
-              History
-            </button>
-            {/* **Dropped below `sm` rather than truncated**, the rule the theme
-                key's legend and the standing plate's points rank both keep: at
-                390 it breaks mid-word, and a sentence cut to "…through its
-                stored …" reads as a rendering fault where the key beside it
-                already says what it does. */}
-            <span className="hidden min-w-0 truncate text-[length:var(--fs-12)] text-foreground/45 sm:inline">
-              Rewind this league, priced at today&rsquo;s values
+          sits over. It is a 32px strip (30 on a phone), the same `--recess-bg`
+          + `--track-shadow` the rail's own bay already wore, with every part of
+          the rail on one line; see `TimelineRail` for the parts. The height is
+          **fixed** rather than a floor, because a fixed height is what makes
+          the four states one height. */}
+      {historyOpen && (
+        <div className="mb-2 flex h-[30px] shrink-0 flex-nowrap items-center gap-1.5 rounded-full bg-[color:var(--recess-bg)] pl-2.5 pr-[5px] shadow-[var(--track-shadow)] sm:mb-2.5 sm:h-8 sm:gap-2.5 sm:pl-3.5 sm:pr-1.5 pointer-fine:[transform:translateZ(4px)]">
+          {loading && (
+            <span className="min-w-0 truncate font-mono text-[length:var(--fs-11)] uppercase tracking-[0.16em] text-readout-label">
+              Reading history…
             </span>
-          </>
-        )}
+          )}
 
-        {opened && loading && (
-          <span className="min-w-0 truncate font-mono text-[length:var(--fs-11)] uppercase tracking-[0.16em] text-readout-label">
-            Reading history…
-          </span>
-        )}
+          {error !== null && (
+            <span className="min-w-0 truncate text-[length:var(--fs-12)] text-error">
+              {error}
+            </span>
+          )}
 
-        {opened && error !== null && (
-          <span className="min-w-0 truncate text-[length:var(--fs-12)] text-error">
-            {error}
-          </span>
-        )}
+          {!loading && error === null && moves === 0 && (
+            <span className="min-w-0 truncate font-mono text-[length:var(--fs-11)] uppercase tracking-[0.16em] text-readout-label">
+              No stored moves to rewind through
+            </span>
+          )}
 
-        {opened && !loading && error === null && moves === 0 && (
-          <span className="min-w-0 truncate font-mono text-[length:var(--fs-11)] uppercase tracking-[0.16em] text-readout-label">
-            No stored moves to rewind through
-          </span>
-        )}
-
-        {moves > 0 && (
-          <TimelineRail
-            stop={stop}
-            moves={moves}
-            boundaries={boundaries}
-            players={players}
-            onChange={setBack}
-          />
-        )}
-      </div>
+          {moves > 0 && (
+            <TimelineRail
+              stop={stop}
+              moves={moves}
+              boundaries={boundaries}
+              players={players}
+              onChange={setBack}
+            />
+          )}
+        </div>
+      )}
 
       {/* **The three parts are the panel's own flex items**, which is what makes
           the capped panel a fixed-height column rather than a box with a
@@ -295,6 +288,49 @@ export function TimelineView({
     </>
   );
 }
+
+/**
+ * The press that asks for a league's history, hung on the card's seam.
+ *
+ * **It is a component here rather than markup in the card** because the card is
+ * not the only thing that knows what it does: the strip it opens is
+ * {@link TimelineView}'s, and a key whose legend, chrome and sentence lived in
+ * two cards would be two spellings of one control on two pages drawing one
+ * league. Both cards fill `ExpandedPanel`'s `seamEnd` with this.
+ *
+ * **The sentence became the key's name rather than a span beside it.** On the
+ * old strip it was a line of prose — dropped below `sm`, where it broke
+ * mid-word — and on the seam there is no line to put it on at any width. It is
+ * the accessible name and the tooltip instead, so what a reader gets by
+ * pointing at the key or hearing it read is what the prose said, and what the
+ * card gets back is the row that prose was sitting on.
+ *
+ * **One-way, and the latch is the caller's.** Once pressed there is nothing
+ * left for this to do, so the caller stops rendering it and the strip below the
+ * seam takes over.
+ *
+ * The chrome is the everyday key's, at a tighter gutter: `px-3 py-[3px]` on the
+ * **padding-free** `CONSOLE_KEY_PILL_SHELL` rather than on `CONSOLE_KEY_PILL`,
+ * whose own `px-4 py-2` would win the coin flip — two base utilities of the same
+ * specificity are settled by Tailwind's emit order and the scale is emitted
+ * ascending, so a key silently laid out at the standard gutter still looks like
+ * a key. It is the trap that shell exists to keep a key out of.
+ */
+export function TimelineHistoryKey({ onOpen }: { onOpen: () => void }) {
+  return (
+    <button
+      type="button"
+      onClick={onOpen}
+      title={HISTORY_KEY_TITLE}
+      className={`${CONSOLE_KEY_PILL_SHELL} border-foreground/10 bg-[image:var(--key-bg)] px-3 py-[3px] text-foreground/80 shadow-[var(--key-shadow)] hover:text-readout`}
+    >
+      History
+      <span className="sr-only"> — {HISTORY_KEY_TITLE}</span>
+    </button>
+  );
+}
+
+const HISTORY_KEY_TITLE = "Rewind this league, priced at today\u2019s values";
 
 /** A stable empty, so a render before the payload lands changes no identity. */
 const EMPTY_PLAYERS = {};
