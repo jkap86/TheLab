@@ -50,27 +50,106 @@ function matchBracket(html: string, start: number): number {
   return -1;
 }
 
-/** Parse the literal assigned to `var <name> = <open>…;`, or null if absent. */
-function extractVar<T>(html: string, name: string, open: "[" | "{"): T | null {
-  const assign = html.indexOf(`var ${name}`);
-  if (assign === -1) return null;
-  const start = html.indexOf(open, assign);
-  if (start === -1) return null;
-  const end = matchBracket(html, start);
-  if (end === -1) throw new Error(`KTC: unterminated \`${name}\` literal`);
-  return JSON.parse(html.slice(start, end + 1)) as T;
+/**
+ * How far past `var <name>` to look for the `getElementById` naming its island.
+ * The call sits on the same line as the assignment; 200 characters is room for
+ * that line and no room to wander into the next statement.
+ */
+const ISLAND_LOOKAHEAD = 200;
+
+/** The id of the island `var <name> = JSON.parse(getElementById(…))` points at. */
+function islandId(html: string, assign: number): string | null {
+  const call = html.slice(assign, assign + ISLAND_LOOKAHEAD);
+  return /getElementById\(\s*['"]([^'"]+)['"]\s*\)/.exec(call)?.[1] ?? null;
 }
 
-/** Extract and parse the `playersArray` literal from a KTC rankings page. */
-export function extractPlayersArray(html: string): KtcPlayer[] {
-  const assign = html.indexOf("playersArray");
-  if (assign === -1) throw new Error("KTC: `playersArray` not found in page");
-  const start = html.indexOf("[", assign);
-  if (start === -1) throw new Error("KTC: `[` not found after `playersArray`");
+/**
+ * The literal inside `<script … id="…">…</script>`, or null where no such
+ * element exists. Located by the id attribute rather than by a tag pattern,
+ * since the two islands this reads spell their attributes in opposite orders,
+ * and closed by {@link matchBracket} rather than by the next `</script>` —
+ * same argument as everywhere else here, and it costs nothing to keep one rule.
+ */
+function islandLiteral(html: string, id: string, open: "[" | "{"): string | null {
+  const attr = html.indexOf(`id="${id}"`);
+  if (attr === -1) return null;
+  const tagEnd = html.indexOf(">", attr);
+  if (tagEnd === -1) return null;
+  const start = html.indexOf(open, tagEnd);
+  if (start === -1) return null;
   const end = matchBracket(html, start);
-  if (end === -1) throw new Error("KTC: unterminated `playersArray` literal");
+  if (end === -1) throw new Error(`KTC: unterminated \`#${id}\` island`);
+  return html.slice(start, end + 1);
+}
 
-  const parsed = JSON.parse(html.slice(start, end + 1)) as KtcPlayer[];
+/**
+ * The literal `var <name>` holds, from wherever the page now keeps it.
+ *
+ * **KTC moved its data out of the assignment and into a JSON island**, which is
+ * the change this exists to absorb. A board page carried
+ * `var playersArray = [ … ];` inline; it now carries
+ *
+ * ```
+ * <script type="application/json" id="ktc-players">[ … ]</script>
+ * …
+ * var playersArray = JSON.parse(document.getElementById('ktc-players').textContent);
+ * ```
+ *
+ * and the island sits *before* the assignment — right after `<body>`, where the
+ * old literal was two megabytes further down — so a forward scan from the
+ * variable's name never reaches it. What that scan reaches instead is the next
+ * `[` in the file, which on the live dynasty page is `var oneQBPlayers`, a
+ * three-entry featured list. **That is the failure this is written against and
+ * it is the quiet kind**: a syntactically perfect array of the wrong thing,
+ * caught only because `validateKtcBoard` refused to reconcile a 500-player
+ * board down to three. Player pages moved the same way, to `#pd-superflex`,
+ * `#pd-oneqb` and `#pd-players`.
+ *
+ * The island is resolved **through the indirection the page itself declares** —
+ * the id is read out of the `getElementById` call rather than spelled here — so
+ * a renamed island needs no edit, and neither does a fourth one.
+ *
+ * The inline form is still read where it is genuinely present, so a revert
+ * needs no edit either. **What the fallback now requires is that the bracket
+ * belong to the assignment**: only `=` and whitespace may sit between the two,
+ * because "the next `[` anywhere in the file" is exactly how a moved literal
+ * came back as another variable's value. Absent is the honest answer there, and
+ * an absent board is refused loudly one layer up where a wrong one was not.
+ */
+function varLiteral(html: string, name: string, open: "[" | "{"): string | null {
+  const assign = html.indexOf(`var ${name}`);
+  if (assign === -1) return null;
+
+  const id = islandId(html, assign);
+  if (id !== null) return islandLiteral(html, id, open);
+
+  const start = html.indexOf(open, assign);
+  if (start === -1) return null;
+  if (!/^\s*=\s*$/.test(html.slice(assign + `var ${name}`.length, start))) {
+    return null;
+  }
+  const end = matchBracket(html, start);
+  if (end === -1) throw new Error(`KTC: unterminated \`${name}\` literal`);
+  return html.slice(start, end + 1);
+}
+
+/** Parse the literal `var <name>` holds — island or inline — or null if absent. */
+function extractVar<T>(html: string, name: string, open: "[" | "{"): T | null {
+  const literal = varLiteral(html, name, open);
+  return literal === null ? null : (JSON.parse(literal) as T);
+}
+
+/** Extract and parse the `playersArray` board from a KTC rankings page. */
+export function extractPlayersArray(html: string): KtcPlayer[] {
+  if (html.indexOf("var playersArray") === -1) {
+    throw new Error("KTC: `playersArray` not found in page");
+  }
+  const literal = varLiteral(html, "playersArray", "[");
+  if (literal === null) {
+    throw new Error("KTC: could not reach the `playersArray` literal or island");
+  }
+
+  const parsed = JSON.parse(literal) as KtcPlayer[];
   if (!Array.isArray(parsed) || parsed.length === 0) {
     throw new Error("KTC: parsed `playersArray` was empty");
   }

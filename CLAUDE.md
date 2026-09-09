@@ -3445,6 +3445,90 @@ arrives with: `history-stats.ts`, `getKtcValuesAsOf` and `getKtcSfHistoryAsOf`
 (the comps reads), and `rosterKtcValue` — the last one because the guard it
 carries has nothing to guard against here; see the lineups section.
 
+### KTC moved its board into a JSON island
+
+On 8 September 2026 the values stopped updating, and the interesting part is
+what that looked like from outside: nothing. The stored board sat exactly as it
+was, every figure on every card was the price it had been, and the only symptom
+was that the prices were yesterday's. **`validateKtcBoard` is the reason there
+was a board to be stale at all** — see below.
+
+**KTC stopped embedding the array and started referencing it.** A rankings page
+carried `var playersArray = [ … ];` inline; it now carries
+
+```
+<script type="application/json" id="ktc-players">[ … ]</script>
+…
+var playersArray = JSON.parse(document.getElementById('ktc-players').textContent);
+```
+
+with the island right after `<body>` — two megabytes *before* the assignment,
+where the old literal was two megabytes after it. `extractPlayersArray` scanned
+forward from the variable's name for the next `[`, and forward from there the
+island is behind it. **What the scan reached instead was `var oneQBPlayers`**, a
+three-entry featured list one line further down: a syntactically perfect array
+of the wrong thing, parsed without error. Player pages moved identically, to
+`#pd-superflex`, `#pd-oneqb` and `#pd-players`, so the history backfill broke on
+the same day for the same reason.
+
+**The completeness gate is what turned a catastrophe into a delay.** The sync's
+reconciliation nulls every stored row the response omits, so a three-entry
+"board" would have nulled the other 497 and stamped them fresh — every KTC
+figure in the app gone, with `updated_at` claiming they had just been confirmed.
+`validateKtcBoard` refused both boards on the 300/200 floors, wrote nothing,
+advanced no timestamp, and said so once every fifteen minutes. `./validate`'s
+header describes this exact scenario as the thing it exists for, in the
+abstract, three months before it happened.
+
+**The island is resolved through the indirection the page declares**, never by a
+spelled id: `varLiteral` reads the id out of the `getElementById` call beside
+the assignment and then takes that element's literal. A renamed island needs no
+edit, and a fourth one needs no edit either — which is the whole reason to
+follow the reference rather than hardcode `#ktc-players`. The inline form is
+still read where a page genuinely carries one, so a revert needs no edit in the
+other direction.
+
+**And the inline fallback gained the guard whose absence was the bug**: only `=`
+and whitespace may sit between `var <name>` and its bracket. "The next `[`
+anywhere in the file" is precisely how a moved literal comes back as another
+variable's value, and the honest answer to a name whose literal is not there is
+*absent* — which the layer above refuses loudly — rather than *whatever was
+nearby*, which it cannot tell from a real board. `parse.test.ts` pins the
+regression with a fixture shaped like the live page, and the fixture
+discriminates: the old algorithm returns 1 entry where the island holds 4.
+
+**`npm run ktc:doctor` is what found it** (`scripts/diagnose-ktc.ts`, and the
+README's Scripts table). Four different faults produce the one symptom — the
+loop not running, a failed scrape, a refused board, and a matcher that resolves
+nothing and leaves a fully populated table whose every `sleeper_id` is null —
+and only the last two leave any trace. It walks the switches, the stored board,
+the players map, a live scrape put through the real validator and matcher, and
+what `getKtcBoards` hands a card, then names the first broken link. Read-only
+throughout, so it is safe to point at a running deployment; `--offline` skips
+the scrape where the network cannot reach KTC.
+
+#### Verified
+
+Against the live site and the local database on the day it landed. Both boards
+parse to their true sizes — **dynasty 500, redraft 373** — and both pass
+`validateKtcBoard`; the matcher resolves **414 of 416** dynasty players and
+**371 of 373** redraft ones; a live player page yields **1,277 day rows** from
+2023-03-10 to 2026-09-09 with both formats merged. A forced sync wrote both
+boards and the doctor's verdict came back clean: fresh, identified and readable,
+`484` dynasty players and `36` picks reaching the read path, `373` redraft.
+2,101 unit tests pass (six new — the island, a renamed island, the fall-through
+regression, the bracket guard, the inline form, and a player page's two
+islands); `lint`, `typecheck` and `build` are clean.
+
+**One pre-existing gap surfaced and was deliberately not closed.** The dynasty
+board carries **84** `RDP` rows and `parseKtcPickName` understands **36** of
+them: the tiered form (`2027 Early 1st`) parses and the 48 exact-slot rows for
+the current class (`2026 Pick 1.01` … `4.12`) do not. It predates this — the
+stored board carries the same 48/36 split — and closing it is a change to the
+pick *vocabulary*, since `ktcPickKey` is keyed by (season, round, tier) and an
+exact slot has no tier. What it costs today is that a 2026 pick is unpriced on
+every card, which is the same em dash an unpriced pick has always drawn.
+
 ## The tools console
 
 `/tools` is one bevelled panel: the account readout on the top row, a rule,
