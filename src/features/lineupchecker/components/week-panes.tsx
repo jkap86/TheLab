@@ -339,20 +339,16 @@ function LineupPane({
               one claim. A pane whose set total already equals it is simply
               level.
 
-              **It is dropped below `lg`, and that is a measurement.** A pane is
-              ~165px at 390 and its track ~148 of that; the labelled pair is
-              160px there even with the legend already gone and the figures
-              already stepped down, so it overflowed the pane's own
-              `overflow-hidden` with nothing on screen saying so. `Set` is the
-              reading the two panes are compared on and stays; the reader's own
-              `Opt` is what the card's `Vs optimal` window above already reports,
-              which is the same trade the reading plate makes when it drops a
-              field at a phone's width. `hidden`/`lg:contents` rather than a
-              second render, on `StandingPlate`'s rule: `display: none` takes it
-              out of the accessibility tree as well as off the screen. */}
-          <span className="hidden lg:contents">
-            <Total label="Opt" value={pane.optimal} tone="error" />
-          </span>
+              **It is drawn at every width now, where it used to drop below
+              `lg`.** That drop was a measurement — a pane is ~165px at 390
+              and the labelled pair was 160px of a ~148px track — and it was
+              made on the argument that the card's `Vs optimal` window above
+              already reports the reader's own `Opt`. That window folds away
+              while the card is open now, so the ledge is the one place the
+              figure survives, and the track was re-cut to hold both: see
+              {@link LedgeTrack} and {@link Total} for the phone's tighter
+              padding, gaps and tracking, which is what fits the pair in. */}
+          <Total label="Opt" value={pane.optimal} tone="error" />
         </LedgeTrack>
 
         <ColumnHeads
@@ -576,11 +572,20 @@ function OptionsPane({
  * of step with the lineup opposite — the one thing this view is arranged
  * against, and invisible as anything but a slight wrongness. 32px is also the
  * card's own control recess above, so its two are one height.
+ *
+ * **Below `lg` the track holds both totals, and the padding and gap are what
+ * were spent to fit them.** `Set` and `Opt` together are ~139px of a ~141px
+ * content box at 390 once the track is `px-1.5` with no vertical padding (the
+ * height is fixed, so that padding bought nothing), the gap between them is
+ * 5px and each pair is set tight — see {@link Total}. Right-aligned, so the
+ * figures sit on the same edge above and below `lg`, where the `flex-1`
+ * spacer after the legend does the same job. The `lg` arm is byte-identical
+ * to what it was: the legend, `p-[3px] pl-3`, the 10px gap.
  */
 function LedgeTrack({ side, children }: { side: Side; children: ReactNode }) {
   return (
     <div
-      className={`${CONSOLE_PANE_TRACK} flex h-8 min-w-0 items-center gap-1.5 p-[3px] pl-1.5 lg:h-[34px] lg:gap-2.5 lg:pl-3`}
+      className={`${CONSOLE_PANE_TRACK} flex h-8 min-w-0 items-center justify-end gap-[5px] px-1.5 lg:h-[34px] lg:gap-2.5 lg:py-[3px] lg:pl-3 lg:pr-[3px]`}
     >
       <span
         aria-hidden
@@ -604,6 +609,10 @@ function LedgeTrack({ side, children }: { side: Side; children: ReactNode }) {
  * Null draws an em dash rather than a zero, on the contract's own rule: the
  * opponent's pair is null for a future week, an unpaired week and an unstored
  * roster, and a `0.0` there is a roster projected to score nothing.
+ *
+ * **Set tight below `lg`** — a 3px gap and `0.1em` of tracking on the label —
+ * which is what two of these cost to sit in a phone's track together; see
+ * {@link LedgeTrack}. From `lg` up the pair keeps its 5px and `0.14em`.
  */
 function Total({
   label,
@@ -615,8 +624,8 @@ function Total({
   tone?: "error";
 }) {
   return (
-    <span className="inline-flex shrink-0 items-baseline gap-[5px]">
-      <span className="font-mono text-[length:var(--fs-8)] uppercase tracking-[0.14em] text-[color:var(--billet-label)] lg:text-[length:var(--fs-9)]">
+    <span className="inline-flex shrink-0 items-baseline gap-[3px] lg:gap-[5px]">
+      <span className="font-mono text-[length:var(--fs-8)] uppercase tracking-[0.1em] text-[color:var(--billet-label)] lg:text-[length:var(--fs-9)] lg:tracking-[0.14em]">
         {label}
       </span>
       <span

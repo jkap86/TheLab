@@ -12750,6 +12750,151 @@ on a page of a hundred; and whether the lineup checker's own panel, which takes
 the seam and the foot but has no key, still reads as intended with its 22px sync
 row 8px under the cut.
 
+## The summary readings fold when the card opens
+
+An open card is the screen, and its summary kept its full furniture while it
+was: the settings strip, the standing (or the projection strip), the four rank
+windows (or the four checks) — so the expanded half got whatever the viewport
+had left after all of it, and on a laptop that was two lineups reading through
+a ~500px slot. **The two readings that are only useful on a shut card fold
+away while the card is open**, on both league tools, and a key on the panel's
+seam — `Ranks` on `/manager`, `Checks` on `/lineupchecker` — brings them back
+in place. Applied from a design handoff. Nothing on the wire moved: no route,
+no query, no contract type, no payload field, no migration, and no token.
+
+**What folds is the standing and the windows, and what stays is the settings
+strip and the caption.** The settings strip names the game, which the panel
+under it does not; "Lineup as set now" is a claim about the very lineup the
+panes are showing. A standing beside a hundred other standings and four checks
+read at a glance are readings for a *list*, and an open card is not in one.
+The card's own height does not move: what the fold frees, the panel takes.
+
+**One boolean per device, shared by both cards, default off.**
+`useSummaryReadings` in `features/shared` is the wrapper over `local-store`,
+on `ktc-board.ts`'s terms — a reader who wants the summary readings while a
+card is open wants them on both pages, and a preference that held on one and
+not the other would be the drift the convergence pass removed, one setting
+deep. Only the literal the store writes reads as shown; anything else is the
+fold, which is the point. **It reaches a card composed with `open`**, as
+`summaryFolded = isOpen && !shown`, and that is the memo rather than a
+spelling: passed as itself the boolean would change on every card in the list
+and a toggle would re-render all 113 to move the one that is open. `open` is
+the disclosure, so the composed prop holds through the collapse and lets go
+when the card shuts, exactly as the mock's own `foldedD` does; the toggle
+handler is a module-level function that reads the store rather than closing
+over the value, so it has no dependency to change under it.
+
+**`SummaryFold` is the wrapper and the caller hands it two whole strings.** A
+transitioned `max-height` (or `max-width`) under `overflow-hidden`, with the
+opacity and the margin moving beside it, the transition list spelled once in
+both states on `CollapseTray`'s rule, `.lab-anim` for reduced motion, and
+`inert` while folded so a screen reader is not read four checks the page has
+put away. The caps are above the measured content — a strip is ~37–41px, a
+window row ~86px on a phone and ~102–113 on a desktop — and exist to give the
+transition a target, never to clip; the folded negative margin cancels the gap
+the parent column gives an item that still takes its share at 0px. **The
+wrapper carries the `translateZ` the row used to**, which is the rule that is
+silent when wrong: the summary is `preserve-3d` and projects its *direct*
+children, so a wrapper between it and a transformed grid is a flat context and
+the grid's plane would go with no error to say so. A transform on the wrapper
+itself projects fine, and nothing inside a strip or a window row carries a
+plane of its own. The clip costs the casts under the parts (a strip's 2px cast,
+a window's 1px lit lip), which the mock accepts too; `overflow: clip` with a
+clip margin would keep them and show a band of the part past the shrinking box
+for the length of every fold, which is the worse trade.
+
+**The manager card's standing folds sideways from `sm`**, where it shares a row
+with the settings strip: a `max-width` with the row's gap cancelled by a
+negative *left* margin, so the settings strip grows into what it leaves —
+821 → 1090px at 1280, measured. Below `sm` it stacks and folds vertically. The
+lineup checker's projection strip has its own line at every width, so there is
+no sideways arm to write. Both wrappers are rendered *inside* the components
+that draw the strips, so a league with no standing contributes no wrapper: an
+empty item would still take its share of the row's gap.
+
+**The key is `ExpandedPanel`'s new `seamStart`.** The seam row was a groove
+with a `seamEnd`; the key that acts on the *summary* now leads it and the keys
+that act on the panel close it — `History` on the manager card, and on the
+checker the `Sync` key with its status note, which moved onto the seam from a
+22px row of its own under the cut. That row had a hairline running out to the
+panel's edge to close it, and the seam's groove was already that line 8px
+above; the row goes to the lists, and the sync key's own hairline goes with it.
+The `seamEnd` wrapper became the one shrinkable thing on the row, so a long
+status note truncates on a phone rather than pushing the row past the panel;
+the groove's basis is zero, so it closes first and the ends never shrink while
+it has width.
+
+**The fold reaches `usePanelCap` through the summary's own observer and
+nothing else.** The handoff asks that the toggle reach the cap, by a dependency
+or a nonce; the fold is a transition, so the summary's box moves a little on
+every frame of it and the `ResizeObserver` re-measures on each, landing the
+last on the transition's end — a nonce bumped on the press would measure a box
+that has not moved yet. Under reduced motion the fold is one frame and the
+observer fires once. The hook's note says so.
+
+**And the phone ledge holds both totals now**, where it dropped `Opt` below
+`lg`. That drop was a measurement made on the argument that the card's
+`Vs optimal` window already reports the figure — and that window folds away
+while the card is open, so the ledge is the one place it survives. The track
+gave up its vertical padding (its height is fixed, so it bought nothing), its
+gap went to 5px and each pair set tight; measured at 390, `Set 131.5 Opt 138.1`
+is 148px in a 148px track with nothing clipped. The `lg` arm is byte-identical.
+
+### Verified
+
+Rendered through a temporary `/preview` route against the real
+`LineupCheckCard`, `LeagueCard`, `useActiveCard`, `ExpandedPanel` and
+`PageShell`, the real tokens and the real Tailwind build — the method the
+console-card, shares, rack and timeline passes established, since no database
+is reachable from where this was built — with `window.fetch` stubbed to answer
+the per-league read from a twelve-team fixture, then driven over CDP at
+**1280×900, 1280×700 and 390×844 in both schemes** and deleted. The mechanics
+are the ones this file records: `--no-proxy-server`, `localhost`, a phone
+viewport from `Emulation.setDeviceMetricsOverride` with `mobile: true`,
+`data-theme` and `localStorage` rather than `prefers-color-scheme`,
+`--disable-features=OverlayScrollbar`, the
+`--blink-settings=availablePointerTypes=4,…` flags, `localStorage.clear()`
+before every drive, a client-component harness, and a CDP client over Node's
+own `WebSocket`.
+
+Every arm landed. **The card's height is constant through the toggle** — 813px
+at 1280×900, 613 at 1280×700, 769 at 390 — while the checker's summary goes
+89.6 → 253.2px (+163.6: the strip's 41.3, its 8px gap, the windows' 104.2 and
+their 10px margin) and the panel's cap 723 → 560; the manager's summary 87.7 →
+210 with its cap 723 → 601, and at 1280×700, where the cap bites, the panel
+itself 523 → 401. At 390 the checker's fold buys the panel **149px** and the
+manager's **134px**. Folded, both wrappers are 0px, `opacity: 0`, `inert`, and
+the strip's `margin-top` is `-8px`; the manager's standing computes
+`max-width: 0` with `margin-left: -8px` at 1280 and `max-height: 0` at 390. The
+key reads `aria-pressed` false → true → false with its caret at `rotate: 90deg`
+while lit, and the store `null → "1" → "0"`. The seam is `Checks` at x=90.5
+(the 18px gutter) with `Sync` ending at 1174.5 at 1280, and `Checks` at 28 with
+`Sync` ending at 362 at 390; `Ranks` and `History` the same. Escape closes the
+card and both readings come back at their shut heights. Under
+`prefers-reduced-motion: reduce` every wrapper's `transition-property` computes
+to `none`. At every width and in both schemes: `documentElement.scrollWidth`
+inside the viewport, **zero** unclipped elements past it, exactly one `<h1>`,
+and **no console output of any kind**. 2,114 unit tests pass (three more, the
+store's parse); `lint`, `typecheck` and `build` are clean.
+
+**One thing a render here says about the panel rather than the fold, reported
+rather than patched**: in this Chromium (141) the panel's `flex: 1 1 auto`
+grows against `::details-content` rather than the `<details>`, so a panel
+whose contents are shorter than its cap does not fill the card — the
+checker's fixture panes measure 551px under both a 723 and a 560px cap. The
+cap moves with the fold either way, which is what the fold is for, and a real
+twelve-team solve is taller than either cap; the manager fixture's 601px
+table shows the cap biting at 1280×700 and at 390.
+
+**Not verified against real data**, which is the gap to close first: every
+number above is a fixture. Three things a render cannot check — whether a
+reader who has never seen the readings folded finds the `Checks` key on the
+seam, which is the one discoverability question no measurement closes;
+whether a real week's status note (`Wait 12s`, `Couldn't sync`) sits beside the
+sync key at 390 without truncating on an ordinary account; and whether the
+lost casts under the folded parts read as a change on a real page of a hundred
+shut cards, none of which the fold touches.
+
 ## The identity plate became a billet, and the win rate the hero
 
 `/manager`'s header was the one object on the page not made of metal. Every
