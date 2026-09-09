@@ -76,12 +76,89 @@ describe("extractPlayersArray", () => {
   test("throws on an empty board rather than storing nothing", () => {
     assert.throws(() => extractPlayersArray(rankingsPage([])), /was empty/);
   });
+
+  /**
+   * The shape KTC moved to in September 2026: the board is a JSON island near
+   * the top of the body and the assignment is a `JSON.parse` reference to it,
+   * so the island sits *before* the name a scan starts from.
+   */
+  const islandPage = (players: unknown[], id = "ktc-players") =>
+    `<html><body><script type="application/json" id="${id}">` +
+    `${JSON.stringify(players)}</script>` +
+    `<script>var leagueType = 1;` +
+    `var playersArray = JSON.parse(document.getElementById('${id}').textContent);` +
+    `var oneQBPlayers = ${JSON.stringify([PLAYER])};</script></body></html>`;
+
+  test("reads the board from the JSON island the assignment names", () => {
+    const players = extractPlayersArray(islandPage([PLAYER, { ...PLAYER, playerID: 13 }]));
+    assert.equal(players.length, 2);
+    assert.equal(players[0].playerName, "Ja'Marr Chase");
+  });
+
+  test("follows a renamed island, since the id is read from the page", () => {
+    const players = extractPlayersArray(islandPage([PLAYER], "pd-players"));
+    assert.equal(players.length, 1);
+  });
+
+  /**
+   * The regression this whole shape exists for. Scanning forward for the next
+   * `[` lands on `var oneQBPlayers` — a short featured list — and returns a
+   * syntactically perfect array of the wrong thing.
+   */
+  test("does not fall through to the next variable's array", () => {
+    const board = Array.from({ length: 4 }, (_, i) => ({ ...PLAYER, playerID: i }));
+    const players = extractPlayersArray(islandPage(board));
+    assert.equal(players.length, 4, "took oneQBPlayers instead of the island");
+  });
+
+  test("refuses an assignment whose bracket is not its own", () => {
+    assert.throws(
+      () =>
+        extractPlayersArray(
+          "<script>var playersArray = someCall();" +
+            `var other = ${JSON.stringify([PLAYER])};</script>`,
+        ),
+      /could not reach/,
+    );
+  });
+
+  test("still reads the inline literal where a page carries one", () => {
+    const players = extractPlayersArray(rankingsPage([PLAYER]));
+    assert.equal(players.length, 1);
+  });
 });
 
 describe("extractPlayerHistory", () => {
   const page = (sf: unknown, oneQB: unknown) =>
     `<script>var playerSuperflex = ${JSON.stringify(sf)};` +
     `var playerOneQB = ${JSON.stringify(oneQB)};</script>`;
+
+  /** The same page after the move to islands — `#pd-superflex` / `#pd-oneqb`. */
+  const islandPage = (sf: unknown, oneQB: unknown) =>
+    `<body><script type="application/json" id="pd-superflex">${JSON.stringify(sf)}</script>` +
+    `<script type="application/json" id="pd-oneqb">${JSON.stringify(oneQB)}</script>` +
+    `<script>var playerSuperflex = JSON.parse(document.getElementById('pd-superflex').textContent);` +
+    `var playerOneQB = JSON.parse(document.getElementById('pd-oneqb').textContent);</script></body>`;
+
+  test("reads both formats out of their JSON islands", () => {
+    const points = extractPlayerHistory(
+      islandPage(
+        { overallValue: [{ d: "260101", v: 100 }] },
+        { overallValue: [{ d: "260101", v: 90 }] },
+      ),
+    );
+    assert.deepEqual(points, [
+      {
+        date: "2026-01-01",
+        sfValue: 100,
+        sfRank: null,
+        sfPositionRank: null,
+        oneqbValue: 90,
+        oneqbRank: null,
+        oneqbPositionRank: null,
+      },
+    ]);
+  });
 
   test("merges the two formats on date and sorts ascending", () => {
     const points = extractPlayerHistory(

@@ -50,6 +50,7 @@ database fails until it is set (in production a missing one is fatal instead).
 | `npm run migrate:create <name>` | New SQL migration in `db/migrations` |
 | `npm run verify:manager-scope` | The manager scope end to end against a throwaway Postgres (needs `DATABASE_URL` and `ALLOW_DESTRUCTIVE=1`) |
 | `npm run verify:crawl-pressure` | The crawler's resource guard end to end against a throwaway Postgres — same two variables. Checks the thing a unit test cannot: that a tick which stands down mid-batch leaves the leagues it never reached unclaimed |
+| `npm run ktc:doctor` | Why KeepTradeCut values are missing from the page. Walks the whole chain — the switches, the stored board, the Sleeper players map the ids come from, a live scrape judged by the real validator, and what `getKtcBoards` hands a card — and names the first broken link. **Read-only**, so it is safe against production while the loop is running; add `--offline` where the network cannot reach keeptradecut.com |
 
 If `npm run typecheck` fails on a file under `.next/types/`, the generated route
 validator is stale rather than the code being wrong — `rm -rf .next` and run it

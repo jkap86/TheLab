@@ -19,6 +19,7 @@
     "migrate:create": "node-pg-migrate create -m db/migrations -j sql",
     "verify:manager-scope": "node --experimental-strip-types --import ./scripts/register-alias.mjs scripts/verify-manager-scope.ts",
     "verify:crawl-pressure": "node --experimental-strip-types --import ./scripts/register-alias.mjs scripts/verify-crawl-pressure.ts",
+    "ktc:doctor": "node --experimental-strip-types --import ./scripts/register-alias.mjs scripts/diagnose-ktc.ts",
     "worker": "node --experimental-strip-types --import ./scripts/register-alias.mjs scripts/worker.ts"
   },
   "dependencies": {
