@@ -10292,6 +10292,200 @@ lineup does, differently, and how often that differs is a question about this
 data. And whether the exchange reads as intended when the two bays are far apart
 on the rack, which a fixture with four adjacent tiles cannot show.
 
+### The case became a part, and Save became leaving
+
+Two faults were reported against the **Edit columns** dialog and they are one
+pass: the case had no edge, and `Save` was missable. Applied from a design
+handoff, its `1c` (case and well) plus its turn 3 (no `Save` key). Nothing on
+the wire moved — no route, no query, no contract type, no payload field, no
+migration — and no colour was added: the two collision values are alphas of the
+existing `--accent`. Both panels change, since both stand on `ColumnPanel`.
+
+**The case was painted in `--panel-bg`, which is the page.** `ConsoleGround`
+paints that same radial, so the dialog and the ground bottomed out on the same
+`#08090a` and the lower two thirds of the case's edge simply were not there — a
+patch of ground rather than a part on top of one. A backdrop alpha cannot
+separate two identical gradients, which is why raising it was not the fix. So
+the case is billet stock at case scale: `--panel-case-bg` lighter than the
+ground at every band, `--panel-case-shadow` chamfered on all four edges at 3px
+where a part spends 1, over a two-stage cast, with `BilletFinish`'s grain and
+raking specular making the pale face read as milled. `--panel-bg` is untouched
+and keeps its other readers; the fix is that this one stops naming it.
+
+**The bezel ring went with the dark case it was drawn for.** A 5.5% white
+hairline inset from the edge reads as a scratch on light stock, and the case's
+own chamfer is the edge now.
+
+**The header band went too, and that is the same argument one part in.** A
+billet bolted to a billet says nothing: the case *is* the part, so the heading
+and its lit reading sit directly on the face with one milled cut under them. The
+cut is `--milled-hairline` rather than the handoff's own `rgba(0,0,0,0.55)` —
+that value to the eye on this stock, and the half of it that turns over, since a
+black alpha is the one thing a cut on a pale face cannot be.
+
+**Everything a reader touches is in one hole.** `--case-well-bg` under
+`--case-well-shadow` holds the copy line, the rack and the axes housing;
+`CONSOLE_PART_TRAY`'s part-and-hole distinction at case scale, and what says the
+panel is on top of the page without spending a shadow on saying it. The rack
+eased its own alphas by one step (`0.46 → 0.42`, both `0.9` insets to `0.85`,
+the lip `0.07 → 0.08`) because a hole inside a hole still has to read as one.
+
+**The 18px rule.** `mx-2` of margin plus `px-2.5` of padding is 18px a side,
+which is exactly what the old body's `px-[1.125rem]` spent, and it is not
+adjustable: `SwitchTrack`'s keys are `flex-1` from `sm` up, so every key takes an
+identical share of its track. A first pass spent 60px a side, which clipped
+`FLEX` to `FL…` on the one axis whose entire point is naming a seat. Measured
+before and after in the same harness, the `Slot` group is **402px at 1280 and
+292px at 390 in both**, with no key clipped — which is also the figure
+`KEYS_PER_TRACK`'s own note has recorded all along. The handoff's 412 is its
+static reference's number: `.lab-scroll` reserves a 10px scrollbar gutter that a
+reference file has no reason to.
+
+#### Save was the smallest key on the panel, and leaving is what it did
+
+`Save` was `--fs-9` beside a `--fs-15` name, while `Done` is the largest key in
+the foot — and it was dark and unpressable most of the time it was on screen,
+which is a key a reader stops reading. Readers changed a column, pressed `Done`,
+and lost the edit silently. **A draft is seated on every way out of a bay now**:
+selecting another, `Done`, Esc and a backdrop click.
+
+**That is one write per bay visit, which is exactly the count one `Save` press
+per visit produced**, so the deferral keeps everything it was for. Its whole
+argument survives verbatim — a press still writes a draft rather than the store,
+so crossing the grid from `Proj · Starters` to `KTC · Picks` still moves nothing
+on the rack and still re-ranks nothing behind the dialog — and `sockets`,
+`arrangeLineupColumns` and `storeLineupColumns` are untouched.
+
+**Three of the four exits are `showModal()`'s**, so the seat is wired to the
+dialog's own `close` event through `ColumnPanel`'s new `onClose` rather than to
+three call sites: one of them missed is the same silent loss with a smaller
+mouth. `select` seats *before* it moves, reading the bay being left, so nothing
+crosses — which is why this **inverts** the file's old "a draft belongs to the
+bay it was made in" without contradicting the reason behind it. What it trades
+away is backing out, and that is the smaller loss: a column is four visible axes,
+so pressing back is trivial where losing an edit you thought you had made is not.
+It is the trade this panel already made when it deleted `Clear`.
+
+**The draft is dropped whether or not there was anything to seat**, and the guard
+being inside `save` rather than around it is the whole of why: a press can
+compose a column back to the one the bay already holds, which is a draft in hand
+with `dirty` false, and an early return would carry it into the next bay
+selected — where every axis would be a fact about the wrong socket.
+
+**`dirty` outlived the key it lit**, which is where this parts company with the
+handoff's own §3: that section drops `dirty` from `ColumnAxes` along with
+`saveTitle` and `onSave`, and its §4.3 says in as many words that `dirty` still
+drives the housing ring. Only the two `Save`-shaped props went. With the key
+gone the housing has one lit reading left, so a draft in hand is what it spends
+it on: the ring comes up (`0.2 → 0.35`, and the glow `-18px → -12px`) and the
+caller's chip reads `Bay 01 · Edit`. The name takes the freed width at `--fs-16`.
+
+**The exchange is shown rather than narrated.** Stating it was the one job
+`Save` did that survived the deferral, and it was stated in a `title` — a
+sentence only a reader who hovered a key they could not press would ever read. A
+marked bay takes a lamp at 55% of the accent under a 26% ring, the foot reads
+`Bay 03 trades places` beside a lit lamp, and that bay's accessible name gains
+`— trades places on leaving`. **The marked bay's own two lines do not change**:
+nothing moves until the reader leaves, and a tile previewing what it was about
+to become would be a rack showing five columns across four sockets.
+
+**The foot is one slot with two readings**, so nothing appears or disappears
+under a press — the rule the three out-of-force tracks and the header's reading
+already live by. The scrape line has the slot at rest, re-inked for metal
+(`--billet-label` under `--standing-label-shadow`, where it was page ink on a
+page ground); the exchange takes it while it is true. It is deliberately **not**
+a second live region: the header's reading is already one, and the fact this
+states is carried on the control it is about.
+
+**`Done` became the accent cap**, which is the rack's own rule for a control that
+acts on the page, and it is now the only key in the panel that commits. One
+label in one state — there is no dirty arm and no `Save & close`, because every
+exit seats and a key describing two outcomes would be describing one it cannot
+reach.
+
+#### The light half, which the handoff leaves open
+
+Its §8 names light mode as unsolved and says the four tokens are dark-only for
+now. Shipped that way they would be **worse than undesigned**: the panel's inks
+invert and the case's would not, so a light reader would get `--billet-name`'s
+near-black title on `#3b4d53` metal at about 1.8:1 — the heading unreadable,
+silently. So the light halves are derived here, on this file's own standing rule
+that a bevel's inverse is a different stack rather than the same one dimmed.
+
+The stock goes near-white, since a part standing on the page is the surface
+catching the light on that side, and the chamfer inverts with it. **The well is
+the one place the light half is a different shape**: `#131d21` on a near-white
+case is the darkest object on a light page with four pale bays floating in it —
+the failure `--rack-channel-bg` records one part smaller — so it is a shadow on
+stock with a lit bottom lip, which is what every other recess in the light scheme
+already is.
+
+Measured against the band each ink actually lands on, read off the case's own
+gradient at that ink's rendered height: the title is at 4% and reads **17.6:1**,
+the copy line over the well at 14% reads **6.10**, and at 95% the foot's
+`--billet-label` reads **6.63** and a lit collision line **4.65** — the lowest
+figure in the panel on either side of the theme. The dark half at those three
+heights is 6.78 / 7.73 / 6.94 and 10.82.
+
+#### Verified
+
+Driven over CDP against `next dev` with no `DATABASE_URL` — the boot hook skips
+migrations and the loops log their refusals, which is the server coming up
+healthy against nothing — through a temporary `/preview` route mounting the real
+`LineupColumnsDialog`, `TeamsColumnDialog` and the real `useLineupColumns` /
+`useTeamsColumn` stores, then deleted. The mechanics are the ones this file
+records: `--no-proxy-server`, `localhost` rather than `127.0.0.1`, a phone
+viewport from `Emulation.setDeviceMetricsOverride` with `mobile: true`,
+`data-theme` **and** `localStorage` rather than `prefers-color-scheme`,
+`--disable-features=OverlayScrollbar`, the
+`--blink-settings=availablePointerTypes=4,…` flags, a **client-component**
+harness, a fresh `--remote-debugging-port` per run, and a CDP client over Node's
+own `WebSocket` since Playwright is not installed here. One is this pass's own:
+**a fixture timestamp must be a literal, not `Date.now()` at module scope** — a
+`"use client"` page evaluates that once on the server and again on the client, so
+the harness hydration-mismatched and reported it as a React error inside the
+panel. A deterministic fixture cleared it; `/tools` had been clean throughout,
+which is what said the harness was the cause.
+
+Geometry is the handoff's to the value at both widths in both schemes: header
+padding `16px 20px 13px`, well margin `14px 8px 0` at a 20px radius with
+`15px 10px 17px` of padding, foot `14px 20px 16px`, case 560px at a 28px radius,
+the cut inverting `rgba(0,0,0,0.45)` → `rgba(15,23,42,0.22)`. **Zero clipped
+elements anywhere in the panel**, `documentElement.scrollWidth` inside the
+viewport, zero unclipped elements past it, `:modal` true, and **no console output
+of any kind**.
+
+Every behaviour arm was driven. At rest the foot is the scrape line in metal ink
+with no lamp; composing bay 01 into bay 02's column marks bay 02 alone
+(`[false,true,false,false]`), lights the foot in `--readout-text` with its lamp,
+and **leaves bay 02's own tile reading its own column**. Selecting bay 03 then
+seated it and **the exchange landed on the rack** — `01 PROJ PTS STARTERS,
+02 PROJ PTS BENCH` became `01 PROJ PTS BENCH, 02 PROJ PTS STARTERS` — with the
+stored *set* unchanged, which is what an exchange is and the reason a store-only
+check cannot see one. `Done`, Esc and a backdrop click each seated a genuinely
+new column (`capital_total → ktc_total → ktc_picks`), and a press composing back
+to the seated column left `dirty` false and no stale draft in the next bay. The
+teams panel inherits the case with no work: same well geometry, same 402/292
+track, zero `Save` keys, no lamp in its foot, `Closing seats it.`, `Teams · Edit`
+while dirty, and Esc seating `ros_starters → ktc_starters`.
+
+The before-state was measured in the same harness by stashing the diff, which is
+the check that the 18px rule holds: the `Slot` track is 402px and 292px on both
+sides of the change, the old body spent `15px 20px`, and the `Save` key that was
+there at `10.44px` is gone. 2,095 unit tests pass; `lint`, `typecheck` and
+`build` are clean.
+
+**Not verified against real data**, which is the gap to close first: every number
+above is a fixture, and no database was reachable from here. Four things a render
+cannot check — whether the case reads as a part against a real hundred-league
+page rather than an empty harness, which is the whole claim; whether readers who
+lost edits find seat-on-exit *discoverable*, since the only thing announcing it
+is one clause of the copy line; whether the light well reads as a recess on real
+content, its floor and the case being within a few percent of each other at their
+own stops; and how the exchange reads when the two bays are far apart on the
+rack, which the handoff's own predecessor already flagged and a four-tile fixture
+still cannot show.
+
 ## The league card's machined billet, and what survived it
 
 **Superseded on the manager card — see The two league cards converged,

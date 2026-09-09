@@ -40,7 +40,15 @@ import { ColumnAxes, ColumnPanel, columnSetting } from "./column-panel";
  * a copy of a panel holding six switch tracks: a switch that stopped travelling
  * in one of two spellings is a panel nobody can see is broken, which is the rule
  * `SwitchTrack` itself exists for. What is this file's own is the trigger, the
- * draft, and what `Save` means with one column — see below.
+ * draft, and what seating means with one column — see below.
+ *
+ * **Closing seats, and there is no `Save` key.** That is the four-bay panel's
+ * change and this panel inherits the reason as well as the case: `Save` was the
+ * smallest key on a panel whose largest is `Done`, so a reader could change a
+ * column, press `Done` and lose it with nothing on screen saying so. With one
+ * column there is no bay to leave, so `Done`, Esc and a backdrop click are the
+ * three exits — all of them the dialog's own `close`, which is why one handler
+ * covers them.
  *
  * **The trigger is here rather than the caller's**, unlike
  * `LineupFiltersDialog`'s `triggerClassName`: this key is not a pill in a row of
@@ -72,7 +80,7 @@ export function TeamsColumnDialog({
   /**
    * The edit in progress, or null where there is none.
    *
-   * **A press writes this and `Save` writes the store**, which is the four-bay
+   * **A press writes this and closing writes the store**, which is the four-bay
    * panel's rule and it matters more here, not less: this column *is* the
    * standings' sort, so every intermediate column on the way from
    * `Proj · Starters` to `KTC · Picks` would re-order a twelve-team table
@@ -90,27 +98,33 @@ export function TeamsColumnDialog({
   const dirty = lineupColumnKey(col) !== lineupColumnKey(seated);
 
   /**
-   * Seat the draft.
+   * Seat the draft — on every way out, which is all three of this panel's.
    *
    * **A plain write, and that is the one behaviour this panel does not share
    * with the four-bay one.** There, a column another bay already holds is
    * resolved by *exchange* — the two swap, so the rack still holds four
-   * distinct readings. With one column there is nothing to collide with and
-   * nothing to trade places, so `Save` is: seat it, store it, drop the draft.
+   * distinct readings — and a bay is a fourth way out. With one column there is
+   * nothing to collide with, nothing to trade places and no bay to leave, so
+   * this is: seat it, store it, drop the draft. Which is also why the panel
+   * carries no `warning`: there is no second column for the foot to name.
+   *
+   * The draft is dropped whether or not there was anything to seat, on the
+   * four-bay panel's own reason one grain smaller: a press can compose back to
+   * the column already seated, and a draft left in hand through a close would
+   * be read by the next open before {@link open} cleared it.
    */
   const save = () => {
-    if (!dirty) return;
-    onChange(col);
+    if (dirty) onChange(col);
     setDraft(null);
   };
 
   /**
-   * Open on what is seated, abandoning anything left in hand.
+   * Open on what is seated.
    *
-   * A draft does not outlive the sitting it was made in, which is the rule
-   * closing already enforces — `Done`, Esc and the backdrop all drop it — and
-   * this is the same rule read from the other end, for the case where a reader
-   * closed on a half-composed column and came back.
+   * Belt and braces rather than a rule of its own now: closing seats and drops,
+   * so there is no draft left for this to clear. It is kept because the cost is
+   * a `setState` on a press that is already re-rendering, and what it guards
+   * against — a panel opening onto a column nobody seated — is silent.
    */
   const open = () => {
     setDraft(null);
@@ -180,17 +194,21 @@ export function TeamsColumnDialog({
         // metric's unit — a live window drawn empty reads as a broken one.
         reading={columnSetting(col) || words.unit}
         copy="What the standings read, and what they are ordered by."
-        wideCopy="Save seats it."
+        wideCopy="Closing seats it."
         ktc={ktc}
+        // `Done`, Esc and the backdrop all reach `close` — see {@link save}.
+        onClose={save}
       >
         <ColumnAxes
-          chip="Teams"
+          // The chip names the state, since with `Save` gone the housing has
+          // one lit reading left and a draft in hand is what is worth spending
+          // it on. `Teams` is the pane rather than a bay number, so what it
+          // gains is the same word the four-bay panel's chip does.
+          chip={dirty ? "Teams · Edit" : "Teams"}
           column={col}
           slots={slots}
           dirty={dirty}
-          saveTitle={dirty ? "Seat this column" : "No change to save"}
           onChange={setDraft}
-          onSave={save}
         />
       </ColumnPanel>
     </>
