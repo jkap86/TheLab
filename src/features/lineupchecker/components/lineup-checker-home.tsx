@@ -24,6 +24,7 @@ import {
   removeSubject,
   SubjectTokens,
   toggleSubject,
+  toggleSummaryReadings,
   type LeagueSubjects,
   type RackDrawerKey,
   type Subject,
@@ -31,6 +32,7 @@ import {
   useManagerLeagues,
   useActiveCard,
   usePublishRackControls,
+  useSummaryReadings,
   useUrlParam,
   writeQueryParam,
 } from "@/features/shared";
@@ -330,6 +332,12 @@ function Checker({
   const listRef = useRef<HTMLUListElement | null>(null);
   const ids = useMemo(() => visible.map((l) => l.league_id), [visible]);
   const card = useActiveCard({ param: "league", ids, listRef });
+  // Whether the open card keeps its projection strip and four checks on
+  // screen — one boolean per device, shared with the manager card's `Ranks`
+  // key. Composed with `open` per card below rather than passed as itself, so
+  // that a toggle moves one prop on the one card that is open rather than
+  // dropping the memo on every league of the account.
+  const readingsShown = useSummaryReadings();
   // Read out so the handler below can depend on it by name — see `LeaguesHome`,
   // where the same pair sits for the same reason.
   const { close: closeCard } = card;
@@ -603,6 +611,10 @@ function Checker({
                     open={card.isOpen(league.league_id)}
                     lit={card.isLit(league.league_id)}
                     onToggle={card.toggle}
+                    summaryFolded={
+                      card.isOpen(league.league_id) && !readingsShown
+                    }
+                    onToggleReadings={toggleSummaryReadings}
                   />
                 ))}
               </ul>

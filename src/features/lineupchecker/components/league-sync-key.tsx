@@ -41,13 +41,20 @@ import { useLeagueRefresh } from "../hooks/use-league-refresh";
  * back. `WeekStepper` keeps real `disabled` because its states are stable facts
  * about the week bounds rather than a momentary one about a request.
  *
- * **It hangs on the seam line and owns no margin of its own.** It stood in a
- * 32px recess strip until the panel's height was counted: a recess is the stock
- * a *rail* is cut into, and 42px of a capped panel on one key and a status note
- * is height the two lists under it want more. So the key is **etched** —
- * `--recess-bg` under a hairline lip, the surface `BILLET_KEY_CHROME` names for
- * a key on a machined face — with a rule running out to the panel's right edge
- * to close the row, and the strip is 22px.
+ * **It sits on the seam itself, at the right end, and owns no row of its own.**
+ * It stood in a 32px recess strip until the panel's height was counted: a
+ * recess is the stock a *rail* is cut into, and 42px of a capped panel on one
+ * key and a status note is height the two lists under it want more. So the key
+ * is **etched** — `--recess-bg` under a hairline lip, the surface
+ * `BILLET_KEY_CHROME` names for a key on a machined face. It then hung on a
+ * 22px row of its own under the cut, with a hairline running out to the panel's
+ * right edge to close that row; the row and its hairline went when the `Checks`
+ * key arrived, because the seam's own groove was already the line and a second
+ * one 8px under it was a rule drawn twice. It is `ExpandedPanel`'s `seamEnd`
+ * now, right-aligned against the panel's gutter, the note leading the key so
+ * the pair reads inward from the edge. The wrapper the panel gives it is the
+ * one shrinkable thing on the row, which is what lets the note truncate on a
+ * phone rather than push the row past the panel.
  *
  * **The key composes the *bare* pill, not the shell and not `CONSOLE_KEY`.**
  * Appending a smaller padding to that constant's `px-4 py-2` is decided by
@@ -89,7 +96,24 @@ export function LeagueSyncKey({
   };
 
   return (
-    <div className="flex min-w-0 flex-1 items-center gap-2">
+    <div className="flex min-w-0 items-center gap-2">
+      {/* The abbreviation is for the eye alone. Without `aria-hidden` the live
+          region below reads the same press twice — once short, once whole. It
+          leads the key because the pair sits at the row's right end and reads
+          inward from the edge; the DOM order is the visual one, so a keyboard
+          reader lands on the key with the note already announced beside it. */}
+      {note && (
+        <span
+          aria-hidden
+          title={note.title}
+          className={`min-w-0 truncate font-mono text-[length:var(--fs-10)] uppercase tracking-[0.14em] ${
+            note.alert ? "text-error" : "text-foreground/60"
+          }`}
+        >
+          {note.text}
+        </span>
+      )}
+
       <button
         type="button"
         onClick={() => void press()}
@@ -104,20 +128,6 @@ export function LeagueSyncKey({
         Sync
       </button>
 
-      {/* The abbreviation is for the eye alone. Without `aria-hidden` the live
-          region below reads the same press twice — once short, once whole. */}
-      {note && (
-        <span
-          aria-hidden
-          title={note.title}
-          className={`min-w-0 truncate font-mono text-[length:var(--fs-10)] uppercase tracking-[0.14em] ${
-            note.alert ? "text-error" : "text-foreground/60"
-          }`}
-        >
-          {note.text}
-        </span>
-      )}
-
       {/* **Always rendered, empty when there is nothing to say.** A live region
           inserted into the DOM in the same commit as its text is not reliably
           announced — the region has to already be in the accessibility tree
@@ -129,16 +139,6 @@ export function LeagueSyncKey({
       <span role="status" className="sr-only">
         {note?.title ?? ""}
       </span>
-
-      {/* The rule that closes the row. It is what the recess used to do — say
-          where the strip ends — spent as a line rather than as a surface, and
-          it takes whatever the key and the note leave rather than a width of
-          its own, so a long note shortens it instead of pushing it off the
-          panel. */}
-      <span
-        aria-hidden
-        className="h-px min-w-0 flex-1 bg-gradient-to-r from-active/35 via-foreground/5 to-transparent"
-      />
     </div>
   );
 }

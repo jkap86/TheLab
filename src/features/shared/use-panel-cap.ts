@@ -50,8 +50,19 @@ import {
  * list stands down around it.
  *
  * **The measurements are taken after layout, never guessed.** The header's
- * height changes with the settings strip's wrap, the league's name and the
- * width, and a `100dvh` estimate is wrong on a phone the moment the URL bar
+ * height changes with the settings strip's wrap, the league's name, the width
+ * — and, since the summary readings fold, with a press: an open card's
+ * standing and rank windows (or projection strip and checks) collapse over
+ * 320ms and come back on the `Ranks` / `Checks` key, and the summary is
+ * shorter by ~157px on a desktop for as long as they are folded. **That press
+ * reaches this hook through the observer on the summary and nothing else**,
+ * which is deliberate: the fold is a transition, so the summary's box moves a
+ * little on every frame of it and the observer re-measures on each, landing
+ * the last measurement on the transition's end — and a nonce bumped on the
+ * press itself would measure a box that has not moved yet and buy nothing.
+ * Under reduced motion the fold is one frame and the observer fires once. The
+ * caller's `flex-none` while open is what makes any of it a measurement; see
+ * below. A `100dvh` estimate is wrong on a phone the moment the URL bar
  * moves. So the cap is read on the frame after the open, and again whenever
  * that box changes size — a `ResizeObserver` on the summary, **and** a `resize`
  * listener beside it, because they are two events: the summary changes height

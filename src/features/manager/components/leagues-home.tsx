@@ -43,6 +43,8 @@ import {
   usePublishRackControls,
   useKtcBoard,
   useLineupColumns,
+  useSummaryReadings,
+  toggleSummaryReadings,
   useTeamsColumn,
   useManagerLeagues,
 } from "@/features/shared";
@@ -436,6 +438,11 @@ export function LeaguesHome({
   };
 
   const columns = useLineupColumns();
+  // Whether the open card keeps its standing and four rank windows on screen —
+  // one boolean per device, shared with the lineup checker's `Checks` key.
+  // Composed with `open` per card below rather than passed as itself, so a
+  // toggle moves one prop on the one card that is open. See `useSummaryReadings`.
+  const readingsShown = useSummaryReadings();
   /**
    * What the expanded card's standings pane reads and is ordered by.
    *
@@ -990,6 +997,15 @@ export function LeaguesHome({
                   open={card.isOpen(league.league_id)}
                   lit={card.isLit(league.league_id)}
                   onToggle={card.toggle}
+                  // Whether this card's standing and four rank windows are
+                  // folded away: only while it is open, and only while the
+                  // device's readings preference is off. Composed here so a
+                  // toggle moves one prop on the open card rather than
+                  // dropping the memo on all 113 — see `useSummaryReadings`.
+                  summaryFolded={
+                    card.isOpen(league.league_id) && !readingsShown
+                  }
+                  onToggleReadings={toggleSummaryReadings}
                 />
               ))}
             </ul>

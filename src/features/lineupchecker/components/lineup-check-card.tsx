@@ -19,6 +19,8 @@ import {
   Scanlines,
   StandingBay,
   StandingStrip,
+  SummaryFold,
+  SummaryReadingsKey,
 } from "@/features/shared";
 
 import {
@@ -86,6 +88,22 @@ import { WeekPanes } from "./week-panes";
  * lineup and means nothing outside it, so a second league opening must not
  * inherit the first's, and a component mounted per card cannot.
  *
+ * **The projection strip and the four checks fold away while the card is
+ * open**, and a `Checks` key on the panel's seam brings them back. An open
+ * card is the screen, so the expanded half gets whatever the viewport has left
+ * after the summary — on a laptop, two lineups reading through a ~500px slot —
+ * and the two readings put away are the ones that are only useful on a shut
+ * card: a week's outcome scanned down a column, four checks read at a glance.
+ * What the fold frees the panel takes, through the summary's own
+ * `ResizeObserver` in `usePanelCap`, so the card's height does not move. The
+ * boolean is the page's and the device's (`useSummaryReadings`), shared with
+ * the manager card's `Ranks` key, and arrives here already composed with
+ * `open` as `summaryFolded` — so a toggle re-renders the one card that is open
+ * rather than every league on the account. A shut card is untouched, byte for
+ * byte. The settings strip and the "Lineup as set now" caption stay: the first
+ * names the game and the second is a claim about the very lineup the panes
+ * below are showing.
+ *
  * **The card wears the metal finish** ({@link CONSOLE_METAL}), which is a set
  * of token overrides on the `<details>` and not a single element of markup:
  * the housing, both plates and every key inside already name the tokens it
@@ -132,6 +150,8 @@ export const LineupCheckCard = memo(function LineupCheckCard({
   open,
   lit,
   onToggle,
+  summaryFolded,
+  onToggleReadings,
 }: {
   league: ManagerLeague;
   /** This league's week, once the check lands. Undefined while it is in flight. */
@@ -156,6 +176,15 @@ export const LineupCheckCard = memo(function LineupCheckCard({
   lit: boolean;
   /** The press. `useActiveCard` drives the disclosure and the list together. */
   onToggle: (id: string, event: MouseEvent<HTMLElement>) => void;
+  /**
+   * Whether the projection strip and the four checks are folded away — true
+   * only while the card is open and the device's readings preference is off.
+   * Composed by the page rather than read here, so the preference flipping
+   * moves one prop on one card; see `useSummaryReadings`.
+   */
+  summaryFolded: boolean;
+  /** The `Checks` key's press. A module-level function, so the memo holds. */
+  onToggleReadings: () => void;
 }) {
   const gap = gapCell(entry);
   const kickoff = kickoffCell(entry);
@@ -269,7 +298,7 @@ export const LineupCheckCard = memo(function LineupCheckCard({
               clips. */}
           <div className="relative mt-3 flex flex-col items-stretch gap-2 sm:mt-3.5 pointer-fine:[transform:translateZ(18px)]">
             <LeagueConfigWindow league={league} />
-            <ProjectionStrip entry={entry} />
+            <ProjectionStrip entry={entry} folded={summaryFolded} />
           </div>
 
           {/* A lineup graded off the roster's *live* starters rather than the
@@ -283,22 +312,35 @@ export const LineupCheckCard = memo(function LineupCheckCard({
             </p>
           )}
 
-          {/* A direct child of the summary, so the `translateZ` survives: a
-              plain wrapper here is a flat rendering context and the depth would
-              go with no error to say so.
+          {/* **The fold wrapper is the direct child of the summary, and it is
+              the wrapper that carries the `translateZ`.** A plain wrapper here
+              is a flat rendering context and a transform on the grid inside it
+              would compute against no projection, with no error to say so; a
+              transform on the wrapper itself projects, and nothing inside the
+              row carries a plane of its own. See `SummaryFold`. The caps are
+              above the row's measured 86px / 102px and the margin is the row's
+              own `mt-2.5`, so the shown state is the shut card's, byte for
+              byte.
 
               **Four across at every width, where it was two-up on a phone.**
               What made that possible is the reading splitting in two: a phone
               tile sets the numeral alone and its unit under it, so nothing has
               to fit `2 to move` into ~72px on one line. See `MetricCell`. */}
-          <div className="relative mt-2.5 grid grid-cols-4 gap-1.5 sm:gap-2 pointer-fine:[transform:translateZ(22px)]">
-            {/* `phase` is which of the four this is, so a row of flasks does
-                not bubble in lockstep — see `BubblingFlask`. */}
-            <MetricTile label="Vs optimal" cell={gap} pending={pending} phase={0} />
-            <MetricTile label="Kickoff" cell={kickoff} pending={pending} phase={1} />
-            <MetricTile label="Superflex" cell={superflex} pending={pending} phase={2} />
-            <MetricTile label="Roster" cell={roster} pending={pending} phase={3} />
-          </div>
+          <SummaryFold
+            folded={summaryFolded}
+            className="relative pointer-fine:[transform:translateZ(22px)]"
+            shownClassName="mt-2.5 max-h-[110px] opacity-100 sm:max-h-[140px]"
+            foldedClassName="mt-0 max-h-0 opacity-0"
+          >
+            <div className="grid grid-cols-4 gap-1.5 sm:gap-2">
+              {/* `phase` is which of the four this is, so a row of flasks does
+                  not bubble in lockstep — see `BubblingFlask`. */}
+              <MetricTile label="Vs optimal" cell={gap} pending={pending} phase={0} />
+              <MetricTile label="Kickoff" cell={kickoff} pending={pending} phase={1} />
+              <MetricTile label="Superflex" cell={superflex} pending={pending} phase={2} />
+              <MetricTile label="Roster" cell={roster} pending={pending} phase={3} />
+            </div>
+          </SummaryFold>
         </summary>
 
         {/* **The expanded half is the card's own bottom half**, not a housing
@@ -319,34 +361,44 @@ export const LineupCheckCard = memo(function LineupCheckCard({
             `<div>` is `transform-style: flat` — so the control strip and the
             panes would compute their `translateZ` against no projection at all,
             with no error to say so. The fragment below is not an element. */}
-        <ExpandedPanel open={open} closing={open && !lit}>
-          {/* Card-scoped controls, **on the seam line rather than in a recess
-              of their own**. The strip used to be a 32px pill on the stock the
-              manager card's history rail stands in, which is the right surface
-              for a rail — a rail is a control a reader drives — and is 42px of
-              a capped panel spent on one key and a status note. Etched onto the
-              seam instead, with a hairline running out to the panel's right
-              edge, the row is 22px and the 16px it gives back goes to the two
-              lists below, which is the point.
+        {/* **Both card-scoped controls sit on the seam itself.** The `Checks`
+            key leads the row, inside the panel's left gutter, and the sync key
+            with its status note closes it on the right — the seam's groove is
+            the line between them. The sync key used to stand in a row of its
+            own under the cut with a hairline of its own running out to the
+            panel's edge: 22px and a 6px margin that the groove was already
+            spending 2px and 16px of margin to say. On the seam, the row the
+            sync key sat on goes to the two lists below, and a `Checks` key
+            that had to sit *somewhere* on an open card sits where the
+            reader's eye already is when the panel opens.
 
-              No `translateZ` and no track shadow with it: what carried the
-              plane was the recess, and a lit key hanging on a hairline is flat
-              by construction — the idiom `BILLET_KEY_CHROME` and the week
-              stepper's own hairline already use one plane up.
-
-              Above the panes rather than in the summary: a `<summary>` is a
-              leaf button to assistive technology, so a control nested in one is
-              unreliably reachable and a live region inside it is swallowed into
-              the disclosure's name. It also lands beside the empty state below,
-              which is the case a sync most often fixes. */}
-          <div className="mb-1.5 flex h-[22px] shrink-0 items-center gap-2 touch:h-7">
+            Neither key is in the summary: a `<summary>` is a leaf button to
+            assistive technology, so a control nested in one is unreliably
+            reachable and a live region inside it is swallowed into the
+            disclosure's name. The sync key still lands beside the empty state
+            below, which is the case a sync most often fixes. */}
+        <ExpandedPanel
+          open={open}
+          closing={open && !lit}
+          seamStart={
+            <SummaryReadingsKey
+              label="Checks"
+              title="Show the projection strip and the four checks on this card"
+              // The panel exists only while the card is open, so "not folded"
+              // *is* the preference here — the one place the composed prop
+              // reads back as the boolean it was composed from.
+              shown={!summaryFolded}
+              onToggle={onToggleReadings}
+            />
+          }
+          seamEnd={
             <LeagueSyncKey
               leagueId={league.league_id}
               leagueName={league.name}
               onSynced={onSynced}
             />
-          </div>
-
+          }
+        >
           {entry ? (
             <WeekPanes entry={entry} teamName={league.team_name} />
           ) : (
@@ -407,8 +459,23 @@ export const LineupCheckCard = memo(function LineupCheckCard({
  * deliberate: this is the week's *game*, and a median standing alone on it —
  * over a lineup the card is already captioning "as set now" — would be a
  * reading of a week nobody has been scheduled for.
+ *
+ * **It folds away while the card is open** (`folded`), vertically at every
+ * width: on this card the strip has its own line under the settings strip
+ * everywhere, so there is no sideways arm to write — the manager card's
+ * standing shares a row from `sm` up and collapses sideways there. The fold
+ * wrapper is rendered *inside* this component so that a league with no strip
+ * to draw contributes no wrapper either: an empty item in the column above
+ * would still take its share of that column's `gap`. The caps are above the
+ * strip's measured 36px / 37px, and the folded `-mt-2` cancels the gap.
  */
-function ProjectionStrip({ entry }: { entry?: LineupCheckLeague | null }) {
+function ProjectionStrip({
+  entry,
+  folded,
+}: {
+  entry?: LineupCheckLeague | null;
+  folded: boolean;
+}) {
   const record = leagueWeekRecord(entry);
   if (!entry || entry.opponent_points === null || !record) return null;
 
@@ -416,6 +483,11 @@ function ProjectionStrip({ entry }: { entry?: LineupCheckLeague | null }) {
   const median = entry.median_points;
 
   return (
+    <SummaryFold
+      folded={folded}
+      shownClassName="mt-0 max-h-14 opacity-100 sm:max-h-[60px]"
+      foldedClassName="-mt-2 max-h-0 opacity-0"
+    >
     <StandingStrip stretch>
       <MarginBay label="Proj" mine={mine} against={entry.opponent_points} />
       {median !== null && <MarginBay label="Med" mine={mine} against={median} />}
@@ -439,6 +511,7 @@ function ProjectionStrip({ entry }: { entry?: LineupCheckLeague | null }) {
         </span>
       </StandingBay>
     </StandingStrip>
+    </SummaryFold>
   );
 }
 

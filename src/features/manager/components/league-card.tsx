@@ -34,6 +34,8 @@ import {
   Scanlines,
   StandingBay,
   StandingStrip,
+  SummaryFold,
+  SummaryReadingsKey,
 } from "@/features/shared";
 
 // Named by module path rather than through `@/features/shared`, and that is the
@@ -179,6 +181,21 @@ import {
  * is standing in `TimelineView`, which draws that browser over the rosters of
  * whichever moment the rail is on.
  *
+ * **The standing and the four rank windows fold away while the card is open**,
+ * and a `Ranks` key on the panel's seam brings them back. An open card is the
+ * screen, so the expanded half gets whatever the viewport has left after the
+ * summary, and the two readings put away are the ones only useful on a shut
+ * card — a standing scanned beside a hundred others, four ranks read down a
+ * column. The standing folds *sideways* from `sm` up, where it shares a row
+ * with the settings strip (which grows into what it leaves), and vertically
+ * below it; the windows fold vertically at every width. What the fold frees
+ * the panel takes, through the summary's own `ResizeObserver` in
+ * `usePanelCap`, so the card's height does not move. The boolean is the
+ * device's (`useSummaryReadings`), shared with the lineup checker's `Checks`
+ * key, and arrives already composed with `open` as `summaryFolded` — so a
+ * toggle re-renders the one card that is open. A shut card is untouched, byte
+ * for byte.
+ *
  * All of the depth — the perspective, `preserve-3d`, every `translateZ`, the
  * open-state lift/halo shadows — rides `pointer-fine:`, because its budget is
  * per-device rather than per-card: the stack is several composited planes *per
@@ -233,6 +250,8 @@ export const LeagueCard = memo(function LeagueCard({
   open,
   lit,
   onToggle,
+  summaryFolded,
+  onToggleReadings,
 }: {
   league: ManagerLeague;
   /** The chosen rank columns, in canonical order — see `useLineupColumns`. */
@@ -300,6 +319,15 @@ export const LeagueCard = memo(function LeagueCard({
   lit: boolean;
   /** The press. `useActiveCard` drives the disclosure and the list together. */
   onToggle: (id: string, event: MouseEvent<HTMLElement>) => void;
+  /**
+   * Whether the standing and the four rank windows are folded away — true only
+   * while the card is open and the device's readings preference is off.
+   * Composed by the page rather than read here, so the preference flipping
+   * moves one prop on one card; see `useSummaryReadings`.
+   */
+  summaryFolded: boolean;
+  /** The `Ranks` key's press. A module-level function, so the memo holds. */
+  onToggleReadings: () => void;
 }) {
   return (
     // The `perspective` makes each `<li>` its own stacking context, so a card
@@ -512,15 +540,25 @@ export const LeagueCard = memo(function LeagueCard({
                 three figures read twice to anything listening, which is what
                 the plate-and-strip pair had to be careful about and this has
                 nothing to be careful about at all. */}
-            <StandingStripFields league={league} />
+            <StandingStripFields league={league} folded={summaryFolded} />
           </div>
 
           {/* The ranks get the row to themselves, under the rail rather than
-              beside it — so the windows stay a direct child of the summary,
-              which is what keeps their `translateZ` alive. A wrapper here would
-              be a flat rendering context and the depth would silently go. */}
+              beside it. **The fold wrapper is the summary's direct child and
+              carries the `translateZ`**: a wrapper between the summary and a
+              transformed grid is a flat rendering context and the grid's own
+              plane would silently go, where a transform on the wrapper itself
+              projects — see `SummaryFold`. The caps are above the row's
+              measured 86px / 102px and the margins are the row's own, so the
+              shown state is the shut card's, byte for byte. */}
+          <SummaryFold
+            folded={summaryFolded}
+            className="relative pointer-fine:[transform:translateZ(22px)]"
+            shownClassName="mt-2 max-h-[100px] opacity-100 sm:mt-2.5 sm:max-h-[140px]"
+            foldedClassName="mt-0 max-h-0 opacity-0"
+          >
           <div
-            className={`relative mt-2 grid gap-1.5 sm:mt-2.5 sm:gap-2 ${GRID_COLS[columns.length] ?? GRID_COLS[2]} pointer-fine:[transform:translateZ(22px)]`}
+            className={`grid gap-1.5 sm:gap-2 ${GRID_COLS[columns.length] ?? GRID_COLS[2]}`}
           >
             {columns.map((column, i) => (
               <RankWindow
@@ -537,6 +575,7 @@ export const LeagueCard = memo(function LeagueCard({
               />
             ))}
           </div>
+          </SummaryFold>
 
           {/*
             **The field size is stated once on this card, in the configuration
@@ -597,6 +636,8 @@ export const LeagueCard = memo(function LeagueCard({
           slots={slots}
           open={open}
           closing={open && !lit}
+          summaryFolded={summaryFolded}
+          onToggleReadings={onToggleReadings}
         />
       </details>
     </li>
@@ -617,6 +658,8 @@ export const LeagueCard = memo(function LeagueCard({
 function LeagueDetail({
   open,
   closing,
+  summaryFolded,
+  onToggleReadings,
   ...detail
 }: {
   leagueId: string;
@@ -626,6 +669,8 @@ function LeagueDetail({
   slots: readonly LineupSlot[];
   open: boolean;
   closing: boolean;
+  summaryFolded: boolean;
+  onToggleReadings: () => void;
 }) {
   // **Whether the reader has asked for this league's history**, held here
   // because the two halves of that gate now sit on either side of the panel's
@@ -646,6 +691,19 @@ function LeagueDetail({
     <ExpandedPanel
       open={open}
       closing={closing}
+      // The key that brings the summary's folded readings back leads the seam,
+      // and `History` — which acts on the panel — closes it. The panel exists
+      // only while the card is open, so "not folded" here *is* the device's
+      // preference, which is the one place the composed prop reads back as the
+      // boolean it was composed from.
+      seamStart={
+        <SummaryReadingsKey
+          label="Ranks"
+          title="Show the standing and the rank windows on this card"
+          shown={!summaryFolded}
+          onToggle={onToggleReadings}
+        />
+      }
       seamEnd={
         historyOpen ? undefined : (
           <TimelineHistoryKey onOpen={() => setHistoryOpen(true)} />
@@ -876,12 +934,38 @@ function rankField(
  * The figures take the ramp: see `standingFields` for which rule each field's
  * percentile comes from, and {@link StandingBay} for why the colour lands here
  * rather than on a plate.
+ *
+ * **It folds away while the card is open** (`folded`), in the two directions
+ * its two arrangements call for: vertically below `sm`, where the row above
+ * stacks it under the settings strip and the fold is a `max-height` with the
+ * column's 8px gap cancelled by a negative top margin; **sideways** from `sm`
+ * up, where it shares that row and the fold is a `max-width` with the row's
+ * gap cancelled by a negative *left* margin, so the settings strip beside it
+ * grows into what it leaves. The wrapper is `flex items-stretch` because the
+ * strip stretches to its neighbour's height to read as one block with it, and
+ * a wrapper between the two would otherwise be where that stretch stopped.
+ * The 420px cap is above any width three bays set; the vertical cap is above
+ * the strip's measured 37px. The wrapper is rendered *inside* this component
+ * so that a league with no standing contributes no wrapper either: an empty
+ * item in that row would still take its share of the row's `gap`.
  */
-function StandingStripFields({ league }: { league: ManagerLeague }) {
+function StandingStripFields({
+  league,
+  folded,
+}: {
+  league: ManagerLeague;
+  folded: boolean;
+}) {
   const fields = standingFields(league);
   if (fields.length === 0) return null;
 
   return (
+    <SummaryFold
+      folded={folded}
+      className="flex shrink-0 items-stretch"
+      shownClassName="mt-0 max-h-[60px] max-w-none opacity-100 sm:ml-0 sm:max-h-none sm:max-w-[420px]"
+      foldedClassName="-mt-2 max-h-0 max-w-none opacity-0 sm:-ml-2 sm:mt-0 sm:max-h-none sm:max-w-0"
+    >
     <StandingStrip>
       {fields.map((field) => (
         <StandingBay
@@ -894,6 +978,7 @@ function StandingStripFields({ league }: { league: ManagerLeague }) {
         </StandingBay>
       ))}
     </StandingStrip>
+    </SummaryFold>
   );
 }
 
