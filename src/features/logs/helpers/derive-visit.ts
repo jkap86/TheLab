@@ -37,6 +37,7 @@ export type Visit = {
 const SUBJECT_ROUTES: Record<string, "username" | "league"> = {
   manager: "username",
   lineupchecker: "username",
+  gametime: "username",
   picktracker: "league",
 };
 

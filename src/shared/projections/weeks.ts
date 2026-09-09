@@ -115,3 +115,38 @@ export async function restOfSeasonStart(
   }
   return 1;
 }
+
+/**
+ * The week a live or lineup tool reads when the caller named none, or null
+ * when the season has none left to read.
+ *
+ * `display_week` rather than `week`: Sleeper advances it to the week whose
+ * games are *next* once the current week's have been played, which is the
+ * week somebody setting or watching a lineup is asking about. A season Sleeper
+ * has moved past has no week left, and a state call that fails answers week 1
+ * — the widest honest window, the fallback the lineups route takes too.
+ *
+ * Takes its state reader as an argument on `restOfSeasonStart`'s terms: two
+ * routes and a streaming room all ask this, and the module stays free of the
+ * network so the rule can be pinned under Node's runner.
+ */
+export async function currentWeek(
+  season: string,
+  readState: () => Promise<Pick<NflStateLike, "season" | "week" | "display_week"> | null>,
+): Promise<number | null> {
+  const state = await readState().catch(() => null);
+  if (!state) return 1;
+
+  if (state.season === season) {
+    return clampWeek(state.display_week || state.week);
+  }
+  const requested = Number(season);
+  const current = Number(state.season);
+  if (Number.isFinite(requested) && Number.isFinite(current) && requested < current) {
+    return null;
+  }
+  return 1;
+}
+
+/** The three fields of Sleeper's NFL state this module reads. */
+type NflStateLike = { season: string; week: number; display_week: number };

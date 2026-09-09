@@ -96,3 +96,30 @@ export function shortName(name: string): string {
   const space = name.indexOf(" ");
   return space > 0 ? `${name.charAt(0)}. ${name.slice(space + 1)}` : name;
 }
+
+/**
+ * A kickoff instant as the reader's own clock prints it — `Sun 1:00 PM` in an
+ * en-US locale, `Sun 13:00` in a 24-hour one. Locale-formatted rather than
+ * fixed, which is why the column that holds it is measured against the widest
+ * string the formatter can produce rather than against a design's `Sun 1:00`.
+ * Null is "not known" and prints nothing — never "never plays".
+ */
+export function kickoffTime(at: number | null): string | null {
+  if (at === null) return null;
+  return new Intl.DateTimeFormat(undefined, {
+    weekday: "short",
+    hour: "numeric",
+    minute: "2-digit",
+  }).format(at);
+}
+
+/** Sleeper's slot names, shortened to fit a 38px column. Unmapped render as-is. */
+const SLOT_LABELS: Record<string, string> = {
+  SUPER_FLEX: "SF",
+  WRRB_FLEX: "W/R",
+  REC_FLEX: "W/T",
+  IDP_FLEX: "IDP",
+  FLEX: "FLX",
+};
+
+export const slotLabel = (slot: string): string => SLOT_LABELS[slot] ?? slot;

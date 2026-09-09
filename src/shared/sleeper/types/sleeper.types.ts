@@ -253,5 +253,31 @@ export type SleeperScoreGame = {
   metadata?: {
     home_team?: string | null;
     away_team?: string | null;
+    /**
+     * The live half of the row, which `schedule/parse` never reads and
+     * `schedule/game-clock` is built on. Checked against the live endpoint on
+     * the 2026 opener's day: a game that has not kicked off carries
+     * `has_started: false`, `is_in_progress: false`, `quarter: ""`,
+     * `quarter_num: ""` and no `time_remaining` (the very next game to start
+     * carries `"15:00"`); a finished one carries `is_over: true`,
+     * `quarter: "F"`, `quarter_num: 4`, `time_remaining: "00:00"` and both
+     * scores. `quarter_num` is a number while a game runs and the empty string
+     * before it, so it is typed as both rather than coerced here.
+     */
+    status?: string | null;
+    quarter?: string | null;
+    quarter_num?: number | string | null;
+    /** `mm:ss` left in the quarter named by `quarter_num`. */
+    time_remaining?: string | null;
+    has_started?: boolean | null;
+    is_in_progress?: boolean | null;
+    is_over?: boolean | null;
+    is_overtime?: boolean | null;
+    has1st_quarter_started?: boolean | null;
+    has2nd_quarter_started?: boolean | null;
+    has3rd_quarter_started?: boolean | null;
+    has4th_quarter_started?: boolean | null;
+    home_score?: number | null;
+    away_score?: number | null;
   } | null;
 };

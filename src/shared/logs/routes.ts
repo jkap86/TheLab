@@ -39,6 +39,7 @@ export const LOGGED_ROUTES = [
 export const LOGGED_ROUTE_PREFIXES = [
   "/manager",
   "/lineupchecker",
+  "/gametime",
   "/picktracker",
 ] as const;
 

@@ -4,6 +4,7 @@ import {
   CONSOLE_BILLET,
   CONSOLE_GLASS,
   CONSOLE_MILLED_WELL,
+  CONSOLE_PANE_TRACK,
   CONSOLE_WINDOW_LEDGE,
 } from "../console-chrome";
 import { Scanlines } from "./card-plate";
@@ -396,5 +397,84 @@ export function PaneDrawer({
     >
       {children}
     </div>
+  );
+}
+
+/**
+ * The recess on a pane's ledge, and what the pane reports about itself.
+ *
+ * The manager card's ledge carries this pane's *control*; a week pane has no
+ * pane-scoped control, so the track carries the readings instead — the same
+ * claim about ownership made with a different cargo: a figure on the ledge is
+ * plainly *this list's* total, where the same figure on the card's own plate
+ * would be the league's. The lineup checker's and the gametime page's, one
+ * spelling.
+ *
+ * **The legend drops below `lg` and the figures step down with it.** Measured
+ * at 390 a pane is ~165px, and a legend beside two labelled figures at the
+ * design's own sizes is ~205 — so the legend goes (the pane's own name is on
+ * the head row 4px below) and the figures take the size the rows under them
+ * use.
+ *
+ * **The height is fixed rather than a floor**, which is what makes two panes
+ * read across: a track sized to its content is 31.9px holding two totals and
+ * 29.8px holding a key, so a pane whose ledge held something else put its rows
+ * 2px out of step with the one opposite — invisible as anything but a slight
+ * wrongness. 32px is also the card's own control recess above.
+ */
+export function PaneLedgeTrack({ legend, children }: { legend: string; children: ReactNode }) {
+  return (
+    <div
+      className={`${CONSOLE_PANE_TRACK} flex h-8 min-w-0 items-center gap-1.5 p-[3px] pl-1.5 lg:h-[34px] lg:gap-2.5 lg:pl-3`}
+    >
+      <span
+        aria-hidden
+        className="hidden shrink-0 font-mono text-[length:var(--fs-10)] uppercase tracking-[0.16em] text-[color:var(--billet-label)] lg:inline"
+      >
+        {legend}
+      </span>
+      <span className="min-w-0 flex-1" />
+      {children}
+    </div>
+  );
+}
+
+/**
+ * One of a pane's totals, milled into the ledge.
+ *
+ * The figure sits in a `--recess-bg` cell under `--figure-well-shadow` — a hole
+ * cut in *metal*, the same turning-over `DrawerRow` already makes against the
+ * glass's own wells one surface down.
+ *
+ * Null draws an em dash rather than a zero, on the contract's own rule: a
+ * figure is null where there is no answer, and a `0.0` there is a roster
+ * scored at nothing.
+ */
+export function PaneTotal({
+  label,
+  value,
+  tone,
+}: {
+  label: string;
+  value: number | null;
+  tone?: "error" | "accent";
+}) {
+  const ink =
+    tone === "error"
+      ? "text-error"
+      : tone === "accent"
+        ? "text-[color:var(--billet-accent)]"
+        : "text-[color:var(--billet-figure)]";
+  return (
+    <span className="inline-flex shrink-0 items-baseline gap-[5px]">
+      <span className="font-mono text-[length:var(--fs-8)] uppercase tracking-[0.14em] text-[color:var(--billet-label)] lg:text-[length:var(--fs-9)]">
+        {label}
+      </span>
+      <span
+        className={`rounded-[5px] bg-[color:var(--recess-bg)] px-1 py-0.5 font-mono text-[length:var(--fs-11)] tabular-nums shadow-[var(--figure-well-shadow)] lg:px-1.5 lg:text-[length:var(--fs-12-5)] ${ink}`}
+      >
+        {value === null ? "—" : value.toFixed(1)}
+      </span>
+    </span>
   );
 }

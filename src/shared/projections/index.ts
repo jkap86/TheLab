@@ -8,6 +8,8 @@ export { getRosProjections, ROS_PROJECTIONS_TTL_MS } from "./ros-read";
 export { assembleRosProjections } from "./ros";
 export type { RosPlayerProjection, RosProjections, RosWeek } from "./ros";
 export { getWeekProjections, WEEK_PROJECTIONS_TTL_MS } from "./week-read";
+export { getWeekStats, statsStamp, WEEK_STATS_TTL_MS } from "./week-stats-read";
+export type { WeekStatsRead } from "./week-stats-read";
 export { assembleWeekProjections, dayLockedPlayers } from "./week";
 export type { WeekPlayerProjection, WeekProjections } from "./week";
 export { isRealProjection, readPlayerIdentity } from "./identity";
@@ -19,7 +21,7 @@ export {
   parseRequestedWeek,
 } from "./weeks";
 export type { RequestedWeek } from "./weeks";
-export { restOfSeasonStart } from "./weeks";
+export { currentWeek, restOfSeasonStart } from "./weeks";
 export {
   KICKOFF_BUFFER_MS,
   kickoffMoves,
