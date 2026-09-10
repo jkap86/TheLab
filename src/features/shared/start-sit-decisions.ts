@@ -1,6 +1,11 @@
-import { NON_STARTING_SLOTS, SLOT_POSITIONS } from "../../../shared/projections/slots.ts";
+import { NON_STARTING_SLOTS, SLOT_POSITIONS } from "../../shared/projections/slots.ts";
 
-import type { WeekLineupEntry, WeekSide } from "./starter-shares.ts";
+import {
+  sideOf,
+  type WeekLineupEntry,
+  type WeekSharePlayer,
+  type WeekSide,
+} from "./week-shares.ts";
 
 /**
  * Who a player was started over, and who he was sat behind.
@@ -13,10 +18,17 @@ import type { WeekLineupEntry, WeekSide } from "./starter-shares.ts";
  *
  * **Legality is the seat's, not the two players'**, and it is the one rule here
  * that is silent when wrong. A wide receiver is not a candidate for a
- * quarterback-only slot, and listing him as one is a claim the lineup checker
- * must not make — `lineup-check-card.tsx`'s module note is about exactly this
- * class of false statement. So a pairing the league's own lineup cannot express
- * is not listed at all, and a pairing that needs a chained seat says which one.
+ * quarterback-only slot, and listing him as one is a claim a week tool must not
+ * make — `lineup-check-card.tsx`'s module note is about exactly this class of
+ * false statement. So a pairing the league's own lineup cannot express is not
+ * listed at all, and a pairing that needs a chained seat says which one.
+ *
+ * **Two tools read it**, over the same normalised side `weekPlayerShares` folds
+ * — the lineup checker, where the figure the calls are judged on is a
+ * projection, and gametime, where it is the live projection. What a decision
+ * *cost* is therefore whatever the page adapted onto
+ * {@link WeekSharePlayer.figure}, and this module never names it: a delta here
+ * is one figure less another, and the word for it is the drawer's.
  *
  * Pure, and everything it reads arrives as an argument: the contract is an
  * erased `import type` and the slot vocabulary comes in relatively with a `.ts`
@@ -53,19 +65,18 @@ export type DecisionRow = {
   seat_index: number | null;
   route: SwapRoute;
   /**
-   * What the call was worth: the started player's projection less the benched
-   * one's, whichever side the subject was on. Positive is the lineup getting it
-   * right.
+   * What the call was worth: the started player's figure less the benched one's,
+   * whichever side the subject was on. Positive is the lineup getting it right.
    *
-   * **Null where either player is unprojected**, never zero — the feed has no
-   * row for him, which is not a projection of nothing, and a zero here would
-   * read as a decision that cost exactly nothing.
+   * **Null where either player has no figure**, never zero — the feed has no row
+   * for him, which is not a projection of nothing, and a zero here would read as
+   * a decision that cost exactly nothing.
    */
   delta: number | null;
   /**
-   * Whether this lineup left points behind — a started player projected under
-   * the bench player he was started over, or a benched player projected over
-   * the starter he sat behind. False where there is no delta to judge.
+   * Whether this lineup left points behind — a started player figuring under
+   * the bench player he was started over, or a benched player figuring over the
+   * starter he sat behind. False where there is no delta to judge.
    */
   lost: boolean;
 };
@@ -77,12 +88,12 @@ export type DecisionGroup = {
   position: string | null;
   team: string | null;
   /**
-   * His projection where every league in {@link rows} agrees, else null — the
-   * rule `WeekPlayerShare.points` is written by and for the same reason: a
-   * projection is scored by the league's own settings, and this row spans
+   * His figure where every league in {@link rows} agrees, else null — the rule
+   * `WeekPlayerShare.figure` is written by and for the same reason: either
+   * tool's figure is scored by the league's own settings, and this row spans
    * leagues. Narrowing the view to one counterpart is what makes it answerable.
    */
-  points: number | null;
+  figure: number | null;
   /** Leagues the subject was started over him in. */
   starts: number;
   /** Leagues the subject sat behind him in. */
@@ -182,6 +193,17 @@ export function relFor(
  * that answers what can still be changed; this answers what was already
  * decided, and a decision does not stop having been made because the game
  * started. Gating on it would have the list quietly shrink through Sunday.
+ *
+ * **A lineup the manager did not set contributes nothing**, which is the one
+ * gate here rather than a filter the caller could forget. Sleeper seats a
+ * best-ball team itself, from the whole roster, after the games — so a row
+ * reading "started over" there is a call nobody made, and on gametime it is
+ * worse than merely wrong: that lineup is *solved* from the very figures the
+ * delta compares, so every such row would be a decision the reader is told they
+ * got right, by construction, in a league they never chose a lineup for. The
+ * shares keep counting those leagues, because who is on a roster and who got
+ * seated are real readings; only the calls go. See
+ * {@link WeekLineupEntry.set_by_manager}.
  */
 export function decisionsFor(
   playerId: string,
@@ -190,14 +212,12 @@ export function decisionsFor(
 ): DecisionGroup[] {
   const groups = new Map<string, DecisionGroup>();
 
-  for (const { league, entry } of entries) {
-    const fielded =
-      side === "starter"
-        ? { lineup: entry.lineup, bench: entry.bench }
-        : entry.opponent_lineup && entry.opponent_bench
-          ? { lineup: entry.opponent_lineup, bench: entry.opponent_bench }
-          : null;
+  for (const entry of entries) {
+    if (!entry.set_by_manager) continue;
+    const fielded = sideOf(entry, side);
     if (!fielded) continue;
+
+    const league = entry.league;
 
     const positions = league.roster_positions;
     // Which of a repeated slot each seat is, resolved once per league so the
@@ -220,7 +240,7 @@ export function decisionsFor(
           seat,
           seat_index: seatIndex[seatedAt],
           route,
-          ...call(mine.points, other.points),
+          ...call(mine.figure, other.figure),
         });
       }
       continue;
@@ -239,7 +259,7 @@ export function decisionsFor(
         seat: seat.slot,
         seat_index: seatIndex[i],
         route,
-        ...call(other.points, mine.points),
+        ...call(other.figure, mine.figure),
       });
     });
   }
@@ -256,15 +276,15 @@ export function decisionsFor(
   );
 }
 
-/** How the two projections compare, and whether the lineup left points behind. */
+/** How the two figures compare, and whether the lineup left points behind. */
 function call(
-  startedPoints: number | null,
-  benchedPoints: number | null,
+  started: number | null,
+  benched: number | null,
 ): Pick<DecisionRow, "delta" | "lost"> {
-  if (startedPoints === null || benchedPoints === null) {
+  if (started === null || benched === null) {
     return { delta: null, lost: false };
   }
-  const delta = startedPoints - benchedPoints;
+  const delta = started - benched;
   return { delta, lost: delta < 0 };
 }
 
@@ -299,13 +319,7 @@ function seatIndices(slots: readonly string[]): (number | null)[] {
 function record(
   groups: Map<string, DecisionGroup>,
   league: { league_id: string; name: string },
-  other: {
-    player_id: string;
-    name: string | null;
-    positions: string[];
-    team: string | null;
-    points: number | null;
-  },
+  other: WeekSharePlayer,
   row: Omit<DecisionRow, "league_id" | "league_name">,
 ): void {
   let group = groups.get(other.player_id);
@@ -315,7 +329,7 @@ function record(
       name: other.name ?? other.player_id,
       position: other.positions[0] ?? null,
       team: other.team,
-      points: other.points,
+      figure: other.figure,
       starts: 0,
       sits: 0,
       rows: [],
@@ -326,10 +340,10 @@ function record(
     // second sighting in a league already recorded is the same row read twice
     // and must not be able to null a figure the first sighting agreed on.
     if (group.rows.some((r) => r.league_id === league.league_id)) return;
-    if (group.points !== other.points) {
+    if (group.figure !== other.figure) {
       // Two leagues that price him differently have no shared answer — see
-      // `points`, and `WeekPlayerShare.points` for the argument in full.
-      group.points = null;
+      // `figure`, and `WeekPlayerShare.figure` for the argument in full.
+      group.figure = null;
     }
   }
 

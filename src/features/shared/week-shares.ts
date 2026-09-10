@@ -1,10 +1,10 @@
-import type { LineupCheckLeague, ManagerLeague } from "@/shared/contract";
+import type { ManagerLeague } from "@/shared/contract";
 
 /**
  * How many of a week's lineups seated each player, and how many left him off.
  *
  * The week's answer to the question `playerShares` answers for a season, and
- * folded on the client for the same reason that one is: this page narrows its
+ * folded on the client for the same reason that one is: a week tool narrows its
  * league list five ways, and a share counted over anything but the leagues in
  * front of the reader is a different question. A reader narrowed to dynasty
  * wants their dynasty week.
@@ -16,12 +16,88 @@ import type { LineupCheckLeague, ManagerLeague } from "@/shared/contract";
  * first — the rule `facetsQuery` already enforces for the trades board's own
  * menus and `playerShares` for the manager page's.
  *
+ * **It is `features/shared` because two tools ask it**, which is the line
+ * `league-subjects.ts`, `shares-drawer.tsx` and `subject-tokens.tsx` all moved
+ * on. The lineup checker asks it of the lineups a reader *set*, and gametime
+ * asks it of the same lineups as they are being *played* — the same fold over
+ * the same leagues, and two copies of it would be two chances for one to count
+ * differently from the other, which is the failure nobody could see: both
+ * would render.
+ *
+ * **So it reads a normalised side rather than either tool's payload.** Their
+ * two wires are genuinely different shapes — the checker's league carries
+ * `lineup`/`bench` and three `opponent_*` fields, gametime's carries a `mine`
+ * and an `opponent` side — and each is adapted at its own page, in one place,
+ * where the choice of {@link WeekSharePlayer.figure} is also made and written
+ * down. A fold that read both would be a fold with a `switch` in it.
+ *
  * Pure, and the contract arrives as an erased `import type`, so it tests under
  * Node's runner without a render behind it.
  */
 
 /** Which side of the week's games a fold is counting. */
 export type WeekSide = "starter" | "opponent";
+
+/**
+ * One rostered player, as a week panel compares him.
+ *
+ * A projection to the checker and a live projection to gametime — which is why
+ * the field is `figure` rather than `points`. Named for the *reading* rather
+ * than for either tool's number, because a shared type spelling `points` would
+ * read as "projected points" on the one page where it is emphatically not
+ * that. The label a reader sees is the caller's too — see the drawer's
+ * `figureLabel`.
+ */
+export type WeekSharePlayer = {
+  player_id: string;
+  name: string | null;
+  positions: string[];
+  team: string | null;
+  /**
+   * The one figure this tool's panels compare players on, or null where it has
+   * no answer for him — never zero, on both wires' own grammar.
+   */
+  figure: number | null;
+};
+
+/** One starting slot of a lineup. */
+export type WeekShareSeat = {
+  slot: string;
+  /** Null for a slot Sleeper is carrying empty. */
+  player: WeekSharePlayer | null;
+};
+
+/** The seats and the bench one side of a league's game fielded. */
+export type WeekShareSide = {
+  lineup: readonly WeekShareSeat[];
+  bench: readonly WeekSharePlayer[];
+};
+
+/** One league's contribution, already adapted out of a payload by the caller. */
+export type WeekLineupEntry = {
+  league: ManagerLeague;
+  /** The manager's own side. */
+  mine: WeekShareSide;
+  /**
+   * The other side of the game, or **null where there is no answer** — a future
+   * week, a week Sleeper filed without a pairing, an opponent whose roster is
+   * not stored. Never an empty side for any of them: a panel counting opposing
+   * players over an empty list would report that the opponent fielded nobody in
+   * a league that has simply not been asked yet.
+   */
+  opponent: WeekShareSide | null;
+  /**
+   * Whether the manager set this lineup themselves.
+   *
+   * False in a best-ball league, where Sleeper seats the team from the whole
+   * roster after the games are played — so the lineup on the wire is whatever
+   * the draft left behind (the checker) or what the live figures solve to
+   * (gametime), and neither is a call anybody made. The shares still count it,
+   * because who is on a roster and who got seated are real readings; the
+   * decisions walk skips it. See `decisionsFor`.
+   */
+  set_by_manager: boolean;
+};
 
 /** One player, and how the week's lineups treated him. */
 export type WeekPlayerShare = {
@@ -32,12 +108,12 @@ export type WeekPlayerShare = {
   position: string | null;
   team: string | null;
   /**
-   * His projection, where every counted league that priced him agrees, and
-   * **null where they do not**.
+   * His {@link WeekSharePlayer.figure}, where every counted league that priced
+   * him agrees, and **null where they do not**.
    *
-   * A projection is a stat line scored by the league's own settings, so a
-   * player is worth one number in a PPR league and another in a half-PPR one —
-   * and a row here spans leagues. There is no honest single figure across two
+   * Either tool's figure is a stat line scored by the league's own settings, so
+   * a player is worth one number in a PPR league and another in a half-PPR one
+   * — and a row here spans leagues. There is no honest single figure across two
    * scorings, and the two ways of inventing one are both worse than an em dash:
    * an average is a number no league pays, and picking the first league's is
    * that same number with the arbitrariness hidden.
@@ -49,7 +125,7 @@ export type WeekPlayerShare = {
    * never affected — those are computed inside one lineup, where the scoring is
    * whatever that league says.
    */
-  points: number | null;
+  figure: number | null;
   /** How many of the counted lineups started him. */
   started: number;
   /** How many benched him. `started + benched` is every league he was on. */
@@ -63,7 +139,7 @@ export type WeekPlayerShares = {
    * The denominator: leagues that **contributed a lineup**, not leagues on
    * screen.
    *
-   * A league the check answered nothing for is skipped rather than counted as
+   * A league the read answered nothing for is skipped rather than counted as
    * one starting nobody — and on the opponent side, so is a league with no
    * opponent to read (a future week, an unpaired week, an unstored roster). A
    * partly-answered account therefore reports its shares over fewer leagues
@@ -75,23 +151,14 @@ export type WeekPlayerShares = {
   players: WeekPlayerShare[];
 };
 
-/** One league's contribution, already picked out of the payload by the caller. */
-export type WeekLineupEntry = {
-  league: ManagerLeague;
-  entry: LineupCheckLeague;
-};
-
-/** The seats and the bench one side of a league's game fielded. */
-function sideOf(entry: LineupCheckLeague, side: WeekSide) {
-  if (side === "starter") {
-    return { lineup: entry.lineup, bench: entry.bench };
-  }
-  // **Null is not an empty lineup**, and the difference is the whole reason the
-  // contract keeps these nullable: a week nobody is scheduled for has no
-  // opposing players to count, where an empty list would report that the
-  // opponent fielded nobody.
-  if (!entry.opponent_lineup || !entry.opponent_bench) return null;
-  return { lineup: entry.opponent_lineup, bench: entry.opponent_bench };
+/** The side a fold or a walk is reading, or null where there is none. */
+export function sideOf(
+  entry: WeekLineupEntry,
+  side: WeekSide,
+): WeekShareSide | null {
+  // **Null is not an empty lineup**, and the difference is the whole reason
+  // both wires keep the opponent nullable — see {@link WeekLineupEntry.opponent}.
+  return side === "starter" ? entry.mine : entry.opponent;
 }
 
 /**
@@ -110,11 +177,13 @@ export function weekPlayerShares(
   const rows = new Map<string, WeekPlayerShare>();
   let leagueCount = 0;
 
-  for (const { league, entry } of entries) {
+  for (const entry of entries) {
     const fielded = sideOf(entry, side);
     // Absent is not empty — see `league_count`.
     if (!fielded) continue;
     leagueCount++;
+
+    const league = entry.league;
 
     // Which of this league's two arrays a player was in, resolved before any
     // counting: one lineup is one decision per player, so a roster naming him
@@ -122,16 +191,7 @@ export function weekPlayerShares(
     // counted as started *and* benched in the same week.
     const seen = new Set<string>();
 
-    const count = (
-      player: {
-        player_id: string;
-        name: string | null;
-        positions: string[];
-        team: string | null;
-        points: number | null;
-      },
-      started: boolean,
-    ) => {
+    const count = (player: WeekSharePlayer, started: boolean) => {
       if (seen.has(player.player_id)) return;
       seen.add(player.player_id);
 
@@ -142,17 +202,17 @@ export function weekPlayerShares(
           name: player.name ?? player.player_id,
           position: player.positions[0] ?? null,
           team: player.team,
-          points: player.points,
+          figure: player.figure,
           started: 0,
           benched: 0,
           leagues: [],
         };
         rows.set(player.player_id, row);
-      } else if (row.points !== player.points) {
+      } else if (row.figure !== player.figure) {
         // Two leagues that price him differently have no shared answer — see
-        // `points`. Null once, null for the rest of the fold: a later league
+        // `figure`. Null once, null for the rest of the fold: a later league
         // agreeing with the first cannot un-disagree the one in between.
-        row.points = null;
+        row.figure = null;
       }
 
       if (started) row.started++;

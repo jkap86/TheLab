@@ -1,50 +1,61 @@
 import assert from "node:assert/strict";
 import { describe, test } from "node:test";
 
+import type { ManagerLeague } from "@/shared/contract";
+
+import { weekPlayerShares } from "./week-shares.ts";
 import type {
-  LineupCheckLeague,
-  LineupCheckPlayer,
-  LineupCheckSeat,
-  ManagerLeague,
-} from "@/shared/contract";
+  WeekLineupEntry,
+  WeekSharePlayer,
+  WeekShareSeat,
+  WeekShareSide,
+} from "./week-shares.ts";
 
-import { weekPlayerShares } from "./starter-shares.ts";
-import type { WeekLineupEntry } from "./starter-shares.ts";
-
+/**
+ * The fixtures are the **normalised** side rather than either tool's payload,
+ * which is the whole point of the fold taking one: what is under test is the
+ * counting, and a fixture shaped like the checker's wire would be a test that
+ * passed for gametime by accident.
+ */
 function player(
   id: string,
-  points: number | null = 10,
-  over: Partial<LineupCheckPlayer> = {},
-): LineupCheckPlayer {
+  figure: number | null = 10,
+  over: Partial<WeekSharePlayer> = {},
+): WeekSharePlayer {
   return {
     player_id: id,
     name: id.toUpperCase(),
     positions: ["RB"],
-    points,
     team: "BAL",
-    kickoff: null,
-    locked: false,
+    figure,
     ...over,
   };
 }
 
-const seat = (slot: string, p: LineupCheckPlayer | null): LineupCheckSeat => ({
+const seat = (slot: string, p: WeekSharePlayer | null): WeekShareSeat => ({
   slot,
   player: p,
-  move_to: null,
 });
 
 function one(
   id: string,
-  lineup: LineupCheckSeat[],
-  bench: LineupCheckPlayer[],
-  over: Partial<LineupCheckLeague> = {},
+  lineup: WeekShareSeat[],
+  bench: WeekSharePlayer[],
+  over: Partial<Omit<WeekLineupEntry, "league" | "mine">> = {},
 ): WeekLineupEntry {
   return {
     league: { league_id: id, name: `League ${id}` } as unknown as ManagerLeague,
-    entry: { lineup, bench, ...over } as unknown as LineupCheckLeague,
+    mine: { lineup, bench },
+    opponent: null,
+    set_by_manager: true,
+    ...over,
   };
 }
+
+const side = (
+  lineup: WeekShareSeat[],
+  bench: WeekSharePlayer[],
+): WeekShareSide => ({ lineup, bench });
 
 describe("weekPlayerShares", () => {
   test("counts the seats and the bench apart", () => {
@@ -93,10 +104,7 @@ describe("weekPlayerShares", () => {
     const shares = weekPlayerShares(
       [
         one("l1", [seat("RB", player("a"))], []),
-        one("l2", [seat("RB", player("a"))], [], {
-          opponent_lineup: null,
-          opponent_bench: null,
-        }),
+        one("l2", [seat("RB", player("a"))], [], { opponent: null }),
       ],
       "opponent",
     );
@@ -110,8 +118,7 @@ describe("weekPlayerShares", () => {
     const shares = weekPlayerShares(
       [
         one("l1", [seat("RB", mine)], [], {
-          opponent_lineup: [seat("RB", theirs)],
-          opponent_bench: [player("their-bench")],
+          opponent: side([seat("RB", theirs)], [player("their-bench")]),
         }),
       ],
       "opponent",
@@ -128,7 +135,7 @@ describe("weekPlayerShares", () => {
     );
   });
 
-  test("a projection two leagues disagree on has no shared answer", () => {
+  test("a figure two leagues disagree on has no shared answer", () => {
     const shares = weekPlayerShares(
       [
         one("l1", [seat("RB", player("a", 12))], []),
@@ -136,10 +143,10 @@ describe("weekPlayerShares", () => {
       ],
       "starter",
     );
-    assert.equal(shares.players[0].points, null);
+    assert.equal(shares.players[0].figure, null);
   });
 
-  test("a projection every league agrees on survives, and null is not zero", () => {
+  test("a figure every league agrees on survives, and null is not zero", () => {
     const agreed = weekPlayerShares(
       [
         one("l1", [seat("RB", player("a", 12))], []),
@@ -147,9 +154,9 @@ describe("weekPlayerShares", () => {
       ],
       "starter",
     );
-    assert.equal(agreed.players[0].points, 12);
+    assert.equal(agreed.players[0].figure, 12);
 
-    // Unprojected in both is still unprojected, not a disagreement.
+    // Figureless in both is still figureless, not a disagreement.
     const blank = weekPlayerShares(
       [
         one("l1", [seat("RB", player("a", null))], []),
@@ -157,7 +164,7 @@ describe("weekPlayerShares", () => {
       ],
       "starter",
     );
-    assert.equal(blank.players[0].points, null);
+    assert.equal(blank.players[0].figure, null);
   });
 
   test("most started first, then most benched, then by name", () => {

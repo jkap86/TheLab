@@ -13,27 +13,35 @@ import {
   DEFAULT_LEAGUE_FILTERS,
   filterSummary,
   BILLET_KEY_CHROME,
+  CONSOLE_KEY,
   CONSOLE_METAL_TRACK_SM,
   FlaskDefs,
   LeagueFiltersDialog,
   ManagerBillet,
   matchesFilters,
   matchesSubjects,
+  narrowedEmptyState,
   NO_SUBJECTS,
+  OpponentSharesDrawer,
   PLATE_KEY,
   removeSubject,
+  subjectCount,
+  StarterSharesDrawer,
   SubjectTokens,
   toggleSubject,
   toggleSummaryReadings,
   type LeagueSubjects,
-  type RackDrawerKey,
   type Subject,
   type SubjectRolls,
+  type WeekLineupEntry,
+  type WeekSharePlayer,
+  type WeekShareSide,
   useManagerLeagues,
   useActiveCard,
   usePublishRackControls,
   useSummaryReadings,
   useUrlParam,
+  WEEK_BROWSE_KEYS,
   WeekStepper,
   writeQueryParam,
 } from "@/features/shared";
@@ -42,43 +50,59 @@ import {
 // network: this module is pure and this is the one predicate that says what a
 // week is. `week-stepper.tsx` reads `LAST_REGULAR_WEEK` the same way.
 import { isPlausibleWeek } from "@/shared/projections/weeks";
+import type { LineupCheckPlayer, LineupCheckSeat } from "@/shared/contract";
 
 import { useLineupCheck } from "../hooks/use-lineup-check";
 import {
   attentionByReason,
   needsAttention,
 } from "../helpers/lineup-check-metrics";
-import type { WeekLineupEntry } from "../helpers/starter-shares";
 import { weekSummary } from "../helpers/week-summary";
 import { AttentionStrip } from "./attention-strip";
-import { OpponentsMark, StartersMark } from "./browse-marks";
 import { LineupCheckCard, LineupMarkDefs } from "./lineup-check-card";
-import { OpponentSharesDrawer } from "./opponent-shares-drawer";
-import { StarterSharesDrawer } from "./starter-shares-drawer";
 import { WeekSummary } from "./week-summary";
-
-/**
- * The two Browse keys this page puts in the rack: their legends, and the
- * glyphs the rack draws them as below `md`.
- *
- * **Module scope, not a literal in the render**, which is the requirement
- * `usePublishRackControls` states rather than a habit: the publish effect
- * depends on this array, so one rebuilt each render would publish each render,
- * set an ancestor's state and re-render — a loop rather than a stale value.
- * The two `icon` elements are built once here for the same reason.
- *
- * The glyphs are this folder's — see `browse-marks.tsx` — because the rack
- * cannot `switch` on the route, which is exactly why the legends became data
- * when this page became the second publisher of a pair.
- */
-const BROWSE_KEYS: readonly RackDrawerKey[] = [
-  { kind: "starter", label: "Starters", icon: <StartersMark /> },
-  { kind: "opponent", label: "Opponents", icon: <OpponentsMark /> },
-];
 
 /** Stable empty answer, so a render before the check lands hands the memos below
  *  the same object rather than a new one to recompute from. */
 const NO_LEAGUES: Record<string, never> = {};
+const NO_ENTRIES: WeekLineupEntry[] = [];
+
+/**
+ * One player, as the shared week panels compare him — this tool's projection on
+ * {@link WeekSharePlayer.figure}.
+ *
+ * Null stays null and is never a zero: the feed has no row for the id, which is
+ * a different answer from a bye, and it is the grammar the panels' em dash is
+ * drawn by.
+ */
+/** Everyone one side of a league fielded, as the narrowing reads them. */
+const fieldedIds = (
+  lineup: readonly LineupCheckSeat[],
+  bench: readonly LineupCheckPlayer[],
+): string[] => [
+  ...lineup.flatMap((seat) => (seat.player ? [seat.player.player_id] : [])),
+  ...bench.map((p) => p.player_id),
+];
+
+const figured = (player: LineupCheckPlayer): WeekSharePlayer => ({
+  player_id: player.player_id,
+  name: player.name,
+  positions: player.positions,
+  team: player.team,
+  figure: player.points,
+});
+
+/** One side of a league's game, as the shared fold reads it. */
+const asSide = (
+  lineup: readonly LineupCheckSeat[],
+  bench: readonly LineupCheckPlayer[],
+): WeekShareSide => ({
+  lineup: lineup.map((seat) => ({
+    slot: seat.slot,
+    player: seat.player ? figured(seat.player) : null,
+  })),
+  bench: bench.map(figured),
+});
 
 /**
  * The lineup checker: every league this account plays in, what its lineup is
@@ -238,18 +262,55 @@ function Checker({
     [leagues, filters],
   );
 
-  // One league's contribution to a week fold: the league row the page draws and
-  // the week the check solved for it. A league the check answered nothing for
-  // is absent rather than present and empty — the denominator rule the two
-  // panels' `league_count` is written by.
-  const entries = useMemo<WeekLineupEntry[]>(
-    () =>
-      leagueFiltered.flatMap((league) => {
-        const entry = checked[league.league_id];
-        return entry ? [{ league, entry }] : [];
-      }),
-    [leagueFiltered, checked],
-  );
+  /**
+   * **Neither the entries nor the roll maps are built until a drawer has been
+   * opened**, which is the latch's second job and `/api/trades/facets`' own
+   * bargain: a reader who never presses a Browse key pays nothing for the
+   * panels. Both are a walk over every player of every roster on the account,
+   * and `matchesSubjects` returns true without asking the resolver while the
+   * selection is empty — so before the first press there is nothing to answer
+   * for. The latch never goes back, so a picked subject that outlives its
+   * drawer still narrows.
+   */
+  const browsed = opened.size > 0;
+
+  /**
+   * One league's contribution to a week fold: the league row the page draws and
+   * the week the check solved for it, **adapted to the shared side shape**. A
+   * league the check answered nothing for is absent rather than present and
+   * empty — the denominator rule the two panels' `league_count` is written by.
+   *
+   * `figure` is this tool's own answer to what a week panel compares players
+   * on, and for the checker it is the projection: this page's whole question is
+   * what a lineup is projected to score against the best one still reachable,
+   * so a panel judging its calls on anything else would be judging them on a
+   * number no card here prints. Gametime adapts the same shape onto its live
+   * figure — see `week-shares.ts` for why the field is named for the reading
+   * rather than for either tool's number.
+   *
+   * The opposing side is null wherever the totals beside it are, and never an
+   * empty side: the three reasons are `LineupCheckLeague.opponent_lineup`'s own.
+   */
+  const entries = useMemo<WeekLineupEntry[]>(() => {
+    if (!browsed) return NO_ENTRIES;
+    return leagueFiltered.flatMap((league) => {
+      const entry = checked[league.league_id];
+      if (!entry) return [];
+      return [
+        {
+          league,
+          mine: asSide(entry.lineup, entry.bench),
+          opponent:
+            entry.opponent_lineup && entry.opponent_bench
+              ? asSide(entry.opponent_lineup, entry.opponent_bench)
+              : null,
+          // Sleeper seats a best-ball lineup itself, so nothing in it is a call
+          // anybody made — see `WeekLineupEntry.set_by_manager`.
+          set_by_manager: !entry.best_ball,
+        },
+      ];
+    });
+  }, [browsed, leagueFiltered, checked]);
 
   // The two populations a subject picked on this page is answered from: who was
   // on each of the manager's rosters this week, and who was on each opponent's.
@@ -259,24 +320,15 @@ function Checker({
   const rolls = useMemo(() => {
     const starter: Record<string, string[]> = {};
     const opponent: Record<string, string[]> = {};
+    if (!browsed) return { starter, opponent };
     for (const [id, entry] of Object.entries(checked)) {
-      starter[id] = [
-        ...entry.lineup.flatMap((seat) =>
-          seat.player ? [seat.player.player_id] : [],
-        ),
-        ...entry.bench.map((p) => p.player_id),
-      ];
+      starter[id] = fieldedIds(entry.lineup, entry.bench);
       if (entry.opponent_lineup && entry.opponent_bench) {
-        opponent[id] = [
-          ...entry.opponent_lineup.flatMap((seat) =>
-            seat.player ? [seat.player.player_id] : [],
-          ),
-          ...entry.opponent_bench.map((p) => p.player_id),
-        ];
+        opponent[id] = fieldedIds(entry.opponent_lineup, entry.opponent_bench);
       }
     }
     return { starter, opponent };
-  }, [checked]);
+  }, [browsed, checked]);
 
   // Null until the check lands, which `matchesSubjects` reads as "nothing here
   // can say" and ignores — the only reading that matches what is on screen,
@@ -305,15 +357,15 @@ function Checker({
   // those names live, so an id that outlives its payload falls back to itself
   // rather than to a blank chip.
   const subjectName = (subject: Subject) => {
-    for (const { entry } of entries) {
-      const sides = [
-        entry.lineup,
-        entry.opponent_lineup ?? [],
-      ].flatMap((lineup) => lineup.flatMap((s) => (s.player ? [s.player] : [])));
-      const found = [...sides, ...entry.bench, ...(entry.opponent_bench ?? [])].find(
-        (p) => p.player_id === subject.id,
-      );
-      if (found?.name) return found.name;
+    for (const entry of entries) {
+      for (const fielded of [entry.mine, entry.opponent]) {
+        if (!fielded) continue;
+        const found =
+          fielded.lineup.find((s) => s.player?.player_id === subject.id)
+            ?.player ??
+          fielded.bench.find((p) => p.player_id === subject.id);
+        if (found?.name) return found.name;
+      }
     }
     return subject.id;
   };
@@ -361,7 +413,7 @@ function Checker({
   );
 
   usePublishRackControls({
-    keys: BROWSE_KEYS,
+    keys: WEEK_BROWSE_KEYS,
     drawer,
     onOpenDrawer: openDrawer,
   });
@@ -388,6 +440,22 @@ function Checker({
     }),
     [visible, checked],
   );
+
+  /**
+   * What to say, and what to offer, when the grid narrows to nothing — see
+   * `narrowedEmptyState`. Two things narrow it, they are undone by two
+   * different controls, and a message naming the wrong one comes with a key
+   * that does nothing.
+   */
+  const empty = narrowedEmptyState(
+    narrowing,
+    subjectCount(subjects) > 0,
+    filterSummary(filters),
+  );
+  const clearNarrowing = () => {
+    if (empty.action !== "subjects") setFilters(DEFAULT_LEAGUE_FILTERS);
+    if (empty.action !== "filters") setSubjects(NO_SUBJECTS);
+  };
 
   const name = user ? user.display_name || user.username : username;
 
@@ -532,14 +600,24 @@ function Checker({
 
       {/* The drawers hide their own state once closed, so the narrowing they
           left behind needs a home on the page — the manager console's own
-          argument, and the same strip. */}
-      <SubjectTokens
-        subjects={subjects}
-        names={subjectName}
-        onRemove={(s) => setSubjects((prev) => removeSubject(prev, s))}
-        onMatch={(match) => setSubjects((prev) => ({ ...prev, match }))}
-        onClear={() => setSubjects(NO_SUBJECTS)}
-      />
+          argument, and the same strip.
+
+          **It stands down with the rest of the page while a card is parked**,
+          which it did not until gametime grew the same tray and the two were
+          put side by side: a parked card *is* the screen, so a token strip left
+          lit above one was the only thing on this page that did not fade with
+          the header and the other cards. `contents` at rest so the layout is
+          what it was, and the stylesheet gives it a box for as long as it is
+          fading — opacity has no effect on an element with none. */}
+      <div className={`contents ${card.chromeClass}`}>
+        <SubjectTokens
+          subjects={subjects}
+          names={subjectName}
+          onRemove={(s) => setSubjects((prev) => removeSubject(prev, s))}
+          onMatch={(match) => setSubjects((prev) => ({ ...prev, match }))}
+          onClear={() => setSubjects(NO_SUBJECTS)}
+        />
+      </div>
 
       {error ? (
         <Alert>{error}</Alert>
@@ -571,14 +649,32 @@ function Checker({
             </Plate>
           ) : visible.length === 0 ? (
             // A different claim from the one above: that one is about the
-            // manager, this one is about the selection.
+            // manager, this one is about the selection — and *which* of the two
+            // narrowings emptied the page decides the words and the key, since
+            // a message naming the wrong one comes with a control that does
+            // nothing. See `narrowedEmptyState`.
             <Plate>
-              <p className="m-0 font-mono text-[length:var(--fs-13)] text-foreground/72">
-                No leagues match these filters.
-              </p>
-              <p className="mt-2 truncate font-mono text-[length:var(--fs-11)] uppercase tracking-[0.16em] text-active">
-                {filterSummary(filters)}
-              </p>
+              <div className="flex flex-wrap items-center justify-between gap-5">
+                <div className="min-w-0">
+                  <p className="m-0 font-mono text-[length:var(--fs-13)] text-foreground/72">
+                    {empty.message}
+                  </p>
+                  {empty.summary ? (
+                    <p className="mt-2 truncate font-mono text-[length:var(--fs-11)] uppercase tracking-[0.16em] text-active">
+                      {empty.summary}
+                    </p>
+                  ) : null}
+                </div>
+                {/* A real key, from the constant rather than a hand-spelled
+                    riser — which is how one of them stops travelling. */}
+                <button
+                  type="button"
+                  onClick={clearNarrowing}
+                  className={CONSOLE_KEY}
+                >
+                  {empty.label}
+                </button>
+              </div>
             </Plate>
           ) : (
             <>
@@ -636,6 +732,9 @@ function Checker({
           week={check?.week ?? null}
           leagueTotal={leagues.length}
           filterSummary={narrowing ? filterSummary(filters) : null}
+          /* The projection: this page's own figure, and the one every card on
+             it prints. See the `entries` adapter. */
+          figureLabel="Proj"
           pending={check === null}
           subjects={subjects}
           onToggle={(s) => setSubjects((prev) => toggleSubject(prev, s))}
@@ -649,6 +748,7 @@ function Checker({
           week={check?.week ?? null}
           leagueTotal={leagues.length}
           filterSummary={narrowing ? filterSummary(filters) : null}
+          figureLabel="Proj"
           pending={check === null}
           subjects={subjects}
           onToggle={(s) => setSubjects((prev) => toggleSubject(prev, s))}

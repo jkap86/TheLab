@@ -169,6 +169,35 @@ export type {
   SharesDrawerRow,
 } from "./ui/shares-drawer";
 export { SubjectTokens } from "./ui/subject-tokens";
+// A **week's** shares, and the two panels both week tools put in the rack. They
+// came here from `features/lineupchecker` when gametime became the second tool
+// asking the same two questions of the same leagues — the line `CONSOLE_KEY`,
+// `ManagerPlate` and `SharesDrawer` itself all moved on, and the folder rule
+// that `features/gametime` may not read a sibling feature.
+//
+// Only the two panels, the fold and the entry shape leave this folder.
+// `WeekSharesDrawer` and the decisions view under it are their own parts, on the
+// barrel rule the manager and tools folders keep.
+// What an emptied league grid says, and which of its two narrowings it points
+// at. Three pages read it — see the module for why it is not three copies.
+export { narrowedEmptyState } from "./narrowed-empty-state";
+export type {
+  NarrowedEmptyAction,
+  NarrowedEmptyState,
+} from "./narrowed-empty-state";
+export { sideOf, weekPlayerShares } from "./week-shares";
+export type {
+  WeekLineupEntry,
+  WeekPlayerShare,
+  WeekPlayerShares,
+  WeekSharePlayer,
+  WeekShareSeat,
+  WeekShareSide,
+  WeekSide,
+} from "./week-shares";
+export { OpponentSharesDrawer } from "./ui/opponent-shares-drawer";
+export { StarterSharesDrawer } from "./ui/starter-shares-drawer";
+export { WEEK_BROWSE_KEYS } from "./ui/week-browse-keys";
 export {
   RackControlsProvider,
   usePublishRackControls,

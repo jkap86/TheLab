@@ -5242,12 +5242,14 @@ somebody can still move.
 
 **The Starters half needed no server work at all.** Every seat, every bench
 player and every projection is already on `useLineupCheck`'s payload because
-the cards render them, so the fold is `helpers/starter-shares.ts` on the client
-— which is also the only place it can be, since it counts over **the
+the cards render them, so the fold is on the client — which is also the only
+place it can be, since it counts over **the
 league-filtered, subject-unnarrowed list** and the filters are the browser's.
 That population rule is `playerShares`' in full: counted over the selection,
 every row would collapse to the row just picked and could not be widened
-without clearing first.
+without clearing first. (It is `shared/week-shares.ts` since gametime became a
+second reader of it — see Starters and Opponents came here, under Gametime,
+for what moved and why the fold stopped reading this tool's payload.)
 
 **The denominator is leagues that contributed a lineup**, so the Opponents
 panel legitimately counts fewer leagues than the Starters panel on the same
@@ -5259,8 +5261,10 @@ week's and nothing else on screen said so.
 
 #### Seat legality is the rule that is silent when wrong
 
-`helpers/start-sit-decisions.ts` is the half with real rules, and it has a test
-each because every one of them renders perfectly when it is wrong.
+`start-sit-decisions.ts` is the half with real rules, and it has a test each
+because every one of them renders perfectly when it is wrong. (In
+`features/shared` since gametime took the same panels, with one gate added
+there: a best-ball lineup contributes no call, because Sleeper seated it.)
 
 **Legality is the seat's, not the two players'.** A receiver is not a candidate
 for a quarterback-only slot, and listing him as one is exactly the class of
@@ -8525,8 +8529,10 @@ back up the page is hardest.
 **A page owns its glyph as it owns its legend**, which is the seam this file
 already argued one grain out. `RackDrawerKey` gained an `icon` beside `label`,
 and the four drawings live in a `browse-marks.tsx` beside each page's own
-`BROWSE_KEYS` — `/manager` publishes Players and Leaguemates, `/lineupchecker`
-Starters and Opponents. The rack cannot `switch` on the route, so a drawing held
+`BROWSE_KEYS` — `/manager` publishes Players and Leaguemates, and the two week
+tools publish Starters and Opponents from one shared `WEEK_BROWSE_KEYS`, which
+is that same rule with two publishers of one pair rather than an exception to
+it. The rack cannot `switch` on the route, so a drawing held
 in `features/tools` would be every page's vocabulary in one folder. They are
 **elements, not components**, because the published array is module-level per
 `usePublishRackControls` and a `() => <Mark />` rebuilt in the render would
@@ -14342,6 +14348,8 @@ argument, and the checker route reads it there too.
 **No Browse keys, deliberately.** The checker's drawers answer who you started
 and who you play, which are questions about the lineup as set; this page is
 about what that lineup is doing. They arrive if a reader asks for them.
+**They have — see Starters and Opponents came here, below**, which supersedes
+this paragraph.
 
 ### Verified
 
@@ -14553,3 +14561,182 @@ seating churns visibly from tick to tick, which is the one thing about seating
 by `live` that a fixture cannot show; how often the scoreboard read actually
 fails in a way that makes the caption/factor split visible; and whether the
 snapshot fallback is ever reached at all outside a deliberately broken stream.
+
+### Starters and Opponents came here
+
+Gametime's own note said the checker's two Browse panels were "deliberately
+absent", on the argument that Starters and Opponents answer who you started and
+who you play — questions about the lineup as *set* — where this page is about
+what that lineup is doing. **That argument is why they were not built here first
+and it is not an argument against them.** The question a reader asks on a Sunday
+is the same one: "which of my twelve lineups is Bijan in" is a question about the
+same rosters, and what changes with the week in progress is that the figure
+beside him is what he has done and is on course to do rather than what he was
+projected for — which is more useful than the projection, not less. So both
+panels are on gametime, over the same two subject kinds, narrowing the same
+league grid. **Nothing on the wire moved** — no route, no query, no contract
+type, no payload field, no migration — and no server work at all: the fold is a
+walk over the payload the stream already pushes, because the cards render every
+seat and every bench player.
+
+**One fold, one drawer, one pair of keys, and that is what the move bought.**
+`features/gametime` may not import from `features/lineupchecker`, so the answer
+was never a copy: `weekPlayerShares`, `decisionsFor`, `WeekSharesDrawer`, the
+decisions view, the two panel wrappers and the two rack glyphs are all
+`features/shared` now — the line `CONSOLE_KEY`, `ManagerPlate`, `SharesDrawer`
+and `subject-tokens.tsx` all moved on. Two spellings of the fold would be two
+chances for one tool to count differently from the other, which is precisely the
+failure nobody could see: both would render.
+
+**So the fold reads a normalised side rather than either tool's payload.** The
+two wires are genuinely different shapes — the checker's league carries
+`lineup`/`bench` and three `opponent_*` fields, gametime's carries a `mine` and
+an `opponent` side — and each is adapted at its own page, in one place, where the
+choice of figure is also made and written down. A fold that read both would be a
+fold with a `switch` in it. `WeekLineupEntry` is `{ league, mine, opponent,
+set_by_manager }`, and `sideOf` is the whole of what the two tools' shapes cost.
+
+**`points` became `figure`, and the rename is the honest half of the move.** On
+a shared type spelling `points` reads as "projected points", which is exactly the
+wrong reading on the one page where it is not that. Named for the *reading*
+instead, each tool says what its own is: the checker adapts the projection — the
+number every card on it prints — and **gametime adapts `live`**, which is
+`scored + projected × remaining`. That choice is the one thing the adapter
+decides, and it is argued where it is made: `live` is the page's own headline
+figure, so every total on the plate and in the panes is a sum of it and a panel
+comparing anything else would judge the week on a number no card here prints. It
+is also the reading a start/sit call wants mid-Sunday, where `scored` alone says
+a player who has not kicked off cost nothing and `projected` alone is the answer
+the checker already gives one tool over.
+
+**The word for it is on screen**, which is the only thing that differs between
+the four panels: `figureLabel` is `Proj` on the checker and `Live` on gametime,
+in the window over every counterpart's number. `decisionsFor` deliberately does
+not name it — a delta there is one figure less another, and the word belongs
+where the figure was chosen.
+
+**A lineup the manager did not set contributes no call**, and this is the one
+correctness fix the convergence surfaced rather than a port. Sleeper seats a
+best-ball team itself, from the whole roster, after the games — so a row reading
+"started over" in one is a call nobody made. On the checker that was a latent
+wrinkle: its best-ball lineup is Sleeper's `starters` array, whatever the draft
+left behind. On gametime it would have been worse than merely wrong, because
+that lineup is **solved from the very live figures the delta compares** — so
+every such row would be a decision the reader is told they got right, by
+construction, in a league they never chose a lineup for. `set_by_manager` is the
+gate and it is on the entry rather than a filter the caller could forget. The
+*shares* still count those leagues, because who is on a roster and who got seated
+are real readings; only the calls go.
+
+**The two rack keys are one module-level array both tools publish.**
+`WEEK_BROWSE_KEYS` replaced two identical literals. The rule the manager page's
+own `browse-marks.tsx` states — a page owns its glyph as it owns its legend,
+because the rack cannot `switch` on the route — is about what the *rack* can see
+and is unchanged: the keys are still data a page publishes. What changed is that
+there are two publishers of the same pair, and a legend or a drawing that
+differed between two pages a reader walks between would be one fact drawn two
+ways. Module scope is still the requirement `usePublishRackControls` states
+rather than a habit.
+
+**And the press closes the open card**, on `LeaguesHome`'s argument: a subject
+narrows the league grid, and a parked card *is* the screen — the page is locked
+and every league but the open one is `display: none`, so there is no grid to
+narrow. A press with no card open is a no-op on that half.
+
+**Neither the entries nor the roll maps are built until a drawer has been
+opened**, which is the `opened` latch's second job and `/api/trades/facets`'
+bargain: a reader who never presses a Browse key pays nothing for the panels.
+Both are a walk over every player of every roster on the account, and
+`matchesSubjects` returns true without asking the resolver while the selection is
+empty — so before the first press there is nothing to answer for. It matters more
+here than on the checker, whose fold ran once per progress line where this one
+would run on **every frame the room pushes**, every twenty seconds for the length
+of a Sunday. The latch never goes back, so a picked subject that outlives its
+drawer still narrows. The checker took the same gate, so the two tools stay one
+object.
+
+**`SubjectKind` did not grow.** A gametime `starter` is the same subject as the
+checker's — the same player, narrowing the same leagues — so a `gametime-starter`
+kind would have been a columns entry, a resolver case and two vocabularies for
+one fact. `SHARES_COLUMNS_BY_KIND` is unchanged and both panels offer the same
+`start`/`bench` pair.
+
+#### The second narrowing made the empty state a false claim
+
+`narrowedEmptyState` came out of `features/manager` on this pass, and the reason
+is a state gametime could not reach until it grew subjects. Both week tools drew
+one message — "No leagues match these filters." — with `filterSummary(filters)`
+under it whatever had narrowed, and that function answers **"all leagues"** when
+nothing is filtering. So a page emptied by a player nobody rosters said "No
+leagues match these filters" over the words "all leagues": two contradictory
+claims on one plate, with no key offered to undo the thing that actually
+narrowed. `/manager` had fixed this in three arms; the fix is not a second copy
+of them, because the sentences a reader sees are the same sentences on all three
+pages and the day one is reworded it should be reworded once. It is pure, takes
+the two states as booleans and leaves `clear` at the call site — three pages hold
+that state three ways, and the only thing they agree on is what to call it.
+
+A subject-only narrowing prints **no** filter summary, deliberately: the tokens
+are named in the tray above where the reader can already see them, and the filter
+summary is a sentence nothing else on the page carries.
+
+**And the checker's token tray stands down with the page now.** It was the one
+element on that page that did not fade with the header and the other cards while
+a card was parked — visible only when the two week tools were put side by side,
+since gametime's was written on the manager page's arrangement from the start.
+
+#### Verified
+
+Driven over CDP against `next dev` with no database — the method the
+console-card, shares, rack and timeline passes established — through two
+temporary `/preview` routes mounting the **real** `GametimeHome` and
+`LineupCheckerHome` with `window.fetch` and `EventSource` stubbed from fixtures,
+at 1280 dark and 390 light, then deleted. The mechanics are the ones this file
+records: `--no-proxy-server`, `localhost` rather than `127.0.0.1`, a phone
+viewport from `Emulation.setDeviceMetricsOverride` with `mobile: true`,
+`data-theme` rather than `prefers-color-scheme`,
+`--disable-features=OverlayScrollbar`, the
+`--blink-settings=availablePointerTypes=4,…` flags, a **client-component**
+harness, a CDP client over Node's own `WebSocket` since Playwright is not
+installed here, and a fresh `--remote-debugging-port` per run. The fixtures are
+five leagues — two superflex, one one-QB, a **best-ball** league, and one with
+**no opponent** — over players deliberately spanning several rosters, plus an
+unprojected stash and a player on exactly one league.
+
+Every arm landed, and the numbers are the rules. The Starters panel opened on six
+rows with `Lamar Jackson 5/5 100%` over `Across all 5 leagues · week 1`; the
+Opponents panel opened on `Across all **4** leagues` — one fewer, the unpaired
+league skipped rather than counted as one the opponent fielded nobody in, which
+is the denominator rule end to end. **The narrowing works**: picking Ja'Marr
+Chase took the grid 5 cards → **2**, exactly the two leagues he is on. The
+figure windows read **`Live`** on gametime and **`Proj`** on the checker, one
+label each and never both. Lamar's four counterparts carried `+13.2 / +4.8 /
++10.5 / —` — the em dash being the unprojected stash, null and not a zero — each
+`Via SF` in the superflex leagues, which is the narrowest-bridge rule, and
+**not one row from the best-ball league**, which is the gate. The two leagues
+where no seat could bridge a QB to the bench contributed nothing, which is the
+legality rule.
+
+The rack keys are on the rack at both widths and inside its box: **112×37**
+legend pills at 1280 in a 65px rack, **32×32** icon caps at 390 in a 52px one.
+The subject-only empty state read **"No leagues match this selection."** with
+**no** "all leagues" line under it and a `Clear selection` key that restored all
+five cards and both tokens. At both widths: `documentElement.scrollWidth` inside
+the viewport, **zero** elements past the panel's own box, `:modal` true, exactly
+one `<h1>`, one `<nav>`, and **no console output of any kind**.
+
+2,226 unit tests pass (68 more — the fold and the walk rewritten against the
+normalised side, the best-ball gate, and `narrowedEmptyState`'s five arms);
+`lint`, `typecheck` and `build` are clean.
+
+**Not verified against real data**, which is the gap to close first: every number
+above is a fixture, and no database was reachable from here. Four things a render
+cannot check — what the adapter and the fold actually cost on a 116-league
+account behind the latch, and in particular whether a frame's re-adapt is
+invisible on a real Sunday or wants the memo narrowing further; whether `live` is
+the figure a reader expects a start/sit call judged on, which is this pass's one
+open question and only a real week answers; whether `opponent` is populated as
+widely on a real week as the fixtures assume, since the whole Opponents panel
+rests on it; and whether a best-ball account finds the decisions view *empty*
+rather than gated, since the message it draws there is written for a league where
+nobody could have taken the seat rather than for one nobody seated.
