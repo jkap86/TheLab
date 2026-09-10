@@ -1,20 +1,24 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 
 import type { GametimeStreamMessage, ManagerGametimePayload } from "@/shared/contract";
-import { isAbortError } from "@/features/shared";
 
 /**
  * Follow one manager's week live.
  *
  * `useLineupCheck` with the read turned into a stream: the page's answer
  * arrives over `GET /api/user/[username]/gametime/stream` as Server-Sent
- * Events, pushed whenever the week's feeds move, and the plain route beside it
- * is kept for the narrowed re-read that follows a Sync press. The subject is
- * the checker's (`username`, the resolved season, the stepped week), the reset
- * happens *during render* on a subject change, and a league id is deliberately
- * not part of it — a press on one card must not blank a hundred.
+ * Events, pushed whenever the week's feeds move. The subject is the checker's
+ * (`username`, the resolved season, the stepped week) and the reset happens
+ * *during render* on a subject change.
+ *
+ * **Nothing here re-reads one league by hand, where `useLineupCheck` does.**
+ * That hook's `reread` exists for the checker's Sync key, which is a control
+ * for a page that reads once; the numbers here already move on their own, so
+ * a press is either a no-op or a slower copy of the next frame. The plain
+ * route's `?league=` narrowing is still the checker's and still answers — it
+ * simply has no caller on this page.
  *
  * **`EventSource` rather than `fetch` + a reader**, on `usePicktracker`'s
  * argument: its automatic reconnect is exactly what a page watched for three
@@ -43,8 +47,6 @@ export type GametimeState = {
    * dropped, or the feeds behind it did. A note, never a replacement.
    */
   stale: string | null;
-  /** Re-read one league and merge it into what is on screen. Stable. */
-  reread: (leagueId: string) => void;
 };
 
 export function useGametime(
@@ -57,11 +59,6 @@ export function useGametime(
   const [connected, setConnected] = useState(false);
   const [stale, setStale] = useState<string | null>(null);
   const [failedSubject, setFailedSubject] = useState<string | null>(null);
-  const rereads = useRef(new Map<string, AbortController>());
-  const latest = useRef({ username, payload });
-  useEffect(() => {
-    latest.current = { username, payload };
-  });
 
   const subject = `${username} ${season ?? ""} ${week ?? ""}`;
   const [renderedSubject, setRenderedSubject] = useState(subject);
@@ -76,7 +73,6 @@ export function useGametime(
   useEffect(() => {
     if (!ready || !season) return;
 
-    const pendingRereads = rereads.current;
     const query = new URLSearchParams({ season });
     if (week !== null) query.set("week", String(week));
     const source = new EventSource(
@@ -145,58 +141,13 @@ export function useGametime(
 
     return () => {
       source.close();
-      for (const pending of pendingRereads.values()) pending.abort();
-      pendingRereads.clear();
     };
   }, [username, season, week, ready, subject]);
-
-  /**
-   * Re-read one league against the answer already on screen — `useLineupCheck`'s
-   * own re-read, over the plain route, with the same merge guard: the season and
-   * week come off the payload, and an answer for another subject is dropped.
-   */
-  const reread = useCallback((leagueId: string) => {
-    const { username: forUser, payload: current } = latest.current;
-    if (!current || current.week === null) return;
-
-    rereads.current.get(leagueId)?.abort();
-    const controller = new AbortController();
-    rereads.current.set(leagueId, controller);
-
-    const query = new URLSearchParams({
-      season: current.season,
-      week: String(current.week),
-      league: leagueId,
-    });
-    const url = `/api/user/${encodeURIComponent(forUser)}/gametime?${query}`;
-
-    void (async () => {
-      try {
-        const res = await fetch(url, { signal: controller.signal });
-        if (!res.ok) return;
-        const body = (await res.json()) as ManagerGametimePayload;
-        setPayload((prev) => {
-          if (!prev) return prev;
-          if (body.season !== prev.season || body.week !== prev.week) return prev;
-          const entry = body.leagues[leagueId];
-          if (!entry) return prev;
-          return { ...prev, leagues: { ...prev.leagues, [leagueId]: entry } };
-        });
-      } catch (err: unknown) {
-        if (isAbortError(err)) return;
-      } finally {
-        if (rereads.current.get(leagueId) === controller) {
-          rereads.current.delete(leagueId);
-        }
-      }
-    })();
-  }, []);
 
   return {
     payload,
     pending: payload === null && failedSubject !== subject,
     connected,
     stale,
-    reread,
   };
 }

@@ -87,7 +87,7 @@ function Live({
 
   const [filters, setFilters] = useState(DEFAULT_LEAGUE_FILTERS);
 
-  const { payload, pending, connected, stale, reread } = useGametime(
+  const { payload, pending, connected, stale } = useGametime(
     username,
     state.season,
     week,
@@ -248,7 +248,6 @@ function Live({
                   entry={entries[league.league_id] ?? null}
                   board={board}
                   pending={pending}
-                  onSynced={reread}
                   open={card.isOpen(league.league_id)}
                   lit={card.isLit(league.league_id)}
                   onToggle={card.toggle}
