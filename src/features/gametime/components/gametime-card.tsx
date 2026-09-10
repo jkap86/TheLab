@@ -13,7 +13,6 @@ import {
   ExpandedPanel,
   LeagueBillet,
   LeagueConfigWindow,
-  LeagueSyncKey,
   MarginBay,
   OutcomeChips,
   RampFigure,
@@ -56,7 +55,6 @@ export const GametimeCard = memo(function GametimeCard({
   entry,
   board,
   pending = false,
-  onSynced,
   open,
   lit,
   onToggle,
@@ -68,7 +66,6 @@ export const GametimeCard = memo(function GametimeCard({
   board: Readonly<Record<string, GametimeGame>>;
   /** The page's read has not answered yet — see `LineupCheckCard`'s own prop. */
   pending?: boolean;
-  onSynced?: (leagueId: string) => void;
   open: boolean;
   lit: boolean;
   onToggle: (id: string, event: MouseEvent<HTMLElement>) => void;
@@ -189,21 +186,10 @@ export const GametimeCard = memo(function GametimeCard({
           </div>
         </summary>
 
-        {/* The sync key rides the panel's seam at its right end, the checker
-            card's own arrangement since the seam's groove became the only
-            line it needs — see `LeagueSyncKey`. */}
-        <ExpandedPanel
-          open={open}
-          closing={open && !lit}
-          seamEnd={
-            <LeagueSyncKey
-              leagueId={league.league_id}
-              leagueName={league.name}
-              onSynced={onSynced}
-            />
-          }
-        >
-
+        {/* No sync key on the panel's seam, where the checker card carries
+            one: this page is a stream, so a press re-reading Sleeper by hand
+            is a control for a page that reads once. */}
+        <ExpandedPanel open={open} closing={open && !lit}>
           {entry ? (
             <LivePanes
               mine={entry.mine}

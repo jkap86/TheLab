@@ -14236,13 +14236,24 @@ per subscriber and their Postgres rows are re-read every `LEAGUES_TTL_MS`
 seconds while a game runs, the time to the next kickoff while games are still
 to come (floored at a minute, capped at ten), and **nothing once the week is
 over** — a finished week is a fact, not a feed. The plain
-`GET /api/user/[username]/gametime` is the first paint's twin, the narrowed
-`?league=` re-read behind the Sync key, and the answer for anything that cannot
-hold a stream open; both build from one `buildGametimePayload`.
+`GET /api/user/[username]/gametime` is the first paint's twin and the answer
+for anything that cannot hold a stream open; both build from one
+`buildGametimePayload`. It keeps the checker's `?league=` narrowing and has no
+caller for it here — see **No Sync key** below.
 
-**What moved to `features/shared` for a second reader**: `LeagueSyncKey` with
-`useLeagueRefresh` and `syncStatusNote`, `WeekStepper`, `kickoffTime` and
-`slotLabel` (into `format.ts`), the week-record fold (`week-record.ts` — the
+**No Sync key**, which is the one control the card gave back. It carried the
+checker's, on the panel's seam, with `useGametime` holding a `reread` that
+merged one league's plain-route answer into the frame on screen. That is a
+control for a page that **reads once**: here the numbers move on their own
+every twenty seconds while a game runs, so a press was either a no-op or a
+slower copy of the next frame — and it re-read Sleeper's stored graph, which
+is not what a reader watching a live score is asking to refresh. The stream's
+own `stale` note is what says the numbers have stopped moving, and it says so
+without being asked. `LeagueSyncKey`, `useLeagueRefresh` and `syncStatusNote`
+stay in `features/shared` with the checker as their one reader again.
+
+**What moved to `features/shared` for a second reader**: `WeekStepper`,
+`kickoffTime` and `slotLabel` (into `format.ts`), the week-record fold (`week-record.ts` — the
 checker's `week-summary.ts` is now its join to that fold), the header gauge
 (`WeekGauge`, which the checker's `WeekSummary` wraps), `MarginBay` and
 `OutcomeChips`, `useLinkedScroll`, and the pane ledge's track and totals. The
