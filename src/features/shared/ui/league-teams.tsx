@@ -31,6 +31,7 @@ import {
 } from "../lineup-columns";
 import { placeAmong, rankColor, sharePercentile } from "../rank-ramp";
 import { slotMedians } from "../seat-compare";
+import { PANEL_BLEED } from "./expanded-panel";
 import {
   type BenchReading,
   type Lens,
@@ -344,17 +345,17 @@ export function LeagueTeams({
           and the name column is what spends it, which at 390 is the difference
           between a readable team name and an initial.
 
-          It is safe because the panel clips (`overflow-hidden`) and its radius
-          is the housing's own, so a row bled to the wall is cut by the card's
-          edge: no second radius, no leaked shadow. The gap between the panes
-          does not move.
+          The gap between the panes does not move.
 
-          The gutter is spelled here rather than taken as a prop because both
-          callers — this card and the trade card — carry the same
-          `px-3.5 sm:px-[1.125rem]`. If that ever stops being true it has to
-          come in as a prop; a bleed against the wrong gutter is a pane
-          overhanging the card with nothing on screen saying so. */}
-      <div className="-mx-3.5 flex min-h-0 flex-1 items-stretch gap-1.5 sm:-mx-[1.125rem] sm:gap-2.5 lg:gap-3.5 pointer-fine:[transform:translateZ(7px)]">
+          **The gutter is `PANEL_BLEED` rather than a fourth spelling of it**,
+          which is what it was until the lineup checker's and gametime's pane
+          rows took the same bleed: what this has to equal is the padding
+          `ExpandedPanel` declares, so it is declared there. Why bleeding is
+          safe at all — the panel clips, and its radius is the housing's — is
+          written beside it. */}
+      <div
+        className={`${PANEL_BLEED} flex min-h-0 flex-1 items-stretch gap-1.5 sm:gap-2.5 lg:gap-3.5 pointer-fine:[transform:translateZ(7px)]`}
+      >
         <Pane>
           <PaneLedge tight>
             {/* **One row above `lg`, two below it**, and the row is the head row

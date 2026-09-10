@@ -18,6 +18,7 @@ import {
   PaneLedge,
   PaneLedgeTrack,
   PaneTotal,
+  PANEL_BLEED,
   rankColor,
   slotLabel,
   useLinkedScroll,
@@ -158,7 +159,20 @@ export function WeekPanes({
     // item refuses to go below its content, the cap has nothing to bite on, and
     // two full lineups push the page exactly as they did before.
     <div className="flex min-h-0 flex-1 flex-col pointer-fine:[transform-style:preserve-3d]">
-      <div className="relative flex min-h-0 flex-1 items-stretch gap-1.5 sm:gap-2.5 lg:gap-3.5 pointer-fine:[transform:translateZ(7px)]">
+      {/* **The row runs to the housing wall**, the manager card's own bleed
+          (`PANEL_BLEED`) rather than a second reading of it: the panel's side
+          padding is what lines the *summary's* windows up, and the panes are
+          the one thing under the seam with nothing above them to line up with.
+          Bled, each pane takes the gutter's width back — 18px a side on a
+          desktop, 14 on a phone — and the name column is what spends it, which
+          at 390 is the difference between a readable name and an initial.
+
+          The two lineups are read *across* each other, so what matters here as
+          much as the width is that both panes gain the same: the row is one
+          box and its gap does not move. */}
+      <div
+        className={`${PANEL_BLEED} relative flex min-h-0 flex-1 items-stretch gap-1.5 sm:gap-2.5 lg:gap-3.5 pointer-fine:[transform:translateZ(7px)]`}
+      >
         {pick?.side === "theirs" && opponent ? (
           <OptionsPane
             side="theirs"

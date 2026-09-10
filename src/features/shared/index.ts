@@ -286,7 +286,11 @@ export type { DrawerTray } from "./ui/pane";
 // here from `features/manager` when the trade card became a second reader — the
 // line `LeagueTeams` and `LeagueConfigWindow` moved on, and the same folder
 // rule, since `features/trades` may not import from `features/manager`.
-export { ExpandedPanel } from "./ui/expanded-panel";
+// `PANEL_BLEED` rides with it: the panel's side padding negated, which is
+// what a pane row bleeds by to run to the card's own wall. It is exported
+// because all three cards' pane rows take it, and it has to equal a value
+// only that module declares.
+export { ExpandedPanel, PANEL_BLEED } from "./ui/expanded-panel";
 // Exported beside it, though all three cards mount `ExpandedPanel` since the
 // lineup checker's expanded half converged on it: the hook is still the seam a
 // half with a different inset would take, which is what it was split off for.

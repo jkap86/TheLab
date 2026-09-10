@@ -12687,12 +12687,89 @@ than taken as a prop because both callers carry the same one; if that ever stops
 being true it has to come in as a prop, since a bleed against the wrong gutter is
 a pane overhanging the card with nothing on screen saying so.
 
+**The other two tools' panes took the same bleed since**, and the gutter is a
+constant now — see The pane rows all run to the wall, below, which supersedes
+that last sentence.
+
 **`SHELL_BREATH` was 16 and nothing had measured what it cost.** It is the one
 term in `parkedShell` that buys no chrome — clearance between a parked card's
 foot and the fold — and six still reads as clearance. The floor (`MIN_PARKED`) is
 untouched, so the panel is only ever *offered* the difference. The panel's own
 foot went the same way, 14/18 → 10: the side padding lines the panes up and the
 seam's margins are the breath around the cut, but the bottom is only clearance.
+
+### The pane rows all run to the wall
+
+The bleed above was the manager card's alone, so the same league drew a 552px
+pane on `/manager` and a **534px** one on `/lineupchecker` and `/gametime` at
+1280 — 163px against 177 at 390 — with the two week tools paying an 18/14px
+gutter for nothing on both sides. Every argument for the manager card's bleed is
+a fact about `ExpandedPanel` rather than about that card: all three mount the
+same panel, its side padding is what lines the *summary's* windows up, and a
+pane row is the one thing under the seam with nothing above it to line up with.
+`WeekPanes` and `LivePanes` take it too. **Nothing on the wire moved** — no
+route, no query, no contract type, no payload field, no migration, no token —
+and the manager card is byte-identical: the two class strings this touched there
+hold the same utilities, checked as sets rather than by eye.
+
+**The gutter is `PANEL_BLEED`, exported from `ExpandedPanel`**, which reverses
+that section's own "spelled in `LeagueTeams` rather than taken as a prop". That
+was right while one caller bled; at four spellings — the seam row, and three
+pane rows — what the value has to equal is a padding only that module declares,
+so it is declared there. It is a constant rather than a prop because it is not a
+caller's choice: a row either runs to the wall or it does not, and the width it
+runs to is the panel's.
+
+**What each pane gains is what the two lineups were both short**, which is the
+one thing to know about applying this to a week view rather than to a standings
+table. These panes are read *across* each other — a seat row against the seat
+row opposite, which is why `useLinkedScroll` exists — so the row being one box
+with one gap is what keeps the gain symmetric; the name column is what spends
+it, and at 390 that is the difference between a readable name and an initial.
+
+#### Verified
+
+Driven over CDP against `next dev` with no `DATABASE_URL` — the boot hook skips
+migrations and the loops log their refusals, which is the server coming up
+healthy against nothing — through a temporary `/preview` route mounting the
+**real** `WeekPanes` and `LivePanes` inside the **real** `ExpandedPanel` against
+fixtures, then deleted. The mechanics are the ones this file records:
+`--no-proxy-server`, `localhost` rather than `127.0.0.1`, a phone viewport from
+`Emulation.setDeviceMetricsOverride` with `mobile: true`,
+`--disable-features=OverlayScrollbar`, the
+`--blink-settings=availablePointerTypes=4,…` flags without which every
+`pointer-fine:` rule is inert, a **client-component** harness, and a CDP client
+over Node's own `WebSocket` since Playwright is not in this project's
+`node_modules`.
+
+**The before-state was measured in the same harness** by stashing the diff,
+which is the check that the change is doing something:
+
+| | before | after |
+| --- | --- | --- |
+| Pane width, 1280 | 534px | **552px** (+18) |
+| Pane width, 390 | 163px | **177px** (+14) |
+
+Both tools, both panes, identical figures — and 552/177 is the manager card's
+own, which is the claim. The row's layout width is the panel's whole padding box
+(1118 at 1280, 360 at 390) where it was the content box (1082, 332); the gap
+between the panes does not move (14.07 and 6.03); and **zero elements are
+painted past the viewport that an ancestor does not clip** at either width, with
+`document.documentElement.scrollWidth` inside it and one `<h1>`. Measure the row
+and the panes with `offsetWidth` rather than `getBoundingClientRect`: the row
+carries `translateZ(7px)` under the panel's 1400px perspective, so every rect
+there is the *projected* box and reads 0.5% long — 1123.62 against 1118, which
+looks like an overflow and is the projection, clipped by the panel exactly as it
+already was on the manager card. It is `usePanelCap`'s own finding, one row down.
+
+`lint`, `typecheck` and `build` are clean, and 2,161 unit tests pass.
+
+**Not verified against real data**, which is the gap to close first: the fixtures
+are one nine-seat lineup a side. Two things a render here cannot check — whether
+the 18px actually buys a readable name on a real week, where the fixtures' names
+are short by construction, and how the two panes read at 390 on a real gametime
+card, whose seat row carries a clock between the name and two figures and is the
+tightest of the three.
 
 ### The seam is a row now, and the key sits on the cut
 
