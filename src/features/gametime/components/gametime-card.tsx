@@ -45,10 +45,10 @@ import { LivePanes } from "./live-panes";
  * margins, the week's games as chips, on `MarginBay`'s own rule that the
  * colour is the margin's size and the chip says which way it went.
  *
- * Hook-free, for `LineupCheckCard`'s reason, and `memo`'d for its reason:
- * this card re-renders on every frame the stream pushes, which on a live
- * Sunday is every twenty seconds, and every prop but `entry`, `open` and
- * `lit` is stable by construction.
+ * Hook-free, for `LineupCheckCard`'s reason, and `memo`'d for its reason: a
+ * frame arrives every twenty seconds while a game runs, and every prop but
+ * `entry`, `open` and `lit` is stable by construction — `board` included, and
+ * see its own note for what that cost to arrange.
  */
 export const GametimeCard = memo(function GametimeCard({
   league,
@@ -62,7 +62,13 @@ export const GametimeCard = memo(function GametimeCard({
   league: ManagerLeague;
   /** This league's week, once the read lands. Undefined while it is in flight. */
   entry?: GametimeLeague | null;
-  /** The week's scoreboard by NFL team — the payload's, read by the seat rows. */
+  /**
+   * The week's scoreboard by NFL team, read by the seat rows in the expanded
+   * half — and **handed over only while this card is open**, because it is a
+   * new object on every frame the room pushes and nothing on a shut card reads
+   * it. A closed card takes a stable empty one instead, which is what keeps
+   * the memo below holding through a live Sunday; see `gametime-home`.
+   */
   board: Readonly<Record<string, GametimeGame>>;
   /** The page's read has not answered yet — see `LineupCheckCard`'s own prop. */
   pending?: boolean;

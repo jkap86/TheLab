@@ -22,7 +22,14 @@ export function buildGametimePayload(input: {
   const solved: Record<string, GametimeLeague> = {};
 
   if (feeds.projections) {
-    const boards = { projections: feeds.projections, stats: feeds.stats, clocks: feeds.clocks };
+    // `pricingClocks`, never `clocks`: the board below is what a reader is
+    // *shown* and this is what the week is *priced* against, and the two part
+    // company the moment a scoreboard request fails. See `WeekFeeds`.
+    const boards = {
+      projections: feeds.projections,
+      stats: feeds.stats,
+      clocks: feeds.pricingClocks,
+    };
     for (const league of leagues) {
       const entry = solveGametimeLeague(league, boards);
       if (entry) solved[league.league_id] = entry;

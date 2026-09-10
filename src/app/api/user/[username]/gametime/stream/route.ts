@@ -19,8 +19,28 @@ export const dynamic = "force-dynamic";
 const HEARTBEAT_MS = 20_000;
 /** Consecutive refused payloads before a stalled consumer is dropped. */
 const MAX_UNREAD = 20;
-/** Frames that may sit unread — see the picktracker stream for why this must be set. */
-const QUEUE_DEPTH = 16;
+/**
+ * Bytes that may sit unread on one connection before the next payload or delta
+ * is refused.
+ *
+ * **Bytes rather than frames, and the difference is what the number means.**
+ * A count of sixteen bounds nothing on a stream whose frames run from a
+ * two-byte heartbeat to a whole week of a hundred-league account: the ceiling
+ * it sets is sixteen times the largest frame there is, which is megabytes per
+ * stalled reader and exactly the memory a dyno cannot spare when the stall is
+ * everybody's at once. `ByteLengthQueuingStrategy` counts what is actually
+ * held, so this is a real per-connection bound.
+ *
+ * **A quarter of a megabyte is chosen against the frames, not the pipe.** The
+ * check is made *before* an enqueue, so the queue is under the mark whenever
+ * one happens and the true ceiling is this plus one frame — which is what lets
+ * it sit below the size of a first payload without ever refusing one: at the
+ * moment a reader joins, nothing is queued, `desiredSize` is the whole mark,
+ * and the payload goes out however large it is. What the number bounds is the
+ * *backlog* behind it, and a quarter of a megabyte is several deltas' worth of
+ * one.
+ */
+const QUEUE_BYTES = 256 * 1024;
 
 /**
  * One manager's week, live, as Server-Sent Events.
@@ -34,6 +54,10 @@ const QUEUE_DEPTH = 16;
  * queuing strategy so `desiredSize` means something, a terminal `error` before
  * closing so `EventSource` stops reconnecting, a heartbeat so a proxy does not
  * cut a correctly silent stream.
+ *
+ * **The room writes the reader's first frame through {@link send} like any
+ * other**, so there is one path a frame can be refused on and one place that
+ * refusal is recorded. See `joinGametime`.
  *
  * **The manager, the season and the week are resolved before the stream
  * opens**, which is the one place this differs: nothing has been written yet,
@@ -80,25 +104,31 @@ export async function GET(
         let beat: ReturnType<typeof setInterval> | null = null;
         let unread = 0;
 
-        const write = (chunk: string) => {
-          if (closed) return;
+        const write = (chunk: string): boolean => {
+          if (closed) return false;
           try {
             controller.enqueue(encoder.encode(chunk));
+            return true;
           } catch {
             closed = true;
+            return false;
           }
         };
         const send: RoomListener = (frame) => {
           const stalled = controller.desiredSize !== null && controller.desiredSize <= 0;
-          // A payload and a delta are both droppable: the reader is caught up
-          // by the full payload their next join sends, and a transition
-          // (`stale`, a terminal `error`) never is.
+          // A payload and a delta are both droppable, and the room is what
+          // makes that safe: it advances a reader's baseline only on a frame
+          // this answers `true` for, so the next delta is computed against
+          // what they actually hold and carries everything since. A transition
+          // (`stale`, a terminal `error`) is never droppable.
           if (stalled && (frame.type === "payload" || frame.type === "delta")) {
+            // A reader who cannot take a frame for twenty ticks running is not
+            // reading; the socket is dropped rather than buffered against.
             if ((unread += 1) >= MAX_UNREAD) finish();
-            return;
+            return false;
           }
           unread = 0;
-          write(`data: ${frame.json}\n\n`);
+          return write(`data: ${frame.json}\n\n`);
         };
         const finish = () => {
           if (beat !== null) {
@@ -155,8 +185,6 @@ export async function GET(
         }
         leave = joined.leave;
 
-        send(joined.frame);
-
         beat = setInterval(() => {
           write(":\n\n");
           if (closed) finish();
@@ -167,7 +195,7 @@ export async function GET(
         teardown?.();
       },
     },
-    new CountQueuingStrategy({ highWaterMark: QUEUE_DEPTH }),
+    new ByteLengthQueuingStrategy({ highWaterMark: QUEUE_BYTES }),
   );
 
   return new Response(stream, {

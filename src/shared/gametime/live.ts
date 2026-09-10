@@ -29,15 +29,19 @@ import type {
 } from "@/shared/contract";
 import { getManagerWeekLineups } from "@/shared/manager";
 import type { ManagerWeekLineupRow } from "@/shared/manager";
+import { mapWithConcurrency } from "@/shared/util";
 
 import { readWeekFeeds } from "./feeds";
 import type { WeekFeeds } from "./feeds";
+import { newDelivery, nextDelivery } from "./live-delivery";
+import type { DeliveryState } from "./live-delivery";
 import {
-  diffLeagues,
   FAILURE_INTERVAL_MS,
-  LEAGUES_TTL_MS,
+  feedsMoved,
   LINGER_MS,
   pollIntervalMs,
+  ROW_REFRESH_CONCURRENCY,
+  rowsDueAt,
   STALE_AFTER_FAILURES,
 } from "./live-rules";
 import { buildGametimePayload } from "./payload";
@@ -45,7 +49,16 @@ import { buildGametimePayload } from "./payload";
 /** A message serialised once for the reader it is about to reach. */
 export type RoomFrame = { type: GametimeStreamMessage["type"]; json: string };
 
-export type RoomListener = (frame: RoomFrame) => void;
+/**
+ * Hand a frame to one reader, and say whether it was **taken**.
+ *
+ * `false` is a frame the transport refused — a stalled socket dropping a
+ * droppable payload, or a stream already closed. It is not an error and needs
+ * no handling beyond the one thing that matters: the room must not then
+ * believe the reader holds what it just tried to send. See
+ * `./live-delivery` for what that buys.
+ */
+export type RoomListener = (frame: RoomFrame) => boolean;
 
 export function toRoomFrame(message: GametimeStreamMessage): RoomFrame {
   return { type: message.type, json: JSON.stringify(message) };
@@ -56,17 +69,17 @@ type Subscriber = {
   userId: string;
   username: string;
   listener: RoomListener;
-  /** Their stored lineups, and when they were read. */
+  /** Their stored lineups, and when they are next due a re-read. */
   rows: ManagerWeekLineupRow[];
-  rowsAt: number;
+  rowsDueAt: number;
+  /** A re-read in flight, so a slow one is never started twice. */
+  refreshing: boolean;
   /**
-   * Each league of the last answer sent, serialised — what a tick diffs the
-   * next answer against, so a reader is sent the leagues that moved and not
-   * the page. See `GametimeDelta`.
+   * What this reader is known to **hold** — the last frame they actually took,
+   * never the last one offered. See `./live-delivery`, which owns every rule
+   * about it.
    */
-  held: Map<string, string>;
-  /** The last answer's header, serialised, so a tick that moved nothing sends nothing. */
-  heldHeader: string;
+  delivery: DeliveryState;
 };
 
 type Room = {
@@ -97,18 +110,26 @@ const registry: Registry = (globalForRooms[REGISTRY_KEY] ??= {
 const { rooms, openings } = registry;
 
 export type JoinResult =
-  | { ok: true; frame: RoomFrame; leave: () => void }
+  | { ok: true; leave: () => void }
   | { ok: false; status: 500 | 502; error: string };
 
 /**
- * Join (or open) the room for a week, as one reader, and get their answer as
- * it stands now.
+ * Join (or open) the room for a week, as one reader.
  *
  * The room's first feed read is shared between simultaneous cold joiners on
  * the picktracker's terms; the reader's own Postgres read is theirs alone and
  * is what a failed join reports. `leave` is idempotent, for the reason that
  * file gives: a stream is torn down by two different disconnects and either
  * may fire first.
+ *
+ * **The first frame goes out through the listener rather than back to the
+ * caller**, which is what makes the whole delivery contract one path. It used
+ * to be returned for the route to write, and the room stamped its baseline as
+ * it built it — so a first payload the socket refused left the reader holding
+ * nothing while the room believed they held the week, and every delta after it
+ * folded onto an answer that was never there. Sent through {@link deliver} it
+ * is a frame like any other: the baseline moves only if it lands, and until
+ * one does, the next frame is a full payload again.
  */
 export async function joinGametime(
   input: { userId: string; username: string; season: string; week: number },
@@ -145,11 +166,10 @@ export async function joinGametime(
     username: input.username,
     listener,
     rows,
-    rowsAt: Date.now(),
-    held: new Map(),
-    heldHeader: "",
+    rowsDueAt: rowsDueAt(Date.now(), Math.random()),
+    refreshing: false,
+    delivery: newDelivery(),
   };
-  const frame = firstFrame(room, subscriber);
 
   if (room.linger !== null) {
     clearTimeout(room.linger);
@@ -157,7 +177,10 @@ export async function joinGametime(
   }
   room.subscribers.add(subscriber);
 
-  return { ok: true, frame, leave: leaver(room, subscriber) };
+  const leave = leaver(room, subscriber);
+  deliver(room, subscriber);
+
+  return { ok: true, leave };
 }
 
 /**
@@ -281,40 +304,78 @@ async function tick(room: Room) {
       return;
     }
 
+    // A `stale` note is a claim about the feeds rather than about any league,
+    // so nothing else on this wire ever takes it back off the page: the
+    // recovery frame has to be forced, because the values behind it may well
+    // have come back unchanged.
+    const recovered = room.toldStale;
     room.failures = 0;
     room.toldStale = false;
     room.feeds = feeds;
 
     // A moved feed re-solves everyone; an unmoved one re-solves only readers
-    // whose stored lineups are due a re-read. Nothing is sent where the answer
-    // did not change either way.
-    const moved =
-      feeds.signature !== previous.signature ||
-      feeds.projections !== previous.projections ||
-      feeds.statuses.projections !== previous.statuses.projections;
+    // whose stored lineups have just been re-read. Nothing is sent where the
+    // answer did not change either way.
+    const moved = feedsMoved(previous, feeds);
 
-    for (const subscriber of [...room.subscribers]) {
-      const rowsDue = Date.now() - subscriber.rowsAt >= LEAGUES_TTL_MS;
-      if (rowsDue) await refreshRows(room, subscriber);
-      if (!rooms.has(room.key)) return;
-      if (!moved && !rowsDue) continue;
-      deliver(room, subscriber);
+    const subscribers = [...room.subscribers];
+    const due = subscribers.filter(
+      (subscriber) => !subscriber.refreshing && Date.now() >= subscriber.rowsDueAt,
+    );
+    await refreshDue(room, due);
+    if (!rooms.has(room.key)) return;
+
+    const refreshed = new Set(due);
+    for (const subscriber of subscribers) {
+      if (!room.subscribers.has(subscriber)) continue;
+      if (!moved && !recovered && !refreshed.has(subscriber)) continue;
+      deliver(room, subscriber, recovered);
     }
 
-    schedule(room);
+    // A delivery whose listener threw can close the room out from under the
+    // walk; arming a timer on a closed one is harmless and pointless.
+    if (rooms.has(room.key)) schedule(room);
   } finally {
     room.ticking = false;
   }
 }
 
+/**
+ * Re-read the stored lineups of every reader that is due one.
+ *
+ * **Bounded, and neither of the two shapes it replaces.** The loop was serial
+ * and awaited inside the delivery walk, so a kickoff crowd whose TTLs had
+ * converged made one tick a queue of round trips with every reader's frame
+ * behind it; `Promise.all` is the other failure, a fan-out as wide as the
+ * room is popular with each branch holding a pool connection.
+ * `ROW_REFRESH_CONCURRENCY` is the middle, and the refresh happens *before*
+ * the walk so nobody's frame waits on somebody else's database read.
+ *
+ * **One reader's failure is theirs alone.** The read is caught per subscriber,
+ * their last good rows stand, and the deadline moves anyway — a failing read
+ * retried every tick is the hammering the interval exists to prevent, and the
+ * page says `stale` for its own reasons long before a lineup three minutes old
+ * matters.
+ */
+async function refreshDue(room: Room, due: readonly Subscriber[]) {
+  if (due.length === 0) return;
+  await mapWithConcurrency([...due], ROW_REFRESH_CONCURRENCY, async (subscriber) => {
+    await refreshRows(room, subscriber);
+  });
+}
+
 /** Re-read one reader's stored lineups. A failed read keeps the last ones. */
 async function refreshRows(room: Room, subscriber: Subscriber) {
+  subscriber.refreshing = true;
   try {
     subscriber.rows = await getManagerWeekLineups(subscriber.userId, room.season, room.week);
   } catch (error) {
     console.warn(`[gametime] lineups re-read failed for ${subscriber.username} ${room.key}:`, error);
   } finally {
-    subscriber.rowsAt = Date.now();
+    subscriber.refreshing = false;
+    // Jittered, so a room everybody joined at kickoff does not land every
+    // reader's re-read on one tick for the rest of the afternoon.
+    subscriber.rowsDueAt = rowsDueAt(Date.now(), Math.random());
   }
 }
 
@@ -345,52 +406,58 @@ function headerOf(payload: ManagerGametimePayload): Omit<ManagerGametimePayload,
 }
 
 /**
- * A reader's first frame: the whole payload, and the hold it is diffed
- * against from then on.
- */
-function firstFrame(room: Room, subscriber: Subscriber): RoomFrame {
-  const payload = payloadFor(room, subscriber);
-  subscriber.held = diffLeagues(new Map(), payload.leagues).serialised;
-  subscriber.heldHeader = JSON.stringify(headerOf(payload));
-  return toRoomFrame({ type: "payload", payload });
-}
-
-/**
  * Solve for one reader and send **what moved**, or nothing.
  *
  * The header (statuses, the board, the read instant) rides every delta,
  * because the board is what moved; the leagues ride it only where their own
- * serialisation differs from the last one sent. A tick that moved neither
- * sends nothing at all, which is what makes a twenty-second cadence
+ * serialisation differs from the last one the reader *took*. A tick that moved
+ * neither sends nothing at all, which is what makes a twenty-second cadence
  * reasonable on a page left open through a quiet afternoon.
+ *
+ * **The baseline moves only on a frame that was accepted.** A stalled socket
+ * drops a payload or a delta (see the stream route), and advancing the hold
+ * for one of those is how a reader ends up folding a `B → C` delta onto a week
+ * still at `A` — a page that renders perfectly and is wrong in a handful of
+ * leagues, with nothing anywhere to say so. Left where it was, the next delta
+ * is computed against `A` and carries everything since, which is both correct
+ * and *cheaper* than the full resend a dropped frame would otherwise trigger
+ * — on precisely the connection that has just proved it cannot take one.
+ * `./live-delivery` holds the rule and its test drives it.
  */
-function deliver(room: Room, subscriber: Subscriber) {
+function deliver(room: Room, subscriber: Subscriber, force = false) {
   const payload = payloadFor(room, subscriber);
   const header = headerOf(payload);
   const headerJson = JSON.stringify(header);
-  const diff = diffLeagues(subscriber.held, payload.leagues);
-  if (diff.changed.length === 0 && diff.removed.length === 0 && headerJson === subscriber.heldHeader) {
-    return;
+  const next = nextDelivery(subscriber.delivery, headerJson, payload.leagues, force);
+  if (next.kind === "none") return;
+
+  let frame: RoomFrame;
+  if (next.kind === "payload") {
+    frame = toRoomFrame({ type: "payload", payload });
+  } else {
+    const changed: Record<string, ManagerGametimePayload["leagues"][string]> = {};
+    for (const id of next.changed) changed[id] = payload.leagues[id];
+    const delta: GametimeDelta = { ...header, leagues: changed, removed: next.removed };
+    frame = toRoomFrame({ type: "delta", delta });
   }
-  subscriber.held = diff.serialised;
-  subscriber.heldHeader = headerJson;
 
-  const changed: Record<string, ManagerGametimePayload["leagues"][string]> = {};
-  for (const id of diff.changed) changed[id] = payload.leagues[id];
-  const delta: GametimeDelta = { ...header, leagues: changed, removed: diff.removed };
-
+  let accepted: boolean;
   try {
-    subscriber.listener(toRoomFrame({ type: "delta", delta }));
+    accepted = subscriber.listener(frame);
   } catch {
     room.subscribers.delete(subscriber);
     if (room.subscribers.size === 0) close(room);
+    return;
   }
+  if (accepted) subscriber.delivery = next.commit;
 }
 
 /** Fan a room-wide message out — a listener that throws is dropped. */
 function emit(room: Room, frame: RoomFrame) {
   for (const subscriber of [...room.subscribers]) {
     try {
+      // A transition is never droppable, so what the listener answers here is
+      // of no interest — only that it did not throw.
       subscriber.listener(frame);
     } catch {
       room.subscribers.delete(subscriber);

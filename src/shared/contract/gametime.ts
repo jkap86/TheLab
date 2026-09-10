@@ -106,7 +106,15 @@ export type GametimeSide = {
    * week, counts as `done` — there is nothing left for that seat to score.
    */
   status: GametimeStatus;
-  /** The lineup as set, in the league's own slot order. */
+  /**
+   * The lineup, in the league's own slot order — **as set in a managed league
+   * and as *solved* in a best-ball one**, which is the league's own rule
+   * rather than a choice this makes. Sleeper seats a best-ball team itself,
+   * from the whole roster, after the games are played, so its `starters`
+   * array holds whatever the draft left behind and is not a lineup anybody
+   * will be scored on. See `manager/gametime`'s `solveSide` for what it is
+   * solved by and why.
+   */
   lineup: GametimeSeat[];
   /** Everyone else on the roster, live projection first. */
   bench: GametimePlayer[];
@@ -115,6 +123,12 @@ export type GametimeSide = {
 /** One league's week, live. */
 export type GametimeLeague = {
   roster_id: number;
+  /**
+   * Whether Sleeper seats this league's lineup for you — and therefore
+   * whether `mine.lineup`, `opponent.lineup` and the rosters behind `median`
+   * were seated from the whole roster rather than read off `starters`. See
+   * {@link GametimeSide.lineup}.
+   */
   best_ball: boolean;
   /** `getManagerWeekLineups`' own reading — the week's stored lineup or the live roster's. */
   as_of: "week" | "current";
@@ -146,10 +160,26 @@ export type ManagerGametimePayload = {
   week: number | null;
   /**
    * `"error"` means the projections read failed and no league could be
-   * priced; the checker's own reading of that status. The two feeds beside it
-   * degrade rather than empty the page: a failed `stats` read leaves every
-   * `scored` null and prices the week as a projection, and a failed `scores`
-   * read leaves every `game` null and every projection whole.
+   * priced; the checker's own reading of that status.
+   *
+   * The two feeds beside it degrade rather than empty the page, and each
+   * degrades **into the reading that claims least**:
+   *
+   * - A failed `stats` read leaves every `scored` null and prices the week as
+   *   a projection — the whole projection, not the share of it the clock has
+   *   left, because with no feed nothing is *known* to have been scored and
+   *   charging the elapsed clock would price the week on the arithmetic that
+   *   nothing was.
+   * - A failed `scores` read still carries the last scoreboard on `board`,
+   *   because a reading twenty seconds old beats none, but it is not what the
+   *   week is priced against: a player with a stat line is priced as half
+   *   played and one without as not started. A stale clock left in the
+   *   arithmetic would go on dividing one dead instant into every roster in
+   *   the league for as long as the feed was out.
+   *
+   * **All three ride every frame**, so a reader is told when a feed fails and
+   * when it comes back, even where not one number moved in between — see
+   * `gametime/live-rules`' `feedsMoved`.
    */
   projections: GametimeFeedStatus;
   stats: GametimeFeedStatus;
@@ -161,9 +191,13 @@ export type ManagerGametimePayload = {
   /**
    * The scoreboard, keyed by NFL team, both sides of every game filed. A
    * player's game is `board[player.team]`; a team absent from it is on a bye,
-   * and an empty board is a scoreboard this process could not read (`scores`
-   * says which). Once per payload rather than once per seat — see
-   * `GametimePlayer.live`.
+   * and an empty board is a scoreboard this process has never read. Once per
+   * payload rather than once per seat — see `GametimePlayer.live`.
+   *
+   * **`scores: "error"` beside a populated board is the last one read rather
+   * than the current one**, and it is a caption at that point rather than a
+   * factor: it is what the seat rows print and it is *not* what `live` was
+   * computed from. See the statuses above.
    */
   board: Record<string, GametimeGame>;
   /** Keyed by league id; absent where nothing could be solved — no slots on file. */

@@ -4,6 +4,7 @@
  * subscriber sets, which cannot be. `picktracker/live-rules`' arrangement.
  */
 
+import type { GametimeFeedStatus } from "../contract/gametime.ts";
 import type { GamePhase } from "../schedule/game-clock.ts";
 
 /** How often the feeds are re-read while any game on the board is running. */
@@ -43,14 +44,51 @@ export const STALE_AFTER_FAILURES = 3;
  * How long a subscriber's stored lineups answer for before the room re-reads
  * them from Postgres.
  *
- * A lineup changes until its players lock, and the manager sync or a Sync key
- * press is what writes the change; three minutes is how late such a change is
- * reflected on a page that was already open, against a Postgres read per
- * subscriber per interval. A press on the page's own Sync key re-reads its
- * league at once through the plain route, so this bounds only the change made
- * elsewhere.
+ * A lineup changes until its players lock, and the manager sync is what writes
+ * the change; three minutes is how late such a change is reflected on a page
+ * that was already open, against a Postgres read per subscriber per interval.
+ * Nothing on this page re-reads a league by hand, so this is the only thing
+ * that reflects a change made elsewhere.
  */
 export const LEAGUES_TTL_MS = 3 * 60_000;
+
+/**
+ * How much of a random extra wait rides on top of that interval, per reader.
+ *
+ * **Kickoff is when everybody joins.** A room opened at one o'clock seats
+ * every reader of that week within a minute or two of each other, and a fixed
+ * TTL then lands all of their re-reads on the same tick for the rest of the
+ * afternoon — one tick a minute doing nothing and one doing a hundred Postgres
+ * reads. A minute of jitter is a fifth of a whole period, which is enough to
+ * spread a kickoff crowd over three ticks without letting anyone's lineup go
+ * meaningfully staler than the interval already allows.
+ */
+export const LEAGUES_TTL_JITTER_MS = 60_000;
+
+/**
+ * How many of those re-reads a tick runs at once.
+ *
+ * The loop was serial, which on a kickoff crowd whose TTLs had converged made
+ * one tick a queue of a hundred round trips before a single frame went out;
+ * `Promise.all` over the same list is the other failure — a fan-out whose
+ * width is the room's popularity, each branch holding a pool connection. Four
+ * is the pool's own arithmetic: `DEFAULT_POOL_MAX` is ten and a live room is
+ * not the only thing on the dyno.
+ */
+export const ROW_REFRESH_CONCURRENCY = 4;
+
+/**
+ * When a reader's stored lineups are next due, given the instant they were
+ * read and a `Math.random()` draw.
+ *
+ * Pure so the spread can be tested rather than eyeballed: the answer is always
+ * at least the interval and never more than the interval plus the jitter, so a
+ * lineup is never held longer than the policy above says.
+ */
+export function rowsDueAt(readAt: number, random: number): number {
+  const draw = Number.isFinite(random) ? Math.min(1, Math.max(0, random)) : 0;
+  return readAt + LEAGUES_TTL_MS + Math.round(draw * LEAGUES_TTL_JITTER_MS);
+}
 
 /**
  * How long a room keeps polling after its last reader leaves — the
@@ -98,6 +136,51 @@ export function pollIntervalMs(input: {
  */
 export function feedSignature(input: { stats: string; clocks: string }): string {
   return `${input.stats}|${input.clocks}`;
+}
+
+/**
+ * What a tick compares against the tick before it — the whole of what can make
+ * a reader's answer different, named field by field.
+ *
+ * A structural subset of `WeekFeeds` rather than that type, so this module
+ * stays free of the runtime imports the feed reader carries and its rules keep
+ * testing under Node's own runner.
+ */
+export type FeedState = {
+  /** {@link feedSignature} — the stat lines and the clocks. */
+  signature: string;
+  /**
+   * The folded projections board, compared by **identity**: it is cached whole
+   * and handed out by reference, so a new object is a new read and the same
+   * object is the same board.
+   */
+  projections: object | null;
+  statuses: Record<"projections" | "stats" | "scores", GametimeFeedStatus>;
+};
+
+/**
+ * Whether a tick's feeds would price, or *caption*, a reader's week differently
+ * from the last one.
+ *
+ * **The statuses count, and that is the whole of why this is a function rather
+ * than the two comparisons it grew out of.** A feed's health is on the wire —
+ * it decides which note the page prints, and since the scoreboard's own read is
+ * what says whether a clock may be trusted for pricing, it decides the numbers
+ * too. Read off the values alone, both transitions are invisible in exactly the
+ * case they matter most: a scoreboard request that starts failing serves the
+ * *same cached clocks*, so the signature does not move, and the reader is never
+ * told that what they are looking at has stopped being current. Recovery is the
+ * same fault pointed the other way — the values come back identical, nothing is
+ * sent, and a warning nobody can clear stands on a healthy page.
+ */
+export function feedsMoved(previous: FeedState, next: FeedState): boolean {
+  return (
+    next.signature !== previous.signature ||
+    next.projections !== previous.projections ||
+    next.statuses.projections !== previous.statuses.projections ||
+    next.statuses.stats !== previous.statuses.stats ||
+    next.statuses.scores !== previous.statuses.scores
+  );
 }
 
 /**

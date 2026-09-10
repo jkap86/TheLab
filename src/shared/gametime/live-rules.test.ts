@@ -4,12 +4,17 @@ import { describe, test } from "node:test";
 import {
   diffLeagues,
   feedSignature,
+  feedsMoved,
   KICKOFF_LEAD_MS,
+  LEAGUES_TTL_JITTER_MS,
+  LEAGUES_TTL_MS,
   LIVE_INTERVAL_MS,
   MAX_WAIT_MS,
   pollIntervalMs,
+  rowsDueAt,
   WAITING_INTERVAL_MS,
 } from "./live-rules.ts";
+import type { FeedState } from "./live-rules.ts";
 
 const NOW = Date.UTC(2026, 8, 13, 12, 0, 0);
 
@@ -100,5 +105,83 @@ describe("diffLeagues", () => {
     const second = diffLeagues(first.serialised, next);
     assert.deepEqual(second.changed, []);
     assert.deepEqual(second.removed, []);
+  });
+});
+
+describe("feedsMoved", () => {
+  const board = { projections: true };
+  const state = (over: Partial<FeedState> = {}): FeedState => ({
+    signature: "sig",
+    projections: board,
+    statuses: { projections: "ok", stats: "ok", scores: "ok" },
+    ...over,
+  });
+
+  test("two identical reads are one answer, and nothing is sent", () => {
+    assert.equal(feedsMoved(state(), state()), false);
+  });
+
+  test("a moved signature is a moved answer", () => {
+    assert.equal(feedsMoved(state(), state({ signature: "other" })), true);
+  });
+
+  test("a fresh projections board is a moved answer, by identity", () => {
+    assert.equal(feedsMoved(state(), state({ projections: { projections: true } })), true);
+    // The same object is the same board, whatever it holds.
+    assert.equal(feedsMoved(state(), state({ projections: board })), false);
+  });
+
+  // The four that were invisible before this function existed: a feed's health
+  // is on the wire, and the values behind a health change are — by
+  // construction, since the read that failed served the cached ones — the same
+  // values as the tick before.
+  test("the scoreboard failing counts, even when the cached clocks are identical", () => {
+    const ok = state();
+    const broken = state({ statuses: { projections: "ok", stats: "ok", scores: "error" } });
+    assert.equal(feedsMoved(ok, broken), true);
+  });
+
+  test("the scoreboard recovering counts, even when the clocks never moved", () => {
+    const broken = state({ statuses: { projections: "ok", stats: "ok", scores: "error" } });
+    assert.equal(feedsMoved(broken, state()), true);
+  });
+
+  test("the stats feed failing and recovering both count", () => {
+    const broken = state({ statuses: { projections: "ok", stats: "error", scores: "ok" } });
+    assert.equal(feedsMoved(state(), broken), true);
+    assert.equal(feedsMoved(broken, state()), true);
+  });
+
+  test("the projections feed's status counts as it always did", () => {
+    const broken = state({ statuses: { projections: "error", stats: "ok", scores: "ok" } });
+    assert.equal(feedsMoved(state(), broken), true);
+    assert.equal(feedsMoved(broken, state()), true);
+  });
+});
+
+describe("rowsDueAt", () => {
+  const NOW = 1_000_000;
+
+  test("never sooner than the interval, never later than the interval plus the jitter", () => {
+    assert.equal(rowsDueAt(NOW, 0), NOW + LEAGUES_TTL_MS);
+    assert.equal(rowsDueAt(NOW, 1), NOW + LEAGUES_TTL_MS + LEAGUES_TTL_JITTER_MS);
+    for (const draw of [0.13, 0.5, 0.87, 0.999]) {
+      const at = rowsDueAt(NOW, draw);
+      assert.ok(at >= NOW + LEAGUES_TTL_MS);
+      assert.ok(at <= NOW + LEAGUES_TTL_MS + LEAGUES_TTL_JITTER_MS);
+    }
+  });
+
+  test("a kickoff crowd is spread rather than converged", () => {
+    // Twenty readers who joined in the same second, drawn evenly: the point of
+    // the jitter is that their next re-reads do not land on one tick.
+    const due = Array.from({ length: 20 }, (_, i) => rowsDueAt(NOW, i / 19));
+    assert.equal(new Set(due).size, 20);
+  });
+
+  test("a draw outside the unit interval, or not a number, takes the floor", () => {
+    assert.equal(rowsDueAt(NOW, -1), NOW + LEAGUES_TTL_MS);
+    assert.equal(rowsDueAt(NOW, 5), NOW + LEAGUES_TTL_MS + LEAGUES_TTL_JITTER_MS);
+    assert.equal(rowsDueAt(NOW, Number.NaN), NOW + LEAGUES_TTL_MS);
   });
 });
