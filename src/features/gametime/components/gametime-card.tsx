@@ -20,6 +20,7 @@ import {
   StandingStrip,
 } from "@/features/shared";
 
+import { playersInPlay } from "../helpers/live-record";
 import { matchupGauge } from "../helpers/matchup-gauge";
 import { LivePanes } from "./live-panes";
 
@@ -42,9 +43,12 @@ import { LivePanes } from "./live-panes";
  * the argument for the swap is that a matchup has two sides: two figures facing
  * each other say which way the week is going without a reader having to read a
  * sign, and the pair of bars beneath them says how much of it has been played.
- * `In play` came off the card with them — the header gauge still reports how
- * many leagues have a game running, which is where that reading now lives
- * alone.
+ * `In play` came off the card with those tiles and has since come back as a
+ * **stamped reading on the rule's row** rather than a tile: what a reader
+ * wanted from it was never a fourth window but how many of *their* players are
+ * on the field, which is a figure about the week and belongs on the face. The
+ * header gauge still counts the leagues, and it counts them by the same
+ * figure — see `leaguesInPlay`.
  *
  * Hook-free, for `LineupCheckCard`'s reason, and `memo`'d for its reason: a
  * frame arrives every twenty seconds while a game runs, and every prop but
@@ -56,6 +60,7 @@ export const GametimeCard = memo(function GametimeCard({
   entry,
   board,
   pending = false,
+  live = false,
   open,
   lit,
   onToggle,
@@ -73,6 +78,20 @@ export const GametimeCard = memo(function GametimeCard({
   board: Readonly<Record<string, GametimeGame>>;
   /** The page's read has not answered yet — see `LineupCheckCard`'s own prop. */
   pending?: boolean;
+  /**
+   * Whether the page is genuinely watching a live week — `gametimeReadout`'s
+   * own `pulse`, lifted to the page so this and the readout beside the stepper
+   * cannot come to disagree about it.
+   *
+   * It decides the in-play lamp's pulse and nothing else. A stream that has
+   * gone stale, dropped or fallen back to a snapshot freezes every figure on
+   * this card, and a lamp that went on pulsing over frozen numbers would be a
+   * hundred cards claiming to be watching something under one readout saying
+   * the page is not. It flips a handful of times a Sunday — a first kickoff, a
+   * last whistle, a dropped socket — where `entry` moves every twenty seconds,
+   * so the memo it costs is nothing beside the one it protects.
+   */
+  live?: boolean;
   open: boolean;
   lit: boolean;
   onToggle: (id: string, event: MouseEvent<HTMLElement>) => void;
@@ -84,6 +103,9 @@ export const GametimeCard = memo(function GametimeCard({
   // a week nobody has been scheduled for. `LiveStrip`'s own rule, kept.
   const median = theirs ? (entry?.median ?? null) : null;
   const reading = pending && !entry;
+  // Null is the whole zero state — nothing in play, no answer yet, no league
+  // — and it draws nothing. See the helper for why that is not a `0`.
+  const inPlay = playersInPlay(entry);
 
   return (
     <li
@@ -130,7 +152,23 @@ export const GametimeCard = memo(function GametimeCard({
             <LeagueBillet name={league.name} avatarUrl={league.avatar_url} />
           </CardBilletRow>
 
-          <CardRule />
+          {/* **The row carries `preserve-3d` and no transform of its own, and
+              each child names its own plane** — the trade card's own finding,
+              one card over. A plain wrapper is a flat rendering context, so a
+              `translateZ` written here would collapse `CardRule`'s own 36px
+              into it and the hairline would sit at the reading's depth, with
+              no error to say so. The rule keeps the plane it has alone; the
+              reading takes 20px, between the settings strip's 18 and the
+              matchup window's 22.
+
+              Closed over, the row is the single child the rule has always
+              been: `items-center` on a row holding one 1px hairline is a
+              no-op, so nothing about the card moves in the state where nothing
+              is in play. */}
+          <div className="relative flex items-center gap-3 pointer-fine:[transform-style:preserve-3d]">
+            <CardRule />
+            {inPlay && <InPlayReading reading={inPlay} pulse={live} />}
+          </div>
 
           {/* The settings strip has the row to itself, so `LeagueConfigWindow`
               is *not* told it is `shared` — the standing that used to stand
@@ -197,6 +235,104 @@ export const GametimeCard = memo(function GametimeCard({
     </li>
   );
 });
+
+/**
+ * How many of this league's players are on the field, stamped into the card's
+ * own metal face on the rule's row.
+ *
+ * **A reading, not a part.** It was first drawn as a small billet hung in
+ * `CardBilletRow` opposite the league's name, on `OwnerBillet`'s construction,
+ * and rejected twice over: what it says is a figure about the week rather than
+ * something the card *carries*, and a second billet in that overhang competes
+ * with the league's name for width at a phone's, which is the one thing the
+ * billet row was arranged to stop. Stamped on the face it costs the card the
+ * rule row's own ~18px and moves no other measurement on it.
+ *
+ * **No denominator.** An earlier pass read `4/9`; the starter count is stated
+ * one row down on the settings strip (`Starters 9`), and in a best-ball league
+ * it is the wrong denominator anyway — Sleeper has not seated that lineup yet,
+ * which is the same reason the count behind this is taken over the whole
+ * roster there. The bare figure is the reading.
+ *
+ * **Only the reader's own side is lit.** Their figure takes `--billet-accent`
+ * with the accent's halo and the opponent's takes `--billet-scope`, which is
+ * the ink the `Opp` role label in the matchup window below already wears — so
+ * the two columns cannot come to read as two of yours. Both are the billet's
+ * ink family rather than an alpha over `--foreground`: those tokens are solid,
+ * measured values in the light scheme, where an alpha over the foreground is a
+ * washed near-black that inverts by accident rather than by design.
+ *
+ * **Everything visible is `aria-hidden` and the `sr-only` sentence is the whole
+ * announcement.** A lamp, a legend and two bare numerals read out in order are
+ * `In play 4 3`, which is not a reading; the sentence says it once, in words.
+ * It is `position: absolute`, so it takes no share of the row's `gap-2`.
+ *
+ * **Not interactive**, like the standing strip: the card's own press covers the
+ * whole summary and this adds no control and swallows nothing.
+ */
+function InPlayReading({
+  reading,
+  pulse,
+}: {
+  /** The two figures — `theirs` null where there is no opponent to have any. */
+  reading: { mine: number; theirs: number | null };
+  /** The page is genuinely watching a live week — see the card's own prop. */
+  pulse: boolean;
+}) {
+  const figure =
+    "whitespace-nowrap font-display text-[length:var(--fs-16)] font-semibold leading-[1.1] " +
+    "tracking-[-0.015em] tabular-nums";
+
+  return (
+    <span className="relative ml-auto inline-flex shrink-0 items-center gap-2 pointer-fine:[transform:translateZ(20px)]">
+      {/* The format bay's `Lamp`, to the value. It pulses **only while the
+          page is live**, which is `gametimeReadout`'s own rule and the reason
+          that reading is lifted to the page: over a stale or dropped stream
+          every figure on this card is frozen, and a lamp still pulsing on top
+          of them would be a hundred cards claiming to watch something the
+          readout beside the stepper says the page is not. Slower than that
+          readout's own 2s, deliberately — a page of lamps beating in time with
+          the header reads as one blinking mass. */}
+      <span
+        aria-hidden
+        className={`block h-[0.3125rem] w-[0.3125rem] shrink-0 rounded-full bg-active shadow-[0_0_6px_var(--accent-glow)] ${
+          pulse ? "lab-anim animate-pulse [animation-duration:2.4s]" : ""
+        }`}
+      />
+      <span
+        aria-hidden
+        className="whitespace-nowrap font-mono text-[length:var(--fs-10)] uppercase tracking-[0.16em] text-[color:var(--billet-label)] [text-shadow:var(--standing-label-shadow)]"
+      >
+        In play
+      </span>
+      <span
+        aria-hidden
+        className={`${figure} text-[color:var(--billet-accent)] [text-shadow:var(--standing-engrave),0_0_12px_var(--accent-glow)]`}
+      >
+        {reading.mine}
+      </span>
+      {reading.theirs !== null && (
+        <>
+          {/* The milled channel between two readings — the cut, not a rule. */}
+          <span
+            aria-hidden
+            className="h-3.5 w-px shrink-0 bg-[image:var(--groove)] shadow-[var(--groove-highlight)]"
+          />
+          <span
+            aria-hidden
+            className={`${figure} text-[color:var(--billet-scope)] [text-shadow:var(--standing-engrave)]`}
+          >
+            {reading.theirs}
+          </span>
+        </>
+      )}
+      <span className="sr-only">
+        {reading.mine} of your players in play
+        {reading.theirs !== null && `, ${reading.theirs} of your opponent's`}
+      </span>
+    </span>
+  );
+}
 
 /**
  * The lit glass the matchup is read on.

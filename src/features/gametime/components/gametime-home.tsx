@@ -41,15 +41,11 @@ import {
 } from "@/features/shared";
 
 import { isPlausibleWeek } from "@/shared/projections/weeks";
-import type {
-  GametimePlayer,
-  GametimeSide,
-  ManagerGametimePayload,
-} from "@/shared/contract";
+import type { GametimePlayer, GametimeSide } from "@/shared/contract";
 
 import { useGametime } from "../hooks/use-gametime";
 import { gametimeReadout } from "../helpers/connection";
-import type { GametimeConnection, LeagueListState } from "../helpers/connection";
+import type { GametimeReadout, LeagueListState } from "../helpers/connection";
 import {
   formatLiveRecord,
   formatLiveWinPct,
@@ -186,6 +182,22 @@ function Live({
   const board = payload?.board ?? NO_BOARD;
   const leagueList: LeagueListState =
     leagues.length > 0 ? "ready" : refreshing ? "loading" : "none";
+  // **One call, two readers.** The pill beside the stepper draws this and every
+  // card's in-play lamp pulses on it, and the rule is pure and tested — so it
+  // is folded here rather than inside the pill, where a card could not see it
+  // and a second spelling would be a lamp pulsing under a readout saying the
+  // page had stopped listening.
+  const readout = gametimeReadout({
+    connection,
+    leagues: leagueList,
+    games: payload?.games ?? null,
+    stale,
+    degraded:
+      payload !== null &&
+      (payload.projections === "error" ||
+        payload.stats === "error" ||
+        payload.scores === "error"),
+  });
 
   // **The two narrowings are two passes and the order is the cheap one** — the
   // leagues console's arrangement, and the drawers count over exactly this
@@ -431,7 +443,7 @@ function Live({
 
       <div className={`relative my-6 flex flex-wrap items-center gap-3 sm:my-9 ${card.chromeClass}`}>
         <WeekStepper week={payload?.week ?? null} onChange={onWeek} />
-        <LiveReadout payload={payload} connection={connection} leagues={leagueList} stale={stale} />
+        <LiveReadout readout={readout} />
         <div
           aria-hidden
           className="hidden h-px flex-1 bg-gradient-to-r from-active/35 via-foreground/5 to-transparent sm:block"
@@ -548,6 +560,11 @@ function Live({
                     // the same render that opens it.
                     board={open ? board : NO_BOARD}
                     pending={pending}
+                    // Whether the in-play lamp pulses, and nothing else. A
+                    // boolean that flips a handful of times a Sunday against
+                    // an `entry` that moves every twenty seconds, so what it
+                    // costs the memo is nothing beside what it protects.
+                    live={readout.pulse}
                     open={open}
                     lit={card.isLit(league.league_id)}
                     onToggle={card.toggle}
@@ -623,30 +640,12 @@ function Live({
  * this is the pill it is drawn in. Lit while the stream is answering and
  * dimmed while it is not; the lamp pulses only while a game is actually
  * running, which is the one thing a reader looking at a quiet page needs told.
+ *
+ * **It takes the reading rather than the four inputs to it**, because the
+ * cards' own in-play lamps pulse on the same `pulse` and a rule folded in two
+ * places is two places for it to drift.
  */
-function LiveReadout({
-  payload,
-  connection,
-  leagues,
-  stale,
-}: {
-  payload: ManagerGametimePayload | null;
-  connection: GametimeConnection;
-  leagues: LeagueListState;
-  stale: string | null;
-}) {
-  const readout = gametimeReadout({
-    connection,
-    leagues,
-    games: payload?.games ?? null,
-    stale,
-    degraded:
-      payload !== null &&
-      (payload.projections === "error" ||
-        payload.stats === "error" ||
-        payload.scores === "error"),
-  });
-
+function LiveReadout({ readout }: { readout: GametimeReadout }) {
   return (
     <span
       role="status"

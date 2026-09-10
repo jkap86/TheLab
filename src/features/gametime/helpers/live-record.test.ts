@@ -8,6 +8,7 @@ import {
   leagueLiveRecord,
   leaguesInPlay,
   liveSummary,
+  playersInPlay,
 } from "./live-record.ts";
 
 function side(over: Partial<GametimeSide> = {}): GametimeSide {
@@ -18,6 +19,7 @@ function side(over: Partial<GametimeSide> = {}): GametimeSide {
     projected: 100,
     live: 100,
     status: { done: 0, live: 0, pending: 9 },
+    players_in_play: 0,
     lineup: [],
     bench: [],
     ...over,
@@ -54,7 +56,11 @@ describe("leagueLiveRecord", () => {
 describe("liveSummary / leaguesInPlay", () => {
   const entries = {
     a: league(),
-    b: league({ mine: side({ live: 80, status: { done: 2, live: 3, pending: 4 } }) }),
+    // `players_in_play` alone, with `status` left at its all-pending default:
+    // the count reads the field the cards print rather than the seat status,
+    // which is the whole of what keeps the header and a best-ball card from
+    // disagreeing on one screen.
+    b: league({ mine: side({ live: 80, players_in_play: 3 }) }),
     c: league({ opponent: null }),
   };
   const leagues = [{ league_id: "a" }, { league_id: "b" }, { league_id: "c" }, { league_id: "d" }];
@@ -67,10 +73,49 @@ describe("liveSummary / leaguesInPlay", () => {
     assert.equal(summary.winPct, 50);
   });
 
-  test("counts a league in play by either side's running starters", () => {
+  test("counts a league in play by either side's players, not by its seat status", () => {
     assert.equal(leaguesInPlay(leagues, entries), 1);
-    const theirs = { a: league({ opponent: side({ status: { done: 0, live: 1, pending: 8 } }) }) };
+    const theirs = { a: league({ opponent: side({ players_in_play: 1 }) }) };
     assert.equal(leaguesInPlay([{ league_id: "a" }], theirs), 1);
+    // A lineup whose seats are live but whose count is zero is not in play:
+    // the two are separate fields and only one of them is the reading.
+    const seats = { a: league({ mine: side({ status: { done: 0, live: 4, pending: 5 } }) }) };
+    assert.equal(leaguesInPlay([{ league_id: "a" }], seats), 0);
+  });
+});
+
+describe("playersInPlay", () => {
+  test("null is the zero state, and it covers a read that has not landed", () => {
+    assert.equal(playersInPlay(league()), null);
+    assert.equal(playersInPlay(null), null);
+    assert.equal(playersInPlay(undefined), null);
+  });
+
+  test("a side with nobody on the field reads zero rather than closing the reading", () => {
+    // Something *is* being watched — three of theirs — so the reading is
+    // drawn, and none of yours is the answer a reader wants at that moment.
+    assert.deepEqual(playersInPlay(league({ opponent: side({ players_in_play: 3 }) })), {
+      mine: 0,
+      theirs: 3,
+    });
+  });
+
+  test("no opponent is a null second figure, never a zero", () => {
+    assert.deepEqual(
+      playersInPlay(league({ mine: side({ players_in_play: 2 }), opponent: null })),
+      { mine: 2, theirs: null },
+    );
+    // And a league with no opponent and nobody in play is still the zero state.
+    assert.equal(playersInPlay(league({ opponent: null })), null);
+  });
+
+  test("both sides in play read both figures", () => {
+    assert.deepEqual(
+      playersInPlay(
+        league({ mine: side({ players_in_play: 4 }), opponent: side({ players_in_play: 3 }) }),
+      ),
+      { mine: 4, theirs: 3 },
+    );
   });
 });
 

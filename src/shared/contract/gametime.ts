@@ -107,6 +107,31 @@ export type GametimeSide = {
    */
   status: GametimeStatus;
   /**
+   * How many of this side's players have a game running right now — the
+   * card's own in-play reading, and the one figure on it that says whether
+   * there is anything to watch in this league.
+   *
+   * **It is `status.live` in a managed league and a count over the whole
+   * roster in a best-ball one**, which is the same rule {@link lineup} is
+   * seated by rather than a second one. A managed lineup is what will be
+   * scored, so its seats are the population; a best-ball team is seated by
+   * Sleeper after the games, so "starters in play" is not a statement about a
+   * lineup anybody set and every rostered player is one Sleeper may yet seat.
+   * `status` counts seats and cannot answer that, which is why this is a field
+   * beside it rather than a fourth arm of it.
+   *
+   * **It rides the wire rather than being counted on the client**, and the
+   * reason is two-fold. A closed card is handed no scoreboard — the board is a
+   * new object every frame and only the open card takes it, which is what
+   * keeps a hundred closed cards' memos holding through a live Sunday — so a
+   * count walked from the board would read zero on every card but one. And
+   * under `scores: "error"` the board on the payload is the last one read
+   * rather than the current one, a caption rather than a factor; this is
+   * counted from the same phases `live` was priced against, so the reading and
+   * the figure it stands beside degrade together.
+   */
+  players_in_play: number;
+  /**
    * The lineup, in the league's own slot order — **as set in a managed league
    * and as *solved* in a best-ball one**, which is the league's own rule
    * rather than a choice this makes. Sleeper seats a best-ball team itself,
