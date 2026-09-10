@@ -11,8 +11,8 @@ import type { LeagueWeekRecord, WeekRecordSummary } from "../../shared/week-reco
 
 /**
  * The gametime page's readings, pure and under Node's runner: a league's live
- * record, the page's record over its leagues, how many leagues are in play,
- * and what a seat's game clock says.
+ * record, the page's record over its leagues, how many leagues are in play and
+ * how many players in one, and what a seat's game clock says.
  *
  * The record fold is `features/shared/week-record`, the same one the lineup
  * checker projects a week with — read relatively with `.ts` for Node's sake.
@@ -41,9 +41,52 @@ export function liveSummary(
 }
 
 /**
- * How many of the leagues on screen have a starter — theirs or the opponent's
+ * How many players each side of a league's week has on the field right now, or
+ * **null where nothing is in play at all**.
+ *
+ * The card's in-play reading, folded here rather than in the component for the
+ * reason everything else in this file is: the three states below render
+ * perfectly when they are wrong, and null is one of them.
+ *
+ * - **Null is the zero state, and it is drawn as nothing.** Not a `0`, which
+ *   beside a lit lamp is a claim that something is being watched, and not an
+ *   em dash, which on this console reads as a figure the read failed to fetch.
+ *   A week that has not kicked off, a week that is over and a bye all arrive
+ *   here alike and all draw the bare rule the card has always had.
+ * - **A null `theirs` is no opponent** — a future week, a week Sleeper filed
+ *   without a pairing, an opponent whose roster is not stored — where a `0` is
+ *   an opponent with nobody on the field. The card draws the first as one
+ *   figure and the second as two, so the distinction is on screen.
+ * - **A `mine` of `0` beside a live `theirs` is drawn**, because something
+ *   *is* being watched: none of yours and three of theirs is the reading, and
+ *   it is one a reader scanning a Sunday wants.
+ *
+ * The figures are the wire's own — see `GametimeSide.players_in_play`
+ * for why they are counted on the server, which is also why this takes an
+ * entry rather than a side and a scoreboard: a closed card is handed no board
+ * at all, so a count walked from one would read zero on every card but the one
+ * that happens to be open.
+ */
+export function playersInPlay(
+  entry: GametimeLeague | null | undefined,
+): { mine: number; theirs: number | null } | null {
+  if (!entry) return null;
+  const mine = entry.mine.players_in_play;
+  const theirs = entry.opponent ? entry.opponent.players_in_play : null;
+  if (mine === 0 && (theirs ?? 0) === 0) return null;
+  return { mine, theirs };
+}
+
+/**
+ * How many of the leagues on screen have a player — theirs or the opponent's
  * — whose game is running right now. The header's second count, and the one
  * figure on the page that says whether there is anything to watch.
+ *
+ * **It reads the same figure the cards under it print**, which is what stops
+ * the header and a card disagreeing on one screen: `status.live` counts
+ * *seats*, and a best-ball league's seats are a lineup Sleeper has not seated
+ * yet — so a bench player whose game was running left the league out of this
+ * count while the card beneath it read a figure that included him.
  */
 export function leaguesInPlay(
   leagues: readonly { league_id: string }[],
@@ -51,9 +94,7 @@ export function leaguesInPlay(
 ): number {
   let count = 0;
   for (const league of leagues) {
-    const entry = entries[league.league_id];
-    if (!entry) continue;
-    if (entry.mine.status.live > 0 || (entry.opponent?.status.live ?? 0) > 0) count++;
+    if (playersInPlay(entries[league.league_id]) !== null) count++;
   }
   return count;
 }

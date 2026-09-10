@@ -14954,3 +14954,196 @@ hundred cards rather than as a stray mark; whether the 300ms width transition
 reads as movement or as lag when a real frame lands every twenty seconds; and
 whether `--fs-21` still reads as the hero on a phone beside a real
 `LeagueConfigWindow`, which is the one thing the type step traded away.
+
+### The card says how many of your players are on the field
+
+The card said what each side is on course to score and what it has scored, and
+nothing on it said **how many of your players are actually playing right now** —
+that reading lived only in the header gauge, as a count of *leagues* with a game
+running (`In play 3 / 4`). It is a per-card figure now: how many of yours, facing
+how many of theirs, stamped into the card's own metal face on the row that held
+`CardRule` alone. Applied from a design handoff. **Nothing on the schema moved
+and there is no migration**; the diff is the contract, the solve, the page, the
+card and one pure helper.
+
+**It is a reading, not a part.** It was first drawn as a small billet hung in
+`CardBilletRow` opposite the league's name, on `OwnerBillet`'s construction, and
+rejected twice over: what it says is a figure about the week rather than
+something the card *carries*, and a second billet in that overhang competes with
+the league's name for width at a phone's — which is the one thing that row was
+arranged to stop. Stamped on the face it costs the card the row's own ~19px and
+moves no other measurement on it.
+
+**No denominator.** An earlier pass read `4/9`. The starter count is stated one
+row down on the settings strip (`Starters 9`), and in a best-ball league it is
+the wrong denominator anyway — which is the same reason the count behind this is
+taken over the whole roster there. The bare figure is the reading.
+
+#### The count rides the wire, and the handoff's first proposal is why
+
+That handoff opens with a client-side helper — `playersInPlay(side, board,
+bestBall)`, walking the scoreboard — and then argues itself out of it in the
+cautions two sections down. Both arguments hold and the second is decisive.
+
+**A closed card is handed no scoreboard.** The board is a new object on every
+frame the room pushes and only the open card takes it, which is what keeps a
+hundred closed cards' memos holding through a live Sunday; a count walked from
+it would read **zero on every card but one**, on a page whose whole subject is
+that the numbers move. And **`scores: "error"` leaves the last board on the
+payload as a caption rather than a factor** — the projection beside it is
+deliberately *not* priced against those clocks — so a count taken from it in that
+state would be a stale reading of a live figure standing next to a figure that
+had degraded away from it.
+
+So `GametimeSide.players_in_play` is a field, counted in `manager/gametime`
+from **the same phases `live` was priced against**, and the reading and the
+figure it stands beside degrade together.
+
+**Two populations, and which one is the same rule the seating already is.** A
+managed lineup is what will be scored, so its seats are the whole of what is in
+play and `status.live` already counts them. A best-ball team has no lineup as
+set — Sleeper seats it after the games, from the whole roster — so every rostered
+player is one it may yet seat, and counting the solved seats would leave a bench
+player whose game is running out of a reading that exists to say whether there is
+anything to watch. `status` counts *seats* and cannot answer that, which is why
+this is a field beside it rather than a fourth arm of it.
+
+**`isInPlay` is one spelling, and it is what made the field cheap.** It is
+`sideStatus`' own `live` arm extracted, so the seat count and the player count
+cannot come to disagree about what "running" means — including the arm that is
+easiest to get wrong, a scoreboard nobody could read, where a stat line is read
+as a game that has at least started. Every rostered id is priced by the time the
+side is assembled and `price` memoises, so the best-ball walk costs nothing; the
+branch is the rule rather than an optimisation.
+
+**The header count reads the same figure.** `leaguesInPlay` was
+`status.live > 0` on either side, and against a best-ball league that is a count
+over a lineup Sleeper has not seated yet — so a bench player whose game was
+running left the league out of the header while the card beneath it printed a
+figure that included him, on one screen. It reads `playersInPlay` now, which is
+the same fold the card draws from.
+
+**`playersInPlay` returns null for the whole zero state**, and that is the one
+client-side rule worth a pure function: a week that has not kicked off, a week
+that is over, a bye and a read still in flight all arrive alike and all draw
+**nothing** — no `0`, which beside a lit lamp is a claim that something is being
+watched, and no em dash, which on this console reads as a figure the read failed
+to fetch. A **null `theirs`** is no opponent, where a `0` is an opponent with
+nobody on the field: the card draws the first as one figure and the second as
+two, so the distinction is on screen. And a **`mine` of `0` beside a live
+`theirs` is drawn**, because something *is* being watched — none of yours and
+three of theirs is the reading, and it is one a reader scanning a Sunday wants.
+
+#### The row keeps its planes, and the lamp keeps the page's rule
+
+**The row carries `preserve-3d` and no transform of its own, and each child
+names its own plane** — the trade card's own finding, one card over, and the
+handoff's suggested wrapper is exactly the shape it warns against. `CardRule`
+carries `translateZ(36px)`, so a `translateZ` written on the row would collapse
+it into the reading's depth and the hairline would sit 16px shallower with no
+error to say so. The rule keeps its plane; the reading takes 20px, between the
+settings strip's 18 and the matchup window's 22.
+
+**Closed over, the row is the single child the rule has always been** —
+`items-center` on a row holding one 1px hairline is a no-op — so nothing about
+the card moves in the state where nothing is in play. Measured: the row is
+**1px** on a card with no reading and **20.4px** on one with it.
+
+**The lamp pulses on `gametimeReadout().pulse`, which is the page's own rule and
+the reason that reading was lifted.** It was folded inside `LiveReadout`, where a
+card could not see it; it is folded once in `GametimeHome` now and the pill takes
+the reading rather than the four inputs to it. Over a stale, dropped or
+snapshot stream every figure on the card is frozen, and a lamp still pulsing on
+top of them would be a hundred cards claiming to watch something the readout
+beside the stepper says the page is not. The prototype anticipates exactly that
+state — it draws a `steady` variant of the same lamp — and it is a boolean that
+flips a handful of times a Sunday against an `entry` that moves every twenty
+seconds, so what it costs the memo is nothing beside what it protects.
+
+**Slower than the page's own lamp, deliberately**: 2.4s against the readout's
+2s, which is the prototype's own pair rather than a transcription slip. A page of
+lamps beating in time with the header reads as one blinking mass.
+
+**Every visible element is `aria-hidden` and the `sr-only` sentence is the whole
+announcement.** The prototype hides the lamp and the cut and leaves the legend
+and both numerals in the tree, which reads out as `In play 4 3` followed by the
+sentence — the very thing the handoff says to avoid. The sentence says it once,
+in words, and is `position: absolute`, so it takes no share of the row's `gap-2`.
+
+**The two inks are the billet's own tokens, not alphas over `--foreground`.**
+The handoff's table spells `text-foreground/76` and `text-foreground/70` and its
+own prose names the second "the billet's quiet ink, matching the `Opp` role
+label" — which is `--billet-scope`. Those two literals *are* `--billet-label` and
+`--billet-scope`'s dark values to the digit, and in the light scheme the tokens
+are solid, measured colours where an alpha over the foreground is a washed
+near-black that inverts by accident. Naming them is also what the handoff's own
+fidelity note asks for. Measured against the card's housing across its whole
+gradient, every ink clears 4.5:1 in both schemes — 5.9–9.3:1 dark and 3.9–5.9:1
+light, and 5.2–11:1 at the band the row actually lands on. **Light mode needed no
+work**, which is the claim that buys.
+
+#### Verified
+
+Rendered through a temporary `/preview` route against the real `GametimeCard`,
+`PageShell`, the real tokens and the real Tailwind build — the method the
+console-card, shares, rack and timeline passes established, since no database is
+reachable from where this was built — then driven over CDP at 1280 and 390 in
+both schemes and deleted. The mechanics are the ones this file records:
+`--no-proxy-server`, `localhost` rather than `127.0.0.1`, a phone viewport from
+`Emulation.setDeviceMetricsOverride` with `mobile: true`, `data-theme` **and**
+`localStorage` rather than `prefers-color-scheme`,
+`--disable-features=OverlayScrollbar`, the
+`--blink-settings=availablePointerTypes=4,…` flags without which every
+`pointer-fine:` rule on this card is inert, a **client-component** harness, a CDP
+client over Node's own `WebSocket` since Playwright is not installed here, and a
+fresh `--remote-debugging-port` per run. The fixtures are six leagues: both sides
+in play, a side with nobody in play facing three, no opponent, nothing in play at
+all, a live count under a stalled stream, and a read still in flight.
+
+Every value is the handoff's. The lamp is **5×5px** (`0.3125rem`) on
+`rgb(0,255,229)` under `0 0 6px var(--accent-glow)`, the legend `In play` at
+**11.6px** (`--fs-10`) IBM Plex Mono, `1.856px` of tracking (`0.16em`) under
+`--standing-label-shadow`, and both figures at **18.56px** (`--fs-16`) 600,
+`-0.2784px` (`-0.015em`), `tabular-nums` — the reader's on `rgb(159,255,242)`
+under `--standing-engrave` **plus** a 12px accent halo, the opponent's on
+`rgba(237,237,237,0.7)` under the engraving **and no halo**. The cut is
+**1px × 14px** on `--groove` under `--groove-highlight`. The row computes
+`transform-style: preserve-3d` with `transform: none`, a 12px gap and
+`items-center`; the rule holds `translateZ(36px)` and the reading takes
+`translateZ(20px)` at `ml-auto`, `flex-shrink: 0`, `gap: 8px`.
+
+Every arm landed at both widths in both schemes. Both sides in play drew
+`4 │ 3`; a side with nobody drew `0 │ 3`; no opponent drew `2` alone with **no
+cut and no second figure**; nothing in play drew **no reading at all**, its row
+one child and 1px tall; the stalled stream drew its figures with the lamp
+`animation-name: none`; the read in flight drew nothing, the matchup window
+carrying the flask. **Both schemes turn over from the tokens alone** — the legend
+`rgba(237,237,237,0.76)` → `rgb(58,77,84)`, the reader's figure `#9ffff2` →
+`#08554d`, the opponent's `rgba(237,237,237,0.7)` → `rgb(62,81,88)` — with no
+light-mode block written for any of it.
+
+Opening a card grows `CardRule` 36 → 92px beside the reading and **nothing gives
+at either width**: `scrollWidth === clientWidth` on the row at 390, where the two
+take 224px of a ~332px content box. Under `prefers-reduced-motion: reduce` the
+lamp's `animation-name` computes to `none`, which is `lab-anim` doing its job.
+At every width and in both schemes: `document.documentElement.scrollWidth` equal
+to the viewport, **zero** unclipped elements past it, nothing clipped inside the
+reading, exactly one `<h1>`, **zero controls inside the part**, and **no console
+output of any kind** beyond the dev server's own React-DevTools and HMR lines.
+
+2,241 unit tests pass (seven more — the two populations, the phases the count
+follows, the field the header reads, and the helper's four states, including a
+lineup whose seats are live and whose count is zero); `lint`, `typecheck` and
+`build` are clean.
+
+**Not verified against real data**, which is the gap to close first: every number
+above is a fixture and no database was reachable from here. Four things a render
+cannot check — whether a real best-ball roster's count reads as *usefully*
+different from its seat count, which is the whole reason the field is not
+`status.live`; what the extra number per side actually adds to a frame on a
+116-league account, which ought to be negligible beside the ten figures already
+there but nothing has weighed it; how often `scores: "error"` is reached in
+practice, since the degraded arm is the one the server-side count exists for and
+is unexercised until it is; and whether a hundred lamps pulsing at 2.4s read as
+quiet or as busy on a real Sunday, which is the one question no single-page
+render can answer.

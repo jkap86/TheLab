@@ -209,11 +209,25 @@ function solveSide(
         (b.live ?? -1) - (a.live ?? -1) || a.player_id.localeCompare(b.player_id),
     );
 
+  const status = sideStatus(phases);
+
   return {
     roster_id: rosterId,
     team_name: teamName,
     ...sideTotals(lineup),
-    status: sideStatus(phases),
+    status,
+    // **Two populations, and which one is the same rule the seating is.** A
+    // managed lineup is what will be scored, so its seats are the whole of
+    // what is in play and `status.live` already counts them. A best-ball team
+    // has no lineup as set — Sleeper seats it after the games, from the whole
+    // roster — so every rostered player is one it may yet seat, and counting
+    // the solved seats would leave a bench player whose game is running out of
+    // a reading that exists to say whether there is anything to watch. Every
+    // rostered id is priced by now in either path and `price` memoises, so the
+    // walk costs nothing; the branch is the rule rather than an optimisation.
+    players_in_play: league.best_ball
+      ? rostered.reduce((n, id) => n + (isInPlay(price(id).phase) ? 1 : 0), 0)
+      : status.live,
     lineup,
     bench,
   };
@@ -256,10 +270,24 @@ function sideStatus(phases: readonly (SeatPhase | null)[]): GametimeStatus {
   const status: GametimeStatus = { done: 0, live: 0, pending: 0 };
   for (const phase of phases) {
     if (phase === null || phase === "none" || phase === "final") status.done += 1;
-    else if (phase === "live" || phase === "unknown-started") status.live += 1;
+    else if (isInPlay(phase)) status.live += 1;
     else status.pending += 1;
   }
   return status;
+}
+
+/**
+ * Whether a game is running behind a seat or a player, right now.
+ *
+ * One spelling, because two readings count by it: this is `sideStatus`' `live`
+ * arm and it is also {@link GametimeSide.players_in_play}'s whole predicate. A
+ * scoreboard nobody could read is included on the same reasoning the pricing
+ * uses — a stat line means his game has at least started — so the count and
+ * the figure beside it on the card degrade together rather than one of them
+ * going quietly to zero.
+ */
+function isInPlay(phase: SeatPhase | null): boolean {
+  return phase === "live" || phase === "unknown-started";
 }
 
 /** One player's three figures and the phase his game is in. */

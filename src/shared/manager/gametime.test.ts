@@ -123,6 +123,30 @@ describe("solveGametimeLeague", () => {
     assert.equal(solved.mine.lineup[2].player, null);
   });
 
+  test("a managed league's in-play count is its seats, and no more", () => {
+    // qb (BUF, live) and rb2 (DAL, live) are the running seats; bench2 (DAL)
+    // is running too and is deliberately *not* counted — in a managed league
+    // the lineup as set is what will be scored, so the seats are the whole
+    // population.
+    const solved = solveGametimeLeague(league(), BOARDS)!;
+    assert.equal(solved.mine.status.live, 2);
+    assert.equal(solved.mine.players_in_play, 2);
+  });
+
+  test("the in-play count follows the phases rather than the stats feed", () => {
+    // A scoreboard nobody could read reads a stat line as a game that has at
+    // least started, which is the same reading the projection is priced by —
+    // so the count and the figure beside it on the card degrade together.
+    const solved = solveGametimeLeague(league(), { ...BOARDS, clocks: null })!;
+    assert.equal(solved.mine.players_in_play, 2); // qb and rb1 have lines
+    // And a stats feed that is down costs the count nothing: the phases are
+    // the scoreboard's.
+    assert.equal(
+      solveGametimeLeague(league(), { ...BOARDS, stats: null })!.mine.players_in_play,
+      2,
+    );
+  });
+
   test("the bench is everyone unseated, live projection first", () => {
     const solved = solveGametimeLeague(league(), BOARDS)!;
     assert.deepEqual(
@@ -443,6 +467,20 @@ describe("solveGametimeLeague, best ball", () => {
     };
     const solved = solveGametimeLeague(bb(), { projections: BB_PROJECTIONS, stats, clocks })!;
     assert.equal(solved.mine.lineup[2].player?.player_id, "wr_bad");
+  });
+
+  test("the in-play count is the whole roster, where a managed league's is its seats", () => {
+    // Sleeper seats a best-ball team after the games, so a bench player whose
+    // game is running is one it may yet seat and the count says so. The same
+    // roster read as managed counts the five seats alone — which is the
+    // distinction the field exists for, and the one `status` cannot make.
+    const clocks = new Map<string, GameClock>([
+      ["MIA", clock({ phase: "live", remaining: 0.5, quarter: 2, clock: "10:00" })],
+    ]);
+    const boards = { ...BB_BOARDS, clocks };
+    assert.equal(solveGametimeLeague(bb(), boards)!.mine.players_in_play, ALL.length);
+    assert.equal(solveGametimeLeague(bb(), boards)!.mine.status.live, 5);
+    assert.equal(solveGametimeLeague(bb({ best_ball: false }), boards)!.mine.players_in_play, 5);
   });
 
   test("a managed league with the same roster is still seated as set", () => {
