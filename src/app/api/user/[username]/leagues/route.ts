@@ -10,6 +10,7 @@ import {
   syncManagerLeagues,
 } from "@/shared/manager";
 import { getActiveSeason, parseRequestedSeason, peekActiveSeason } from "@/shared/season";
+import { withInteractiveSleeper } from "@/shared/sleeper";
 import { resolveManagerUser, toUserInfo } from "@/shared/user";
 
 export const dynamic = "force-dynamic";
@@ -38,6 +39,17 @@ export const dynamic = "force-dynamic";
  * `features/manager/hooks/use-manager-leagues`.
  */
 export async function GET(
+  request: Request,
+  context: { params: Promise<{ username: string }> },
+) {
+  // Interactive Sleeper traffic — a reader is waiting on this handler, so the
+  // reads under it are bounded rather than queueing behind a crawl batch. No
+  // `signal`: see `shared/sleeper/request-policy`, which is where both halves
+  // of that decision are argued.
+  return withInteractiveSleeper(() => readLeaguesStream(request, context));
+}
+
+async function readLeaguesStream(
   request: Request,
   { params }: { params: Promise<{ username: string }> },
 ) {
@@ -187,16 +199,16 @@ export async function GET(
    * a disconnect nothing announced.
    *
    * **What it does not do is stop the sync, and that is deliberate rather than
-   * missing.** Nothing in the sync stack takes an `AbortSignal` — `sleeperGet`
-   * has no parameter for one, so neither do `fetchLeagueGraph`,
-   * `syncLeagueGraphs`, `persistLeagueGraph`'s per-league transactions, or the
-   * session advisory lock held across all of it — so honouring `request.signal`
-   * here would mean threading a signal through every Sleeper call site and then
-   * answering a question none of this code has an answer for: what a half-run
-   * sync stamps. `attempt_at` and `synced_at` mean "we tried" and "this graph is
-   * current" (see `sync-freshness`), and a run cancelled between two leagues is
-   * neither cleanly, so a partial implementation would put a lie into the column
-   * the whole throttle is read off.
+   * missing.** `sleeperGet` takes a signal now and `syncManagerLeagues` refuses
+   * it: that function opens a `withBackgroundSleeper` scope around its whole
+   * run, which replaces the interactive budget this handler declared *and drops
+   * the ambient signal with it*. The reason is the one this note always gave —
+   * `persistLeagueGraph`'s per-league transactions and the session advisory lock
+   * held across all of it have no answer to what a half-run sync stamps.
+   * `attempt_at` and `synced_at` mean "we tried" and "this graph is current"
+   * (see `sync-freshness`), and a run cancelled between two leagues is neither
+   * cleanly, so honouring a disconnect here would put a lie into the column the
+   * whole throttle is read off.
    *
    * It is also not obviously the behaviour you want. A cold sync is the one
    * thing that fills this manager's graph, and it is filling *shared* Postgres

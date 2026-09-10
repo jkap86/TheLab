@@ -37,7 +37,7 @@ import type {
 import { getRosProjections, restOfSeasonStart } from "@/shared/projections";
 import type { RosProjections } from "@/shared/projections";
 import { getActiveSeason, parseRequestedSeason } from "@/shared/season";
-import { getNflState } from "@/shared/sleeper";
+import { getNflState, withInteractiveSleeper } from "@/shared/sleeper";
 import { resolveManagerUser } from "@/shared/user";
 import { jsonWithPayloadSize } from "@/shared/util";
 
@@ -142,6 +142,17 @@ export const dynamic = "force-dynamic";
  * season nobody can read would put one year's page under another's heading.
  */
 export async function GET(
+  request: Request,
+  context: { params: Promise<{ username: string }> },
+) {
+  // Interactive Sleeper traffic — a reader is waiting on this handler, so the
+  // reads under it are bounded rather than queueing behind a crawl batch. No
+  // `signal`: see `shared/sleeper/request-policy`, which is where both halves
+  // of that decision are argued.
+  return withInteractiveSleeper(() => readLineups(request, context));
+}
+
+async function readLineups(
   request: Request,
   { params }: { params: Promise<{ username: string }> },
 ) {

@@ -174,10 +174,29 @@ const globalScope = globalThis as typeof globalThis & {
   [SEASON_LEAGUES_KEY]?: ReadMemo<ManagerLeague[]>;
 };
 
+/**
+ * How many seasons either of the two season-keyed memos below holds.
+ *
+ * **A handful is every season there is, and the bound is against the ones that
+ * are not.** `parseRequestedSeason` validates against a plausible *range*
+ * rather than a list, so a stale bookmark, a crawler or a hand-edited query
+ * string can name decades of them; a memo with no bound would hold an entry for
+ * each and drop none, since a stale-but-served answer is exactly what this
+ * shape refuses to expire.
+ *
+ * One number for both because they are one decision: they are keyed the same
+ * way, asked for together on the same route, and there is no reading under
+ * which a process should hold more of one than the other. Whichever season a
+ * reader is on is read constantly and so is never the one evicted — the eviction
+ * order is least recently *read*, which is what makes that true.
+ */
+const SEASON_MEMO_MAX = 8;
+
 const seasonAdpMemo = (): StaleWhileRevalidateMemo<DraftAdpBoards> =>
   (globalScope[SEASON_ADP_KEY] ??= createStaleWhileRevalidateMemo({
     ttlMs: SEASON_ADP_TTL_MS,
     revalidateMs: SEASON_ADP_REVALIDATE_MS,
+    max: SEASON_MEMO_MAX,
     onRebuildError: (season, error) =>
       console.warn(
         `[trades] draft capital rebuild failed for ${season}; serving the previous board:`,
@@ -187,9 +206,7 @@ const seasonAdpMemo = (): StaleWhileRevalidateMemo<DraftAdpBoards> =>
 
 const seasonLeaguesMemo = (): ReadMemo<ManagerLeague[]> =>
   (globalScope[SEASON_LEAGUES_KEY] ??= createReadMemo({
-    // A handful of seasons is every season there is; the bound is against a
-    // stale bookmark naming one that is not.
-    max: 8,
+    max: SEASON_MEMO_MAX,
     ttlMs: SEASON_LEAGUES_TTL_MS,
   }));
 

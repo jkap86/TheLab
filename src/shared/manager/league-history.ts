@@ -3,7 +3,7 @@ import {
   leagueSyncLockKey,
   withBlockingAdvisoryLock,
 } from "@/shared/db";
-import { getLeague } from "@/shared/sleeper";
+import { getLeague, withBackgroundSleeper } from "@/shared/sleeper";
 import { errorMessage } from "@/shared/util";
 
 import { markLeaguesGone } from "./crawl-queue";
@@ -75,8 +75,23 @@ export type LeagueHistoryResult =
  * it learns from a payload that may be a minute old, and a stale one would name
  * a season somebody else has since loaded. Asking the database where the chain
  * currently ends is one query and cannot be stale.
+ *
+ * **Background Sleeper traffic, though it is a press.** What a press produces
+ * is a season written into the shared corpus — every reader of that league's
+ * rail sees it, and the crawler refreshes it thereafter — so it takes
+ * `refreshLeague`'s budget rather than the interactive scope the route opened:
+ * a fan-out shed for a four-second queue wait, or abandoned because the reader
+ * collapsed the card, would be a permit and a lock spent on a season nobody
+ * ended up with. The press is already off the client's abort lineage for the
+ * same reason.
  */
 export async function extendLeagueHistory(
+  leagueId: string,
+): Promise<LeagueHistoryResult> {
+  return withBackgroundSleeper(() => runHistoryExtension(leagueId));
+}
+
+async function runHistoryExtension(
   leagueId: string,
 ): Promise<LeagueHistoryResult> {
   // Asked before the permit so a press at an id we hold nothing for cannot spend

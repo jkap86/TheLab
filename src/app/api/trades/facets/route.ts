@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 
 import type { ApiErrorPayload } from "@/shared/contract";
 import { getActiveSeason, parseRequestedSeason } from "@/shared/season";
+import { withInteractiveSleeper } from "@/shared/sleeper";
 import {
   parseTradeQuery,
   readTradeFacets,
@@ -30,12 +31,19 @@ export const dynamic = "force-dynamic";
  * too long for a request line here is the same scope that was too long there —
  * see `shared/trades/transport`.
  */
+/**
+ * Every Sleeper read under this handler is answering a reader, so it runs on
+ * the interactive budget: a bounded queue wait, one retry and a ladder that
+ * gives up well inside the platform's own deadline. See
+ * `shared/sleeper/request-policy`; the durable work a route starts opens a
+ * background scope of its own.
+ */
 export async function GET(request: Request) {
-  return readFacets(request);
+  return withInteractiveSleeper(() => readFacets(request));
 }
 
 export async function POST(request: Request) {
-  return readFacets(request);
+  return withInteractiveSleeper(() => readFacets(request));
 }
 
 async function readFacets(request: Request) {

@@ -35,8 +35,24 @@ Extensions therefore follow a rule rather than a habit:
 - Ordinary relative imports in a runtime module — **no** extension.
 - A test importing the module under test — **explicit `.ts`**.
 
-`npm test` needs Node ≥ 22.6 for `--experimental-strip-types`; on 23.6+ the flag
-is redundant but harmless.
+`npm test` needs Node ≥ 22.6 for `--experimental-strip-types`, and that floor is
+**declared** now rather than only written down: `engines.node` is `>=22.6 <23`,
+so a deploy resolves the same major this is developed, tested and built against
+instead of whatever the platform's buildpack installs next. The ceiling is a
+choice rather than a limitation — the flag is redundant on 23.6+ and harmless —
+and moving it is a deliberate change. `packageManager` pins npm on the same
+argument: the lockfile decides which packages, that field decides which npm
+reads it.
+
+**`npm run check` is the fast one and `npm run check:full` is the whole one**,
+and the order of the second is the thing to know: it runs the production build
+**first** and then lint, typecheck and tests. `tsc` cannot run without a build
+on a clean tree — Next generates the `PageProps`/`LayoutProps` types under
+`.next/types/` that `layout.tsx` and every `[param]` page read — so `check`
+alone fails on a fresh checkout with four "cannot find name" errors that say
+nothing about the code. `check` still runs after the build, because `tsc` covers
+`scripts/` and the test files the bundler never sees. A green `tsc` and a green
+suite have never implied a build; this is what closes that.
 
 ## Reaching Sleeper
 
@@ -95,6 +111,122 @@ reach it — and where a helper returning six fields for a caller that read one
 cost every request an `await getActiveSeason()` it discarded. A route that needs
 no season should not pay a Sleeper round-trip for one.
 
+### A request's budget is what it is for
+
+**Every bound this needed was already reachable and none of it was reached.**
+`LimiterWaitOptions` has carried `signal` and `maxWaitMs` since the limiter
+landed; `http.get` has carried `signal`, `timeoutMs` and `retries` since it
+replaced axios; and `sleeperGet` — the one function every Sleeper call in this
+process passes through — took none of them. So the queue was unbounded and the
+ladder was 30s × 4 for everybody, which is one policy wearing two jobs. A page
+that queued forty seconds behind a crawl batch and then spent two minutes
+retrying was not slow: it was work for an answer nobody would receive, holding a
+permit and a pooled connection while it happened, behind a platform deadline the
+process cannot see.
+
+**Two named policies, in `sleeper/request-policy.ts`, and no numbers at call
+sites.** *Interactive* — somebody is watching a spinner — queues at most 4s,
+allows 8s an attempt and one retry, and gives the whole ladder 12s.
+*Background* — a crawl tick, a scheduled refresh, a sync whose answer is rows —
+queues as long as it takes at 30s × 4, which is byte for byte what every Sleeper
+read ran under before. Only the half that was wrong moved.
+
+**The interactive numbers are sized against the platform rather than against
+Sleeper.** Heroku's router abandons a request at 30 seconds, so what matters is
+the worst case one Sleeper read adds to a handler: 4 + 12 = 16, leaving a route
+its Postgres reads, its solve and its serialisation inside the deadline.
+`request-policy.test.ts` pins that arithmetic rather than leaving it in a
+comment — including that the deadline *binds*, since `timeoutMs × (retries + 1)`
+alone would outlast it.
+
+**`deadlineMs` is the field `timeoutMs` and `retries` cannot express between
+them**, and it is the one thing this added to `shared/http`. Four attempts at
+thirty seconds is two minutes and neither number says so; a reader auditing
+either in isolation sees a defensible figure. It bounds rather than replaces —
+each attempt gets the smaller of `timeoutMs` and what is left, and a backoff that
+would not fit is not waited out at all, the last error being thrown instead.
+
+**How the class travels is a scope, not an argument, and it had to be.** A
+page's Sleeper traffic reaches `sleeperGet` through `getActiveSeason`,
+`resolveManagerUser`, a projections span and a scoreboard, none of which has any
+business knowing who asked; threading a parameter would have touched thirty call
+sites to say one thing. `withInteractiveSleeper` is an `AsyncLocalStorage` scope
+a route handler wraps its body in — one wrapper, no re-indentation, the original
+body moved to a named function beneath it — and `resolveSleeperPolicy` is the
+pure rule the composition reads it through.
+
+**Nothing declared is the *background* policy**, which is the opposite of what a
+reader might expect and is `processRole`'s own call: the honest answer to "we
+could not tell" is the behaviour the app already had. The two mistakes are not
+symmetrical. A route that loses its declaration is as slow as it was yesterday;
+a *background* path that lost one under the other default would start giving up
+on work nothing else retries — and that asymmetry is the whole reason the
+default is what it is.
+
+**`withBackgroundSleeper` is the escape, and dropping the signal is its point.**
+`syncManagerLeagues`, `refreshLeague` and `extendLeagueHistory` open it
+*themselves* rather than trusting a caller to remember, because all three are
+started from inside a request and none of them is answering it: what they
+produce is rows in Postgres that every later reader and the crawler share. Given
+a reader's budget a sync would shed leagues to a four-second queue wait under
+exactly the crawler pressure it is queued behind, having already stamped
+`attempt_at` for a graph nobody finished; given a reader's signal, one browser
+navigating away would abandon a cold fan-out mid-write. The leagues route's own
+note has argued that second half since the route landed, on the grounds that
+`sleeperGet` had no signal to honour — it has one now, and the argument is
+unchanged.
+
+**The two SSE rooms say it twice each, and the second time is the load-bearing
+one.** A reader's join is what opens a gametime week room or a picktracker draft
+room, and the read that opens it is also what arms the tick chain — so a room
+opened inside an interactive scope would carry that reader's budget and their
+signal for the life of the room. `openRoom` declares it and `tick` declares it
+again. `startBackgroundLoop` does the same for all four maintenance loops in one
+line, which is belt to that braces: a loop started from a request path would
+inherit the same way.
+
+**One route hands its reader's cancellation to Sleeper and it is the only one
+that can.** `GET /api/picktracker/[leagueId]` makes four uncached reads against
+one league, all of them this press's own, so a browser that has gone leaves
+nothing behind. Every other interactive route passes no signal, and the reason is
+sharper than caution: the projections span, the week's stats, the NFL state and
+the KeepTradeCut boards are all *held in process for other readers*, so a
+disconnect would reject a promise other requests are already awaiting. A scope's
+signal is a promise about every read under it.
+
+**Verified under Node's own runner**, which is why `request.ts` exists at all:
+`client.ts` reaches `@/shared/http` through the alias and cannot be tested, so
+the composition takes the limiter and the getter as arguments and `client.ts` is
+left as the wiring that names the real two. 66 tests across four files — the
+resolution rules and the scopes; the queue budget ending a wait and the
+background one not; a cancelled read leaving the queue without touching Sleeper
+and without losing its slot; the process-wide concurrency bound surviving the
+policy wiring; the deadline stopping a ladder and capping an attempt. What a
+unit test cannot reach — that any *real* caller declares anything — is pinned
+textually in `request-scopes.test.ts`, on `crawl-writes.test.ts`' terms and for
+its reason: a route that lost its scope and a sync that lost its scope both
+render a perfectly ordinary page.
+
+**One gap is structural rather than unmeasured, and it is worth naming.** The
+class belongs to the *call*, so where two classes share a memoized promise —
+`getNflState`, the projections span, a KeepTradeCut board — whoever populates it
+decides the budget for everyone awaiting it, and a background tick that got
+there first can hold an interactive caller past its own 12 seconds. Fixing that
+means either not coalescing those reads, which the second performance pass
+introduced deliberately, or racing a per-caller deadline against a promise other
+callers still want, which turns one reader giving up into a rejection they all
+see. Neither is worth it: a shared cached read is shared work by definition, and
+the case is a cold memo and a busy upstream at the same instant.
+
+**Not verified against real traffic**, which is the gap to close first. Three
+things a test cannot say: whether four seconds is the right queue budget against
+a real crawl batch on one dyno, which is the one number a live
+`AdmissionTimeoutError` rate would settle; whether any interactive path makes
+enough *sequential* Sleeper reads for 16 seconds apiece to add up inside the
+platform's 30; and whether the picktracker route's signal ever actually fires,
+since a snapshot that fast is usually answered before a reader can navigate
+away.
+
 ### Known drift
 
 `sleeper/limiter.ts` is now the whole file, admission half included — the
@@ -104,8 +236,13 @@ with it and is what pins the two properties that are silent when wrong: the slot
 *transfer* in `release()` that keeps the bound from widening across the
 microtask gap, and a cancelled waiter leaving the queue rather than being handed
 a permit it has stopped waiting for. One thing is still trimmed:
-`ADMISSION_REFUSALS` names two errors where TheLabX names three — the third is
-its request budget's, and joins when that ports.
+`ADMISSION_REFUSALS` names two errors where TheLabX names three, and it will
+stay that way. The third is `RequestBudgetExhaustedError`, which that repo
+throws when a caller runs out of safe lifetime before a slot is taken — which is
+exactly what `AdmissionTimeoutError` says here: the budget landed as `maxWaitMs`
+on the *wait* rather than as a clock a caller carries around, so the refusal it
+produces is one this list already names. See A request's budget is what it is
+for, above.
 
 `sleeper/types/sleeper.types.ts` doc comments still cite `SLEEPER_DATA_BASE` and
 `manager/crawl-ttl`, which arrive with the projections and crawler ports. Most
@@ -1203,6 +1340,23 @@ minutes sorted as though it had not been touched since it arrived, which made th
 card a reader had *just* closed the first thing evicted. An in-flight read is aborted
 when its last reader goes and a resolved one is kept — a half-read answer is
 worth nothing to anybody.
+
+**A failed entry goes with its last reader too, and that was a retry nobody
+could reach.** `acquire` starts a request only for a key in `IDLE`, so a card
+whose read failed, was closed and was opened again found the entry still there,
+still holding the old message, and asked for nothing — the one thing anybody
+would actually try was a no-op for the life of the page. Neither way out was a
+reader's to take: a global invalidation is a sync landing, and eviction skips
+exactly the entries nothing is reading. So the three endings are one rule
+now — **an entry is kept only for what it can serve** — and a failed one, having
+nothing behind it, joins the in-flight case rather than the resolved one. It is
+the *release* rather than the acquire because that is what tells a second card
+apart from a second visit: while the failed card stays open the entry stands and
+every subscriber reads the message, so nothing here can become a request per
+mount. No cooldown, deliberately — the effect that acquires depends on the key
+and the disclosure rather than on a render, so there is no churn for a clock to
+damp and one would be a second staleness policy answering a question nothing
+asks.
 
 **A stale response cannot overwrite a current one by construction.** The key is
 the whole question — league, season, manager, column, narrowing — so a response
@@ -14199,6 +14353,24 @@ existing shape.
   `JSON.stringify().length`, which costs more than the read it stands in front
   of — and **an entry heavier than the whole budget is refused rather than
   exempted**, which is the one arm eviction cannot reach.
+- **The stale-while-revalidate memo is bounded, and by a count.** Every other
+  memo's TTL is also, in practice, a bound on how many it holds: a key nobody
+  asks for expires and is dropped on the next write. In this one a stale entry
+  is precisely what keeps being served, so nothing expires it and nothing
+  dropped it — the season ADP board grew by one for every distinct season the
+  process was ever asked about and shrank never, and `parseRequestedSeason`
+  validates against a plausible *range* rather than a list, so that is decades
+  of boards each holding maps of every priced id in its corpus. A **count**
+  rather than the weight beside it, and that is a fact about what it holds: the
+  two manager memos answer per manager, where a dozen leagues and a hundred and
+  thirteen are two orders of magnitude apart, while this one answers per season
+  over a whole corpus and every entry is much the same size as every other.
+  Eviction is least recently **read**, which is the half that is silent when
+  wrong — a stale-but-served entry is not rewritten when it answers, so an
+  insertion order would make the season everybody is looking at the oldest thing
+  in the map and the first thing a burst of bookmarks naming other seasons threw
+  away. `SEASON_MEMO_MAX` is 8 and it is one number for both season-keyed memos,
+  since they are keyed the same way and asked for on the same route.
 - **The shares drawers unmount while shut.** They stay *mounted* for the
   session by design (the page's `opened` latch is what the grid's subject
   narrowing needs), which meant four hundred row trees and every derived list

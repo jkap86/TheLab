@@ -196,6 +196,92 @@ describe("http.get — what is worth retrying", () => {
   });
 });
 
+describe("http.get — the deadline on the whole ladder", () => {
+  it("stops retrying once the deadline has passed", async () => {
+    // The multiplication this bound exists to stop. At the background policy's
+    // own numbers — 30s an attempt, three retries — the ladder is just over two
+    // minutes and neither figure says so; a route behind a 30-second platform
+    // timeout needs to say the one thing they cannot between them.
+    let calls = 0;
+    stubFetch(async () => {
+      calls += 1;
+      return new Response("", { status: 500, statusText: "Server Error" });
+    });
+
+    await assert.rejects(
+      () =>
+        get("https://example.test/down", {
+          retries: 5,
+          // Shorter than the first backoff (300ms), so the ladder ends after
+          // the attempt that has already run rather than sleeping past its own
+          // deadline to make one more.
+          deadlineMs: 40,
+        }),
+      (error: unknown) =>
+        error instanceof HttpError && error.response.status === 500,
+    );
+    assert.equal(calls, 1, "the deadline stopped it, not the retry count");
+  });
+
+  it("caps an attempt at whatever is left of the deadline", async () => {
+    // A generous per-attempt timeout under a short deadline must not outlast
+    // it: the attempt is bounded by the *smaller* of the two.
+    stubFetch(hangs);
+    const started = Date.now();
+
+    await assert.rejects(
+      () =>
+        get("https://example.test/slow", {
+          timeoutMs: 30_000,
+          retries: 0,
+          deadlineMs: 25,
+        }),
+      (error: unknown) => error instanceof HttpTimeoutError,
+    );
+    assert.ok(
+      Date.now() - started < 5_000,
+      "the 30s attempt was cut to the deadline",
+    );
+  });
+
+  it("still retries inside a deadline that has room for it", async () => {
+    // The bound narrows the ladder and does not replace it: a first attempt
+    // that fails with time left is retried exactly as it always was.
+    let calls = 0;
+    stubFetch(async () => {
+      calls += 1;
+      if (calls === 1) {
+        return new Response("", { status: 503, statusText: "Unavailable" });
+      }
+      return Response.json({ ok: true });
+    });
+
+    const { data } = await get<{ ok: boolean }>("https://example.test/flaky", {
+      retries: 3,
+      deadlineMs: 5_000,
+    });
+
+    assert.deepEqual(data, { ok: true });
+    assert.equal(calls, 2);
+  });
+
+  it("is absent by default, which is what every caller had before", async () => {
+    let calls = 0;
+    stubFetch(async () => {
+      calls += 1;
+      return calls === 1
+        ? new Response("", { status: 500, statusText: "Server Error" })
+        : Response.json({ ok: true });
+    });
+
+    const { data } = await get<{ ok: boolean }>("https://example.test/flaky", {
+      retries: 1,
+    });
+    assert.deepEqual(data, { ok: true });
+    assert.equal(calls, 2);
+  });
+});
+
 describe("http.get — the caller's cancellation", () => {
   it("ends the ladder when the caller aborts during the backoff", async () => {
     // The case that motivated the test: the attempt fails retryably, so the

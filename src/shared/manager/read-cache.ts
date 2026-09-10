@@ -196,6 +196,26 @@ export type StaleWhileRevalidateOptions = {
    * being a rebuild every few seconds.
    */
   revalidateMs: number;
+  /**
+   * How many keys are held; past it the least recently **read** one goes.
+   *
+   * **Required, because this memo's whole shape is to keep answering.** A TTL
+   * bounds how *old* an entry may be and every other memo's TTL is also, in
+   * practice, a bound on how many it holds — a key nobody asks for expires and
+   * is dropped on the next write. Here a stale entry is precisely the one that
+   * keeps being served, so nothing expires it and nothing drops it: without a
+   * count the map grows by one for every distinct key the process is ever
+   * asked about and never shrinks. `?season=` is validated against a plausible
+   * *range* rather than a list, so "every distinct key" is decades of them,
+   * each holding maps of every priced id in its corpus.
+   *
+   * **Least recently read rather than least recently written**, which is the
+   * one thing an insertion order would get wrong here: a stale-but-served entry
+   * is not rewritten when it answers, so ordering by write would make the
+   * season everybody is actually reading the *oldest* thing in the map and the
+   * first thing a burst of bookmarks naming other seasons evicted.
+   */
+  max: number;
   now?: () => number;
   /** A rebuild rejected; the previous answer stays and this is the only trace. */
   onRebuildError?: (key: string, error: unknown) => void;
@@ -209,6 +229,15 @@ export type StaleWhileRevalidateOptions = {
  * that resolves replaces the value, and one that rejects leaves it in place
  * and caches nothing. Only a *cold* read that rejects is evicted, since there
  * is nothing older to keep.
+ *
+ * Bounded by a **count** where {@link createReadMemo} takes a weight beside
+ * one, and that is a fact about what each holds rather than an omission: those
+ * two memos answer *per manager*, and one manager's league rows are a dozen
+ * leagues where another's are a hundred and thirteen, so a count says nothing
+ * about the memory. This one answers per **season** over a whole corpus, so
+ * every entry is much the same size as every other and a count is a real bound
+ * — and weighing here would have to re-measure on each in-place rebuild, which
+ * is machinery bought for a variance that is not there.
  */
 export type StaleWhileRevalidateMemo<V> = {
   read(key: string, load: () => Promise<V>): Promise<V>;
@@ -234,8 +263,32 @@ type StaleEntry<V> = {
 export function createStaleWhileRevalidateMemo<V>(
   options: StaleWhileRevalidateOptions,
 ): StaleWhileRevalidateMemo<V> {
-  const { ttlMs, revalidateMs, now = Date.now, onRebuildError } = options;
+  const { ttlMs, revalidateMs, max, now = Date.now, onRebuildError } = options;
   const entries = new Map<string, StaleEntry<V>>();
+  const limit = Math.max(1, Math.trunc(max));
+
+  /**
+   * Drop the least recently read keys until at most `limit` are held.
+   *
+   * A `Map` iterates in insertion order and {@link touch} re-inserts on every
+   * read, so the front of it is exactly the least recently read — no timestamp
+   * and no sort. An entry evicted **mid-rebuild** is not a special case: the
+   * rebuild's own `entries.get(key) !== entry` guard drops its result, which is
+   * the same check a `clear()` mid-rebuild already relies on.
+   */
+  const trim = (): void => {
+    while (entries.size > limit) {
+      const oldest = entries.keys().next();
+      if (oldest.done) break;
+      entries.delete(oldest.value);
+    }
+  };
+
+  /** Move a key to the young end. Identity is kept, so a rebuild still lands. */
+  const touch = (key: string, entry: StaleEntry<V>): void => {
+    entries.delete(key);
+    entries.set(key, entry);
+  };
 
   return {
     read(key, load) {
@@ -255,9 +308,13 @@ export function createStaleWhileRevalidateMemo<V>(
         fresh.value.catch(() => {
           if (entries.get(key) === fresh) entries.delete(key);
         });
+        // After the insert, so the key just asked for is the youngest and can
+        // never be the one this evicts.
+        trim();
         return fresh.value;
       }
 
+      touch(key, entry);
       const due = entry.marked > entry.built || at - entry.at >= ttlMs;
       if (due && !entry.rebuilding && at - entry.attemptedAt >= revalidateMs) {
         entry.rebuilding = true;

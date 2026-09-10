@@ -120,9 +120,9 @@ describe("acquireLeagueLineup", () => {
     assert.equal(source.calls, 2);
   });
 
-  test("a failure is reported and retried when its reader comes back", async () => {
+  test("a failure is reported, and a second card on it does not retry", async () => {
     const source = deferred();
-    acquireLeagueLineup("L1", source.load, () => {});
+    const release = acquireLeagueLineup("L1", source.load, () => {});
     source.fail(new Error("boom"));
     await flush();
 
@@ -132,8 +132,14 @@ describe("acquireLeagueLineup", () => {
     // The card is still open, so the entry stays and a second reader inherits
     // the message rather than firing a request per mount. An invalidation is
     // the way back, and it asks again itself.
-    acquireLeagueLineup("L1", source.load, () => {});
+    const second = acquireLeagueLineup("L1", source.load, () => {});
     assert.equal(source.calls, 1, "a second subscriber does not retry");
+    // ...and neither does a third, a fourth, or a re-render that resubscribes:
+    // whatever joins a failed card that is still open reads the message.
+    acquireLeagueLineup("L1", source.load, () => {})();
+    acquireLeagueLineup("L1", source.load, () => {})();
+    assert.equal(source.calls, 1, "no retry storm while the card stays open");
+    assert.equal(peekLeagueLineup("L1").error, "boom");
 
     invalidateLeagueLineups();
     assert.equal(source.calls, 2, "the invalidation asked again");
@@ -142,6 +148,81 @@ describe("acquireLeagueLineup", () => {
     // re-read would be answered from with the pre-sync numbers.
     assert.deepEqual(source.reloads, [false, true]);
     assert.equal(peekLeagueLineup("L1").loading, true);
+    release();
+    second();
+  });
+
+  test("closing a failed card and opening it again asks Sleeper's route again", async () => {
+    // **The retry that used to be unreachable.** A failed entry stayed in the
+    // store, and `acquire` starts a request only for a key in `IDLE` — so the
+    // one thing a reader would actually do, close the card and open it again,
+    // was a no-op and the old message stood for the life of the page. Neither
+    // way back was a reader's to take: a global invalidation is a sync landing,
+    // and eviction skips exactly the entries nothing is reading.
+    const first = deferred();
+    const release = acquireLeagueLineup("L1", first.load, () => {});
+    first.fail(new Error("boom"));
+    await flush();
+    assert.equal(first.calls, 1);
+    assert.equal(peekLeagueLineup("L1").error, "boom");
+
+    // The card closes: its last reader goes, and a failed entry has nothing to
+    // serve the next one, so it goes too.
+    release();
+    assert.equal(leagueLineupCacheSize(), 0, "nothing worth keeping was kept");
+    assert.deepEqual(peekLeagueLineup("L1"), {
+      payload: null,
+      loading: false,
+      error: null,
+    });
+
+    // The card opens again — and this time the read happens.
+    const second = deferred();
+    acquireLeagueLineup("L1", second.load, () => {});
+    assert.equal(second.calls, 1, "re-opening a failed card asks again");
+    assert.equal(peekLeagueLineup("L1").loading, true);
+    assert.equal(peekLeagueLineup("L1").error, null, "the old message is gone");
+
+    second.settle();
+    await flush();
+    assert.equal(peekLeagueLineup("L1").payload?.season, "2026");
+    assert.equal(peekLeagueLineup("L1").error, null);
+    assert.equal(peekLeagueLineup("L1").loading, false);
+  });
+
+  test("a failed entry survives one of two readers leaving", async () => {
+    // The distinction the release turns on: 2 → 1 is a card closing beside
+    // another card that is still showing the message, and must not re-ask.
+    const source = deferred();
+    const a = acquireLeagueLineup("L1", source.load, () => {});
+    const b = acquireLeagueLineup("L1", source.load, () => {});
+    source.fail(new Error("boom"));
+    await flush();
+
+    a();
+    assert.equal(leagueLineupCacheSize(), 1, "the other card still reads it");
+    assert.equal(peekLeagueLineup("L1").error, "boom");
+    assert.equal(source.calls, 1);
+
+    b();
+    assert.equal(leagueLineupCacheSize(), 0);
+  });
+
+  test("a resolved answer is still kept when its last reader goes", async () => {
+    // The other half of the one rule, restated where the failure case is: only
+    // an entry with nothing to serve is dropped, and a complete answer is worth
+    // exactly what re-opening a card costs.
+    const source = deferred();
+    const release = acquireLeagueLineup("L1", source.load, () => {});
+    source.settle();
+    await flush();
+    release();
+
+    assert.equal(leagueLineupCacheSize(), 1);
+    const again = deferred();
+    acquireLeagueLineup("L1", again.load, () => {});
+    assert.equal(again.calls, 0, "re-opening a resolved card pays nothing");
+    assert.equal(peekLeagueLineup("L1").payload?.season, "2026");
   });
 
   test("an answer for one key never lands on another", async () => {

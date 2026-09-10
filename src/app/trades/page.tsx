@@ -1,6 +1,7 @@
 import { ConsoleGround, PageShell } from "@/features/shared";
 import { TradesHome } from "@/features/trades";
 import { getActiveSeason } from "@/shared/season";
+import { withInteractiveSleeper } from "@/shared/sleeper";
 
 // The season is resolved per request rather than baked at build time: a
 // prerendered page would carry whatever season was current when it was built,
@@ -8,7 +9,11 @@ import { getActiveSeason } from "@/shared/season";
 export const dynamic = "force-dynamic";
 
 export default async function TradesPage() {
-  const season = await getActiveSeason();
+  // A reader is waiting on this render, so the season resolve — the one thing
+  // here that can reach Sleeper — runs on the interactive budget rather than
+  // queueing behind a crawl batch on the background one. See
+  // `shared/sleeper/request-policy`.
+  const season = await withInteractiveSleeper(() => getActiveSeason());
 
   return (
     <>

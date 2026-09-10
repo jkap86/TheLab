@@ -69,6 +69,23 @@ export type HttpGetOptions = {
   /** Attempts after the first. Zero disables retrying. */
   retries?: number;
   /**
+   * The longest the whole ladder may run — attempts *and* the backoffs between
+   * them — in ms. Omitted, it is bounded only by its own arithmetic.
+   *
+   * **It exists because that arithmetic multiplies and neither term says so.**
+   * `timeoutMs` of 30s and `retries` of 3 are each a defensible number and
+   * together they are just over two minutes of a request's life; a reader
+   * auditing either one in isolation sees nothing wrong. A caller behind a
+   * platform deadline — every route handler is — needs to say the one thing
+   * those two cannot: how long the whole thing may take.
+   *
+   * It bounds rather than replaces: each attempt gets the *smaller* of
+   * `timeoutMs` and what is left, and a backoff that would not fit is not
+   * waited out at all — the last error is thrown instead, which is the honest
+   * answer and is what the caller would have got a moment later anyway.
+   */
+  deadlineMs?: number;
+  /**
    * Merged over the default `Accept: application/json` — how a caller that
    * wants HTML says so (the KTC scrape sends a browser `User-Agent` and
    * `Accept: text/html`).
@@ -186,7 +203,9 @@ const delay = (ms: number, signal?: AbortSignal) =>
  * GET a JSON document, retrying what is worth retrying.
  *
  * The caller's `signal` ends the whole ladder, not just the attempt in flight —
- * a client that has gone should not be waited on through a backoff.
+ * a client that has gone should not be waited on through a backoff. So does
+ * `deadlineMs`, which is the same bound written as a clock rather than as a
+ * client: see {@link HttpGetOptions.deadlineMs}.
  */
 export async function get<T>(
   url: string,
@@ -196,18 +215,37 @@ export async function get<T>(
     signal,
     timeoutMs = DEFAULT_TIMEOUT_MS,
     retries = DEFAULT_RETRIES,
+    deadlineMs,
     headers,
     responseType,
   } = options;
 
+  // Read once, before the first attempt: a deadline measured from each attempt
+  // would be `retries` deadlines rather than one.
+  const endsAt =
+    deadlineMs === undefined || !Number.isFinite(deadlineMs)
+      ? null
+      : Date.now() + Math.max(0, deadlineMs);
+  const remaining = () => (endsAt === null ? Infinity : endsAt - Date.now());
+
   for (let attempt = 0; ; attempt += 1) {
+    // The smaller of the two, and never below 1ms: a zero would abort the
+    // attempt before `fetch` was called and report it as a timeout that had
+    // not been given any time, which is true and useless in a log.
+    const left = remaining();
+    const attemptMs = Math.max(1, Math.min(timeoutMs, left));
     try {
-      return await getOnce<T>(url, timeoutMs, { signal, headers, responseType });
+      return await getOnce<T>(url, attemptMs, { signal, headers, responseType });
     } catch (error) {
       // The caller gave up; nothing below is worth doing.
       if (signal?.aborted) throw error;
       if (attempt >= retries || !isRetryable(error)) throw error;
-      await delay(RETRY_BASE_DELAY_MS * 2 ** attempt, signal);
+      const backoff = RETRY_BASE_DELAY_MS * 2 ** attempt;
+      // A backoff that would outlast the deadline is not waited out: sleeping
+      // past it to make one more attempt that is guaranteed to be cut short is
+      // the multiplication this bound exists to stop.
+      if (remaining() <= backoff) throw error;
+      await delay(backoff, signal);
     }
   }
 }

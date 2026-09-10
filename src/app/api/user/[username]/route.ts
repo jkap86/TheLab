@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 
 import type { ApiErrorPayload } from "@/shared/contract";
 import { resolveManagerUser, toUserInfo } from "@/shared/user";
+import { withInteractiveSleeper } from "@/shared/sleeper";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -13,6 +14,17 @@ export const dynamic = "force-dynamic";
  * all this does is spell it as a response.
  */
 export async function GET(
+  request: Request,
+  context: { params: Promise<{ username: string }> },
+) {
+  // Interactive Sleeper traffic — a reader is waiting on this handler, so the
+  // reads under it are bounded rather than queueing behind a crawl batch. No
+  // `signal`: see `shared/sleeper/request-policy`, which is where both halves
+  // of that decision are argued.
+  return withInteractiveSleeper(() => readUser(request, context));
+}
+
+async function readUser(
   request: Request,
   { params }: { params: Promise<{ username: string }> },
 ) {

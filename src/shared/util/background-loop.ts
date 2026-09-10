@@ -1,6 +1,7 @@
 // A `.ts` extension because this module is reached from its own test under
 // Node's runner, which resolves the file it is given — the rule
 // `sync-admission.ts` follows to `../sleeper/limiter.ts`.
+import { withBackgroundSleeper } from "../sleeper/request-policy.ts";
 import { isNodeRuntime } from "./runtime.ts";
 
 type BackgroundLoop = {
@@ -138,7 +139,16 @@ export function startBackgroundLoop({
     if (ticking) return;
     ticking = true;
     try {
-      await tick(firstRun);
+      // **Every tick is background traffic, and this is where all four loops
+      // say so.** A tick is maintenance — a crawl fan-out, a ~5MB players
+      // download, a KTC scrape, a corpus probe — and nothing is holding a
+      // response open for any of it, so it queues for a Sleeper slot as long
+      // as it takes and re-dials a flaky upstream the full ladder. Declared
+      // here rather than in each `tick` for two reasons: it is one line for
+      // four loops, and a loop *started* from inside a request scope would
+      // otherwise inherit that reader's budget for the life of the process,
+      // since the timer chain is created under whatever context armed it.
+      await withBackgroundSleeper(() => tick(firstRun));
     } catch (error) {
       console.error(`[${name}] Tick failed:`, error);
     } finally {

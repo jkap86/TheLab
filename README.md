@@ -13,8 +13,13 @@ createdb thelab                       # see Database below
 npm run dev     # http://localhost:3000, which redirects to /tools
 ```
 
-Requires **Node ≥ 22.6** — `npm test` runs under Node's own test runner with
-`--experimental-strip-types`, which is where that floor comes from.
+Requires **Node 22, at 22.6 or later** — declared as `engines.node` in
+`package.json` so a deploy resolves the same thing this is developed and tested
+on. The floor is `npm test`, which runs under Node's own test runner with
+`--experimental-strip-types`; the ceiling is the major the app is actually built
+and run against, and moving it is a deliberate change rather than whatever the
+platform installs next. `packageManager` pins npm for the same reason — the
+lockfile decides which packages, and that field decides which npm reads it.
 
 ## Database
 
@@ -44,7 +49,8 @@ database fails until it is set (in production a missing one is fatal instead).
 | `npm run lint` | ESLint |
 | `npm run typecheck` | `tsc --noEmit` |
 | `npm test` | Node's test runner over `src/**/*.test.ts` |
-| `npm run check` | All three of the above, in order |
+| `npm run check` | Lint, typecheck and tests, in order — the fast one, for while you work |
+| `npm run check:full` | A production `next build`, then `check`. What to run before pushing, and the only one of the two that works from a clean checkout. **The build comes first because `tsc` cannot run without it** — Next generates the route types under `.next/types/` that `layout.tsx` and every `[param]` page read, so on a tree with no `.next` the typecheck fails on names it cannot find rather than on anything wrong. `check` still runs afterwards: `tsc` covers `scripts/` and the test files, which the bundler never sees |
 | `npm run comps:load-corpus` | Load historical player-seasons for `/comps` (see below) |
 | `npm run migrate:up` / `migrate:down` | Apply or roll back one migration |
 | `npm run migrate:create <name>` | New SQL migration in `db/migrations` |
@@ -52,9 +58,12 @@ database fails until it is set (in production a missing one is fatal instead).
 | `npm run verify:crawl-pressure` | The crawler's resource guard end to end against a throwaway Postgres — same two variables. Checks the thing a unit test cannot: that a tick which stands down mid-batch leaves the leagues it never reached unclaimed |
 | `npm run ktc:doctor` | Why KeepTradeCut values are missing from the page. Walks the whole chain — the switches, the stored board, the Sleeper players map the ids come from, a live scrape judged by the real validator, and what `getKtcBoards` hands a card — and names the first broken link. **Read-only**, so it is safe against production while the loop is running; add `--offline` where the network cannot reach keeptradecut.com |
 
-If `npm run typecheck` fails on a file under `.next/types/`, the generated route
-validator is stale rather than the code being wrong — `rm -rf .next` and run it
-again.
+If `npm run typecheck` fails on a file under `.next/types/` — or on a
+`PageProps`/`LayoutProps` name it says it cannot find — the generated route
+validator is missing or stale rather than the code being wrong. Both are a build
+artefact: `npm run build` writes them, so a fresh checkout typechecks only after
+one. `rm -rf .next && npm run build` is the reset. This is the other half of why
+`check:full` exists.
 
 ## Deploying
 
@@ -172,6 +181,45 @@ matters for anything that reads the database; the rest are optional.
 | `APP_PROCESS_ROLE` | `all` | `all`, `web` or `worker` — which job this process does. See Deploying above. An unreadable value reads as `all`, which is the behaviour this app had before the switch existed. |
 | `COMPS_CORPUS_LOAD` | on | Set to `off` to stop the app loading the comps corpus on boot. The loop checks daily and loads only the seasons `player_seasons` is missing, so an ordinary boot fetches nothing; turn it off to keep the corpus entirely under `npm run comps:load-corpus`. |
 | `COMPS_SAMPLE_CORPUS` | allowed in development, denied in production | `on` or `off`. Whether `/comps` may answer from its built-in sample corpus when `player_seasons` is empty. Production refuses by default so a deployment cannot silently serve twenty-six invented seasons; set `on` for a demo build that wants it deliberately. Anything that is not `on` or `off` falls to the default for the environment. |
+
+## Sleeper request budgets
+
+Every Sleeper read in this process passes through one function, and how long it
+may take is a fact about **who is waiting for it** rather than about the
+endpoint. Two named policies, in `src/shared/sleeper/request-policy.ts`:
+
+| | Interactive | Background |
+| --- | --- | --- |
+| What it is | a page, a card being opened, a lookup — somebody is watching a spinner | a crawl tick, a scheduled refresh, a sync whose answer is rows in Postgres |
+| Longest queued for a Sleeper slot | 4s, then `AdmissionTimeoutError` | as long as it takes |
+| Per attempt | 8s | 30s |
+| Retries after the first | 1 | 3 |
+| Whole ladder | 12s | unbounded by anything but its own arithmetic |
+| Cancellation | only where the caller passes a signal | never |
+
+The interactive numbers are sized against **the platform, not against Sleeper**:
+Heroku's router abandons a request at 30 seconds, so one Sleeper read's worst
+case is 4 + 12 = 16, which leaves a route its Postgres reads, its solve and its
+serialisation inside the deadline. The background numbers are exactly what every
+Sleeper request in this process ran under before the split existed, which is the
+point — only the half that was wrong moved.
+
+**Nothing declared is the background policy.** A route handler opens an
+interactive scope around its body; the durable work a route can *start* —
+`syncManagerLeagues`, `refreshLeague`, `extendLeagueHistory` — opens a
+background scope inside itself, which replaces that budget **and drops the
+reader's signal with it**. That is deliberate and is the one rule to keep: what
+those produce is shared state every later reader and the crawler read, not this
+request's answer, so a browser navigating away must not be able to abandon a
+fan-out mid-write, and a reader's four-second queue budget must not shed leagues
+under exactly the crawler pressure the sync is queued behind. The long-lived
+SSE rooms (gametime, picktracker) say the same thing for the same reason: a
+reader's join is what opens one, and the room outlives them.
+
+There is no environment variable here on purpose. `SLEEPER_MAX_CONCURRENCY`
+above is the operational knob — it bounds the *process* — where these two are a
+statement about what a request is for, and a deployment that wanted to tune them
+would be tuning the wrong thing.
 
 ## The comps corpus
 

@@ -108,9 +108,16 @@ export class AdmissionTimeoutError extends Error {
  * the work itself failing.
  *
  * Matched by name rather than by class, which is what lets a reader of this
- * predicate stay free of runtime imports. TheLabX's set carries a third,
- * `RequestBudgetExhaustedError` — the request ran out of safe lifetime before a
- * slot was ever taken — which joins this list when the request budget ports.
+ * predicate stay free of runtime imports.
+ *
+ * **TheLabX carries a third, `RequestBudgetExhaustedError`, and this app
+ * deliberately does not.** That error is what a request budget throws when a
+ * caller runs out of safe lifetime *before* a slot is taken, which is exactly
+ * what {@link AdmissionTimeoutError} already says here: the budget landed as
+ * `maxWaitMs` on the wait rather than as a clock a caller carries around, so
+ * the refusal it produces is the one this list already names. See
+ * `./request-policy`, which is where an interactive read's four seconds comes
+ * from.
  */
 const ADMISSION_REFUSALS = new Set([
   "AdmissionAbortedError",

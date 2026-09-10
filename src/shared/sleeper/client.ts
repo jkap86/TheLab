@@ -3,6 +3,8 @@ import { http } from "@/shared/http";
 import { createLimiter, sleeperConcurrency } from "./limiter";
 import type { Limiter } from "./limiter";
 import { isMissingResource } from "./missing";
+import { createSleeperRequest } from "./request";
+import type { SleeperRequestOptions } from "./request-policy";
 import type { SleeperUser } from "./types/sleeper.types";
 
 export const SLEEPER_API_BASE = "https://api.sleeper.app/v1";
@@ -46,6 +48,12 @@ export const sleeperLimiter: Limiter = (globalScope[LIMITER_KEY] ??=
   createLimiter(sleeperConcurrency()));
 
 /**
+ * The composition every read below runs through — see `./request`, where the
+ * limiter and the client are arguments so the policy wiring can be tested.
+ */
+const sleeperRequest = createSleeperRequest(sleeperLimiter, http.get);
+
+/**
  * GET a Sleeper endpoint, returning `fallback` when Sleeper responds with a null
  * body — its convention for "no data" (e.g. a user with no leagues).
  *
@@ -55,9 +63,20 @@ export const sleeperLimiter: Limiter = (globalScope[LIMITER_KEY] ??=
  * The slot is held for the request *including* its retries, deliberately: a
  * retry is another request on Sleeper's doorstep, and a limiter that released
  * between attempts would admit a new caller for every one of them.
+ *
+ * **How long any of that may take is the request's *class*, not this
+ * function's.** `options` is almost never passed: the budget comes from the
+ * scope the call is made in — a route handler opens an interactive one, the
+ * durable syncs open a background one — and reaches here through
+ * `resolveSleeperPolicy`. See `./request-policy` for what the two classes are
+ * and why nothing said means the background one.
  */
-export async function sleeperGet<T>(url: string, fallback: T): Promise<T> {
-  const { data } = await sleeperLimiter.run(() => http.get<T | null>(url));
+export async function sleeperGet<T>(
+  url: string,
+  fallback: T,
+  options?: SleeperRequestOptions,
+): Promise<T> {
+  const data = await sleeperRequest<T>(url, options);
   return data ?? fallback;
 }
 
@@ -82,9 +101,10 @@ export async function sleeperGet<T>(url: string, fallback: T): Promise<T> {
 export async function sleeperGetOptional<T>(
   url: string,
   fallback: T,
+  options?: SleeperRequestOptions,
 ): Promise<T> {
   try {
-    return await sleeperGet(url, fallback);
+    return await sleeperGet(url, fallback, options);
   } catch (error) {
     if (isMissingResource(error)) return fallback;
     throw error;

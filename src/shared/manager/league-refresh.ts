@@ -39,7 +39,11 @@ import {
   pool,
   withBlockingAdvisoryLock,
 } from "@/shared/db";
-import { cacheBustToken, getLeague } from "@/shared/sleeper";
+import {
+  cacheBustToken,
+  getLeague,
+  withBackgroundSleeper,
+} from "@/shared/sleeper";
 import { errorMessage } from "@/shared/util";
 
 import { markLeaguesAccessed, markLeaguesGone } from "./crawl-queue";
@@ -108,8 +112,24 @@ export async function getLeagueRefreshState(
  * is what makes the gate's race arm mean anything: it is the difference between
  * a caller who queued behind somebody else's refresh — and should be handed
  * their result — and one who simply pressed the key twice.
+ *
+ * **Its Sleeper reads run on the background budget, though a reader pressed the
+ * key.** This fills shared Postgres state — the same rows the crawler refreshes
+ * and every other reader of that league sees — so it is `syncManagerLeagues`'
+ * case one league down: given a reader's four-second queue budget a press would
+ * fail under exactly the crawler pressure it is queued behind, having already
+ * stamped `sync_attempt_at` and spent the cooldown; and an ambient signal would
+ * let a collapsed card abandon a fan-out mid-write. `useLeagueRefresh` makes
+ * the same call on the client and for the same reason: it mints no
+ * `AbortController` at all.
  */
 export async function refreshLeague(
+  leagueId: string,
+): Promise<LeagueRefreshResult> {
+  return withBackgroundSleeper(() => runLeagueRefresh(leagueId));
+}
+
+async function runLeagueRefresh(
   leagueId: string,
 ): Promise<LeagueRefreshResult> {
   // Asked before the permit so a press at an id we hold nothing for cannot

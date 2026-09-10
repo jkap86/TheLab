@@ -8,6 +8,7 @@ import {
   parseKtcLineupChoice,
 } from "@/shared/ktc/board-choice";
 import { getActiveSeason, parseRequestedSeason } from "@/shared/season";
+import { withInteractiveSleeper } from "@/shared/sleeper";
 import { getLeagueTimeline, resolveTimelinePayload } from "@/shared/timeline";
 import { resolveManagerUser } from "@/shared/user";
 
@@ -63,6 +64,17 @@ export const dynamic = "force-dynamic";
  * rail draws a word rather than an error, and the card beside it is unaffected.
  */
 export async function GET(
+  request: Request,
+  context: { params: Promise<{ leagueId: string }> },
+) {
+  // Interactive Sleeper traffic — a reader is waiting on this handler, so the
+  // reads under it are bounded rather than queueing behind a crawl batch. No
+  // `signal`: see `shared/sleeper/request-policy`, which is where both halves
+  // of that decision are argued.
+  return withInteractiveSleeper(() => readLeagueTimeline(request, context));
+}
+
+async function readLeagueTimeline(
   request: Request,
   { params }: { params: Promise<{ leagueId: string }> },
 ) {

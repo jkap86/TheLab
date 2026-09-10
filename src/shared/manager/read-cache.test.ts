@@ -143,8 +143,11 @@ describe("createReadMemo", () => {
 });
 
 describe("createStaleWhileRevalidateMemo", () => {
-  const options = (now: () => number, onRebuildError?: (k: string, e: unknown) => void) =>
-    ({ ttlMs: 1_000, revalidateMs: 60, now, onRebuildError }) as const;
+  const options = (
+    now: () => number,
+    onRebuildError?: (k: string, e: unknown) => void,
+    max = 8,
+  ) => ({ ttlMs: 1_000, revalidateMs: 60, max, now, onRebuildError }) as const;
 
   test("a cold read is shared, and a cold rejection is evicted", async () => {
     const { now } = clock();
@@ -318,6 +321,134 @@ describe("createStaleWhileRevalidateMemo", () => {
     assert.equal(loads.length, 3, "a fresh cold read, not the orphaned rebuild");
     loads[2].resolve("v3");
     assert.equal(await next, "v3");
+  });
+});
+
+describe("createStaleWhileRevalidateMemo — the count bound", () => {
+  const options = (now: () => number, max: number) =>
+    ({ ttlMs: 1_000, revalidateMs: 60, max, now }) as const;
+
+  test("holds at most `max` keys however many are asked for", async () => {
+    // **The bound this shape cannot do without.** Every other memo's TTL is
+    // also a bound on how many it holds — a key nobody asks for expires and is
+    // dropped on the next write. Here a stale entry is precisely what keeps
+    // being served, so nothing expires it: without a count the map grows by one
+    // for every distinct key the process is ever asked about. `?season=` is
+    // validated against a range rather than a list, so that is decades of
+    // boards, each holding maps of every priced id in its corpus.
+    const { now } = clock();
+    const memo = createStaleWhileRevalidateMemo<string>(options(now, 3));
+    for (const season of ["2019", "2020", "2021", "2022", "2023", "2024"]) {
+      await memo.read(season, async () => season);
+    }
+    assert.equal(memo.size, 3);
+    // The three that went are the three least recently read.
+    assert.equal(await memo.read("2024", async () => "refetched"), "2024");
+    assert.equal(await memo.read("2019", async () => "refetched"), "refetched");
+  });
+
+  test("the season being read is never the one evicted", async () => {
+    // The reason the order is least recently **read** rather than least
+    // recently written: a stale-but-served entry is not rewritten when it
+    // answers, so an insertion order would make the season everybody is
+    // actually looking at the oldest thing in the map — and the first thing a
+    // burst of bookmarks naming other seasons threw away. Interleaved the way a
+    // real board is read, the hot season survives and the bookmarks do not.
+    const { now, tick } = clock();
+    const memo = createStaleWhileRevalidateMemo<string>(options(now, 2));
+    // Written first and then far past its own TTL, so it is as *old* as an
+    // entry can be while still being the one everybody is looking at.
+    await memo.read("live", async () => "board");
+    tick(10_000);
+
+    await memo.read("bookmark-a", async () => "a");
+    await memo.read("live", async () => "not asked");
+    await memo.read("bookmark-b", async () => "b");
+    assert.equal(memo.size, 2);
+
+    let asked = false;
+    await memo.read("live", async () => {
+      asked = true;
+      return "re-read";
+    });
+    assert.equal(asked, false, "the live season was still held");
+
+    let refetched = false;
+    await memo.read("bookmark-a", async () => {
+      refetched = true;
+      return "a";
+    });
+    assert.equal(refetched, true, "the least recently read one went");
+  });
+
+  test("eviction does not break the refresh behind it", async () => {
+    // An entry evicted while its rebuild is in flight is not a special case:
+    // the rebuild's own identity check drops the result, exactly as a `clear()`
+    // mid-rebuild already does, and the next read is a clean cold one.
+    const { now, tick } = clock();
+    const memo = createStaleWhileRevalidateMemo<string>(options(now, 1));
+    const loads: ReturnType<typeof deferred<string>>[] = [];
+    const load = () => {
+      const d = deferred<string>();
+      loads.push(d);
+      return d.promise;
+    };
+
+    const cold = memo.read("s", load);
+    loads[0].resolve("v1");
+    await cold;
+
+    memo.markStale("s");
+    tick(60);
+    assert.equal(await memo.read("s", load), "v1", "stale answer still served");
+    assert.equal(loads.length, 2, "one rebuild started");
+
+    // A second season pushes the first out while that rebuild is still open.
+    await memo.read("other", async () => "other");
+    assert.equal(memo.size, 1);
+
+    loads[1].resolve("v2");
+    await settle();
+
+    const again = memo.read("s", load);
+    assert.equal(loads.length, 3, "a fresh cold read, not the orphaned rebuild");
+    loads[2].resolve("v3");
+    assert.equal(await again, "v3");
+  });
+
+  test("a rejected rebuild still keeps the value it was replacing", async () => {
+    // The stale-while-revalidate promise, restated beside the bound so an edit
+    // to one has to keep the other: a rebuild that rejects leaves the previous
+    // board in place and caches nothing, because a population that moves a
+    // handful of drafts a preseason is better a minute old than absent.
+    const { now, tick } = clock();
+    const seen: string[] = [];
+    const memo = createStaleWhileRevalidateMemo<string>({
+      ...options(now, 4),
+      onRebuildError: (key) => seen.push(key),
+    });
+    let loads = 0;
+    const load = async () => {
+      loads += 1;
+      if (loads === 1) return "board";
+      throw new Error("aggregate failed");
+    };
+
+    assert.equal(await memo.read("2026", load), "board");
+    memo.markStale("2026");
+    tick(60);
+    assert.equal(await memo.read("2026", load), "board", "the old board stands");
+    await settle();
+    assert.deepEqual(seen, ["2026"]);
+    assert.equal(memo.size, 1, "a failed rebuild evicts nothing");
+    assert.equal(await memo.read("2026", load), "board");
+  });
+
+  test("a max below one is read as one rather than as no cache at all", () => {
+    const { now } = clock();
+    const memo = createStaleWhileRevalidateMemo<string>(options(now, 0));
+    void memo.read("s", async () => "v");
+    assert.equal(memo.size, 1);
   });
 });
 

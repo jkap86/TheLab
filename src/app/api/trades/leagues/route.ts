@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 
 import type { ApiErrorPayload, TradeLeaguesPayload } from "@/shared/contract";
 import { getActiveSeason, parseRequestedSeason } from "@/shared/season";
+import { withInteractiveSleeper } from "@/shared/sleeper";
 import { lookupSeasonTradeLeagues } from "@/shared/trades";
 
 export const runtime = "nodejs";
@@ -22,6 +23,13 @@ export const dynamic = "force-dynamic";
  * evicts it, so a league's first trade names it on the next read.
  */
 export async function GET(request: Request) {
+  // A reader is waiting, so the season resolve below — the one Sleeper read on
+  // this route — takes the interactive budget. See
+  // `shared/sleeper/request-policy`.
+  return withInteractiveSleeper(() => readSeasonLeagues(request));
+}
+
+async function readSeasonLeagues(request: Request) {
   const requested = parseRequestedSeason(
     new URL(request.url).searchParams.get("season"),
   );

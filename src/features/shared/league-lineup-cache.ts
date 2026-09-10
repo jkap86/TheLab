@@ -32,9 +32,14 @@ import type { LeagueLineupPayload } from "@/shared/contract";
  * protection `request-guard` gives a hook that owns its own state, obtained
  * here from the shape of the store rather than from a ticket.
  *
- * **An in-flight read is aborted when its last reader goes**, and a resolved
- * one is kept. A partial answer is worth nothing to anybody, where a complete
- * one is worth exactly what re-opening a card costs.
+ * **An entry is kept only for what it can serve, and that is one rule rather
+ * than three.** A resolved answer is worth exactly what re-opening a card
+ * costs, so it is kept when its last reader goes; an in-flight read is aborted
+ * and dropped, because a partial answer is worth nothing to anybody; and a
+ * *failed* one is dropped for the same reason — there is nothing behind it to
+ * hand the next reader. See {@link acquireLeagueLineup}'s release, which is
+ * where the three meet, and the note there on the retry that used to be
+ * unreachable.
  */
 
 /**
@@ -240,11 +245,12 @@ export function acquireLeagueLineup(
   held.load = load;
   held.at = touch();
 
-  // Nothing has answered and nothing is asking. A *failed* entry is
-  // deliberately not retried here: the two hooks that read this latch `enabled`
-  // one-way, so a second subscriber is a second card rather than a fresh
-  // attempt, and re-issuing on every mount would turn a failing league into a
-  // request per render. {@link invalidateLeagueLineups} is the way back.
+  // Nothing has answered and nothing is asking. A *failed* entry that still has
+  // a reader is deliberately not retried here — a second card on the same
+  // league is a second card, not a fresh attempt, and re-issuing per subscriber
+  // is the request-per-render this store exists to avoid. What makes that safe
+  // is that a failed entry with **no** reader is dropped on its way out, so the
+  // reader who comes back finds nothing and starts clean. See the release.
   if (held.state === IDLE) start(key, held, load);
 
   return () => {
@@ -253,6 +259,32 @@ export function acquireLeagueLineup(
     if (held.controller) {
       held.controller.abort();
       held.controller = null;
+      map.delete(key);
+      return;
+    }
+    // **A failed entry goes with its last reader, and that is a retry bug
+    // rather than a tidy-up.** It used to stay, and `acquire` starts a request
+    // only for a key in {@link IDLE} — so a card whose read failed, was closed
+    // and was opened again found the entry still there, still holding the old
+    // message, and asked for nothing. The only ways out were a global
+    // invalidation (a sync landing, which a reader cannot cause) or eviction
+    // (which skips entries nothing is reading and so could not reach it):
+    // opening the card again, which is the one thing anybody would try, was a
+    // no-op for the life of the page.
+    //
+    // Dropped, the next reader creates a fresh entry and starts clean, which is
+    // the in-flight rule one state over — an entry with no payload has nothing
+    // to serve, so keeping it buys nobody anything and costs the retry. It is
+    // the *release* rather than the acquire because that is what tells a second
+    // card apart from a second visit: while the failed card stays open the
+    // entry stands and every subscriber reads the message, so nothing here can
+    // become a request per mount.
+    //
+    // No cooldown, deliberately: a re-acquire is a card being opened, and the
+    // effect that acquires depends on the key and the disclosure rather than on
+    // a render, so there is no churn for one to damp. A clock here would be a
+    // second staleness policy answering a question nothing asks.
+    if (held.state.payload === null) {
       map.delete(key);
       return;
     }

@@ -9,7 +9,12 @@ import type {
 import { getRosProjections, restOfSeasonStart } from "@/shared/projections";
 import type { RosProjections } from "@/shared/projections";
 import { getActiveSeason, parseRequestedSeason } from "@/shared/season";
-import { getNflState, sleeperAvatarUrl } from "@/shared/sleeper";
+import {
+  getNflState,
+  sleeperAvatarUrl,
+  withInteractiveSleeper,
+} from "@/shared/sleeper";
+
 import {
   collectEnrichmentIds,
   countTradeTotals,
@@ -91,12 +96,19 @@ const TRADE_ENRICHMENT_DB_CONCURRENCY = 4;
  * the parser nor the SQL knows which method was used. See
  * {@link TradeQuery.leagues}.
  */
+/**
+ * Every Sleeper read under this handler is answering a reader, so it runs on
+ * the interactive budget: a bounded queue wait, one retry and a ladder that
+ * gives up well inside the platform's own deadline. See
+ * `shared/sleeper/request-policy`; the durable work a route starts opens a
+ * background scope of its own.
+ */
 export async function GET(request: Request) {
-  return readTradesPage(request);
+  return withInteractiveSleeper(() => readTradesPage(request));
 }
 
 export async function POST(request: Request) {
-  return readTradesPage(request);
+  return withInteractiveSleeper(() => readTradesPage(request));
 }
 
 async function readTradesPage(request: Request) {

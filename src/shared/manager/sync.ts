@@ -5,7 +5,12 @@ import {
   withBlockingAdvisoryLock,
 } from "@/shared/db";
 import { peekActiveSeason } from "@/shared/season";
-import { getLeague, getNflState, getUserLeaguesEnumeration } from "@/shared/sleeper";
+import {
+  getLeague,
+  getNflState,
+  getUserLeaguesEnumeration,
+  withBackgroundSleeper,
+} from "@/shared/sleeper";
 import type { SleeperLeague, SleeperNflState } from "@/shared/sleeper";
 import { errorMessage, mapWithConcurrency } from "@/shared/util";
 import type {
@@ -337,11 +342,32 @@ export async function syncLeagueGraphs(
  * the leagues route has to know whether it may sync *before* it opens a stream,
  * since a caller with nothing cached answers 503 rather than an empty list, and a
  * decision made inside this call is a decision made after that answer was owed.
+ *
+ * **The Sleeper budget *is* this function's, and it is the background one even
+ * when a browser is waiting.** The leagues route opens an interactive scope
+ * around its handler, and this is the one thing under it that must not inherit
+ * it: what a sync produces is rows in Postgres that every later reader and the
+ * crawler share, not this request's answer. Given a reader's budget it would
+ * shed leagues to a four-second queue wait under exactly the crawler pressure
+ * it is queued behind, and stamp `attempt_at` for a graph nobody finished — and
+ * an ambient `signal` would let one browser navigating away abandon a cold sync
+ * mid-fan-out, throwing away the Sleeper budget already spent and leaving the
+ * next visitor to start over. `withBackgroundSleeper` replaces the budget and
+ * drops the signal; the route's own note says the same thing from the other
+ * side.
  */
 export async function syncManagerLeagues(
   userId: string,
   season: string,
   options: SyncOptions = {},
+): Promise<SyncSummary> {
+  return withBackgroundSleeper(() => runManagerSync(userId, season, options));
+}
+
+async function runManagerSync(
+  userId: string,
+  season: string,
+  options: SyncOptions,
 ): Promise<SyncSummary> {
   const requestedAt = new Date();
   try {

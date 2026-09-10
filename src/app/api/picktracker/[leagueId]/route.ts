@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 
 import type { ApiErrorPayload } from "@/shared/contract";
 import { toPicktrackerPayload, trackPlaceholderDraft } from "@/shared/picktracker";
+import { withInteractiveSleeper } from "@/shared/sleeper";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -25,6 +26,23 @@ export const dynamic = "force-dynamic";
  * `./stream`.
  */
 export async function GET(
+  request: Request,
+  context: { params: Promise<{ leagueId: string }> },
+) {
+  // **The one route that hands its reader's cancellation to Sleeper**, and the
+  // one where doing so is unambiguously safe: every request under it is this
+  // press's own — four uncached Sleeper reads against one league — so nothing
+  // else is awaiting them and a browser that has gone leaves nothing behind. A
+  // scope's `signal` is a promise about *every* read in it, which is why the
+  // routes that reach a shared projections span or a cached board pass none;
+  // see `shared/sleeper/request-policy`. Aborting lands in `track.ts`'s own
+  // catch and answers 502 to a client that is not listening.
+  return withInteractiveSleeper(() => readBoard(request, context), {
+    signal: request.signal,
+  });
+}
+
+async function readBoard(
   _request: Request,
   { params }: { params: Promise<{ leagueId: string }> },
 ) {

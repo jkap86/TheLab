@@ -7,7 +7,7 @@ import type {
 } from "@/shared/contract";
 import { getManagerLeaguemates } from "@/shared/manager";
 import { getActiveSeason, parseRequestedSeason } from "@/shared/season";
-import { sleeperAvatarUrl } from "@/shared/sleeper";
+import { sleeperAvatarUrl, withInteractiveSleeper } from "@/shared/sleeper";
 import { resolveManagerUser } from "@/shared/user";
 
 export const runtime = "nodejs";
@@ -23,6 +23,17 @@ export const dynamic = "force-dynamic";
  * sentinel rather than an oversight — see `getManagerLeaguemates`.
  */
 export async function GET(
+  request: Request,
+  context: { params: Promise<{ username: string }> },
+) {
+  // Interactive Sleeper traffic — a reader is waiting on this handler, so the
+  // reads under it are bounded rather than queueing behind a crawl batch. No
+  // `signal`: see `shared/sleeper/request-policy`, which is where both halves
+  // of that decision are argued.
+  return withInteractiveSleeper(() => readLeaguemates(request, context));
+}
+
+async function readLeaguemates(
   request: Request,
   { params }: { params: Promise<{ username: string }> },
 ) {

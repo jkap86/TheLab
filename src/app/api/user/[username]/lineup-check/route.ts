@@ -16,7 +16,7 @@ import {
 import type { WeekProjections } from "@/shared/projections";
 import { getWeekKickoffs } from "@/shared/schedule";
 import { getActiveSeason, parseRequestedSeason } from "@/shared/season";
-import { getNflState } from "@/shared/sleeper";
+import { getNflState, withInteractiveSleeper } from "@/shared/sleeper";
 import { resolveManagerUser } from "@/shared/user";
 import { easternDate } from "@/shared/util";
 
@@ -58,6 +58,17 @@ export const dynamic = "force-dynamic";
  *   locks fall back to the day rule, which is exactly what they degrade to.
  */
 export async function GET(
+  request: Request,
+  context: { params: Promise<{ username: string }> },
+) {
+  // Interactive Sleeper traffic — a reader is waiting on this handler, so the
+  // reads under it are bounded rather than queueing behind a crawl batch. No
+  // `signal`: see `shared/sleeper/request-policy`, which is where both halves
+  // of that decision are argued.
+  return withInteractiveSleeper(() => readLineupCheck(request, context));
+}
+
+async function readLineupCheck(
   request: Request,
   { params }: { params: Promise<{ username: string }> },
 ) {

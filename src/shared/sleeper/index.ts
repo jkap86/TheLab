@@ -40,6 +40,25 @@ export {
   DEFAULT_SLEEPER_CONCURRENCY,
 } from "./limiter";
 export type { Limiter, LimiterStats, LimiterWaitOptions } from "./limiter";
+// What a Sleeper read is *for*, and therefore how long it may take. The two
+// scope helpers are the surface everything outside this folder uses:
+// `withInteractiveSleeper` at a route handler, `withBackgroundSleeper` inside
+// the durable work a route starts. See `./request-policy`.
+export {
+  withInteractiveSleeper,
+  withBackgroundSleeper,
+  withSleeperRequests,
+  currentSleeperPolicy,
+  resolveSleeperPolicy,
+  isInteractive,
+  BACKGROUND_SLEEPER_POLICY,
+  INTERACTIVE_SLEEPER_POLICY,
+} from "./request-policy";
+export type {
+  SleeperRequestClass,
+  SleeperRequestOptions,
+  SleeperRequestPolicy,
+} from "./request-policy";
 export { classifyUserLeagues } from "./enumeration";
 export type { UserLeaguesEnumeration } from "./enumeration";
 export { isMissingResource } from "./missing";

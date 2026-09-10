@@ -35,7 +35,7 @@ import type { AdpEntry } from "@/shared/manager";
 import { getRosProjections, restOfSeasonStart } from "@/shared/projections";
 import type { RosProjections } from "@/shared/projections";
 import { getActiveSeason, parseRequestedSeason } from "@/shared/season";
-import { getNflState } from "@/shared/sleeper";
+import { getNflState, withInteractiveSleeper } from "@/shared/sleeper";
 import { resolveManagerUser } from "@/shared/user";
 import { jsonWithPayloadSize } from "@/shared/util";
 
@@ -106,6 +106,17 @@ export const dynamic = "force-dynamic";
  * rosters read for this league yet" and the trade above it is unaffected.
  */
 export async function GET(
+  request: Request,
+  context: { params: Promise<{ leagueId: string }> },
+) {
+  // Interactive Sleeper traffic — a reader is waiting on this handler, so the
+  // reads under it are bounded rather than queueing behind a crawl batch. No
+  // `signal`: see `shared/sleeper/request-policy`, which is where both halves
+  // of that decision are argued.
+  return withInteractiveSleeper(() => readLeagueLineup(request, context));
+}
+
+async function readLeagueLineup(
   request: Request,
   { params }: { params: Promise<{ leagueId: string }> },
 ) {

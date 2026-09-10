@@ -29,6 +29,7 @@ import type {
 } from "@/shared/contract";
 import { getManagerWeekLineups } from "@/shared/manager";
 import type { ManagerWeekLineupRow } from "@/shared/manager";
+import { withBackgroundSleeper } from "@/shared/sleeper";
 import { mapWithConcurrency } from "@/shared/util";
 
 import { readWeekFeeds } from "./feeds";
@@ -192,7 +193,14 @@ export async function joinGametime(
  */
 async function openRoom(key: string, season: string, week: number): Promise<Room> {
   try {
-    const feeds = await readWeekFeeds(season, week);
+    // **Background traffic, though a reader's join is what opened the room.**
+    // The feeds are one read of the week for everybody watching it, not this
+    // request's answer, and the room outlives whichever browser happened to be
+    // first — so it must not inherit that reader's Sleeper budget or their
+    // signal. It is also the read that arms the tick chain: a timer created
+    // under an interactive scope carries it for the life of the room, which
+    // would put every later tick on a four-second queue budget nobody chose.
+    const feeds = await withBackgroundSleeper(() => readWeekFeeds(season, week));
     const room: Room = {
       key,
       season,
@@ -290,7 +298,12 @@ async function tick(room: Room) {
   room.ticking = true;
   try {
     const previous = room.feeds;
-    const feeds = await readWeekFeeds(room.season, room.week);
+    // Declared again here rather than trusted from `openRoom`: this runs from a
+    // timer, and the one thing that must be true of every tick is that it is
+    // background traffic. See `openRoom`.
+    const feeds = await withBackgroundSleeper(() =>
+      readWeekFeeds(room.season, room.week),
+    );
     if (!rooms.has(room.key)) return;
 
     if (feedsFailed(feeds)) {

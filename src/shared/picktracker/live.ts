@@ -25,6 +25,7 @@ import type {
   PicktrackerPayload,
   PicktrackerStreamMessage,
 } from "@/shared/contract";
+import { withBackgroundSleeper } from "@/shared/sleeper";
 
 import {
   boardSignature,
@@ -192,7 +193,14 @@ async function openRoom(
   leagueId: string,
 ): Promise<Room | Extract<JoinResult, { ok: false }>> {
   try {
-    const first = await trackPlaceholderDraft(leagueId);
+    // **Background traffic, though a reader's join opened the room.** The board
+    // is one read of one draft for everybody watching it and the room outlives
+    // whichever browser was first, so it must not inherit that reader's Sleeper
+    // budget or their signal — and this read is what arms the tick chain, which
+    // would carry an interactive scope for the life of the room.
+    const first = await withBackgroundSleeper(() =>
+      trackPlaceholderDraft(leagueId),
+    );
     if (!first.ok) return first;
 
     const payload = toPicktrackerPayload(first);
@@ -345,9 +353,13 @@ async function tick(room: Room) {
     // a status that changed under a cheap tick re-reads once, because the
     // transition is the moment the order and the size become final.
     const full = room.contextStale || room.status === "pre_draft";
-    const result = full
-      ? await trackPlaceholderDraft(room.leagueId)
-      : await retrackPlaceholderDraft(room.context);
+    // Declared again rather than trusted from `openRoom`: this runs from a
+    // timer, and every tick is background traffic whatever opened the room.
+    const result = await withBackgroundSleeper(() =>
+      full
+        ? trackPlaceholderDraft(room.leagueId)
+        : retrackPlaceholderDraft(room.context),
+    );
 
     // Every path below re-checks: the last reader can leave during the await,
     // and a room that closed mid-tick must not be rescheduled.
