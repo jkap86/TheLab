@@ -1,11 +1,9 @@
 "use client";
 
-import { CONSOLE_KEY_PILL, CONSOLE_WINDOW, Scanlines } from "@/features/shared";
-
-import type {
-  DecisionGroup,
-  DecisionRow,
-} from "../helpers/start-sit-decisions";
+import type { DecisionGroup, DecisionRow } from "../start-sit-decisions";
+import { slotLabel } from "../format";
+import { CONSOLE_KEY_PILL, CONSOLE_WINDOW } from "../console-chrome";
+import { Scanlines } from "./card-plate";
 
 /**
  * The start/sit decisions view: who a player was started over, and who he was
@@ -21,22 +19,24 @@ import type {
  * however many lineups, and grouping by league would split the same pairing
  * across a dozen headings.
  *
- * **The three-way grammar the rest of this tool is written in holds here.** A
- * delta is a number where both players are projected, an em dash where either
- * is not, and lit in the error tone only where the lineup left points behind —
+ * **The three-way grammar both week tools are written in holds here.** A delta
+ * is a number where both players have a figure, an em dash where either does
+ * not, and lit in the error tone only where the lineup left points behind —
  * never a zero standing in for an absent answer.
+ *
+ * **`figureLabel` is the caller's, and that is the whole of what differs between
+ * the two tools that mount this.** The lineup checker judges a call on a
+ * projection and gametime on the live one, so the window over a counterpart's
+ * number reads `Proj` on one page and `Live` on the other — three characters,
+ * and the only thing on screen that says which of two scales a reader is
+ * looking at. `decisionsFor` deliberately does not name it: a delta there is one
+ * figure less another, and the word for it belongs where the figure was chosen.
+ *
+ * The slot labels are `slotLabel`'s, not a table of their own. This file kept a
+ * byte-identical copy of that record until it moved here, which is one more
+ * chance for `SUPER_FLEX` to read `SF` on a seat chip and `SUPER_FLEX` on the
+ * route pill beside it.
  */
-
-/** Sleeper's slot names, shortened to fit a chip — the card's own table. */
-const SLOT_LABELS: Record<string, string> = {
-  SUPER_FLEX: "SF",
-  WRRB_FLEX: "W/R",
-  REC_FLEX: "W/T",
-  IDP_FLEX: "IDP",
-  FLEX: "FLX",
-};
-
-const slotLabel = (slot: string): string => SLOT_LABELS[slot] ?? slot;
 
 /** `RB2` where the league starts two, `TE` where it starts one. */
 function seatLabel(row: DecisionRow): string {
@@ -55,15 +55,18 @@ export function DecisionsDeck({
   name,
   position,
   team,
-  points,
+  figure,
+  figureLabel,
   line,
   onBack,
 }: {
   name: string;
   position: string | null;
   team: string | null;
-  /** Null where the leagues on screen do not agree — see `WeekPlayerShare.points`. */
-  points: number | null;
+  /** Null where the leagues on screen do not agree — see `WeekPlayerShare.figure`. */
+  figure: number | null;
+  /** What the figure is, in three characters — `Proj`, `Live`. */
+  figureLabel: string;
   /** What this view is currently showing, in words. */
   line: string;
   onBack: () => void;
@@ -97,10 +100,10 @@ export function DecisionsDeck({
         >
           <Scanlines />
           <span className="relative font-mono text-[length:var(--fs-9)] uppercase tracking-[0.14em] text-readout-label">
-            Proj
+            {figureLabel}
           </span>
           <span className="relative font-mono text-[length:var(--fs-13)] tabular-nums text-readout [text-shadow:var(--readout-text-glow)]">
-            {points === null ? "—" : points.toFixed(1)}
+            {figure === null ? "—" : figure.toFixed(1)}
           </span>
         </span>
       </div>
@@ -119,11 +122,14 @@ export function DecisionsDeck({
 export function DecisionsList({
   groups,
   picked,
+  figureLabel,
   onPick,
 }: {
   groups: readonly DecisionGroup[];
   /** The counterpart the view is narrowed to, or null for all of them. */
   picked: string | null;
+  /** What every figure in the list is — see the module note. */
+  figureLabel: string;
   onPick: (playerId: string) => void;
 }) {
   if (groups.length === 0) {
@@ -142,6 +148,7 @@ export function DecisionsList({
           key={group.player_id}
           group={group}
           picked={picked === group.player_id}
+          figureLabel={figureLabel}
           onPick={() => onPick(group.player_id)}
         />
       ))}
@@ -160,10 +167,12 @@ export function DecisionsList({
 function CounterpartCard({
   group,
   picked,
+  figureLabel,
   onPick,
 }: {
   group: DecisionGroup;
   picked: boolean;
+  figureLabel: string;
   onPick: () => void;
 }) {
   // **The position is on the badge two millimetres to the left**, so it is not
@@ -223,10 +232,10 @@ function CounterpartCard({
         >
           <Scanlines />
           <span className="relative font-mono text-[length:var(--fs-8)] uppercase tracking-[0.14em] text-readout-label">
-            Proj
+            {figureLabel}
           </span>
           <span className="relative font-mono text-[length:var(--fs-11)] tabular-nums text-readout [text-shadow:var(--readout-text-glow)]">
-            {group.points === null ? "—" : group.points.toFixed(1)}
+            {group.figure === null ? "—" : group.figure.toFixed(1)}
           </span>
         </span>
       </button>
@@ -285,7 +294,9 @@ function LeagueRow({ row }: { row: DecisionRow }) {
       {/* **Lit only where the lineup left points behind.** A positive delta is
           the call going the reader's way, and colouring it too would make the
           column a decoration rather than a warning. An absent delta is an em
-          dash and never a zero — see `DecisionRow.delta`. */}
+          dash and never a zero — see `DecisionRow.delta`. It carries no unit,
+          because the two figures it is a difference of are labelled by the
+          windows above it. */}
       <span
         className={`ml-auto w-[3.25rem] shrink-0 text-right font-mono text-[length:var(--fs-11)] tabular-nums ${
           row.lost

@@ -8,22 +8,44 @@ import {
   filterSummary,
   BILLET_KEY_CHROME,
   BubblingFlask,
+  CONSOLE_KEY,
   CONSOLE_METAL_TRACK_SM,
   FlaskDefs,
   LeagueFiltersDialog,
   ManagerBillet,
   matchesFilters,
+  matchesSubjects,
+  narrowedEmptyState,
+  NO_SUBJECTS,
+  OpponentSharesDrawer,
   PLATE_KEY,
+  removeSubject,
+  subjectCount,
+  StarterSharesDrawer,
+  SubjectTokens,
+  toggleSubject,
+  type LeagueSubjects,
+  type Subject,
+  type SubjectRolls,
+  type WeekLineupEntry,
+  type WeekSharePlayer,
+  type WeekShareSide,
   useManagerLeagues,
   useActiveCard,
+  usePublishRackControls,
   useUrlParam,
+  WEEK_BROWSE_KEYS,
   WeekGauge,
   WeekStepper,
   writeQueryParam,
 } from "@/features/shared";
 
 import { isPlausibleWeek } from "@/shared/projections/weeks";
-import type { ManagerGametimePayload } from "@/shared/contract";
+import type {
+  GametimePlayer,
+  GametimeSide,
+  ManagerGametimePayload,
+} from "@/shared/contract";
 
 import { useGametime } from "../hooks/use-gametime";
 import { gametimeReadout } from "../helpers/connection";
@@ -40,6 +62,48 @@ import { GametimeCard } from "./gametime-card";
 /** Stable empty answer, so a render before the read lands hands the memos the same object. */
 const NO_LEAGUES: Record<string, never> = {};
 const NO_BOARD: Record<string, never> = {};
+const NO_ENTRIES: WeekLineupEntry[] = [];
+
+/**
+ * One player, as the shared week panels compare him — **this tool's live
+ * projection** on {@link WeekSharePlayer.figure}.
+ *
+ * `live` rather than `scored` or `projected`, and the choice is the one thing
+ * this adapter decides. It is the page's own headline figure: every total on
+ * the plate and in the panes is a sum of it, so a panel comparing anything else
+ * would judge the week on a number no card here prints. It is also the reading
+ * a start/sit call wants mid-Sunday — `scored + projected × remaining` is this
+ * app's best estimate of what a decision will finally have cost, where `scored`
+ * alone says a player who has not kicked off cost nothing and `projected` alone
+ * is the answer the lineup checker already gives one tool over. The panels are
+ * labelled `Live` so a reader is never left inferring which of three scales
+ * they are looking at.
+ *
+ * Null stays null and is never a zero, on `GametimePlayer.live`'s own grammar:
+ * no projection and no game to have scored in is an em dash.
+ */
+const figured = (player: GametimePlayer): WeekSharePlayer => ({
+  player_id: player.player_id,
+  name: player.name,
+  positions: player.positions,
+  team: player.team,
+  figure: player.live,
+});
+
+/** One side of a league's game, as the shared fold reads it. */
+const asSide = (side: GametimeSide): WeekShareSide => ({
+  lineup: side.lineup.map((seat) => ({
+    slot: seat.slot,
+    player: seat.player ? figured(seat.player) : null,
+  })),
+  bench: side.bench.map(figured),
+});
+
+/** Everyone one side fielded, as the narrowing reads them. */
+const fieldedIds = (side: GametimeSide): string[] => [
+  ...side.lineup.flatMap((seat) => (seat.player ? [seat.player.player_id] : [])),
+  ...side.bench.map((p) => p.player_id),
+];
 
 /**
  * Gametime: every league this account plays in, what its lineup has scored,
@@ -54,11 +118,25 @@ const NO_BOARD: Record<string, never> = {};
  * in its windows. What differs is the read behind it: a stream rather than a
  * fetch (`useGametime`), so the numbers move without a press.
  *
- * **No Browse keys, deliberately.** The checker's two drawers answer who you
- * started and who you play, which are questions about the lineup as set; this
- * page is about what that lineup is doing, and a drawer narrowing the grid
- * would be the same drawer one tool over. They arrive if a reader asks for
- * them.
+ * **The two Browse keys are the checker's, and they are the same two panels.**
+ * This file used to say they were deliberately absent, on the argument that
+ * Starters and Opponents answer who you started and who you play — questions
+ * about the lineup as *set* — where this page is about what that lineup is
+ * doing. That argument is why the panels were not built here first and it is not
+ * an argument against them: the question a reader asks on a Sunday is the same
+ * one, and the answer is more useful with the week in progress, not less.
+ * "Which of my twelve lineups is Bijan in" is a question about the same rosters;
+ * what changes is that the figure beside him is what he has done and is on
+ * course to do rather than what he was projected for. So it is one fold, one
+ * drawer and one pair of keys, in `features/shared`, with this page supplying
+ * the entries and the word for its own scale — see `figured` above, which is
+ * where the choice of {@link GametimePlayer.live} is made and argued.
+ *
+ * **What a press narrows is the league grid**, exactly as on the checker: the
+ * subjects compose with the league filters as a second pass, so picking a
+ * player leaves the cards he is on. And a press *closes the open card* first,
+ * because a parked card is the screen — there is no grid on screen to narrow
+ * while one is open.
  */
 export function GametimeHome({ username, heading }: { username: string; heading: ReactNode }) {
   const rawWeek = Number(useUrlParam("week"));
@@ -88,6 +166,13 @@ function Live({
   const cold = leagues.length === 0 && refreshing;
 
   const [filters, setFilters] = useState(DEFAULT_LEAGUE_FILTERS);
+  // The drawers' half of the narrowing, on the checker's terms. `opened` is a
+  // latch rather than the open flag: a picked subject keeps narrowing the grid
+  // after its drawer closes, and both panels keep their own search and scroll
+  // once they have been opened.
+  const [subjects, setSubjects] = useState<LeagueSubjects>(NO_SUBJECTS);
+  const [drawer, setDrawer] = useState<Subject["kind"] | null>(null);
+  const [opened, setOpened] = useState<ReadonlySet<Subject["kind"]>>(new Set());
 
   const { payload, pending, connection, stale } = useGametime(
     username,
@@ -95,29 +180,181 @@ function Live({
     week,
     leagues.length > 0 && !refreshing,
   );
-  const entries = payload?.leagues ?? NO_LEAGUES;
+  const solved = payload?.leagues ?? NO_LEAGUES;
   const board = payload?.board ?? NO_BOARD;
   const leagueList: LeagueListState =
     leagues.length > 0 ? "ready" : refreshing ? "loading" : "none";
 
-  const visible = useMemo(
+  // **The two narrowings are two passes and the order is the cheap one** — the
+  // leagues console's arrangement, and the drawers count over exactly this
+  // intermediate list, never over the one below it.
+  const leagueFiltered = useMemo(
     () => leagues.filter((league) => matchesFilters(league, filters)),
     [leagues, filters],
   );
+
+  /**
+   * **Neither the entries nor the roll maps are built until a drawer has been
+   * opened**, which is the latch's second job and `/api/trades/facets`' own
+   * bargain: a reader who never presses a Browse key pays nothing for the
+   * panels. Both are a walk over every player of every roster on the account,
+   * and `matchesSubjects` returns true without asking the resolver while the
+   * selection is empty — so before the first press there is nothing to answer
+   * for. The latch never goes back, so a picked subject that outlives its
+   * drawer still narrows.
+   */
+  const browsed = opened.size > 0;
+
+  /**
+   * One league's contribution to a week fold, adapted to the shared side shape
+   * — see `figured` for which figure, and `week-shares.ts` for why the fold
+   * takes a normalised side rather than either tool's wire.
+   *
+   * A league nothing could be solved for is absent rather than present and
+   * empty, which is the denominator rule the panels' `league_count` is written
+   * by; so is a league with no opponent, on the opponent side alone.
+   *
+   * It re-runs on every frame the room pushes, which is what a stream costs a
+   * page that folds its own payload — one shallow map per player of per roster,
+   * against a walk over the same players the fold behind it already makes. What
+   * is behind the latch is the expensive half.
+   */
+  const entries = useMemo<WeekLineupEntry[]>(
+    () =>
+      browsed
+        ? leagueFiltered.flatMap((league) => {
+            const entry = solved[league.league_id];
+            if (!entry) return [];
+            return [
+              {
+                league,
+                mine: asSide(entry.mine),
+                opponent: entry.opponent ? asSide(entry.opponent) : null,
+                // Sleeper seats a best-ball lineup itself — and here it is
+                // *solved* from the very live figures a delta would compare, so
+                // a call in one would be a decision the reader is told they got
+                // right by construction. See
+                // `WeekLineupEntry.set_by_manager`.
+                set_by_manager: !entry.best_ball,
+              },
+            ];
+          })
+        : NO_ENTRIES,
+    [browsed, leagueFiltered, solved],
+  );
+
+  // The two populations a subject picked on this page is answered from: who was
+  // on each of the manager's rosters this week, and who was on each opponent's.
+  // A league with no opponent is simply absent from the second, which the
+  // predicate reads as "this league does not hold them" — correct, and a
+  // different state from the map not having arrived at all.
+  const rolls = useMemo(() => {
+    const starter: Record<string, string[]> = {};
+    const opponent: Record<string, string[]> = {};
+    if (!browsed) return { starter, opponent };
+    for (const [id, entry] of Object.entries(solved)) {
+      starter[id] = fieldedIds(entry.mine);
+      if (entry.opponent) opponent[id] = fieldedIds(entry.opponent);
+    }
+    return { starter, opponent };
+  }, [browsed, solved]);
+
+  // Null until the first frame lands, which `matchesSubjects` reads as "nothing
+  // here can say" and ignores — the only reading that matches what is on
+  // screen, since failing it closed would empty the grid while a read is in
+  // flight.
+  const subjectRolls = useCallback<SubjectRolls>(
+    (kind) => {
+      if (payload === null) return null;
+      if (kind === "starter") return rolls.starter;
+      if (kind === "opponent") return rolls.opponent;
+      return null;
+    },
+    [payload, rolls],
+  );
+
+  const visible = useMemo(
+    () =>
+      leagueFiltered.filter((league) =>
+        matchesSubjects(league.league_id, subjects, subjectRolls),
+      ),
+    [leagueFiltered, subjects, subjectRolls],
+  );
+
   const narrowing = activeFilterCount(filters) > 0;
+
+  // A token names what the reader picked. The folded lineups are the only place
+  // those names live, so an id that outlives its payload falls back to itself
+  // rather than to a blank chip.
+  const subjectName = (subject: Subject) => {
+    for (const entry of entries) {
+      for (const fielded of [entry.mine, entry.opponent]) {
+        if (!fielded) continue;
+        const found =
+          fielded.lineup.find((s) => s.player?.player_id === subject.id)
+            ?.player ??
+          fielded.bench.find((p) => p.player_id === subject.id);
+        if (found?.name) return found.name;
+      }
+    }
+    return subject.id;
+  };
 
   const listRef = useRef<HTMLUListElement | null>(null);
   const ids = useMemo(() => visible.map((l) => l.league_id), [visible]);
   const card = useActiveCard({ param: "league", ids, listRef });
+  // Read out so the handler below can depend on it by name — the checker's own
+  // pair, in the same place and for the same reason.
+  const { close: closeCard } = card;
+
+  // Latch and open in one handler — never during render. It is a `useCallback`
+  // because it crosses the rack seam below, where a new identity every render
+  // would re-publish on every render and set an ancestor's state in a loop.
+  //
+  // **It closes the open card first**, on `LeaguesHome`'s argument: a picked
+  // subject narrows the league grid, and a parked card *is* the screen — the
+  // page is locked and every league but the open one is `display: none`, so
+  // there is no grid on screen to be narrowed. A press with no card open is a
+  // no-op on that half.
+  const openDrawer = useCallback(
+    (kind: Subject["kind"]) => {
+      closeCard();
+      setOpened((prev) => (prev.has(kind) ? prev : new Set(prev).add(kind)));
+      setDrawer(kind);
+    },
+    [closeCard],
+  );
+
+  usePublishRackControls({
+    keys: WEEK_BROWSE_KEYS,
+    drawer,
+    onOpenDrawer: openDrawer,
+  });
 
   const { summary, inPlay, answered } = useMemo(
     () => ({
-      summary: liveSummary(visible, entries),
-      inPlay: leaguesInPlay(visible, entries),
-      answered: leaguesAnswered(visible, entries),
+      summary: liveSummary(visible, solved),
+      inPlay: leaguesInPlay(visible, solved),
+      answered: leaguesAnswered(visible, solved),
     }),
-    [visible, entries],
+    [visible, solved],
   );
+
+  /**
+   * What to say, and what to offer, when the grid narrows to nothing — see
+   * `narrowedEmptyState`. Two things narrow it, they are undone by two
+   * different controls, and a message naming the wrong one comes with a key
+   * that does nothing.
+   */
+  const empty = narrowedEmptyState(
+    narrowing,
+    subjectCount(subjects) > 0,
+    filterSummary(filters),
+  );
+  const clearNarrowing = () => {
+    if (empty.action !== "subjects") setFilters(DEFAULT_LEAGUE_FILTERS);
+    if (empty.action !== "filters") setSubjects(NO_SUBJECTS);
+  };
 
   const name = user ? user.display_name || user.username : username;
 
@@ -199,6 +436,22 @@ function Live({
         />
       </div>
 
+      {/* The drawers hide their own state once closed, so the narrowing they
+          left behind needs a home on the page — the manager console's own
+          argument, and the same strip. `contents` at rest so the layout is what
+          it was, and the stylesheet gives it a box for as long as it is fading
+          with the rest of the page: opacity has no effect on an element with
+          none. */}
+      <div className={`contents ${card.chromeClass}`}>
+        <SubjectTokens
+          subjects={subjects}
+          names={subjectName}
+          onRemove={(s) => setSubjects((prev) => removeSubject(prev, s))}
+          onMatch={(match) => setSubjects((prev) => ({ ...prev, match }))}
+          onClear={() => setSubjects(NO_SUBJECTS)}
+        />
+      </div>
+
       {error ? (
         <Alert>{error}</Alert>
       ) : cold ? (
@@ -231,13 +484,33 @@ function Live({
               </p>
             </Plate>
           ) : visible.length === 0 ? (
+            // A different claim from the one above: that one is about the
+            // manager, this one is about the selection — and *which* of the two
+            // narrowings emptied the page decides the words and the key, since
+            // a message naming the wrong one comes with a control that does
+            // nothing. See `narrowedEmptyState`.
             <Plate>
-              <p className="m-0 font-mono text-[length:var(--fs-13)] text-foreground/72">
-                No leagues match these filters.
-              </p>
-              <p className="mt-2 truncate font-mono text-[length:var(--fs-11)] uppercase tracking-[0.16em] text-active">
-                {filterSummary(filters)}
-              </p>
+              <div className="flex flex-wrap items-center justify-between gap-5">
+                <div className="min-w-0">
+                  <p className="m-0 font-mono text-[length:var(--fs-13)] text-foreground/72">
+                    {empty.message}
+                  </p>
+                  {empty.summary ? (
+                    <p className="mt-2 truncate font-mono text-[length:var(--fs-11)] uppercase tracking-[0.16em] text-active">
+                      {empty.summary}
+                    </p>
+                  ) : null}
+                </div>
+                {/* A real key, from the constant rather than a hand-spelled
+                    riser — which is how one of them stops travelling. */}
+                <button
+                  type="button"
+                  onClick={clearNarrowing}
+                  className={CONSOLE_KEY}
+                >
+                  {empty.label}
+                </button>
+              </div>
             </Plate>
           ) : (
             <ul
@@ -251,7 +524,7 @@ function Live({
                   <GametimeCard
                     key={league.league_id}
                     league={league}
-                    entry={entries[league.league_id] ?? null}
+                    entry={solved[league.league_id] ?? null}
                     // Only the open card reads the scoreboard, and only the
                     // open card is handed it. The board is a new object on
                     // every frame the room pushes — every twenty seconds while
@@ -272,6 +545,45 @@ function Live({
             </ul>
           )}
         </>
+      )}
+
+      {/* Mounted once each kind has been opened, and kept: a closed drawer is
+          `open={false}`, not unmounted, so its search, its scroll and the
+          decisions view a reader was inside survive being shut. Both count over
+          `entries` — the league-filtered, subject-unnarrowed list — and the
+          readout's denominator is `leagues.length`, the account's own total.
+
+          `pending` is the hook's own answer rather than `payload === null`,
+          which is also true after a stream that will never answer. */}
+      {opened.has("starter") && (
+        <StarterSharesDrawer
+          open={drawer === "starter"}
+          onClose={() => setDrawer(null)}
+          entries={entries}
+          week={payload?.week ?? null}
+          leagueTotal={leagues.length}
+          filterSummary={narrowing ? filterSummary(filters) : null}
+          /* The live projection: this page's own figure, and the one every
+             total on it is a sum of. See `figured`. */
+          figureLabel="Live"
+          pending={pending}
+          subjects={subjects}
+          onToggle={(s) => setSubjects((prev) => toggleSubject(prev, s))}
+        />
+      )}
+      {opened.has("opponent") && (
+        <OpponentSharesDrawer
+          open={drawer === "opponent"}
+          onClose={() => setDrawer(null)}
+          entries={entries}
+          week={payload?.week ?? null}
+          leagueTotal={leagues.length}
+          filterSummary={narrowing ? filterSummary(filters) : null}
+          figureLabel="Live"
+          pending={pending}
+          subjects={subjects}
+          onToggle={(s) => setSubjects((prev) => toggleSubject(prev, s))}
+        />
       )}
     </div>
   );

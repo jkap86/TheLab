@@ -1,15 +1,15 @@
 import assert from "node:assert/strict";
 import { describe, test } from "node:test";
 
-import type {
-  LineupCheckLeague,
-  LineupCheckPlayer,
-  LineupCheckSeat,
-  ManagerLeague,
-} from "@/shared/contract";
+import type { ManagerLeague } from "@/shared/contract";
 
 import { decisionsFor, relFor, seatTakes } from "./start-sit-decisions.ts";
-import type { WeekLineupEntry } from "./starter-shares.ts";
+import type {
+  WeekLineupEntry,
+  WeekSharePlayer,
+  WeekShareSeat,
+  WeekShareSide,
+} from "./week-shares.ts";
 
 const ONE_QB = ["QB", "RB", "RB", "WR", "WR", "TE", "FLEX", "BN", "BN"];
 const SUPERFLEX = [...ONE_QB, "SUPER_FLEX"];
@@ -17,21 +17,19 @@ const SUPERFLEX = [...ONE_QB, "SUPER_FLEX"];
 function player(
   id: string,
   positions: string[],
-  points: number | null = 10,
-): LineupCheckPlayer {
+  figure: number | null = 10,
+): WeekSharePlayer {
   return {
     player_id: id,
     name: id.toUpperCase(),
     positions,
-    points,
     team: "BAL",
-    kickoff: null,
-    locked: false,
+    figure,
   };
 }
 
-function seat(slot: string, p: LineupCheckPlayer | null): LineupCheckSeat {
-  return { slot, player: p, move_to: null };
+function seat(slot: string, p: WeekSharePlayer | null): WeekShareSeat {
+  return { slot, player: p };
 }
 
 function league(id: string, rosterPositions: string[]): ManagerLeague {
@@ -42,22 +40,25 @@ function league(id: string, rosterPositions: string[]): ManagerLeague {
   } as unknown as ManagerLeague;
 }
 
-function entry(
-  lineup: LineupCheckSeat[],
-  bench: LineupCheckPlayer[],
-  over: Partial<LineupCheckLeague> = {},
-): LineupCheckLeague {
-  return { lineup, bench, ...over } as unknown as LineupCheckLeague;
-}
+const side = (
+  lineup: WeekShareSeat[],
+  bench: WeekSharePlayer[],
+): WeekShareSide => ({ lineup, bench });
 
 function one(
   id: string,
   rosterPositions: string[],
-  lineup: LineupCheckSeat[],
-  bench: LineupCheckPlayer[],
-  over: Partial<LineupCheckLeague> = {},
+  lineup: WeekShareSeat[],
+  bench: WeekSharePlayer[],
+  over: Partial<Omit<WeekLineupEntry, "league" | "mine">> = {},
 ): WeekLineupEntry {
-  return { league: league(id, rosterPositions), entry: entry(lineup, bench, over) };
+  return {
+    league: league(id, rosterPositions),
+    mine: side(lineup, bench),
+    opponent: null,
+    set_by_manager: true,
+    ...over,
+  };
 }
 
 describe("seatTakes", () => {
@@ -260,18 +261,42 @@ describe("decisionsFor", () => {
 
   test("the opponent side reads the opponent's lineup, and null is not empty", () => {
     const opp = one("a", ONE_QB, [seat("RB", rb)], [te], {
-      opponent_lineup: [seat("RB", player("orb", ["RB"], 11))],
-      opponent_bench: [player("ote", ["TE"], 7)],
+      opponent: side(
+        [seat("RB", player("orb", ["RB"], 11))],
+        [player("ote", ["TE"], 7)],
+      ),
     });
     const groups = decisionsFor("orb", [opp], "opponent");
     assert.deepEqual(groups.map((g) => g.player_id), ["ote"]);
 
     // A week with no opponent contributes nothing rather than an empty lineup.
     const none = one("a", ONE_QB, [seat("RB", rb)], [te], {
-      opponent_lineup: null,
-      opponent_bench: null,
+      opponent: null,
     });
     assert.deepEqual(decisionsFor("orb", [none], "opponent"), []);
+  });
+
+  test("a lineup the manager did not set contributes no call", () => {
+    // Sleeper seats a best-ball team itself, so "started over" there is a call
+    // nobody made — and on gametime the lineup is *solved* from the very
+    // figures the delta compares, so every such row would read as a decision
+    // the reader got right by construction. The shares still count the league;
+    // only the calls go. See `WeekLineupEntry.set_by_manager`.
+    const managed = one("a", ONE_QB, [seat("RB", rb)], [te]);
+    assert.deepEqual(
+      decisionsFor("rb1", [managed], "starter").map((g) => g.player_id),
+      ["te1"],
+    );
+
+    const bestBall = one("a", ONE_QB, [seat("RB", rb)], [te], {
+      set_by_manager: false,
+    });
+    assert.deepEqual(decisionsFor("rb1", [bestBall], "starter"), []);
+
+    // And it is per league rather than per call: a managed league beside a
+    // best-ball one still answers for itself.
+    const mixed = decisionsFor("rb1", [bestBall, managed], "starter");
+    assert.deepEqual(mixed.map((g) => g.rows.map((r) => r.league_id)), [["a"]]);
   });
 
   test("a league the subject is not on contributes nothing", () => {
@@ -294,7 +319,7 @@ describe("decisionsFor", () => {
       ],
       "starter",
     );
-    assert.equal(groups[0].points, null);
+    assert.equal(groups[0].figure, null);
     // The per-league deltas are unaffected: each is computed inside one lineup.
     assert.deepEqual(groups[0].rows.map((r) => r.delta), [6, 4]);
   });
