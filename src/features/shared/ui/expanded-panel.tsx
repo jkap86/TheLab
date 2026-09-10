@@ -55,6 +55,25 @@ import { usePanelCap } from "../use-panel-cap";
  * it converged here; the seam stays because it is what a fourth shape would
  * take.
  */
+/**
+ * The panel's side padding, negated — what a child bleeds by to run to the
+ * card's own wall.
+ *
+ * It is a constant rather than four spellings of `-mx-3.5 sm:-mx-[1.125rem]`
+ * because what it has to equal is the padding one declaration above it, and a
+ * bleed against the wrong gutter is a part overhanging the card with nothing
+ * on screen saying so. The seam row takes it, and so does every pane row: the
+ * panel's side padding is what lines the *summary's* windows up, and the panes
+ * are the one thing under the seam with nothing above them to line up with.
+ *
+ * It is safe because the panel clips (`overflow-hidden`) and its radius is the
+ * housing's own, so a row bled to the wall is cut by the card's edge — no
+ * second radius, no leaked shadow. Compose it into a class string that spells
+ * no other `mx`/`ml`/`mr`: two base margin utilities of the same specificity
+ * are settled by Tailwind's emit order rather than by the caller.
+ */
+export const PANEL_BLEED = "-mx-3.5 sm:-mx-[1.125rem]";
+
 export function ExpandedPanel({
   children,
   open,
@@ -142,7 +161,9 @@ export function ExpandedPanel({
 
           The margins are the breath around it: 8px either side, against the
           `12/18` and `10/14` the two halves used to spend separately. */}
-      <div className="-mx-3.5 my-2 flex shrink-0 items-center gap-2.5 sm:-mx-[1.125rem] sm:gap-3">
+      <div
+        className={`${PANEL_BLEED} my-2 flex shrink-0 items-center gap-2.5 sm:gap-3`}
+      >
         {mounted && seamStart ? (
           <span className="ml-3.5 shrink-0 sm:ml-[1.125rem]">{seamStart}</span>
         ) : null}
