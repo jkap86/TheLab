@@ -1,49 +1,50 @@
 "use client";
 
-import { memo, type MouseEvent, type ReactNode } from "react";
+import { memo, type CSSProperties, type MouseEvent, type ReactNode } from "react";
 
-import type { GametimeGame, GametimeLeague, ManagerLeague } from "@/shared/contract";
+import type { GametimeGame, GametimeLeague, GametimeSide, ManagerLeague } from "@/shared/contract";
 import {
   BubblingFlask,
   CardBilletRow,
   CardRule,
   CONSOLE_CARD_SHELL,
+  CONSOLE_GLASS,
   CONSOLE_METAL,
-  CONSOLE_WINDOW,
   ExpandedPanel,
   LeagueBillet,
   LeagueConfigWindow,
-  MarginBay,
-  OutcomeChips,
-  RampFigure,
+  rankColor,
   Scanlines,
   sharePercentile,
   StandingBay,
   StandingStrip,
 } from "@/features/shared";
 
-import { leagueLiveRecord, statusScope } from "../helpers/live-record";
+import { matchupGauge } from "../helpers/matchup-gauge";
 import { LivePanes } from "./live-panes";
 
 /**
  * One league's week, live, as an instrument housing.
  *
- * `LineupCheckCard` with the week's *result* in its windows where that card
- * puts its four checks, and deliberately the same object everywhere else: the
- * same housing, the same billet with the avatar lit in its bezel, the same
- * settings strip under it and the same standing strip under that — a reader
- * walking from the checker to here is looking at the same league, and the
- * numbers changing is the whole of what should differ. Every constraint that
- * card records — the clip in one decorative layer, `flex-1` in a flex `<li>`,
- * the named `group/card`, the `pointer-fine:` budget, `min-w-0` — is inherited
- * and is silent when broken; its module note carries the arguments.
+ * `LineupCheckCard` with the week's *result* in its window where that card puts
+ * its four checks, and deliberately the same object everywhere else: the same
+ * housing, the same billet with the avatar lit in its bezel and the same
+ * settings strip under it — a reader walking from the checker to here is
+ * looking at the same league, and the numbers changing is the whole of what
+ * should differ. Every constraint that card records — the clip in one
+ * decorative layer, `flex-1` in a flex `<li>`, the named `group/card`, the
+ * `pointer-fine:` budget, `min-w-0` — is inherited and is silent when broken;
+ * its module note carries the arguments.
  *
- * **Three windows: the score, the live projection, and how much of the week
- * is still in play.** Each is the manager's figure over the opponent's, which
- * is what a matchup is read for, and the standing strip beneath states the
- * two margins and the outcome they add up to — `Live` and `Med` as signed
- * margins, the week's games as chips, on `MarginBay`'s own rule that the
- * colour is the margin's size and the chip says which way it went.
+ * **One facing window: your live projection against your opponent's, with what
+ * each has scored so far under it.** It replaced a standing strip of signed
+ * margins and W/L chips over three tiles (`Score`, `Live proj`, `In play`), and
+ * the argument for the swap is that a matchup has two sides: two figures facing
+ * each other say which way the week is going without a reader having to read a
+ * sign, and the pair of bars beneath them says how much of it has been played.
+ * `In play` came off the card with them — the header gauge still reports how
+ * many leagues have a game running, which is where that reading now lives
+ * alone.
  *
  * Hook-free, for `LineupCheckCard`'s reason, and `memo`'d for its reason: a
  * frame arrives every twenty seconds while a game runs, and every prop but
@@ -78,6 +79,11 @@ export const GametimeCard = memo(function GametimeCard({
 }) {
   const mine = entry?.mine ?? null;
   const theirs = entry?.opponent ?? null;
+  // An opponent is what makes this a matchup, so the median rides on one too:
+  // a league's middle stated beside a side with nothing to face is a reading of
+  // a week nobody has been scheduled for. `LiveStrip`'s own rule, kept.
+  const median = theirs ? (entry?.median ?? null) : null;
+  const reading = pending && !entry;
 
   return (
     <li
@@ -97,7 +103,7 @@ export const GametimeCard = memo(function GametimeCard({
             // before the slot holding its other children, so the span written
             // first above would otherwise paint over the billet — the manager
             // card's own finding, and its own note carries the argument.
-            `lab-card-3d ${CONSOLE_CARD_SHELL} relative z-10 pb-[1.125rem] pt-[1.875rem] sm:pt-[2.125rem] group-open/card:pb-0 flex flex-1 group-open/card:flex-none cursor-pointer list-none flex-col font-mono ` +
+            `lab-card-3d ${CONSOLE_CARD_SHELL} relative z-10 pb-4 pt-[1.875rem] sm:pb-[1.125rem] sm:pt-[2.125rem] group-open/card:pb-0 flex flex-1 group-open/card:flex-none cursor-pointer list-none flex-col font-mono ` +
             "px-3.5 sm:px-[1.125rem] " +
             "pointer-fine:[transform-style:preserve-3d] [transform-origin:center_bottom] " +
             "pointer-fine:[transform:translateZ(0)_rotateX(3deg)] " +
@@ -126,70 +132,42 @@ export const GametimeCard = memo(function GametimeCard({
 
           <CardRule />
 
-          <div className="relative mt-3 flex flex-col items-stretch gap-2 sm:mt-3.5 pointer-fine:[transform:translateZ(18px)]">
-            <LeagueConfigWindow league={league} />
-            <LiveStrip entry={entry} />
-          </div>
+          {/* The settings strip has the row to itself, so `LeagueConfigWindow`
+              is *not* told it is `shared` — the standing that used to stand
+              beside it is gone and the non-wrapping arm has the full width. */}
+          <LeagueConfigWindow
+            league={league}
+            className="mt-3 sm:mt-3.5 pointer-fine:[transform:translateZ(18px)]"
+          />
 
+          {/* A lineup graded off the roster's *live* starters rather than the
+              week's own stored ones has to say so. It keeps its place between
+              the settings and the matchup, which is where it qualifies both. */}
           {entry?.as_of === "current" && (
             <p className="relative mt-3 font-mono text-[length:var(--fs-11)] uppercase tracking-[0.16em] text-foreground/85 pointer-fine:[transform:translateZ(14px)]">
               Lineup as set now
             </p>
           )}
 
-          {/* Three across at every width — a third of a phone card is ~105px,
-              room for a figure and its unit where four tiles left 79. A direct
-              child of the summary, so the `translateZ` survives. */}
-          <div className="relative mt-2.5 grid grid-cols-3 gap-1.5 sm:gap-2 pointer-fine:[transform:translateZ(22px)]">
-            <LiveWindow
-              label="Score"
-              scope={theirs ? `Theirs ${theirs.scored.toFixed(1)}` : mine ? "No opponent" : ""}
-              figure={mine ? mine.scored.toFixed(1) : null}
-              percentile={mine && theirs ? sharePercentile(mine.scored, [mine.scored, theirs.scored]) : null}
-              unit="pts"
-              title={
-                mine
-                  ? theirs
-                    ? `Scored so far: ${mine.scored.toFixed(1)} against ${theirs.scored.toFixed(1)}`
-                    : `Scored so far: ${mine.scored.toFixed(1)}`
-                  : "No lineup read for this league this week"
-              }
-              pending={pending && !entry}
-              phase={0}
-            />
-            <LiveWindow
-              label="Live proj"
-              scope={theirs ? `Theirs ${theirs.live.toFixed(1)}` : mine ? `Proj ${mine.projected.toFixed(1)}` : ""}
-              figure={mine ? mine.live.toFixed(1) : null}
-              percentile={mine && theirs ? sharePercentile(mine.live, [mine.live, theirs.live]) : null}
-              unit="on course"
-              title={
-                mine
-                  ? `On course for ${mine.live.toFixed(1)}, projected ${mine.projected.toFixed(1)} before kickoff${
-                      theirs ? `; opponent on course for ${theirs.live.toFixed(1)}` : ""
-                    }`
-                  : "No lineup read for this league this week"
-              }
-              pending={pending && !entry}
-              phase={1}
-            />
-            <LiveWindow
-              label="In play"
-              scope={mine ? statusScope(mine.status) : ""}
-              figure={mine ? String(mine.status.live) : null}
-              // The count is lit while anything is running and neutral at rest:
-              // a zero here is a real answer, not a fault.
-              percentile={mine ? (mine.status.live > 0 ? 100 : null) : null}
-              unit="playing"
-              title={
-                mine
-                  ? `${mine.status.live} starter${mine.status.live === 1 ? "" : "s"} playing, ${mine.status.done} done, ${mine.status.pending} to play`
-                  : "No lineup read for this league this week"
-              }
-              pending={pending && !entry}
-              phase={2}
-            />
-          </div>
+          {/* A direct child of the summary, so the `translateZ` survives — a
+              plain wrapper is a flat rendering context and every plane under it
+              collapses with no error to say so. */}
+          {reading ? (
+            <MatchupWindow>
+              <div className="relative flex items-center justify-center py-6 sm:py-7">
+                <BubblingFlask size={34} label="Reading" />
+              </div>
+            </MatchupWindow>
+          ) : (
+            mine &&
+            theirs && (
+              <MatchupWindow>
+                <Matchup mine={mine} theirs={theirs} median={median} />
+              </MatchupWindow>
+            )
+          )}
+
+          {mine && median && <MedianStrip mine={mine} median={median} />}
         </summary>
 
         {/* No sync key on the panel's seam, where the checker card carries
@@ -221,99 +199,304 @@ export const GametimeCard = memo(function GametimeCard({
 });
 
 /**
- * The week's live outcome as a milled strip: the two comparisons as signed
- * margins on the live projections, and the games they add up to as chips.
+ * The lit glass the matchup is read on.
  *
- * `LineupCheckCard`'s `ProjectionStrip` over live figures. The same three
- * absences draw no strip at all — no opponent, and a league without a median
- * draws two bays rather than `Med —`, on that strip's own argument.
+ * **No machined header**, where every other window on these cards has one: the
+ * two side labels sit on the glass because they name the *columns* rather than
+ * the part, and a ledge across the top would be a third thing to read above two
+ * figures that are the whole point.
  */
-function LiveStrip({ entry }: { entry?: GametimeLeague | null }) {
-  const record = leagueLiveRecord(entry);
-  if (!entry || !entry.opponent || !record) return null;
-
-  return (
-    <StandingStrip stretch>
-      <MarginBay label="Live" mine={entry.mine.live} against={entry.opponent.live} />
-      {entry.median !== null && (
-        <MarginBay label="Med" mine={entry.mine.live} against={entry.median.live} />
-      )}
-      <StandingBay label="Rec" stretch>
-        <OutcomeChips games={record.games} verb="On course for a" />
-      </StandingBay>
-    </StandingStrip>
-  );
-}
-
-/**
- * One reading, as a lit window — `MetricTile`'s surface with a figure polished
- * in the ramp's hue rather than struck in the alert's red: a score is a
- * reading, not a fault, and its colour is where it stands against the figure
- * opposite (`sharePercentile`, the standings table's own scale). A null
- * percentile is the neutral, which is what a window with nothing to compare
- * against draws.
- *
- * The same two rooms as the checker's tile: name over scope and the figure on
- * a desktop, name, figure and unit on a phone, one node in two layouts.
- */
-function LiveWindow({
-  label,
-  scope,
-  figure,
-  percentile,
-  unit,
-  title,
-  pending,
-  phase,
-}: {
-  label: string;
-  scope: string;
-  /** Null draws an em dash — no answer for this league. */
-  figure: string | null;
-  percentile: number | null;
-  unit: string;
-  title: string;
-  pending: boolean;
-  phase: number;
-}) {
+function MatchupWindow({ children }: { children: ReactNode }) {
   return (
     <div
-      className={`${CONSOLE_WINDOW} flex min-w-0 flex-col rounded-[0.625rem] px-[7px] py-2 sm:px-2 sm:py-2.5`}
-      title={title}
+      className={`${CONSOLE_GLASS} mt-2.5 rounded-[0.625rem] sm:rounded-xl pointer-fine:[transform:translateZ(22px)]`}
     >
       <Scanlines />
-      <div className="relative sm:min-h-[1.625rem]">
-        <p className="m-0 truncate font-mono text-[length:var(--fs-9)] uppercase leading-[1.2] text-readout-line sm:text-[length:var(--fs-11)] sm:tracking-[0.1em]">
-          {label}
-        </p>
-        <p className="m-0 mt-px hidden min-h-[0.6875rem] truncate font-mono text-[length:var(--fs-10)] uppercase leading-[1.2] tracking-[0.12em] text-readout-label sm:block">
-          {scope}
-        </p>
-      </div>
-
-      <div className="relative mt-auto pt-2">
-        {pending ? (
-          <BubblingFlask size={30} phase={phase} label="Reading" />
-        ) : (
-          <p className="m-0 truncate font-mono text-[length:var(--fs-18)] font-medium leading-none tabular-nums sm:text-[length:var(--fs-24)]">
-            {figure === null ? (
-              <span className="text-readout-muted">—</span>
-            ) : (
-              <Polished percentile={percentile}>{figure}</Polished>
-            )}
-          </p>
-        )}
-      </div>
-
-      <p className="relative m-0 mt-0.5 min-h-[0.6875rem] truncate font-mono text-[length:var(--fs-9)] uppercase tracking-[0.1em] text-readout-label sm:hidden">
-        {figure === null ? "" : unit}
-      </p>
-      <span className="sr-only">{title}</span>
+      {children}
     </div>
   );
 }
 
-/** The figure in the ramp's hue — `RampFigure`, which is the strip's polish. */
-function Polished({ percentile, children }: { percentile: number | null; children: ReactNode }) {
-  return <RampFigure percentile={percentile}>{children}</RampFigure>;
+/**
+ * The two readings facing each other, and the gauge under them.
+ *
+ * **The facing arrangement is kept at every width and nothing stacks**, which
+ * is the one thing about this part that a phone would ordinarily undo: stacked,
+ * the two figures stop being a comparison and become two readings that happen
+ * to be adjacent. What gives instead is the team names, which truncate.
+ */
+function Matchup({
+  mine,
+  theirs,
+  median,
+}: {
+  mine: GametimeSide;
+  theirs: GametimeSide;
+  median: { scored: number; live: number } | null;
+}) {
+  const gauge = matchupGauge(mine, theirs, median);
+  const pair = [mine.live, theirs.live];
+
+  return (
+    <>
+      <div className="relative grid grid-cols-[1fr_auto_1fr] items-end gap-2.5 px-3 pb-3 pt-3.5 sm:gap-[18px] sm:px-4 sm:pb-2.5">
+        <MatchupSide
+          role="You"
+          roleClass="text-[color:var(--billet-accent)]"
+          name={mine.team_name}
+          side={mine}
+          percentile={sharePercentile(mine.live, pair)}
+          sentence={`You: on course for ${mine.live.toFixed(1)}, ${mine.scored.toFixed(1)} scored so far`}
+        />
+
+        <span className="self-center font-mono text-[length:var(--fs-9)] uppercase tracking-[0.18em] text-readout-muted sm:text-[length:var(--fs-10)]">
+          vs
+        </span>
+
+        <MatchupSide
+          mirrored
+          role="Opp"
+          // Only the reader's own side is lit — the opponent's role label takes
+          // the billet's quiet ink, which is what keeps the two columns from
+          // reading as two of yours.
+          roleClass="text-[color:var(--billet-scope)]"
+          name={theirs.team_name}
+          side={theirs}
+          percentile={sharePercentile(theirs.live, pair)}
+          sentence={`${theirs.team_name ?? "Your opponent"}: on course for ${theirs.live.toFixed(1)}, ${theirs.scored.toFixed(1)} scored so far`}
+        />
+      </div>
+
+      {/* One gauge opening outward from the centre: the left bar grows from the
+          right edge inward and the right one from the left, so the two meet at
+          the gutter and the lead is the gap between them. */}
+      <div
+        aria-hidden
+        className="relative grid grid-cols-[1fr_12px_1fr] items-center px-3 pb-4 pt-2 sm:grid-cols-[1fr_14px_1fr] sm:px-4 sm:pb-[18px] sm:pt-2.5"
+      >
+        <GaugeBar mine reading={gauge.mine} median={gauge.median} />
+        <span />
+        <GaugeBar reading={gauge.theirs} median={gauge.median} />
+      </div>
+    </>
+  );
 }
+
+/** One column of the matchup: who, what they are on course for, what they have. */
+function MatchupSide({
+  role,
+  roleClass,
+  name,
+  side,
+  percentile,
+  sentence,
+  mirrored = false,
+}: {
+  role: string;
+  roleClass: string;
+  /** The team's label, or null where none is stored — never invented. */
+  name: string | null;
+  side: GametimeSide;
+  percentile: number;
+  sentence: string;
+  /** The opponent's column reads inward: name before role, `Now` before the figure. */
+  mirrored?: boolean;
+}) {
+  const roleLabel = (
+    <span
+      className={`shrink-0 font-mono text-[length:var(--fs-9)] uppercase tracking-[0.16em] sm:text-[length:var(--fs-10)] ${roleClass}`}
+    >
+      {role}
+    </span>
+  );
+  const teamName = name ? (
+    <span
+      title={name}
+      className="min-w-0 truncate font-mono text-[length:var(--fs-9)] uppercase tracking-[0.1em] text-readout-label sm:text-[length:var(--fs-10)] sm:tracking-[0.12em]"
+    >
+      {name}
+    </span>
+  ) : null;
+
+  const now = (
+    <span className="flex shrink-0 items-baseline gap-[3px] sm:gap-[5px]">
+      <span className="font-mono text-[length:var(--fs-9)] uppercase tracking-[0.12em] text-readout-label sm:tracking-[0.14em]">
+        Now
+      </span>
+      <span className="font-display text-[length:var(--fs-13)] font-medium tabular-nums text-readout-line sm:text-[length:var(--fs-18)]">
+        {side.scored.toFixed(1)}
+      </span>
+    </span>
+  );
+  const projection = (
+    <span
+      // The engraving and the halo are one `text-shadow` list, so the blur has
+      // to travel as a custom property: a `style` cannot carry a `sm:` variant,
+      // and a second declaration would replace the first rather than compose.
+      style={{ color: rankColor(percentile), "--fig-glow": rankColor(percentile, 0.4) } as GlowStyle}
+      className="font-display text-[length:var(--fs-21)] font-semibold leading-[0.95] tracking-[-0.02em] tabular-nums [text-shadow:var(--figure-engrave),0_0_20px_var(--fig-glow)] sm:text-[length:var(--fs-40)] sm:[text-shadow:var(--figure-engrave),0_0_22px_var(--fig-glow)]"
+    >
+      {side.live.toFixed(1)}
+    </span>
+  );
+
+  // **Both rows are `w-full` and the mirroring is `justify-end`**, never
+  // `items-end` on the column. A flex item whose `align-self` is not `stretch`
+  // is sized `fit-content`, and a render is what showed where that goes: the
+  // opponent's label row took its *max-content* inside a 136px column, so a
+  // long team name ran 188px past the card's own edge instead of truncating,
+  // while the reader's own column — stretched, because it is the default —
+  // truncated correctly. Two columns of one part behaving differently is the
+  // failure, and a definite width is what makes the `truncate` inside mean
+  // something on both.
+  const justify = mirrored ? "justify-end" : "";
+  return (
+    <div className="flex min-w-0 flex-col gap-1.5 sm:gap-1">
+      <span className={`flex w-full min-w-0 items-baseline gap-1.5 sm:gap-2 ${justify}`}>
+        {mirrored ? (
+          <>
+            {teamName}
+            {roleLabel}
+          </>
+        ) : (
+          <>
+            {roleLabel}
+            {teamName}
+          </>
+        )}
+      </span>
+      <span className={`flex w-full items-baseline gap-[5px] sm:gap-2.5 ${justify}`}>
+        {mirrored ? (
+          <>
+            {now}
+            {projection}
+          </>
+        ) : (
+          <>
+            {projection}
+            {now}
+          </>
+        )}
+      </span>
+      <span className="sr-only">{sentence}</span>
+    </div>
+  );
+}
+
+/**
+ * One side's bar: the live projection as a ghost, what has been scored in front
+ * of it, and the league's median as a tick across both.
+ *
+ * **The tick overhangs the track, so the clip is on the track and not on this
+ * box.** An `overflow-hidden` here would cut the one thing the two bars have in
+ * common down to the height of the bar it is crossing.
+ */
+function GaugeBar({
+  mine = false,
+  reading,
+  median,
+}: {
+  /** The reader's own bar: lit stock, and it grows from the centre outward. */
+  mine?: boolean;
+  reading: { ghost: number; live: number };
+  median: number | null;
+}) {
+  const edge = mine ? "right-0" : "left-0";
+  return (
+    <div className="relative h-3 sm:h-3.5">
+      <div
+        className={`absolute inset-0 overflow-hidden bg-[color:var(--figure-well-bg)] shadow-[var(--figure-well-shadow)] ${
+          mine
+            ? "rounded-l-[6px] rounded-r-[3px] sm:rounded-l-[7px]"
+            : "rounded-l-[3px] rounded-r-[6px] sm:rounded-r-[7px]"
+        }`}
+      >
+        <span
+          className={`lab-anim absolute inset-y-0 ${edge} transition-[width] duration-300 ${
+            mine ? "bg-[color:var(--lit-bar-ghost)]" : "bg-[color:var(--rival-bar-ghost)]"
+          }`}
+          style={{ width: `${reading.ghost}%` }}
+        />
+        <span
+          className={`lab-anim absolute inset-y-0 ${edge} transition-[width] duration-300 ${
+            mine
+              ? "bg-[image:var(--lit-bar-bg)] shadow-[var(--lit-bar-shadow)]"
+              : "bg-[image:var(--rival-bar-bg)]"
+          }`}
+          style={{ width: `${reading.live}%` }}
+        />
+      </div>
+      {median !== null && (
+        <span
+          className="absolute -bottom-[5px] -top-[5px] w-[3px] rounded-[2px] bg-[color:var(--median-ink)] shadow-[0_0_8px_var(--median-glow)] sm:-bottom-1.5 sm:-top-1.5"
+          style={mine ? { right: `${median}%` } : { left: `${median}%` }}
+        />
+      )}
+    </div>
+  );
+}
+
+/**
+ * The league's median as a milled strip under the glass.
+ *
+ * **Drawn only where the league runs one** — there is no `Med —` state, on the
+ * standing strip's own rule that a league without a median has no such field
+ * and a dash there would read as one the read failed to fetch.
+ *
+ * The swatch is the same 3px object as the tick on the bars, and that is the
+ * whole of what ties the two: a reader who has seen the amber line cross their
+ * bar finds the figures it stands for directly beneath it.
+ */
+function MedianStrip({
+  mine,
+  median,
+}: {
+  mine: GametimeSide;
+  median: { scored: number; live: number };
+}) {
+  // The median's own figure is coloured by where the *reader* stands against
+  // it, which is the question a median is on the card to answer: green is a
+  // week they are on course to beat the league's middle.
+  const percentile = sharePercentile(mine.live, [mine.live, median.live]);
+
+  return (
+    <div className="relative mt-2 pointer-fine:[transform:translateZ(18px)]">
+      <StandingStrip stretch>
+        <span className="relative inline-flex shrink-0 items-center gap-[7px] px-[7px] sm:gap-2 sm:px-2.5">
+          <span
+            aria-hidden
+            className="block h-[18px] w-[3px] rounded-[2px] bg-[color:var(--median-ink)] shadow-[0_0_8px_var(--median-glow)] sm:h-5"
+          />
+          <span className="whitespace-nowrap font-mono text-[length:var(--fs-9)] uppercase tracking-[0.14em] text-[color:var(--median-ink)] [text-shadow:var(--standing-engrave)] sm:text-[length:var(--fs-10)] sm:tracking-[0.16em]">
+            {/* Two spans switched by the cascade, never state: a client
+                component must not have to hydrate to learn a breakpoint. */}
+            <span className="sm:hidden">Med</span>
+            <span className="hidden sm:inline">Median</span>
+          </span>
+        </span>
+
+        {/* `transparent` rather than no glow at all: `StandingBay` composes its
+            engraving and its halo into one `text-shadow` list, so a bay that
+            wants the engraving and nothing else asks for a halo of nothing. */}
+        <StandingBay label="Now" stretch tone="var(--billet-figure)" glow="transparent">
+          {median.scored.toFixed(1)}
+        </StandingBay>
+        <StandingBay
+          label="Live"
+          stretch
+          tone={rankColor(percentile)}
+          glow={rankColor(percentile, 0.35)}
+        >
+          {median.live.toFixed(1)}
+        </StandingBay>
+      </StandingStrip>
+      <span className="sr-only">
+        League median: on course for {median.live.toFixed(1)}, {median.scored.toFixed(1)} scored so
+        far
+      </span>
+    </div>
+  );
+}
+
+/** The halo's colour, as a custom property a `pointer`-agnostic class reads. */
+type GlowStyle = CSSProperties & { "--fig-glow": string };

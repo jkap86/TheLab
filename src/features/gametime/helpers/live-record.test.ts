@@ -8,7 +8,6 @@ import {
   leagueLiveRecord,
   leaguesInPlay,
   liveSummary,
-  statusScope,
 } from "./live-record.ts";
 
 function side(over: Partial<GametimeSide> = {}): GametimeSide {
@@ -109,9 +108,5 @@ describe("gameClockLabel", () => {
     assert.equal(gameScoreLabel(game({ score: { team: 21, opponent: 17 } })), "21–17");
     assert.equal(gameScoreLabel(game({})), null);
     assert.equal(gameScoreLabel(null), null);
-  });
-
-  test("the status scope", () => {
-    assert.equal(statusScope({ done: 3, live: 4, pending: 2 }), "3 done · 2 to play");
   });
 });
