@@ -105,8 +105,3 @@ export function gameScoreLabel(game: GametimeGame | null): string | null {
   if (!game || !game.score) return null;
   return `${game.score.team}–${game.score.opponent}`;
 }
-
-/** `3 done · 2 to play`, the status window's second line. */
-export function statusScope(status: { done: number; live: number; pending: number }): string {
-  return `${status.done} done · ${status.pending} to play`;
-}

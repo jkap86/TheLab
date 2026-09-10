@@ -1006,6 +1006,47 @@
   --lit-bar-bg: linear-gradient(180deg, #9ffff2, #00d9c3);
   --lit-bar-shadow: 0 0 10px var(--accent-glow),
     inset 0 1px 0 rgba(255, 255, 255, 0.5);
+  /*
+   * The gametime card's facing gauge: the opponent's bar, and the two ghost
+   * washes behind both.
+   *
+   * **Three surfaces rather than three literals, for this file's own reason.**
+   * The design draws them as `rgba(214,255,250,0.75)` and friends — near-white
+   * mint alphas, which are exactly right on the dark readout and invisible on
+   * the pale one, and an `rgba()` typed into a class string cannot invert. The
+   * bar the *reader* owns is `--lit-bar-bg` above; these are the two voices
+   * beside it, and the whole point of the pair is that one is lit and one is
+   * not, so a scheme where both landed on the same ink would say nothing.
+   *
+   * The ghost is the side's live projection and the bar in front of it is what
+   * has actually been scored, so it has to read as the same object dimmed
+   * rather than as a second bar: an alpha of the ink its own fill is made of.
+   */
+  --rival-bar-bg: linear-gradient(
+    180deg,
+    rgba(214, 255, 250, 0.75),
+    rgba(159, 255, 242, 0.4)
+  );
+  --lit-bar-ghost: rgba(159, 255, 242, 0.13);
+  --rival-bar-ghost: rgba(214, 255, 250, 0.1);
+  /*
+   * The median's own ink — a third voice that is neither side.
+   *
+   * The card spends teal on the reader and the red/green ramp on the result,
+   * so the league's middle needs a colour that cannot be mistaken for either:
+   * it is the same object on the bars (a tick) and on the strip under them (a
+   * swatch), and the tie between the two is that they are one amber.
+   *
+   * It inks *text* on the strip's billet face as well as drawing the tick, so
+   * the light half is measured against the band that ink lands on rather than
+   * against a stop: #7a4f00 is 5.46:1 on the billet's own gradient where the
+   * label sits, 4.80:1 across the whole face, and 5.97:1 on the light readout
+   * where the tick is drawn. A shallower amber (#8a5a00) clears the label at
+   * 4.54 and that is the "sat on the threshold" trap this file has already
+   * recorded once, so it takes the margin instead.
+   */
+  --median-ink: #ffd487;
+  --median-glow: rgba(255, 196, 92, 0.6);
   /* The channel that bar runs in — deeper than a meter's, since a thumb rides
      it and the fill has to read as sitting *in* the groove. */
   --rail-channel-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.98),
@@ -1582,6 +1623,19 @@
   --lit-bar-bg: linear-gradient(180deg, #14a294, #0b6d63);
   --lit-bar-shadow: 0 0 10px var(--accent-glow),
     inset 0 1px 0 rgba(255, 255, 255, 0.4);
+  /* The gauge's other two voices, inverted rather than dimmed: on a pale well
+     a wash has to be *darker* than its ground, so the mint alphas above become
+     alphas of the light scheme's own teal and readout ink. */
+  --rival-bar-bg: linear-gradient(
+    180deg,
+    rgba(18, 60, 57, 0.62),
+    rgba(11, 109, 99, 0.4)
+  );
+  --lit-bar-ghost: rgba(11, 109, 99, 0.22);
+  --rival-bar-ghost: rgba(18, 60, 57, 0.16);
+  /* The median's amber, measured — see the dark block for the bands. */
+  --median-ink: #7a4f00;
+  --median-glow: rgba(122, 79, 0, 0.35);
   --rail-channel-shadow: inset 0 2px 4px rgba(15, 23, 42, 0.32),
     inset 0 -1px 0 rgba(255, 255, 255, 0.9);
   --pick-pill-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.9),

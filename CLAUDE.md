@@ -14553,3 +14553,217 @@ seating churns visibly from tick to tick, which is the one thing about seating
 by `live` that a fixture cannot show; how often the scoreboard read actually
 fails in a way that makes the caption/factor split visible; and whether the
 snapshot fallback is ever reached at all outside a deliberately broken stream.
+
+### The card became a matchup
+
+The gametime league card carried a standing strip of signed margins (`Live`,
+`Med`) with W/L chips over three lit tiles — `Score`, `Live proj`, `In play`.
+It is one facing window now: **your live projection against your opponent's**,
+with what each has scored so far beside it, a gauge under both, and — where the
+league runs a median — a milled strip stating it. Applied from a design handoff.
+**Nothing on the wire moved** — no route, no query, no contract type, no payload
+field, no migration; the three readings the window needs (`scored`, `live`,
+`team_name`) have been on `GametimeSide` since the page landed.
+
+**Two figures facing each other say which way the week is going, where a signed
+margin has to be read.** That is the swap in one sentence: `+6.8` is arithmetic
+somebody has to do in their head to recover the two numbers it came from, and
+`128.7 vs 121.9` is the same fact with both terms on screen. `Live proj` is the
+hero and the score-so-far rides beside it, because on a live page the question
+is what a lineup is *heading for* and the score is how far along it is.
+
+**`In play` came off the card and not off the page.** The header gauge still
+reports `N / M` leagues with a game running, which is where that reading now
+lives alone — a count of leagues is a page-level fact, and a per-card copy of it
+was three characters saying what the row of clocks in the expanded half says
+properly.
+
+**`LiveStrip` and `LiveWindow` went with it, and `statusScope` with them.**
+`MarginBay` and `OutcomeChips` stay in `features/shared` — the lineup checker is
+their other reader — and `leagueLiveRecord` stays because `liveSummary` folds
+the page's record from it. `statusScope` was the `In play` tile's second line
+and nothing else's, and it is a two-term string join named after a window that
+no longer exists: there is no argument in it a later reader would otherwise get
+wrong, so it is deleted rather than kept on `peekActiveSeason`'s terms.
+
+#### The gauge is one scale, and the arithmetic is pure
+
+`helpers/matchup-gauge.ts` is under Node's own runner for `seat-compare.ts`'s
+reason: a bar drawn against the wrong denominator renders perfectly and says
+something untrue, which is the one failure a page of live scores cannot have.
+
+**One scale for both sides is the whole of it.** Each bar normalised to its own
+side would run nearly full on both and the pair would say nothing about who is
+ahead; against `max(mine.live, theirs.live, median.live) × 1.05` the lead *is*
+the gap between the two fills. The median is **in** that scale rather than
+measured against it, so a league whose middle is on course to beat both sides
+still puts its tick inside the track. The `1.05` is what keeps the leading bar
+off the outer edge — a fill that reached the end would read as a gauge pinned at
+its limit rather than as the larger of two figures.
+
+**Fantasy scoring goes negative, so the clamp is here rather than left to CSS.**
+A lineup below zero is a real Sunday-morning reading; the browser would clamp a
+negative *width* silently, and what it cannot clamp is a scale made of negatives
+flipping every bar on the row.
+
+**A bar with no scale draws empty and a tick with no scale is not drawn at
+all**, which is `rankPercentile`'s rule one grain down and the one thing a
+render caught rather than an argument: an empty bar is the honest reading of a
+week nothing has been projected for, where a tick is a *position*, and one
+parked at the inner edge claims the median sits there. On screen that was two
+amber marks floating at the centre gutter of a card with no bars on it. A median
+of **zero on a real scale** still places at the inner edge, correctly, and the
+test pins both.
+
+#### Three surfaces and an amber, all five of them tokens
+
+The handoff's own instruction is to add only `--median-ink` / `--median-glow`,
+and its literals for the rest are the class of thing this file treats as a
+fault: `rgba(214,255,250,0.75)` and its two friends are near-white mint alphas,
+exactly right on the dark readout and invisible on the pale one, and **an
+`rgba()` typed into a class string cannot invert**. So the opponent's bar and
+the two ghost washes are `--rival-bar-bg`, `--lit-bar-ghost` and
+`--rival-bar-ghost` beside `--lit-bar-bg`, which is the reader's own and was
+already a token. Every dark value is the handoff's to the digit; the light half
+darkens where the dark one lightens, because a wash on a pale well has to be
+darker than its ground.
+
+**The amber is measured rather than started from.** The handoff nominates
+`~#8a5a00` for light and that figure clears the `Median` label at **4.54:1** on
+the band of the billet's gradient the label actually lands on — which is the
+"sat on the threshold" trap this file has already recorded once, at the
+font-size floor. `#7a4f00` is **5.46:1** on that band, **4.80:1** across the
+whole billet face, and **5.97:1** on the light readout where the tick is drawn,
+so it takes the margin instead. The dark `#ffd487` is the handoff's and measures
+13.06–13.83:1 on the readout.
+
+**A third voice that is neither side** is the whole reason it is a colour rather
+than more teal: the card spends teal on the reader and the red/green ramp on the
+result, so the league's middle needs an ink that cannot be mistaken for either —
+and the swatch on the strip is the *same object* as the tick on the bars, which
+is what ties a reader who has seen the amber line cross their bar to the figures
+directly beneath it.
+
+#### What is reused, and the two places it costs a word
+
+`StandingStrip stretch` **is** the median strip: `px-1.5 py-[5px]` is the
+handoff's own `p-[5px_6px]`, at its radius, under its shadow, with
+`BilletFinish` already inside. `StandingBay stretch` is its bays — same well,
+same radius, same `pt-[3px] pb-1`, same label ink and same `--fs-16` figure. The
+handoff lists `card-plate.tsx` as read-but-don't-change, so two small things
+follow from taking it at its word:
+
+- **The bay's label is a `string`**, so the desktop's `Live proj` cannot become
+  two spans switched by the cascade. It reads **`Live`** at every width — the
+  handoff's own phone word — because `Now 84.6 / Live 118.3` is unambiguous in
+  the median's own strip and reusing the shared bay is worth four characters.
+  Measured, `Live proj` would not have fitted a phone anyway: at 390 a bay has
+  ~127px and that label plus `118.3` wants ~136.
+- **`glow` is required alongside `tone`**, since the bay composes its engraving
+  and its halo into one `text-shadow` list. The `Now` bay wants the engraving
+  and no halo, so it asks for a halo of `transparent` — valid CSS, and the
+  alternative was widening a component the handoff says not to touch.
+
+The `Median` / `Med` label *is* two spans switched by the cascade, because that
+markup is the card's own: a client component must not have to hydrate to learn a
+breakpoint.
+
+#### Three things changed against the handoff, each because a render showed it
+
+- **The phone figure is `--fs-21`, not `--fs-24`.** The handoff measures the
+  phone arm at "the content box is ~360px, each column ~165px" and concludes a
+  five-character projection fits. In this app it is **332px** and each column is
+  **136px** — its `2b` artboard is a 390px card with no page gutter, and
+  `PageShell` has one. Measured at 390: the design's own numbers (`128.7` /
+  `Now 96.4`) need exactly 136 of 136, and an ordinary late-Sunday reading with
+  a five-character *score* (`133.3` / `Now 111.1`) needs **144** and ran 8px
+  past its column. `--fs-21` saves 8.89px and the two inner gaps tighten 7→5 and
+  4→3 for 3 more, which lands it at 132 in 136. It is the lever the handoff
+  itself nominates for the overflow case, one case earlier than it expected.
+- **The mirrored column is `w-full` + `justify-end`, never `items-end`.** A flex
+  item whose `align-self` is not `stretch` is sized `fit-content`, and rendered
+  that let the opponent's label row take its **max-content** inside a 136px
+  column: a long team name ran 188px past the card's edge instead of
+  truncating, while the reader's own column — stretched, because it is the
+  default — truncated correctly. Two columns of one part behaving differently is
+  the failure, and a definite width is what makes the `truncate` inside mean
+  something on both.
+- **The no-median window keeps the median arm's Row B padding.** The handoff's
+  prose says "nothing else changes — the window keeps its height", and its `2c`
+  artboard draws `2px 16px 14px` against `2a`'s `10px 16px 18px`. The prose is
+  what shipped, so one part has one height whether or not a league runs a
+  median; the artboard's tighter arm is a 12px change if a designer prefers it.
+
+**Optional made a choice:** the fills carry `lab-anim transition-[width]
+duration-300`, so a frame landing every ~20s reads as movement rather than a
+jump. The figures do not transition. `.lab-anim` is what stops it under reduced
+motion.
+
+#### Verified
+
+Rendered through a temporary `/preview` route against the real `GametimeCard`,
+`ConsoleGround`, `PageShell` and the real tokens and Tailwind build — the method
+the console-card, shares, rack and timeline passes established, since no
+database is reachable from where this was built — then driven over CDP at
+**390, 430, 640, 768 and 1280**, at 390 and 1280 in both schemes, and deleted.
+The mechanics are the ones this file records: `--no-proxy-server`, `localhost`
+rather than `127.0.0.1`, a phone viewport from
+`Emulation.setDeviceMetricsOverride` with `mobile: true`, `data-theme` **and**
+`localStorage` rather than `prefers-color-scheme`,
+`--disable-features=OverlayScrollbar`, the
+`--blink-settings=availablePointerTypes=4,…` flags built as a **template
+literal**, a client-component harness, a CDP client over Node's own `WebSocket`
+since Playwright is not installed here, and a fresh `--remote-debugging-port`
+per run. The fixtures are seven leagues — a median league on the handoff's own
+numbers, one with no median, an all-zero league graded off the live roster with
+null team names, a league with no opponent, one nothing was read for, one still
+reading, and a pair of deliberately enormous team names.
+
+Every value is the handoff's. The window is **radius 12px at 1280 and 10px at
+390** on `--readout-bg` under `--glass-shadow` at `translateZ(22px)`; Row A is
+`14px 16px 10px` / gap 18 and `14px 12px 12px` / gap 10 with `align-items:
+flex-end`; Row B is `10px 16px 18px` over `1fr 14px 1fr` and `8px 12px 16px`
+over `1fr 12px 1fr`. The figures are **46.4px** (`--fs-40`) and **23.94px**
+(`--fs-21`) in IBM Plex Sans 600 at `-0.02em` and `0.95`, hue **150** for the
+side ahead and **25** for the side behind, under `--figure-engrave` plus a
+22px/20px halo at the ramp's own colour. The bars measure **95.24 / 71.34 /
+90.21 / 65.19%** with the tick at **87.54%** on both — the handoff's 95.3 /
+71.4 / 90.3 / 65.3 / 87.6 — with the track `overflow: hidden`, the box
+`overflow: visible` and the tick `±6px` / `±5px` at 3px on `--median-ink`. The
+reader's fill carries `--lit-bar-shadow` and the opponent's carries none, which
+is what makes one of them the lit side. The strip is `5px 6px` at radius 10px
+under `--standing-strip-shadow` at `translateZ(18px)`, its swatch **3×20px** and
+**3×18px**, its label `MEDIAN` at `--fs-10`/`0.16em` and `MED` at
+`--fs-9`/`0.14em`.
+
+Both schemes turn over from the tokens alone: `--median-ink`
+`rgb(255,212,135)` → `rgb(122,79,0)`, its glow `rgba(255,196,92,0.6)` →
+`rgba(122,79,0,0.35)`, the ghosts `rgba(159,255,242,0.13)` /
+`rgba(214,255,250,0.1)` → `rgba(11,109,99,0.22)` / `rgba(18,60,57,0.16)`, and
+`--standing-engrave` inverting wholesale under the `MEDIAN` label.
+
+Every arm landed. The no-median league draws the window with **no tick on
+either bar** and no strip; the no-opponent and never-read leagues draw neither;
+the pending league draws one flask centred where the figures go; the all-zero
+league draws empty bars and — after the fix — **no ticks at all**. At all five
+widths in both schemes: **no element overflows its column** (`scrollWidth ===
+clientWidth` on every label and figure row), both team names truncate on both
+sides, `document.documentElement.scrollWidth` is within the viewport, **zero**
+unclipped elements past it, exactly one `<h1>`, and **no console output of any
+kind** beyond the dev server's own React-DevTools and HMR lines.
+
+2,228 unit tests pass (nine of them the gauge's — the shared scale on the
+handoff's own numbers, the headroom, a median above both sides, a median with no
+scale, a median of zero on a real scale, the empty week, and the two negative
+arms); `lint`, `typecheck` and `build` are clean.
+
+**Not verified against real data**, which is the gap to close first: every
+number above is a fixture and no database was reachable from here. Four things a
+render cannot check — whether real team names sit acceptably in a 136px column
+at 390 now that both sides truncate, since the fixtures are short by
+construction or absurd by construction and nothing in between; whether the
+median tick reads as *the same object* as the strip's swatch on a page of a
+hundred cards rather than as a stray mark; whether the 300ms width transition
+reads as movement or as lag when a real frame lands every twenty seconds; and
+whether `--fs-21` still reads as the hero on a phone beside a real
+`LeagueConfigWindow`, which is the one thing the type step traded away.
