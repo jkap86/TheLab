@@ -33,7 +33,7 @@ import type {
   GametimeStatus,
 } from "@/shared/contract";
 
-import { round, startingSlots } from "../projections/optimal.ts";
+import { optimalLineup, round, startingSlots } from "../projections/optimal.ts";
 import { scoreStatLine } from "../projections/score.ts";
 import { SLOT_POSITIONS } from "../projections/slots.ts";
 import type { WeekProjections } from "../projections/week.ts";
@@ -107,17 +107,39 @@ export function solveGametimeLeague(
 }
 
 /**
- * One roster, seated as set and priced live.
+ * One roster, seated and priced live.
  *
- * **The seats are paired exactly as `compareLineup` pairs them**: every
- * starting slot is walked in order, a slot this build does not recognise drops
- * the same index from `starters`, and Sleeper's `"0"` is an empty seat. Two
- * spellings of that walk would be two lineups drawn from one array.
+ * **Two ways to seat it, and which one is the league's own rule.** A managed
+ * league is seated exactly as `compareLineup` pairs it: every starting slot is
+ * walked in order, a slot this build does not recognise drops the same index
+ * from `starters`, and Sleeper's `"0"` is an empty seat. Two spellings of that
+ * walk would be two lineups drawn from one array.
  *
- * The bench is the roster and whoever is starting, less the seated — the
- * checker's own candidate rule, for its reason: Sleeper's two arrays can
- * disagree for a moment after a move, and a starter missing from `players`
- * must still be priced.
+ * **A best-ball league has no lineup as set**, and reading one off `starters`
+ * was this file's own bug: Sleeper seats such a team itself, from the whole
+ * roster, after the games are played, so that array holds whatever the draft
+ * left behind and the numbers a card drew from it were a lineup nobody will
+ * ever be scored on. It is solved instead — `optimalLineup`, the app's one
+ * lineup solver, over every rostered player, which is `compareLineup`'s own
+ * `bestBall` arm reached directly because that function's other half (a gap
+ * against a lineup somebody set) is the question this tool does not ask.
+ * Flex, superflex and dual eligibility are that solver's, and so is the
+ * guarantee that nobody fills two seats.
+ *
+ * **It is seated by `live`, and the choice is the reading rather than a
+ * convenience.** Sleeper will seat this roster by what each player *finally*
+ * scores, which nobody knows yet; a player's live figure is precisely this
+ * app's best estimate of that number, so the lineup it produces is the best
+ * estimate of the lineup that will be scored, and its total is the best
+ * estimate of the total. Before kickoff every live figure is the projection
+ * whole, so the two agree; they part company as games are played, which is
+ * exactly what a live page is for. Seating each of the three totals by its own
+ * metric was the alternative and it breaks the contract's own invariant —
+ * three different lineups cannot all add up to the three figures on one plate.
+ *
+ * The bench is the roster less the seated — the checker's own candidate rule,
+ * for its reason: Sleeper's two arrays can disagree for a moment after a move,
+ * and a starter missing from `players` must still be priced.
  */
 function solveSide(
   rosterId: number,
@@ -128,25 +150,60 @@ function solveSide(
   league: WeekLineupLeague,
   boards: GametimeBoards,
 ): GametimeSide {
+  // Priced once each: a best-ball roster is read twice over (into the solver's
+  // pool, then back out of its seats) and a player Sleeper lists in both
+  // arrays is one player.
+  const priced = new Map<string, PricedPlayer>();
+  const price = (id: string): PricedPlayer => {
+    const held = priced.get(id);
+    if (held) return held;
+    const fresh = pricePlayer(id, league, boards);
+    priced.set(id, fresh);
+    return fresh;
+  };
+
+  const rostered = [...new Set([...(players ?? []), ...starters])].filter(
+    (id): id is string => Boolean(id) && id !== "0",
+  );
+
   const lineup: GametimeSeat[] = [];
   const phases: (SeatPhase | null)[] = [];
   const seated = new Set<string>();
 
-  slots.forEach((slot, i) => {
-    if (!(slot in SLOT_POSITIONS)) return;
-    const id = starters[i];
-    const playerId = id && id !== "0" ? id : null;
+  const seat = (slot: string, playerId: string | null) => {
     if (playerId) seated.add(playerId);
-    const priced = playerId ? pricePlayer(playerId, league, boards) : null;
-    lineup.push({ slot, player: priced?.player ?? null });
-    phases.push(priced?.phase ?? null);
-  });
+    const held = playerId ? price(playerId) : null;
+    lineup.push({ slot, player: held?.player ?? null });
+    phases.push(held?.phase ?? null);
+  };
 
-  const rostered = [...new Set([...(players ?? []), ...starters])].filter(
-    (id) => id && id !== "0" && !seated.has(id),
-  );
+  if (league.best_ball) {
+    const known = slots.filter((slot) => slot in SLOT_POSITIONS);
+    const pool = rostered.map((id) => {
+      const held = price(id);
+      return {
+        player_id: id,
+        positions: held.player.positions,
+        // A player with nothing to price from can only ever take a seat
+        // nobody else wanted, which is `solverPool`'s own reading one file
+        // over.
+        points: held.player.live ?? 0,
+      };
+    });
+    for (const filled of optimalLineup(known, pool)) {
+      seat(filled.slot, filled.player_id);
+    }
+  } else {
+    slots.forEach((slot, i) => {
+      if (!(slot in SLOT_POSITIONS)) return;
+      const id = starters[i];
+      seat(slot, id && id !== "0" ? id : null);
+    });
+  }
+
   const bench = rostered
-    .map((id) => pricePlayer(id, league, boards).player)
+    .filter((id) => !seated.has(id))
+    .map((id) => price(id).player)
     .sort(
       (a, b) =>
         (b.live ?? -1) - (a.live ?? -1) || a.player_id.localeCompare(b.player_id),
@@ -205,6 +262,9 @@ function sideStatus(phases: readonly (SeatPhase | null)[]): GametimeStatus {
   return status;
 }
 
+/** One player's three figures and the phase his game is in. */
+type PricedPlayer = { player: GametimePlayer; phase: SeatPhase };
+
 /**
  * One player, priced live.
  *
@@ -226,13 +286,29 @@ function sideStatus(phases: readonly (SeatPhase | null)[]): GametimeStatus {
  *   the least possible error against a clock nobody can see — the same fallback
  *   `remainingShare` takes for a running game that says nothing else.
  *
+ * **A stats feed that is down does not spend the clock**, and telling that
+ * apart from a healthy feed with no row for one player is the distinction the
+ * whole degraded path turns on. The formula's first term is what a player has
+ * *realised* of his projection, and the second is what is left of it; with no
+ * feed the first term is not zero but *unknown*, so charging him the elapsed
+ * clock would price a twenty-point back at ten by halftime on the arithmetic
+ * that he had scored nothing — a wrong number rather than a missing one, and
+ * one that would go on falling as the afternoon wore on. So `remaining` is
+ * held at `1` and `live` is the projection whole, which is what the page's own
+ * note ("showing the projections until Sleeper answers") already promises. A
+ * *healthy* feed with no row for him is unchanged: that is a real zero once
+ * his game is running, and the clock applies as it always did.
+ *
+ * The phase is untouched by any of it — how much of the week is still in play
+ * is a fact about the scoreboard, not about whether we can read a stat line.
+ *
  * `live` is null only where there is nothing at all to price from.
  */
 function pricePlayer(
   id: string,
   league: WeekLineupLeague,
   boards: GametimeBoards,
-): { player: GametimePlayer; phase: SeatPhase } {
+): PricedPlayer {
   const proj = boards.projections[id];
   const stat = boards.stats?.[id];
   const identity = proj ?? stat;
@@ -243,9 +319,11 @@ function pricePlayer(
 
   const projected = proj ? scoreStatLine(proj.stats, league.scoring_settings) : null;
 
+  const statsDown = boards.stats === null;
+
   let scored: number | null;
   if (stat) scored = scoreStatLine(stat.stats, league.scoring_settings);
-  else if (boards.stats === null) scored = null;
+  else if (statsDown) scored = null;
   else if (game && game.phase !== "pre") scored = 0;
   else scored = null;
 
@@ -262,10 +340,14 @@ function pricePlayer(
     phase = stat ? "unknown-started" : "unknown-pending";
   }
 
+  // See the note above: with no stats feed nothing is known to have been
+  // realised, so nothing of the projection may be spent.
+  const share = statsDown ? 1 : remaining;
+
   const live =
     projected === null && scored === null
       ? null
-      : round((scored ?? 0) + (projected ?? 0) * remaining);
+      : round((scored ?? 0) + (projected ?? 0) * share);
 
   return {
     player: {

@@ -14365,3 +14365,191 @@ closes tonight: whether Sleeper's stats feed moves during a game at the rate
 the twenty-second tick assumes, what a running tick's delta actually weighs,
 and what `quarter_num` and `time_remaining` read at halftime and in overtime
 on a live row rather than a finished one.
+
+### The degraded week, the best-ball week, and the frame that may be refused
+
+A correctness pass over the live half, made before a real Sunday ran through
+it. Nine changes, and the shape they share is that every one of them renders
+perfectly while being wrong: a page of ordinary-looking numbers is the one
+failure this tool cannot have. **Nothing on the wire moved** — no route, no
+contract field, no migration — except one field added to `WeekFeeds`, which is
+internal, and the plain route losing a query parameter nothing called.
+
+**A feed's health is data, and the room was not sending it.** The tick decided
+a reader's answer had moved by comparing the stat lines' stamp, the clock
+signature and the projections board, which misses the two transitions that
+matter most *because of how the feed layer degrades*: a scoreboard request that
+starts failing serves the **same cached clocks**, so the signature does not
+move, the room's own `scores: "error"` never leaves the process, and the reader
+goes on being shown a page whose caption says the numbers are current. Recovery
+is the same fault reversed — the values come back identical, nothing is sent,
+and a warning nobody can clear stands on a healthy page. `feedsMoved` is the
+whole comparison in one pure function and all three statuses are in it.
+
+**A `stale` note is the one claim on this wire nothing else can take back.** It
+is about the *feeds* rather than about any league, so the values behind it can —
+and after a quiet outage usually do — recover unchanged, which means no diff
+would ever produce the frame that clears it. The tick captures `toldStale`
+before it resets it and forces one delivery on the transition, which is the
+only `force` this delivery path has.
+
+**A stale clock is a caption and must never be a factor.** `WeekFeeds` grew
+`pricingClocks` beside `clocks`, and the split is the difference between two
+readings of one map. `Q3 08:41` beside a name says where the game was when we
+last saw it, and ageing only makes it old; the same reading used as
+`remaining` says what share of the game is *still to be played*, and a stale
+one goes on saying it — a scoreboard that stopped answering at the top of the
+third would price every roster in the league at 39% left for the rest of the
+afternoon, with the stat lines moving underneath it. The board on the wire and
+the phase counts and the room's cadence still take the last read, because a
+reading twenty seconds old beats none; the solve takes null and falls back to
+the reading it already had for a scoreboard nobody could read. The file's own
+doc had claimed this behaviour since it was written — this is the code catching
+up with it.
+
+**A stats feed that is down does not mean nothing was scored.** `live` is
+`scored + projected × remaining`, and the first term is what a player has
+*realised* of his projection. With no feed that term is not zero but unknown,
+and charging him the elapsed clock anyway priced a twenty-point back at ten by
+halftime on the arithmetic that he had scored nothing — a wrong number rather
+than a missing one, and one that fell further as the afternoon wore on, under a
+note that already promised the opposite ("showing the projections until Sleeper
+answers"). `remaining` is held at `1` while the feed is out, so the reading is
+the projection whole. What is emphatically unchanged is a **healthy** feed with
+no row for one player: that is a real zero once his game is running, and the
+clock still applies. The phase counts are untouched by either — how much of the
+week is in play is a fact about the scoreboard.
+
+**A best-ball card was drawing a lineup nobody will be scored on.** Sleeper
+seats such a team itself, from the whole roster, after the games, so its
+`starters` array holds whatever the draft left behind — and `solveSide` was
+reading it. It solves now, through `optimalLineup`, which is the app's one
+lineup solver and `compareLineup`'s own `bestBall` arm reached directly (that
+function's other half is a gap against a lineup somebody set, which is the
+question this tool does not ask). Flex, superflex, dual eligibility and the
+guarantee that nobody fills two seats are all the solver's.
+
+**It is seated by `live`, and that is the reading rather than a convenience.**
+Sleeper will seat the roster by what each player *finally* scores, which nobody
+yet knows; a live figure is precisely this app's best estimate of that number,
+so the lineup it produces is the best estimate of the lineup that will be
+scored. Before kickoff every live figure is the projection whole, so it agrees
+with the projection-optimal lineup and diverges as games are played, which is
+what a live page is for. Seating each of the three totals by its own metric was
+the alternative and it breaks the contract's own invariant — three lineups
+cannot all add up to the three figures on one plate. The opponent and every
+roster of the median pool go through the same `solveSide`, so a best-ball
+league's median is best-ball too.
+
+**A frame the socket refused was being treated as delivered.** The room advanced
+a reader's baseline as it built the frame, and the stream route drops payloads
+and deltas under backpressure — so a dropped `A → B` left the server at `B` and
+the reader at `A`, and the next `B → C` folded onto a week that had never
+existed: a page missing whatever moved in between, with nothing anywhere to say
+so. `RoomListener` answers `true`/`false` now and the baseline moves only on
+`true`. The consequence worth stating is that **a full resync is not needed**:
+the baseline is the last *accepted* answer, so the next delta is computed
+against it and is cumulative by construction — correct, and cheaper than
+resending the week on precisely the connection that has just proved it cannot
+take one. The exception is a reader who has never accepted a payload, which a
+delta has nothing to fold onto, so the first frame stays a payload until one
+lands — which is also why `joinGametime` now sends it through the listener
+rather than handing it back to the route.
+
+**Backpressure is counted in bytes.** `CountQueuingStrategy({ highWaterMark:
+16 })` bounds nothing on a stream whose frames run from a two-byte heartbeat to
+a whole week of a hundred-league account: the ceiling it sets is sixteen times
+the largest frame there is. It is `ByteLengthQueuingStrategy` at 256KB, which
+is a real per-connection bound — and which never refuses a first payload,
+because the check happens before an enqueue and a joining reader's queue is
+empty. What it bounds is the *backlog*. The unread counter and the disconnect
+at twenty consecutive refusals stay as the second line.
+
+**The row re-reads are bounded and jittered.** The loop was serial and awaited
+*inside* the delivery walk, so a kickoff crowd — everybody joins within a
+minute or two of each other, and a fixed three-minute TTL then lands all of
+their re-reads on the same tick forever — made one tick a queue of round trips
+with every reader's frame behind it. `Promise.all` is the other failure, a
+fan-out as wide as the room is popular with each branch holding a pool
+connection. It is `mapWithConcurrency` at 4, run as its own pass before the
+walk, with a minute of jitter on each deadline and an in-flight guard; a failed
+read is caught per reader and still moves the deadline, because a failing read
+retried every tick is the hammering the interval exists to prevent.
+
+**The page stopped saying `Connecting…` when it is not connecting.** The status
+pill was drawn from `connected` and `stale` alone, so every state those two
+could not name fell through to that word — including an account with no leagues
+(the hook never opens a stream at all), a season with no week left (the server
+says so and closes), and a stream that has given up. `GametimeConnection` is
+seven words and `gametimeReadout` is the pure function that turns one into the
+pill's reading; the visual language is unchanged.
+
+**And a stream that will not stay open falls back to one snapshot, never to a
+poll.** `EventSource` gives up for good on an HTTP status rather than a dropped
+socket, which left a first visit on nothing at all. A fatal close now fetches
+the plain route **once**, shows what it answers marked `Snapshot · not live`,
+and re-opens the stream on a widening backoff (10s doubling to two minutes); a
+stream that comes back returns the page to `live`. It is deliberately not a
+timer that re-fetches — the solve behind that body is the most expensive read
+this app makes — and deliberately not fetched on an ordinary first load, where
+it would be a second full solve for an answer the stream is about to push. Data
+already on screen is never cleared by any of it.
+
+**One rendering cost went with the pass.** Every card took the payload's
+`board`, which is a new object on every frame the room pushes — so a scoreboard
+tick broke `GametimeCard`'s memo for a hundred closed cards to move the seat
+rows of the one that was open. Only the open card is handed it now; the rest
+take a module-scoped empty object, so their props are identical frame to frame.
+A card's expanded half is not mounted while it is shut, so nothing that reads
+the board loses anything, and `isOpen` stays true through the collapse, so the
+clocks do not blank as a card closes.
+
+**Manual Sync is not reintroduced anywhere.** The key came off this card in its
+own change; what this pass removed is the last thing left behind it — the plain
+route's `?league=` narrowing, which existed for that key's re-read and had no
+caller. The checker's route keeps its own.
+
+#### Verified
+
+Under Node's own runner: 2,216 tests pass, 55 of them new. The four pure
+modules the pass turns on are driven directly — `feedsMoved` over all six of
+its arms including the two status transitions that were invisible, `rowsDueAt`
+over its bounds and its spread, `gametimeReadout` over every state it can give
+(and one test asserting that none of the six non-attempts reads as
+`Connecting…`), and `nextDelivery` as the state machine it is: a first payload
+repeated until one is taken, a dropped delta leaving the reader exactly where
+they were, the next delta after a drop landing them whole, several drops in a
+row resolving to one answer, and a league that left during a dropped frame
+still leaving. The solve's degraded arms are driven per quarter — a stats feed
+down prices the projection whole at `pre`, Q1, Q2, Q3, Q4 and `final` — beside
+the case that must not move, a healthy feed with no row for one player being a
+real zero with the clock applied. Best ball is driven over a roster whose
+`starters` array is the wrong lineup at every seat: the solved lineup, the flex
+taking the best player no strict seat wanted, a superflex taking a quarterback
+once he is worth one, the nominal starters on the bench, the seating following
+the live figures once games are played, the same league read as managed being
+seated as set, and the opponent and median solved the same way.
+
+**What a unit test cannot reach is pinned textually**, on `crawl-writes.test.ts`'
+terms and for its reason: `live.ts` imports `@/shared/manager` and `feeds.ts`
+imports `@/shared/projections`, so `npm test` cannot resolve either, and the
+decisions left in them are *which* pure function is called and in what order —
+none of which fails when it is wrong. `live-wiring.test.ts` reads the three
+files and the stream route and asserts thirteen of them: that movement is
+`feedsMoved` and not a comparison spelled back into the tick, that clearing a
+stale note forces a frame, that the refresh pass is bounded and precedes the
+delivery walk, that the baseline is committed behind the listener's answer and
+never before it, that the first frame goes out through the listener, that the
+scoreboard's failed read is withheld from the pricing and not from the wire,
+and that the queuing strategy is the byte one.
+
+`lint`, `typecheck` and `build` are clean.
+
+**Not verified against a live game**, which is still the gap to close first and
+is now a narrower one: every number above is a fixture. Four things a test
+cannot check — what a running tick's delta actually weighs and therefore
+whether 256KB is the right backlog; whether a real best-ball roster's live
+seating churns visibly from tick to tick, which is the one thing about seating
+by `live` that a fixture cannot show; how often the scoreboard read actually
+fails in a way that makes the caption/factor split visible; and whether the
+snapshot fallback is ever reached at all outside a deliberately broken stream.

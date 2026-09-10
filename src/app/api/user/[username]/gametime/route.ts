@@ -16,12 +16,20 @@ export const dynamic = "force-dynamic";
  * {@link ManagerGametimePayload}.
  *
  * The lineup-check route's twin: the same manager, the same season and week
- * resolution, the same stored lineups, the same `?league=` narrowing for the
- * re-read that follows a Sync press. What differs is what the lineups are read
+ * resolution, the same stored lineups. What differs is what they are read
  * *against* — three feeds rather than one, each degrading on its own (see
- * `readWeekFeeds`) — and that the page reads this over the stream beside it
- * rather than once: this route is the first paint, the narrowed re-read, and
- * the answer for anything that cannot hold a stream open.
+ * `readWeekFeeds`).
+ *
+ * **What this route is for is the stream failing.** The page follows the week
+ * over the SSE route beside this one and asks for a body here only when that
+ * connection cannot be established or kept — one snapshot, held and marked not
+ * live, rather than a poll (see `useGametime`). It is also the answer for
+ * anything that cannot hold a stream open at all.
+ *
+ * **It carries no `?league=` narrowing.** The checker's route has one because
+ * that page reads once and its Sync key re-reads a single card; nothing on a
+ * page whose numbers move on their own ever asked for one league, and the
+ * parameter's only caller went with that key.
  *
  * Two of the checker's three failures are the same here: the database read is
  * a 500, and a failed projections read is `projections: "error"` with no
@@ -53,8 +61,6 @@ export async function GET(
     const error: ApiErrorPayload = { error: requestedWeek.error };
     return NextResponse.json(error, { status: 400 });
   }
-  const requestedLeague = searchParams.get("league")?.trim() || undefined;
-
   const season = requestedSeason?.season ?? (await getActiveSeason());
 
   try {
@@ -74,7 +80,7 @@ export async function GET(
       return NextResponse.json(empty);
     }
 
-    const leagues = await getManagerWeekLineups(userId, season, week, requestedLeague);
+    const leagues = await getManagerWeekLineups(userId, season, week);
     const feeds = await readWeekFeeds(season, week);
     const payload = buildGametimePayload({ season, week, leagues, feeds });
     return NextResponse.json(payload);

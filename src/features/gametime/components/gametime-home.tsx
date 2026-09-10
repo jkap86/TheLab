@@ -26,6 +26,8 @@ import { isPlausibleWeek } from "@/shared/projections/weeks";
 import type { ManagerGametimePayload } from "@/shared/contract";
 
 import { useGametime } from "../hooks/use-gametime";
+import { gametimeReadout } from "../helpers/connection";
+import type { GametimeConnection, LeagueListState } from "../helpers/connection";
 import {
   formatLiveRecord,
   formatLiveWinPct,
@@ -87,7 +89,7 @@ function Live({
 
   const [filters, setFilters] = useState(DEFAULT_LEAGUE_FILTERS);
 
-  const { payload, pending, connected, stale } = useGametime(
+  const { payload, pending, connection, stale } = useGametime(
     username,
     state.season,
     week,
@@ -95,6 +97,8 @@ function Live({
   );
   const entries = payload?.leagues ?? NO_LEAGUES;
   const board = payload?.board ?? NO_BOARD;
+  const leagueList: LeagueListState =
+    leagues.length > 0 ? "ready" : refreshing ? "loading" : "none";
 
   const visible = useMemo(
     () => leagues.filter((league) => matchesFilters(league, filters)),
@@ -188,7 +192,7 @@ function Live({
 
       <div className={`relative my-6 flex flex-wrap items-center gap-3 sm:my-9 ${card.chromeClass}`}>
         <WeekStepper week={payload?.week ?? null} onChange={onWeek} />
-        <LiveReadout payload={payload} connected={connected} stale={stale} />
+        <LiveReadout payload={payload} connection={connection} leagues={leagueList} stale={stale} />
         <div
           aria-hidden
           className="hidden h-px flex-1 bg-gradient-to-r from-active/35 via-foreground/5 to-transparent sm:block"
@@ -241,18 +245,30 @@ function Live({
               {...card.shellProps}
               className="relative m-0 grid list-none grid-cols-1 gap-[1.125rem] p-0 [overflow-anchor:none]"
             >
-              {visible.map((league) => (
-                <GametimeCard
-                  key={league.league_id}
-                  league={league}
-                  entry={entries[league.league_id] ?? null}
-                  board={board}
-                  pending={pending}
-                  open={card.isOpen(league.league_id)}
-                  lit={card.isLit(league.league_id)}
-                  onToggle={card.toggle}
-                />
-              ))}
+              {visible.map((league) => {
+                const open = card.isOpen(league.league_id);
+                return (
+                  <GametimeCard
+                    key={league.league_id}
+                    league={league}
+                    entry={entries[league.league_id] ?? null}
+                    // Only the open card reads the scoreboard, and only the
+                    // open card is handed it. The board is a new object on
+                    // every frame the room pushes — every twenty seconds while
+                    // a game runs — so passing it to all of them would break
+                    // `GametimeCard`'s memo for a hundred closed cards to move
+                    // the seat rows of one. `NO_BOARD` is module-scoped, so a
+                    // closed card's props are identical frame to frame and its
+                    // memo holds; opening one hands it the current board in
+                    // the same render that opens it.
+                    board={open ? board : NO_BOARD}
+                    pending={pending}
+                    open={open}
+                    lit={card.isLit(league.league_id)}
+                    onToggle={card.toggle}
+                  />
+                );
+              })}
             </ul>
           )}
         </>
@@ -262,37 +278,35 @@ function Live({
 }
 
 /**
- * What the stream is doing, beside the stepper: a lamp and a word.
+ * What the page is doing, beside the stepper: a lamp and a word.
  *
- * Lit while the stream is open and a game is running, steady while it is open
- * and nothing is, and dimmed with the reason while it is not — `stale` is the
- * hook's own note, which covers a reconnect and a Sleeper outage alike. The
- * count of games is the scoreboard's, not the page's: it says whether the NFL
- * week is live at all, which is the one thing a reader looking at a quiet page
- * needs told.
+ * Every reading it can give is `gametimeReadout`'s, which is pure and tested —
+ * this is the pill it is drawn in. Lit while the stream is answering and
+ * dimmed while it is not; the lamp pulses only while a game is actually
+ * running, which is the one thing a reader looking at a quiet page needs told.
  */
 function LiveReadout({
   payload,
-  connected,
+  connection,
+  leagues,
   stale,
 }: {
   payload: ManagerGametimePayload | null;
-  connected: boolean;
+  connection: GametimeConnection;
+  leagues: LeagueListState;
   stale: string | null;
 }) {
-  const games = payload?.games ?? null;
-  const live = games !== null && games.live > 0;
-  const text = stale
-    ? stale
-    : !connected
-      ? "Connecting…"
-      : games === null
-        ? "Live"
-        : live
-          ? `Live · ${games.live} game${games.live === 1 ? "" : "s"} in progress`
-          : games.pre > 0
-            ? `Waiting · ${games.pre} game${games.pre === 1 ? "" : "s"} to come`
-            : "Final";
+  const readout = gametimeReadout({
+    connection,
+    leagues,
+    games: payload?.games ?? null,
+    stale,
+    degraded:
+      payload !== null &&
+      (payload.projections === "error" ||
+        payload.stats === "error" ||
+        payload.scores === "error"),
+  });
 
   return (
     <span
@@ -306,19 +320,21 @@ function LiveReadout({
       <span
         aria-hidden
         className={`relative size-[0.4375rem] shrink-0 rounded-full ${
-          connected && live
+          readout.pulse
             ? "lab-anim animate-pulse bg-readout shadow-[0_0_10px_var(--accent-glow)]"
-            : connected
+            : readout.lit
               ? "bg-readout/70"
               : "bg-foreground/30"
         }`}
       />
       <span
         className={`relative whitespace-nowrap font-mono text-[length:var(--fs-11)] uppercase tracking-[0.14em] ${
-          connected ? "text-readout [text-shadow:var(--readout-text-glow)]" : "text-readout-muted"
+          readout.lit
+            ? "text-readout [text-shadow:var(--readout-text-glow)]"
+            : "text-readout-muted"
         }`}
       >
-        {text}
+        {readout.text}
       </span>
     </span>
   );
