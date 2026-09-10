@@ -2,28 +2,34 @@
 
 import { useCallback, useMemo, useState } from "react";
 
+import { subjectSlot, type LeagueSubjects, type Subject } from "../league-subjects";
+import { decisionsFor } from "../start-sit-decisions";
 import {
-  SharesDrawer,
-  subjectSlot,
-  type LeagueSubjects,
-  type SharesDrawerRow,
-  type Subject,
-} from "@/features/shared";
-
-import { decisionsFor } from "../helpers/start-sit-decisions";
-import { weekPlayerShares, type WeekLineupEntry, type WeekSide } from "../helpers/starter-shares";
+  weekPlayerShares,
+  type WeekLineupEntry,
+  type WeekSide,
+} from "../week-shares";
+import { SharesDrawer, type SharesDrawerRow } from "./shares-drawer";
 import { DecisionsDeck, DecisionsList } from "./start-sit-decisions";
 
 /**
  * A week's shares, for one side of the week's games.
  *
- * Both panels the lineup checker puts in the rack are this component: the
- * Starters panel counts the manager's own lineups and the Opponents panel
+ * All **four** panels the two week tools put in the rack are this component:
+ * the Starters panel counts the manager's own lineups and the Opponents panel
  * counts the lineups facing them, and everything else about them — the columns,
  * the sort, the decisions view, the population rule — is the same. Two files
  * naming two sides of one fold would be two chances for one of them to count
  * differently from the other, which is precisely the failure nobody could see:
- * both would render.
+ * both would render. The same argument one grain out is why it is in
+ * `features/shared` rather than in either tool: `features/gametime` may not
+ * import from `features/lineupchecker`, and the answer to that is not a copy.
+ *
+ * **What the two tools differ on is one word.** The rows are folded over a
+ * normalised side (see `weekPlayerShares`), so the fold does not know which
+ * page asked; what a reader has to be told is which of two scales the figures
+ * are on, and that is `figureLabel` — `Proj` on the checker, `Live` on
+ * gametime.
  *
  * **The rows are folded over the league-filtered, subject-unnarrowed list**, the
  * rule `playerShares` states in full. Folded over the selection instead, every
@@ -47,6 +53,7 @@ export function WeekSharesDrawer({
   week,
   leagueTotal,
   filterSummary,
+  figureLabel,
   pending,
   emptyMessage,
   subjects,
@@ -67,6 +74,11 @@ export function WeekSharesDrawer({
   leagueTotal: number;
   /** What the league filters left, or null for nothing active. */
   filterSummary: string | null;
+  /**
+   * What every figure in this panel is, in a window's worth of characters —
+   * `Proj` on the lineup checker, `Live` on gametime. See the module note.
+   */
+  figureLabel: string;
   /** The check has not landed yet — a different state from having no rows. */
   pending: boolean;
   emptyMessage: string;
@@ -111,11 +123,12 @@ export function WeekSharesDrawer({
   );
   const picked = groups.find((group) => group.player_id === combo) ?? null;
 
-  // **The subject's projection follows what is on screen**, which is what makes
-  // it answerable at all: a projection is scored by the league's own settings,
-  // so a player spanning a PPR league and a half-PPR one has no single figure —
-  // and picking a counterpart narrows to that pairing's own leagues, which is
-  // usually one scoring and usually a number. See `WeekPlayerShare.points`.
+  // **The subject's figure follows what is on screen**, which is what makes it
+  // answerable at all: either tool's figure is scored by the league's own
+  // settings, so a player spanning a PPR league and a half-PPR one has no single
+  // number — and picking a counterpart narrows to that pairing's own leagues,
+  // which is usually one scoring and usually a number. See
+  // `WeekPlayerShare.figure`.
   //
   // Nothing picked means nothing narrowed, and the fold above already answered.
   const narrowed = useMemo(() => {
@@ -183,7 +196,8 @@ export function WeekSharesDrawer({
                   name={subject.name}
                   position={subject.position}
                   team={subject.team}
-                  points={subject.points}
+                  figure={subject.figure}
+                  figureLabel={figureLabel}
                   line={
                     picked
                       ? `With ${picked.name} · ${picked.rows.length} of ${counted} leagues`
@@ -201,6 +215,7 @@ export function WeekSharesDrawer({
                 <DecisionsList
                   groups={picked ? [picked] : groups}
                   picked={combo}
+                  figureLabel={figureLabel}
                   onPick={(id) => setCombo((prev) => (prev === id ? null : id))}
                 />
               ),

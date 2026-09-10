@@ -25,6 +25,7 @@ import {
   ManagerBillet,
   matchesFilters,
   matchesSubjects,
+  narrowedEmptyState,
   NO_SUBJECTS,
   parseLeaguematePlayerId,
   PLATE_KEY,
@@ -573,47 +574,20 @@ export function LeaguesHome({
   /**
    * What to say, and what to offer, when the grid narrows to nothing.
    *
-   * **Which narrowing emptied it is the whole question**, and the page used to
-   * answer it one way whatever the truth was. Two things narrow this grid — the
-   * league rules and the subjects picked in the drawers — and they are undone by
-   * two different controls, so a message naming the wrong one comes with a key
-   * that does nothing: `Clear filters` over filters already at their defaults
-   * leaves the reader looking at the same empty page, with the token tray above
-   * it as the only clue and nothing pointing at it.
-   *
-   * It never renders with neither active — a page with nothing narrowing and no
-   * visible leagues has no unfiltered leagues either, which is the arm above.
+   * The reading is `narrowedEmptyState`'s, which came out of this file when the
+   * two week tools grew the same second narrowing and needed the same three
+   * arms; the `clear` is still this page's, because only it holds the two
+   * states. See that module for the argument in full.
    */
-  const emptyState = useMemo(() => {
-    if (filtersActive && subjectsActive) {
-      return {
-        message: "No leagues match the current filters and selection.",
-        summary: filterSummary(filters),
-        action: "Clear all",
-        clear: () => {
-          setFilters(DEFAULT_LEAGUE_FILTERS);
-          setSubjects(NO_SUBJECTS);
-        },
-      };
-    }
-    if (subjectsActive) {
-      return {
-        message: "No leagues match this selection.",
-        // The tokens are named in the tray above rather than restated here: the
-        // filter summary is a sentence nothing else on the page carries, where
-        // a subject is a chip the reader can already see.
-        summary: null,
-        action: "Clear selection",
-        clear: () => setSubjects(NO_SUBJECTS),
-      };
-    }
-    return {
-      message: "No leagues match these filters.",
-      summary: filterSummary(filters),
-      action: "Clear filters",
-      clear: () => setFilters(DEFAULT_LEAGUE_FILTERS),
-    };
-  }, [filters, filtersActive, subjectsActive]);
+  const empty = narrowedEmptyState(
+    filtersActive,
+    subjectsActive,
+    filterSummary(filters),
+  );
+  const clearNarrowing = () => {
+    if (empty.action !== "subjects") setFilters(DEFAULT_LEAGUE_FILTERS);
+    if (empty.action !== "filters") setSubjects(NO_SUBJECTS);
+  };
 
   return (
     <div className="relative">
@@ -873,11 +847,11 @@ export function LeaguesHome({
               <div className="flex flex-wrap items-center justify-between gap-5">
                 <div>
                   <p className="m-0 font-mono text-[length:var(--fs-13)] text-foreground/72">
-                    {emptyState.message}
+                    {empty.message}
                   </p>
-                  {emptyState.summary ? (
+                  {empty.summary ? (
                     <p className="mt-2 truncate font-mono text-[length:var(--fs-11)] uppercase tracking-[0.16em] text-active">
-                      {emptyState.summary}
+                      {empty.summary}
                     </p>
                   ) : null}
                 </div>
@@ -886,10 +860,10 @@ export function LeaguesHome({
                     travelling. */}
                 <button
                   type="button"
-                  onClick={emptyState.clear}
+                  onClick={clearNarrowing}
                   className={CONSOLE_KEY}
                 >
-                  {emptyState.action}
+                  {empty.label}
                 </button>
               </div>
             </Plate>
