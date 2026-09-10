@@ -1,5 +1,7 @@
 import type { ManagerLeague } from "@/shared/contract";
 
+import type { WeekReading } from "./league-subjects.ts";
+
 /**
  * How many of a week's lineups seated each player, and how many left him off.
  *
@@ -24,12 +26,12 @@ import type { ManagerLeague } from "@/shared/contract";
  * differently from the other, which is the failure nobody could see: both
  * would render.
  *
- * **So it reads a normalised side rather than either tool's payload.** Their
+ * **So it reads a normalised entry rather than either tool's payload.** Their
  * two wires are genuinely different shapes — the checker's league carries
  * `lineup`/`bench` and three `opponent_*` fields, gametime's carries a `mine`
  * and an `opponent` side — and each is adapted at its own page, in one place,
  * where the choice of {@link WeekSharePlayer.figure} is also made and written
- * down. A fold that read both would be a fold with a `switch` in it.
+ * down. A fold that read both wires would be a fold with a `switch` in it.
  *
  * Pure, and the contract arrives as an erased `import type`, so it tests under
  * Node's runner without a render behind it.
@@ -99,8 +101,27 @@ export type WeekLineupEntry = {
   set_by_manager: boolean;
 };
 
-/** One player, and how the week's lineups treated him. */
-export type WeekPlayerShare = {
+/** The side a fold or a walk is reading, or null where there is none. */
+export function sideOf(
+  entry: WeekLineupEntry,
+  side: WeekSide,
+): WeekShareSide | null {
+  // **Null is not an empty lineup**, and the difference is the whole reason
+  // both wires keep the opponent nullable — see {@link WeekLineupEntry.opponent}.
+  return side === "starter" ? entry.mine : entry.opponent;
+}
+
+/**
+ * One player, and how the week's lineups treated him — **on both sides at
+ * once**.
+ *
+ * This used to be two types folded by two calls, one per panel. The two panels
+ * this replaces asked one question each and a reader comparing them had to hold
+ * two lists in their head: the same player, twice, in two corners of the
+ * screen, under two denominators. One row with four counts is the same four
+ * numbers with the comparison already made.
+ */
+export type WeekTwoSidedShare = {
   player_id: string;
   /** The stored name, else the id — a searchable token beats a blank. */
   name: string;
@@ -124,114 +145,219 @@ export type WeekPlayerShare = {
    * always one scoring and always a number. The per-league deltas beside it are
    * never affected — those are computed inside one lineup, where the scoring is
    * whatever that league says.
+   *
+   * **Both sides answer it**, because it is a fact about the *player* rather
+   * than about which roster he happens to be on: two leagues that disagree
+   * disagree however he got there.
    */
   figure: number | null;
-  /** How many of the counted lineups started him. */
+  /** How many of the manager's own lineups started him, and benched him. */
   started: number;
-  /** How many benched him. `started + benched` is every league he was on. */
   benched: number;
-  /** The leagues he appears on at all, in the order they were given. */
-  leagues: ManagerLeague[];
+  /** The same two over the lineups facing them. */
+  oppStarted: number;
+  oppBenched: number;
+  /**
+   * The leagues behind each of the four counts, keyed by the reading.
+   *
+   * Kept rather than derived because two things read them and neither can
+   * recompute one cheaply: the deck's chip says how many leagues a row's
+   * narrowing leaves, which is the union of the picked readings' sets, and the
+   * decisions view narrows to a counterpart's own leagues.
+   */
+  leagues: Record<WeekReading, ManagerLeague[]>;
 };
 
-export type WeekPlayerShares = {
+export type WeekTwoSidedShares = {
   /**
-   * The denominator: leagues that **contributed a lineup**, not leagues on
-   * screen.
+   * The manager's own denominator: leagues that **contributed a lineup**, not
+   * leagues on screen, and the scale the two `mine` columns are read against.
    *
    * A league the read answered nothing for is skipped rather than counted as
-   * one starting nobody — and on the opponent side, so is a league with no
-   * opponent to read (a future week, an unpaired week, an unstored roster). A
-   * partly-answered account therefore reports its shares over fewer leagues
-   * than the count beside it, which is the same rule `PlayerShares.league_count`
-   * is written by. Zeroing it would quietly deflate every share on the page.
+   * one starting nobody, which is the same rule `PlayerShares.league_count` is
+   * written by. Zeroing it would quietly deflate every share on the panel.
    */
-  league_count: number;
+  starter_league_count: number;
+  /**
+   * The opposing denominator, and it is **legitimately lower** — a future week,
+   * a week Sleeper filed without a pairing, an opponent whose roster is not
+   * stored. Both numbers are on the wire because two of the four columns are
+   * scaled by each, and a row reading `18/79` where only 74 leagues had an
+   * opponent to read would understate every opposing share on the panel.
+   */
+  opponent_league_count: number;
   /** Most-started first, then most-benched, ties broken by name. */
-  players: WeekPlayerShare[];
+  players: WeekTwoSidedShare[];
 };
 
-/** The side a fold or a walk is reading, or null where there is none. */
-export function sideOf(
-  entry: WeekLineupEntry,
-  side: WeekSide,
-): WeekShareSide | null {
-  // **Null is not an empty lineup**, and the difference is the whole reason
-  // both wires keep the opponent nullable — see {@link WeekLineupEntry.opponent}.
-  return side === "starter" ? entry.mine : entry.opponent;
-}
+/** An empty set of the four league lists — a fresh one per row. */
+const noLeagues = (): Record<WeekReading, ManagerLeague[]> => ({
+  start: [],
+  bench: [],
+  "opp-start": [],
+  "opp-bench": [],
+});
 
 /**
- * Fold one week's lineups into a share per player.
+ * Fold one week's lineups into a share per player, **both sides in one walk**.
  *
- * A league is counted once, in the denominator, as soon as it has a lineup to
- * read; a player is counted once per league however many times that league's
- * arrays name him. Sleeper's roster padding never reaches here — the seats
+ * A side is counted once, in its own denominator, as soon as it has a lineup to
+ * read; a player is counted once per league per side however many times that
+ * side's arrays name him; an absent side is skipped rather than counted as one
+ * that fielded nobody. Sleeper's roster padding never reaches here — the seats
  * carry a null player and the bench is built from real ids — so there is no
  * phantom row held, by construction, in every league.
+ *
+ * **The two sides are counted apart and a player is never on both in one
+ * league**, which is what makes the four counts add up to something a reader
+ * can reason about: he is on one roster per league, so his four counts partition
+ * the leagues he appears in rather than overlapping them. That is also the fact
+ * the row's narrowing rests on — see {@link Subject.readings}.
+ *
+ * One walk rather than one call per side, because the fold has to resolve one
+ * `figure` and one sort order across both, and merging two results afterwards
+ * would be a second place for either to be decided.
  */
-export function weekPlayerShares(
+export function weekTwoSidedShares(
   entries: readonly WeekLineupEntry[],
-  side: WeekSide,
-): WeekPlayerShares {
-  const rows = new Map<string, WeekPlayerShare>();
-  let leagueCount = 0;
+): WeekTwoSidedShares {
+  const rows = new Map<string, WeekTwoSidedShare>();
+  let starterLeagues = 0;
+  let opponentLeagues = 0;
 
   for (const entry of entries) {
-    const fielded = sideOf(entry, side);
-    // Absent is not empty — see `league_count`.
-    if (!fielded) continue;
-    leagueCount++;
-
     const league = entry.league;
 
-    // Which of this league's two arrays a player was in, resolved before any
-    // counting: one lineup is one decision per player, so a roster naming him
-    // twice must not count twice, and a player somehow in both must not be
-    // counted as started *and* benched in the same week.
-    const seen = new Set<string>();
+    for (const side of ["starter", "opponent"] as const) {
+      const fielded = sideOf(entry, side);
+      // Absent is not empty — see `WeekLineupEntry.opponent`.
+      if (!fielded) continue;
+      if (side === "starter") starterLeagues++;
+      else opponentLeagues++;
 
-    const count = (player: WeekSharePlayer, started: boolean) => {
-      if (seen.has(player.player_id)) return;
-      seen.add(player.player_id);
+      // One lineup is one decision per player, so a side naming him twice must
+      // not count twice and a player somehow in both its arrays must not be
+      // counted as started *and* benched in the same week.
+      const seen = new Set<string>();
 
-      let row = rows.get(player.player_id);
-      if (!row) {
-        row = {
-          player_id: player.player_id,
-          name: player.name ?? player.player_id,
-          position: player.positions[0] ?? null,
-          team: player.team,
-          figure: player.figure,
-          started: 0,
-          benched: 0,
-          leagues: [],
-        };
-        rows.set(player.player_id, row);
-      } else if (row.figure !== player.figure) {
-        // Two leagues that price him differently have no shared answer — see
-        // `figure`. Null once, null for the rest of the fold: a later league
-        // agreeing with the first cannot un-disagree the one in between.
-        row.figure = null;
+      const count = (player: WeekSharePlayer, started: boolean) => {
+        if (seen.has(player.player_id)) return;
+        seen.add(player.player_id);
+
+        let row = rows.get(player.player_id);
+        if (!row) {
+          row = {
+            player_id: player.player_id,
+            name: player.name ?? player.player_id,
+            position: player.positions[0] ?? null,
+            team: player.team,
+            figure: player.figure,
+            started: 0,
+            benched: 0,
+            oppStarted: 0,
+            oppBenched: 0,
+            leagues: noLeagues(),
+          };
+          rows.set(player.player_id, row);
+        } else if (row.figure !== player.figure) {
+          // Null once, null for the rest of the fold — see `figure`.
+          row.figure = null;
+        }
+
+        const reading: WeekReading =
+          side === "starter"
+            ? started
+              ? "start"
+              : "bench"
+            : started
+              ? "opp-start"
+              : "opp-bench";
+
+        if (reading === "start") row.started++;
+        else if (reading === "bench") row.benched++;
+        else if (reading === "opp-start") row.oppStarted++;
+        else row.oppBenched++;
+
+        row.leagues[reading].push(league);
+      };
+
+      for (const seat of fielded.lineup) {
+        if (seat.player) count(seat.player, true);
       }
-
-      if (started) row.started++;
-      else row.benched++;
-      row.leagues.push(league);
-    };
-
-    for (const seat of fielded.lineup) {
-      if (seat.player) count(seat.player, true);
+      for (const player of fielded.bench) count(player, false);
     }
-    for (const player of fielded.bench) count(player, false);
   }
 
+  // **Ordered by the manager's own side first**, which is the panel's own claim
+  // about what it is for: the four columns are one reading of a week and the
+  // two on the left are the reader's. A row nobody on either side fielded
+  // cannot exist, so the tiebreak never has to reach past the name.
   const players = [...rows.values()].sort(
     (a, b) =>
       b.started - a.started ||
       b.benched - a.benched ||
+      b.oppStarted - a.oppStarted ||
+      b.oppBenched - a.oppBenched ||
       a.name.localeCompare(b.name),
   );
 
-  return { league_count: leagueCount, players };
+  return {
+    starter_league_count: starterLeagues,
+    opponent_league_count: opponentLeagues,
+    players,
+  };
+}
+
+/**
+ * The five populations a week narrowing is answered from — the four readings,
+ * and the resting one a picked row with no reading chosen means.
+ *
+ * **It is here rather than in either page** because it is the same walk both of
+ * them were doing by hand over their own wire, and a second spelling is a page
+ * whose grid narrows differently from the page beside it. Each page adapts its
+ * payload to {@link WeekLineupEntry} already; this is what that adaptation is
+ * for.
+ *
+ * `either` is the resting reading: everybody either side fielded, which is what
+ * pressing a row before touching its tray has always meant.
+ *
+ * **A league with no opposing side simply has no row in the two `opp-*`
+ * maps**, which {@link matchesSubjects} reads as "this league does not hold
+ * them" — correct, and a different state from the map not having arrived.
+ */
+export function weekSubjectRolls(
+  entries: readonly WeekLineupEntry[],
+): Record<WeekReading | "either", Record<string, string[]>> {
+  const rolls: Record<WeekReading | "either", Record<string, string[]>> = {
+    either: {},
+    start: {},
+    bench: {},
+    "opp-start": {},
+    "opp-bench": {},
+  };
+
+  for (const entry of entries) {
+    const id = entry.league.league_id;
+    const either: string[] = [];
+
+    for (const side of ["starter", "opponent"] as const) {
+      const fielded = sideOf(entry, side);
+      if (!fielded) continue;
+
+      const started = fielded.lineup.flatMap((seat) =>
+        seat.player ? [seat.player.player_id] : [],
+      );
+      const benched = fielded.bench.map((p) => p.player_id);
+
+      rolls[side === "starter" ? "start" : "opp-start"][id] = started;
+      rolls[side === "starter" ? "bench" : "opp-bench"][id] = benched;
+      either.push(...started, ...benched);
+    }
+
+    // A league neither side answered for gets no row at all, which is the
+    // absent-is-not-empty rule the two denominators above are written by.
+    if (either.length > 0 || sideOf(entry, "starter")) rolls.either[id] = either;
+  }
+
+  return rolls;
 }

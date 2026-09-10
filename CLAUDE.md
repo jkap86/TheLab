@@ -5219,6 +5219,13 @@ of a hundred cards, which is the one question no single-card render can answer.
 
 ### Starters and Opponents
 
+**Superseded — the two panels are one.** See The two panels became one, under
+Gametime, which merges them into a single drawer listing every player once with
+four readings beside him. What is kept here is everything about the *rules*: the
+population the rows are folded over, the seat legality behind the decisions view,
+the mixed-scoring figure, and what moved to `features/shared` and why. What it
+supersedes is the pair — two keys, two kinds, two denominators on two panels.
+
 Two more Browse keys in the rack, each opening a side panel of *week* shares:
 **Starters** (docks left) is every player on the manager's rosters this week
 with how many lineups started him and how many benched him, and **Opponents**
@@ -14564,6 +14571,11 @@ snapshot fallback is ever reached at all outside a deliberately broken stream.
 
 ### Starters and Opponents came here
 
+**Half superseded — there are not two panels any more.** See The two panels
+became one, below, which merges them. Everything here about *why* gametime has
+them at all, which figure it adapts onto, and the best-ball gate still holds and
+is what that merge is built on; what it supersedes is the pair.
+
 Gametime's own note said the checker's two Browse panels were "deliberately
 absent", on the argument that Starters and Opponents answer who you started and
 who you play — questions about the lineup as *set* — where this page is about
@@ -14740,6 +14752,217 @@ widely on a real week as the fixtures assume, since the whole Opponents panel
 rests on it; and whether a best-ball account finds the decisions view *empty*
 rather than gated, since the message it draws there is written for a league where
 nobody could have taken the seat rather than for one nobody seated.
+
+### The two panels became one
+
+`/lineupchecker` and `/gametime` each put **two** panels in the rack — `Starters`
+docking left and `Opponents` docking right — and both were `WeekSharesDrawer`
+over one *side* of the week. They are one panel now: every player either side
+fielded, listed once, with **four** readings beside him and any union of them
+narrowing the grid behind. Applied from a design handoff, its `3a`. **Nothing on
+the wire moved** — no route, no query, no contract type, no payload field, no
+migration — and the whole fold is still a walk over what the page already holds.
+
+**The merge is the argument.** A reader comparing the two sides — which is most
+of the question on a page whose card draws the two lineups facing each other —
+had the same player as two rows, in two panels, in two corners of the screen,
+under two denominators, and did the comparison themselves. One row with four
+counts is those four numbers with the comparison already made. The rack key that
+freed is ~44px at 390, which the wordmark's own conditional can have back.
+
+**`starter` and `opponent` became one `week` kind, and that is not bookkeeping.**
+Two kinds would be two `subjectSlot`s for one row, so a reader could pick the
+same player twice and the token tray above the grid would name him twice for one
+narrowing. Which of the four readings a row is on is `Subject.readings`, which is
+a property of the *pick* rather than a second kind of thing to pick — the same
+argument `SubjectMode` is on the subject rather than beside it.
+
+**A list rather than a mode, because these compose and the modes do not.** A
+player is `owned` or `taken` or `available` and never two at once; the four week
+readings are four questions about one player that a reader picks any of, and the
+tray's keys multi-select for exactly that.
+
+**Unioned, and it is the only operator with anything to say.** The handoff flags
+this as its one open decision and asks it be confirmed; the data settles it. A
+player sits on one roster per league, so *every* intersection of two of the four
+is empty by construction — he is never started and benched in one league, and
+never on his own manager's roster and his opponent's. An intersecting selection
+would empty the grid whatever was picked, which is not a narrowing anybody could
+learn from. Union is what shipped, and `league-subjects.test.ts` pins it.
+
+**Empty is the resting reading rather than "nothing matches"**, which is what
+keeps pressing a row meaning what it always meant: the leagues that fielded him
+at all, either side. So the deck chip's ✕ clears a row's *readings* and leaves
+the row picked, where the row's own press is what clears the row.
+
+**`holds` unions per population and keeps the three states per reading.** A
+reading whose own map has not arrived is skipped rather than counted against the
+row — the rule that function already keeps one grain out, applied one grain in —
+and a row whose every reading is unanswerable is unanswerable itself rather than
+failed closed, which would empty the grid while a payload is in flight.
+
+**`weekSubjectRolls` is where the five maps are folded**, and it replaced the
+same walk written by hand in both pages. Two spellings of a population is a page
+whose grid narrows differently from the page beside it, which is the failure
+nobody could see: both render. `weekTwoSidedShares` is the fold, one walk, and
+the one-sided `weekPlayerShares` is **deleted** rather than kept — every rule it
+carried is restated on the merged type, and a fold with no caller is the dead
+weight this file's own history is written about.
+
+**`decisionsFor` walks both sides into one map**, which the data makes safe: the
+leagues the two walks find him in are disjoint, so a counterpart's rows cannot be
+counted twice. The two sides are two different people's calls — his manager's on
+one, the opponent's on the other — and grouping them by counterpart is still one
+sentence: every lineup decision this player was part of, in the leagues on
+screen.
+
+**The cap is per kind, not raised.** `MAX_SHARES_COLUMNS`' own note says the
+number is a fact about the *row's width* — a cell is 3.25–4.75rem and these
+drawers are 34rem — and this panel is 40rem. Raising the global to four would let
+a manager drawer offer a fourth cell it measurably cannot hold, a regression on a
+panel this change does not touch, made silently. `maxSharesColumns(kind)` is four
+for `week` and three for everything else.
+
+**The Sort track's groove is read as a run**, the tools tray's own rule one
+control over: `sharesColumnBreak` compares each column's group with the one
+before it, so a track offering the four readings gets the side boundary without
+being told where it is and one offering three season metrics gets none.
+
+**`WEEK_READING_COLUMN` is the tie between two vocabularies.** `WeekReading`
+spells itself in `league-subjects.ts`, the module with no imports, so the
+narrowing resolves under Node's runner; the columns live in a `"use client"`
+wrapper over the device store. The `Record` is what makes a rename break a
+compile rather than light the wrong cell, and being an identity map is the point
+rather than an accident to optimise away.
+
+**The finish is four token overrides and not one element of markup.** `milled`
+puts `CONSOLE_METAL` plus `[--key-shadow:var(--key-metal-shadow)]` on the panel,
+so every surface inside picks up the brushed stock through the cascade —
+`--key-metal-shadow` being the new token, a key chamfered on **four** edges
+rather than two, because a key milled out of a metal sheet has sides where one
+pressed into a moulded panel does not. Its light half inverts rather than
+dimming, on `--plate-metal-shadow`'s terms.
+
+**Three findings came out of the render and each is the same class of fault.**
+
+- **`CONSOLE_WINDOW` had to split.** A cell that lights when its reading is
+  picked cannot get there by appending `border-active/55` to a string that
+  already says `border-black/85` — both are base border-colour utilities of the
+  same specificity, so Tailwind's emit order decides, and it decided for the
+  black. Driven, all four cells stayed black with the chip and the pip correctly
+  lit. `CONSOLE_WINDOW_SHELL` carries the shape and `CONSOLE_WINDOW` is that plus
+  its resting border, which is `CONSOLE_KEY_PILL`'s own split one property over.
+- **The Sort track ran 96px past the panel at 390.** Its keys are the columns on
+  screen plus `Name`, so four columns are five keys — 486px of them inside a
+  354px panel that clips, with the last two unreachable and nothing on screen
+  saying so. That control was already 4px past with three columns, recorded here
+  as a designer's call; at five keys it is a defect this change introduced, so
+  the track wraps, which is the arrangement the Columns strip beside it already
+  has.
+- **`CONSOLE_CHANNEL` is the wrong recess on pale stock.** Its own note says it
+  is a black alpha and safe because its callers sit on dark stock in both
+  themes; a channel milled into `--key-metal` is not one of those, and 52% black
+  on a near-white face is a hole punched through the part with four pale keys
+  floating in it. `CONSOLE_CHANNEL_METAL` is the same channel on
+  `--rack-channel-bg`'s pair, which inverts — the finding `--rack-channel-bg`
+  already records one part larger. The rack was that pair's only reader and
+  spelled it inline; it takes the constant now, so there is one spelling.
+
+**Two more the render forced, both about a longer readout.** The population
+string gains a second denominator (`Across all 79 leagues · 74 with an opponent ·
+week 3`) because two of the four columns are scaled by it and it is legitimately
+lower — a future week, an unpaired week, an unstored opponent roster. Inline at
+628px it took the title row's whole slack and pushed `Esc` onto a line of its
+own, so a wide panel keeps the readout on its own line at every width, which is
+what the handoff's artboard draws. And at 390 it is ~47px past its window, so
+there it **wraps** rather than truncating — truncated, the clause that goes is
+`week 3`, and the one thing on screen saying which week these shares are of says
+nothing. The deck chip splits for the same reason: the name truncates and
+`· bench+opp start · 2` does not, because the readings and the count are the
+whole of what the chip adds and the name is already on the row it came from.
+
+**The row is one line and the note rides it.** `noteInline` puts the NFL team on
+the name's own line with a 7px accent pip after it where a reading is picked, and
+an `sr-only` sentence naming the lit columns — derived from the same string the
+cells light from, so the two cannot say different things. The manager panels keep
+their second line, where the note is a position *and* a team and the row is not
+competing with four cells.
+
+**`litCells` is a delimited string rather than a set**, and that is the memo
+rather than a taste: every row is `memo`'d on its props, and a fresh `Set` per
+row per render would re-render several hundred rows to light one cell. It is a
+callback rather than a field on the row for `selectedStrip`'s reason — it moves
+with the *selection*, so folding it into the rows would rebuild every row on
+every press.
+
+#### Verified
+
+Rendered through a temporary `/preview` route against the real `WeekSharesDrawer`,
+`SharesDrawer`, the real `weekSubjectRolls`/`matchesSubjects` chain, the real
+tokens and the real Tailwind build — the method the console-card, shares, rack
+and timeline passes established, since no database is reachable from where this
+was built — then driven over CDP at 1280 and 390 in both schemes and deleted. The
+mechanics are the ones this file records: `--no-proxy-server`, `localhost` rather
+than `127.0.0.1`, a phone viewport from `Emulation.setDeviceMetricsOverride` with
+`mobile: true`, `data-theme` **and** `localStorage` rather than
+`prefers-color-scheme`, `--disable-features=OverlayScrollbar`, the
+`--blink-settings=availablePointerTypes=4,…` flags, a **client-component**
+harness, a CDP client over Node's own `WebSocket` since Playwright is not
+installed here, and a fresh `--remote-debugging-port` per run. One is this pass's
+own: the browser is at `/opt/pw-browsers/chromium-1194/chrome-linux/chrome`, not
+on `PATH`. The fixtures are four leagues — three with an opponent and one
+without, so the two denominators differ — over nine players, one of whom is on
+the manager's bench in one league and on an opponent's lineup in another.
+
+Every arm landed. The panel is **628px** at 1280 and 354 at 390 — the handoff's
+own figure for the first — carrying **four 76px cells** on every row, headers
+reading `Started ▼ · Bench · Opp start · Opp bench`, and one groove in the Sort
+track, before `Opp start`. The population reads `Across all 4 leagues · 3 with an
+opponent · week 3` **unclipped at both widths**, one line at 1280 and two at 390.
+
+The arithmetic is the claim. The cross-side row read `0/4 · 1/4 25% · 1/3 33% ·
+1/3 33%` — the two opposing figures scaled by their own lower denominator — and
+its tray read `Start · 0 · Bench · 1 · Start · 1 · Bench · 1`, filled dots for
+the reader's pair and hollow for the opponent's, one line at 1280 and inside the
+panel at both. Narrowing it drove the grid end to end: `bench` alone left `L4`,
+`+ opp-start` left **`L1, L4`** — the union across the two sides — `opp-start`
+alone left `L1`, and the resting reading left `L1, L2, L4`, which is every league
+that fielded him either side. Pressing a lit key cleared it; the chip's ✕ left
+the row picked on its resting reading.
+
+The lit cells are the first and third at `border-active/55` with the other two at
+`border-black/85`, and the accent **inverts** (oklab lightness 0.897 in dark
+against 0.482 in light) from the token alone. The row grew its pip and
+`Narrowed on Started, Opp start`. A fresh press on an unpicked row opened the
+decisions view reading `Started in 2 of 4 leagues · benched in 1`, `Back`
+returned to the list with the narrowing standing and the row still
+`aria-pressed`, and sorting by `Opp start` reordered the list. The disclosure key
+is **24×28 at 1280 and 44×44 at 390**.
+
+In the rack: exactly **one** Browse key, legend `Both sides`, with its glyph — a
+131×37 legend pill at 1280 and a 32×32 accent cap at 390, in a channel computing
+`rgba(0,0,0,0.52)` in dark and `rgba(15,23,42,0.1)` in light. The rack's own row
+is 62px at 1280 and 50 at 390, this file's recorded figures, so the constant it
+took is a no-op on it.
+
+At every width and in both schemes: `document.documentElement.scrollWidth` inside
+the viewport, **zero** elements painted past it, exactly one `<h1>`, `:modal`
+true, and **no console output of any kind**. 2,260 unit tests pass (36 more — the
+readings' union and its three states, the canonical order, the key, the two
+editors, the two-sided fold, the two denominators, the five roll maps, the
+per-kind cap, the groove runs and the two-sided decisions walk); `lint`,
+`typecheck` and `build` are clean.
+
+**Not verified against real data**, which is the gap to close first: every number
+above is a fixture and no database was reachable from here. Four things a render
+cannot check — what the merged fold costs on a 113-league account, where the row
+list runs to a thousand and it is now one walk over both sides rather than one
+over one; whether a 179px name column is enough for real display names beside
+four cells, since the fixtures are short by construction; whether readers find
+the four readings *inside a disclosure* — nothing on a collapsed row says the
+tray is there but the chevron; and whether the union reads as a union on a real
+grid, which is the one question the handoff asked be confirmed and only a reader
+can answer.
 
 ### The card became a matchup
 

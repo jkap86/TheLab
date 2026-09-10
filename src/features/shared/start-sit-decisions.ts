@@ -23,7 +23,7 @@ import {
  * false statement. So a pairing the league's own lineup cannot express is not
  * listed at all, and a pairing that needs a chained seat says which one.
  *
- * **Two tools read it**, over the same normalised side `weekPlayerShares` folds
+ * **Two tools read it**, over the same normalised side `weekTwoSidedShares` folds
  * — the lineup checker, where the figure the calls are judged on is a
  * projection, and gametime, where it is the live projection. What a decision
  * *cost* is therefore whatever the page adapted onto
@@ -89,7 +89,7 @@ export type DecisionGroup = {
   team: string | null;
   /**
    * His figure where every league in {@link rows} agrees, else null — the rule
-   * `WeekPlayerShare.figure` is written by and for the same reason: either
+   * `WeekTwoSidedShare.figure` is written by and for the same reason: either
    * tool's figure is scored by the league's own settings, and this row spans
    * leagues. Narrowing the view to one counterpart is what makes it answerable.
    */
@@ -181,8 +181,13 @@ export function relFor(
  * and make the count a reader is after — how often was this call made — a thing
  * they had to add up themselves.
  *
- * The subject is looked for in each league's lineup first and its bench second,
- * so a league is one or the other and never both; a league he is not on at all
+ * **Both sides of the week's games**, which is what the merged panel asks and
+ * what a player's row spans: he is on his own manager's roster in some of these
+ * leagues and on an opponent's in others, and the calls made about him are
+ * calls either way. See {@link decisionsFor}'s body for why one map is safe.
+ *
+ * The subject is looked for in each side's lineup first and its bench second,
+ * so a side is one or the other and never both; a league he is not on at all
  * contributes nothing. Where he started, the counterparts are the bench players
  * his seat would have taken. Where he sat, they are the starters whose seats
  * would have taken him — legality belongs to the *other* player's seat there,
@@ -208,10 +213,38 @@ export function relFor(
 export function decisionsFor(
   playerId: string,
   entries: readonly WeekLineupEntry[],
-  side: WeekSide,
 ): DecisionGroup[] {
   const groups = new Map<string, DecisionGroup>();
+  // **Both sides, into one map**, which is what the merged panel needs and what
+  // the data makes safe: a player sits on one roster per league, so the leagues
+  // the two walks find him in are disjoint and a counterpart's rows cannot be
+  // counted twice. The two sides are also two different people's calls — his
+  // manager's on one, the opponent's on the other — and grouping them by
+  // counterpart is still one sentence: every lineup decision this player was
+  // part of, in the leagues on screen.
+  for (const side of ["starter", "opponent"] as const) {
+    collect(groups, playerId, entries, side);
+  }
 
+  return [...groups.values()].sort(
+    (a, b) =>
+      b.rows.length - a.rows.length ||
+      // Then the counterparts the lineup got wrong most often: the whole point
+      // of the view is the calls that cost something, and a pairing made twice
+      // and lost twice is worth more of the reader's eye than one made twice
+      // and won twice.
+      lostCount(b) - lostCount(a) ||
+      a.name.localeCompare(b.name),
+  );
+}
+
+/** One side's calls, folded into the map the two share. */
+function collect(
+  groups: Map<string, DecisionGroup>,
+  playerId: string,
+  entries: readonly WeekLineupEntry[],
+  side: WeekSide,
+): void {
   for (const entry of entries) {
     if (!entry.set_by_manager) continue;
     const fielded = sideOf(entry, side);
@@ -263,17 +296,6 @@ export function decisionsFor(
       });
     });
   }
-
-  return [...groups.values()].sort(
-    (a, b) =>
-      b.rows.length - a.rows.length ||
-      // Then the counterparts the lineup got wrong most often: the whole point
-      // of the view is the calls that cost something, and a pairing made twice
-      // and lost twice is worth more of the reader's eye than one made twice
-      // and won twice.
-      lostCount(b) - lostCount(a) ||
-      a.name.localeCompare(b.name),
-  );
 }
 
 /** How the two figures compare, and whether the lineup left points behind. */
@@ -342,7 +364,7 @@ function record(
     if (group.rows.some((r) => r.league_id === league.league_id)) return;
     if (group.figure !== other.figure) {
       // Two leagues that price him differently have no shared answer — see
-      // `figure`, and `WeekPlayerShare.figure` for the argument in full.
+      // `figure`, and `WeekTwoSidedShare.figure` for the argument in full.
       group.figure = null;
     }
   }

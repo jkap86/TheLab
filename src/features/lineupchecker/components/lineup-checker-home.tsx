@@ -22,11 +22,10 @@ import {
   matchesSubjects,
   narrowedEmptyState,
   NO_SUBJECTS,
-  OpponentSharesDrawer,
   PLATE_KEY,
   removeSubject,
   subjectCount,
-  StarterSharesDrawer,
+  WeekSharesDrawer,
   SubjectTokens,
   toggleSubject,
   toggleSummaryReadings,
@@ -42,6 +41,7 @@ import {
   useSummaryReadings,
   useUrlParam,
   WEEK_BROWSE_KEYS,
+  weekSubjectRolls,
   WeekStepper,
   writeQueryParam,
 } from "@/features/shared";
@@ -76,14 +76,6 @@ const NO_ENTRIES: WeekLineupEntry[] = [];
  * drawn by.
  */
 /** Everyone one side of a league fielded, as the narrowing reads them. */
-const fieldedIds = (
-  lineup: readonly LineupCheckSeat[],
-  bench: readonly LineupCheckPlayer[],
-): string[] => [
-  ...lineup.flatMap((seat) => (seat.player ? [seat.player.player_id] : [])),
-  ...bench.map((p) => p.player_id),
-];
-
 const figured = (player: LineupCheckPlayer): WeekSharePlayer => ({
   player_id: player.player_id,
   name: player.name,
@@ -312,33 +304,24 @@ function Checker({
     });
   }, [browsed, leagueFiltered, checked]);
 
-  // The two populations a subject picked on this page is answered from: who was
-  // on each of the manager's rosters this week, and who was on each opponent's.
-  // A league with no opponent is simply absent from the second, which the
-  // predicate reads as "this league does not hold them" — correct, and a
-  // different state from the map not having arrived at all.
-  const rolls = useMemo(() => {
-    const starter: Record<string, string[]> = {};
-    const opponent: Record<string, string[]> = {};
-    if (!browsed) return { starter, opponent };
-    for (const [id, entry] of Object.entries(checked)) {
-      starter[id] = fieldedIds(entry.lineup, entry.bench);
-      if (entry.opponent_lineup && entry.opponent_bench) {
-        opponent[id] = fieldedIds(entry.opponent_lineup, entry.opponent_bench);
-      }
-    }
-    return { starter, opponent };
-  }, [browsed, checked]);
+  // The five populations a subject picked on this page is answered from: who
+  // each side started and who each side sat, plus the resting reading a row
+  // picked with no key pressed means. Folded from the same entries the panel
+  // reads rather than by hand here — a page whose grid narrowed differently
+  // from the page beside it is the drift `weekSubjectRolls` exists to prevent.
+  //
+  // A league with no opponent is simply absent from the two opposing maps,
+  // which the predicate reads as "this league does not hold them" — correct,
+  // and a different state from the map not having arrived at all.
+  const rolls = useMemo(() => weekSubjectRolls(entries), [entries]);
 
   // Null until the check lands, which `matchesSubjects` reads as "nothing here
   // can say" and ignores — the only reading that matches what is on screen,
   // since failing it closed would empty the grid while a read is in flight.
   const subjectRolls = useCallback<SubjectRolls>(
-    (kind) => {
-      if (check === null) return null;
-      if (kind === "starter") return rolls.starter;
-      if (kind === "opponent") return rolls.opponent;
-      return null;
+    (kind, _mode, reading) => {
+      if (check === null || kind !== "week") return null;
+      return rolls[reading ?? "either"];
     },
     [check, rolls],
   );
@@ -719,14 +702,14 @@ function Checker({
         </>
       )}
 
-      {/* Mounted once each kind has been opened, and kept: a closed drawer is
+      {/* Mounted once it has been opened, and kept: a closed drawer is
           `open={false}`, not unmounted, so its search, its scroll and the
-          decisions view a reader was inside survive being shut. Both count over
+          decisions view a reader was inside survive being shut. It counts over
           `entries` — the league-filtered, subject-unnarrowed list — and the
           readout's denominator is `leagues.length`, the account's own total. */}
-      {opened.has("starter") && (
-        <StarterSharesDrawer
-          open={drawer === "starter"}
+      {opened.has("week") && (
+        <WeekSharesDrawer
+          open={drawer === "week"}
           onClose={() => setDrawer(null)}
           entries={entries}
           week={check?.week ?? null}
@@ -738,20 +721,7 @@ function Checker({
           pending={check === null}
           subjects={subjects}
           onToggle={(s) => setSubjects((prev) => toggleSubject(prev, s))}
-        />
-      )}
-      {opened.has("opponent") && (
-        <OpponentSharesDrawer
-          open={drawer === "opponent"}
-          onClose={() => setDrawer(null)}
-          entries={entries}
-          week={check?.week ?? null}
-          leagueTotal={leagues.length}
-          filterSummary={narrowing ? filterSummary(filters) : null}
-          figureLabel="Proj"
-          pending={check === null}
-          subjects={subjects}
-          onToggle={(s) => setSubjects((prev) => toggleSubject(prev, s))}
+          onSubjects={setSubjects}
         />
       )}
     </div>

@@ -2,7 +2,11 @@
 
 import type { ReactNode } from "react";
 
-import { CONSOLE_KEY_PILL_SHELL, type RackControls } from "@/features/shared";
+import {
+  CONSOLE_CHANNEL_METAL,
+  CONSOLE_KEY_PILL_SHELL,
+  type RackControls,
+} from "@/features/shared";
 
 /**
  * The page's own controls, in the rack: the Browse track.
@@ -122,7 +126,7 @@ export function RackControlsKeys({ controls }: { controls: RackControls }) {
     <div
       role="group"
       aria-label="Browse"
-      className="flex shrink-0 items-center gap-[0.3125rem] rounded-full bg-[var(--rack-channel-bg)] p-1 shadow-[var(--rack-channel-shadow)] md:order-4 md:gap-[0.4375rem] md:bg-[image:var(--key-bg)] md:bg-transparent md:p-[0.3125rem] md:shadow-[var(--track-shadow-deep)]"
+      className={`${CONSOLE_CHANNEL_METAL} flex shrink-0 items-center gap-[0.3125rem] p-1 md:order-4 md:gap-[0.4375rem] md:bg-[image:var(--key-bg)] md:bg-transparent md:p-[0.3125rem] md:shadow-[var(--track-shadow-deep)]`}
     >
       {keys.map(({ kind, label, icon }) => (
         <button

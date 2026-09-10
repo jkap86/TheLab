@@ -141,7 +141,6 @@ describe("decisionsFor", () => {
     const groups = decisionsFor(
       "rb1",
       [one("a", ONE_QB, [seat("RB", rb), seat("QB", qb)], [te, wr])],
-      "starter",
     );
 
     // The quarterback is a starter, not a counterpart; the two bench players
@@ -164,7 +163,6 @@ describe("decisionsFor", () => {
     const groups = decisionsFor(
       "rb2",
       [one("a", ONE_QB, [seat("RB", rb), seat("QB", qb)], [bench])],
-      "starter",
     );
 
     // The QB seat cannot hold a running back and this league has no superflex,
@@ -185,7 +183,6 @@ describe("decisionsFor", () => {
     const groups = decisionsFor(
       "qb1",
       [one("a", ONE_QB, [seat("QB", qb)], [wr, te])],
-      "starter",
     );
     assert.deepEqual(groups, []);
 
@@ -193,7 +190,6 @@ describe("decisionsFor", () => {
     const sf = decisionsFor(
       "qb1",
       [one("a", SUPERFLEX, [seat("QB", qb)], [wr, te])],
-      "starter",
     );
     assert.deepEqual(sf.map((g) => g.player_id).sort(), ["te1", "wr1"]);
     assert.deepEqual(sf[0].rows[0].route, { direct: false, via: "SUPER_FLEX" });
@@ -206,7 +202,6 @@ describe("decisionsFor", () => {
         one("a", ONE_QB, [seat("RB", rb)], [te]),
         one("b", ONE_QB, [seat("RB", rb)], [te]),
       ],
-      "starter",
     );
     assert.equal(groups.length, 1);
     assert.equal(groups[0].rows.length, 2);
@@ -222,7 +217,6 @@ describe("decisionsFor", () => {
     const groups = decisionsFor(
       "rb1",
       [one("a", ONE_QB, [seat("RB", rb)], [te, te])],
-      "starter",
     );
     assert.equal(groups[0].rows.length, 1);
     assert.equal(groups[0].starts, 1);
@@ -233,7 +227,6 @@ describe("decisionsFor", () => {
     const groups = decisionsFor(
       "rb1",
       [one("a", ONE_QB, [seat("RB", rb)], [blank])],
-      "starter",
     );
     assert.equal(groups[0].rows[0].delta, null);
     assert.equal(groups[0].rows[0].lost, false);
@@ -244,7 +237,6 @@ describe("decisionsFor", () => {
     const groups = decisionsFor(
       "rb2",
       [one("a", ONE_QB, [seat("RB", rb), seat("RB", rb2), seat("TE", te)], [wr])],
-      "starter",
     );
     const row = groups.find((g) => g.player_id === "wr1")!.rows[0];
     assert.equal(row.seat, "RB");
@@ -254,26 +246,25 @@ describe("decisionsFor", () => {
     const teGroups = decisionsFor(
       "wr1",
       [one("a", ONE_QB, [seat("TE", te)], [wr])],
-      "starter",
     );
     assert.equal(teGroups[0].rows[0].seat_index, null);
   });
 
-  test("the opponent side reads the opponent's lineup, and null is not empty", () => {
+  test("the opposing side is walked too, and null is not empty", () => {
     const opp = one("a", ONE_QB, [seat("RB", rb)], [te], {
       opponent: side(
         [seat("RB", player("orb", ["RB"], 11))],
         [player("ote", ["TE"], 7)],
       ),
     });
-    const groups = decisionsFor("orb", [opp], "opponent");
+    const groups = decisionsFor("orb", [opp]);
     assert.deepEqual(groups.map((g) => g.player_id), ["ote"]);
 
     // A week with no opponent contributes nothing rather than an empty lineup.
     const none = one("a", ONE_QB, [seat("RB", rb)], [te], {
       opponent: null,
     });
-    assert.deepEqual(decisionsFor("orb", [none], "opponent"), []);
+    assert.deepEqual(decisionsFor("orb", [none]), []);
   });
 
   test("a lineup the manager did not set contributes no call", () => {
@@ -284,18 +275,18 @@ describe("decisionsFor", () => {
     // only the calls go. See `WeekLineupEntry.set_by_manager`.
     const managed = one("a", ONE_QB, [seat("RB", rb)], [te]);
     assert.deepEqual(
-      decisionsFor("rb1", [managed], "starter").map((g) => g.player_id),
+      decisionsFor("rb1", [managed]).map((g) => g.player_id),
       ["te1"],
     );
 
     const bestBall = one("a", ONE_QB, [seat("RB", rb)], [te], {
       set_by_manager: false,
     });
-    assert.deepEqual(decisionsFor("rb1", [bestBall], "starter"), []);
+    assert.deepEqual(decisionsFor("rb1", [bestBall]), []);
 
     // And it is per league rather than per call: a managed league beside a
     // best-ball one still answers for itself.
-    const mixed = decisionsFor("rb1", [bestBall, managed], "starter");
+    const mixed = decisionsFor("rb1", [bestBall, managed]);
     assert.deepEqual(mixed.map((g) => g.rows.map((r) => r.league_id)), [["a"]]);
   });
 
@@ -303,7 +294,6 @@ describe("decisionsFor", () => {
     const groups = decisionsFor(
       "nobody",
       [one("a", ONE_QB, [seat("RB", rb)], [te])],
-      "starter",
     );
     assert.deepEqual(groups, []);
   });
@@ -317,10 +307,54 @@ describe("decisionsFor", () => {
         one("a", ONE_QB, [seat("RB", rb)], [cheap]),
         one("b", ONE_QB, [seat("RB", rb)], [dear]),
       ],
-      "starter",
     );
     assert.equal(groups[0].figure, null);
     // The per-league deltas are unaffected: each is computed inside one lineup.
     assert.deepEqual(groups[0].rows.map((r) => r.delta), [6, 4]);
+  });
+});
+
+describe("decisionsFor across both sides", () => {
+  const rb = player("rb1", ["RB"], 14);
+  const te = player("te1", ["TE"], 6);
+
+  test("one map, and a player on both sides contributes from each", () => {
+    // The leagues the two walks find him in are disjoint — a player sits on one
+    // roster per league — so a counterpart's rows cannot be counted twice.
+    const mine = one("a", ONE_QB, [seat("RB", rb)], [te]);
+    const theirs = one("b", ONE_QB, [seat("RB", player("orb", ["RB"], 9))], [], {
+      opponent: side([seat("RB", rb)], [player("ote", ["TE"], 4)]),
+    });
+
+    const groups = decisionsFor("rb1", [mine, theirs]);
+    assert.deepEqual(
+      groups.map((g) => g.player_id).sort(),
+      ["ote", "te1"],
+    );
+    for (const group of groups) {
+      assert.equal(group.rows.length, 1);
+    }
+    assert.deepEqual(
+      groups.flatMap((g) => g.rows.map((r) => r.league_id)).sort(),
+      ["a", "b"],
+    );
+  });
+
+  test("a counterpart met on both sides is one group, not two", () => {
+    // Grouped by the other player, which is the question the view answers —
+    // one counterpart is one decision, made in however many lineups.
+    const shared = player("shared", ["TE"], 5);
+    const mine = one("a", ONE_QB, [seat("RB", rb)], [shared]);
+    const theirs = one("b", ONE_QB, [seat("RB", player("x", ["RB"], 3))], [], {
+      opponent: side([seat("RB", rb)], [shared]),
+    });
+
+    const groups = decisionsFor("rb1", [mine, theirs]);
+    assert.deepEqual(
+      groups.map((g) => g.player_id),
+      ["shared"],
+    );
+    assert.equal(groups[0].rows.length, 2);
+    assert.equal(groups[0].starts, 2);
   });
 });

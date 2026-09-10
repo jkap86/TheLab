@@ -17,11 +17,10 @@ import {
   matchesSubjects,
   narrowedEmptyState,
   NO_SUBJECTS,
-  OpponentSharesDrawer,
   PLATE_KEY,
   removeSubject,
   subjectCount,
-  StarterSharesDrawer,
+  WeekSharesDrawer,
   SubjectTokens,
   toggleSubject,
   type LeagueSubjects,
@@ -35,6 +34,7 @@ import {
   usePublishRackControls,
   useUrlParam,
   WEEK_BROWSE_KEYS,
+  weekSubjectRolls,
   WeekGauge,
   WeekStepper,
   writeQueryParam,
@@ -96,12 +96,6 @@ const asSide = (side: GametimeSide): WeekShareSide => ({
   })),
   bench: side.bench.map(figured),
 });
-
-/** Everyone one side fielded, as the narrowing reads them. */
-const fieldedIds = (side: GametimeSide): string[] => [
-  ...side.lineup.flatMap((seat) => (seat.player ? [seat.player.player_id] : [])),
-  ...side.bench.map((p) => p.player_id),
-];
 
 /**
  * Gametime: every league this account plays in, what its lineup has scored,
@@ -257,32 +251,25 @@ function Live({
     [browsed, leagueFiltered, solved],
   );
 
-  // The two populations a subject picked on this page is answered from: who was
-  // on each of the manager's rosters this week, and who was on each opponent's.
-  // A league with no opponent is simply absent from the second, which the
-  // predicate reads as "this league does not hold them" — correct, and a
-  // different state from the map not having arrived at all.
-  const rolls = useMemo(() => {
-    const starter: Record<string, string[]> = {};
-    const opponent: Record<string, string[]> = {};
-    if (!browsed) return { starter, opponent };
-    for (const [id, entry] of Object.entries(solved)) {
-      starter[id] = fieldedIds(entry.mine);
-      if (entry.opponent) opponent[id] = fieldedIds(entry.opponent);
-    }
-    return { starter, opponent };
-  }, [browsed, solved]);
+  // The five populations a subject picked on this page is answered from: who
+  // each side started and who each side sat, plus the resting reading a row
+  // picked with no key pressed means. Folded from the same entries the panel
+  // reads rather than by hand here — a page whose grid narrowed differently
+  // from the page beside it is the drift `weekSubjectRolls` exists to prevent.
+  //
+  // A league with no opponent is simply absent from the two opposing maps,
+  // which the predicate reads as "this league does not hold them" — correct,
+  // and a different state from the map not having arrived at all.
+  const rolls = useMemo(() => weekSubjectRolls(entries), [entries]);
 
   // Null until the first frame lands, which `matchesSubjects` reads as "nothing
   // here can say" and ignores — the only reading that matches what is on
   // screen, since failing it closed would empty the grid while a read is in
   // flight.
   const subjectRolls = useCallback<SubjectRolls>(
-    (kind) => {
-      if (payload === null) return null;
-      if (kind === "starter") return rolls.starter;
-      if (kind === "opponent") return rolls.opponent;
-      return null;
+    (kind, _mode, reading) => {
+      if (payload === null || kind !== "week") return null;
+      return rolls[reading ?? "either"];
     },
     [payload, rolls],
   );
@@ -584,9 +571,9 @@ function Live({
 
           `pending` is the hook's own answer rather than `payload === null`,
           which is also true after a stream that will never answer. */}
-      {opened.has("starter") && (
-        <StarterSharesDrawer
-          open={drawer === "starter"}
+      {opened.has("week") && (
+        <WeekSharesDrawer
+          open={drawer === "week"}
           onClose={() => setDrawer(null)}
           entries={entries}
           week={payload?.week ?? null}
@@ -598,20 +585,7 @@ function Live({
           pending={pending}
           subjects={subjects}
           onToggle={(s) => setSubjects((prev) => toggleSubject(prev, s))}
-        />
-      )}
-      {opened.has("opponent") && (
-        <OpponentSharesDrawer
-          open={drawer === "opponent"}
-          onClose={() => setDrawer(null)}
-          entries={entries}
-          week={payload?.week ?? null}
-          leagueTotal={leagues.length}
-          filterSummary={narrowing ? filterSummary(filters) : null}
-          figureLabel="Live"
-          pending={pending}
-          subjects={subjects}
-          onToggle={(s) => setSubjects((prev) => toggleSubject(prev, s))}
+          onSubjects={setSubjects}
         />
       )}
 

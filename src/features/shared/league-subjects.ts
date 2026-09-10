@@ -28,8 +28,17 @@
  * until it has been given a population either. The two halves cannot drift.
  *
  * `player` and `leaguemate` are a season's — who the manager rosters, and who
- * they play against — where `starter` and `opponent` are one *week's*: the
- * players on their own lineups, and the players on the lineups facing them.
+ * they play against — where `week` is one *week's*: every player either side of
+ * the week's games fielded.
+ *
+ * **`week` used to be two kinds**, `starter` and `opponent`, one per panel: the
+ * players on the manager's own lineups and the players on the lineups facing
+ * them. The two panels are one panel now, listing every player once with four
+ * readings beside him, so two kinds would be two slots for one row — a reader
+ * could pick the same player twice and the tray above the grid would name him
+ * twice for one narrowing. Which of the four readings a row is narrowed on is
+ * {@link Subject.readings}, which is a property of the pick rather than a
+ * second kind of thing to pick.
  *
  * `leaguemate-player` is the one that is **not a panel**: it is picked from a
  * chip inside the leaguemate panel's own expanded row, so there is no drawer of
@@ -42,8 +51,32 @@ export type SubjectKind =
   | "player"
   | "leaguemate"
   | "leaguemate-player"
-  | "starter"
-  | "opponent";
+  | "week";
+
+/**
+ * One of the four readings a week row can be narrowed on: which side fielded
+ * him, and whether that side started him or sat him.
+ *
+ * **They are spelled as the four column ids the panel draws**, which is not a
+ * coincidence to be tidied away: the tray's four keys *are* the row's four
+ * cells, and a reading that named itself differently from the column it lights
+ * would be two vocabularies for one fact. `WEEK_READING_COLUMN` in
+ * `shares-columns.ts` is the `Record` that ties them, so a rename breaks a
+ * compile rather than a cell.
+ *
+ * It lives here rather than beside those columns because this is the module
+ * with no imports — the narrowing has to resolve under Node's test runner, and
+ * `shares-columns.ts` is a `"use client"` wrapper over the device store.
+ */
+export type WeekReading = "start" | "bench" | "opp-start" | "opp-bench";
+
+/** The four, in the order the panel offers them: mine, then theirs. */
+export const WEEK_READINGS: readonly WeekReading[] = [
+  "start",
+  "bench",
+  "opp-start",
+  "opp-bench",
+];
 
 /**
  * Which leagues a *player* pick narrows to, of the three a stored roster set
@@ -69,6 +102,27 @@ export type Subject = {
   id: string;
   /** Absent is {@link SubjectMode}'s `owned`, and is what every other kind is. */
   mode?: SubjectMode;
+  /**
+   * Which of a week row's four readings this pick narrows on — **unioned**, and
+   * absent or empty meaning the kind's own resting reading.
+   *
+   * **A list rather than a mode, because these compose and the modes do not.**
+   * A player is `owned` or `taken` or `available` and never two at once; a week
+   * row's readings are four questions about the same player that a reader picks
+   * any of, and the panel's four keys multi-select for exactly that.
+   *
+   * **Unioned, and that is the only operator with anything to say.** A player
+   * sits on one roster per league, so every intersection of two of the four is
+   * empty by construction: he is never started *and* benched in one league, and
+   * never on his manager's roster *and* the opponent's. An intersecting
+   * selection would therefore empty the grid whatever was picked, which is not
+   * a narrowing a reader could learn from. See {@link holds}.
+   *
+   * Empty is the resting reading rather than "nothing matches", which is what
+   * makes pressing a row before touching the tray mean what it always meant:
+   * the leagues that fielded him at all, either side.
+   */
+  readings?: readonly WeekReading[];
 };
 
 /**
@@ -86,10 +140,17 @@ export type Subject = {
  * *other* roster in the league, and `available` is every roster in it — which
  * {@link matchesSubjects} then reads inverted, since a player nobody names is
  * the one who is free.
+ *
+ * **The reading is a third argument for the same reason**, and it is the week
+ * kind's alone: the four are four populations — who each side started, who each
+ * side sat — and `undefined` asks for the resting one, everybody either side
+ * fielded. A page that answers for no week drawer ignores it, which costs it
+ * nothing, because a resolver may take fewer arguments than it is handed.
  */
 export type SubjectRolls = (
   kind: SubjectKind,
   mode: SubjectMode | undefined,
+  reading: WeekReading | undefined,
 ) => Record<string, readonly string[]> | null;
 
 /**
@@ -134,9 +195,77 @@ export function subjectKey(subject: Subject): string {
   const slot = subjectSlot(subject);
   // Absent and `owned` are one narrowing, so they must be one key — otherwise
   // a mode press that lands back on the resting mode would look like a change.
-  return subject.mode && subject.mode !== "owned"
-    ? `${slot}:${subject.mode}`
-    : slot;
+  const moded =
+    subject.mode && subject.mode !== "owned" ? `${slot}:${subject.mode}` : slot;
+  // The readings are in it on the mode's own argument, one kind over: a row on
+  // `start` narrows to different leagues from the same row on `start+opp-start`
+  // and the chip above the grid says different words. **Canonically ordered**,
+  // so the same two readings picked in the other order are one key rather than
+  // two — a reader who pressed Bench then Start would otherwise get a chip that
+  // looked like a second narrowing of the row they already had.
+  const readings = canonicalReadings(subject.readings);
+  return readings.length > 0 ? `${moded}#${readings.join("+")}` : moded;
+}
+
+/**
+ * The picked readings, deduped and in {@link WEEK_READINGS}' own order.
+ *
+ * The order is the vocabulary's rather than the presses', which is what lets
+ * {@link subjectKey} compare two selections and what keeps a chip's legend
+ * reading `start+opp-start` however the reader arrived at it.
+ */
+export function canonicalReadings(
+  readings: readonly WeekReading[] | undefined,
+): readonly WeekReading[] {
+  if (!readings || readings.length === 0) return [];
+  const held = new Set(readings);
+  return WEEK_READINGS.filter((reading) => held.has(reading));
+}
+
+/**
+ * Add that reading to the row's pick, or take it off — **in place**, on
+ * {@link setSubjectMode}'s argument: the tray's order is the order things were
+ * picked in, and refining a row is not a re-pick.
+ *
+ * A row that is not picked is left alone; the drawer picks it first, which is
+ * what makes a press on an unpicked row's tray key do the obvious thing.
+ * Clearing the last reading leaves the row picked on its resting reading rather
+ * than clearing the row — the row's own press is where a reader reaches to
+ * clear it, and the deck's chip carries a key for the readings alone.
+ */
+export function toggleSubjectReading(
+  state: LeagueSubjects,
+  kind: SubjectKind,
+  id: string,
+  reading: WeekReading,
+): LeagueSubjects {
+  const slot = subjectSlot({ kind, id });
+  return {
+    ...state,
+    subjects: state.subjects.map((s) => {
+      if (subjectSlot(s) !== slot) return s;
+      const held = canonicalReadings(s.readings);
+      const next = held.includes(reading)
+        ? held.filter((r) => r !== reading)
+        : canonicalReadings([...held, reading]);
+      return { ...s, readings: next };
+    }),
+  };
+}
+
+/** Drop that row's readings, leaving the row picked on its resting reading. */
+export function clearSubjectReadings(
+  state: LeagueSubjects,
+  kind: SubjectKind,
+  id: string,
+): LeagueSubjects {
+  const slot = subjectSlot({ kind, id });
+  return {
+    ...state,
+    subjects: state.subjects.map((s) =>
+      subjectSlot(s) === slot ? { ...s, readings: [] } : s,
+    ),
+  };
 }
 
 export function subjectCount(state: LeagueSubjects): number {
@@ -257,7 +386,36 @@ function holds(
   subject: Subject,
   rolls: SubjectRolls,
 ): boolean | null {
-  const map = rolls(subject.kind, subject.mode);
+  // **The readings are unioned, and one of them answering is enough.** See
+  // {@link Subject.readings} for why union is the only operator here. A reading
+  // whose own map has not arrived is skipped rather than counted against the
+  // row — the same three-state rule this function keeps one grain out, applied
+  // per population instead of per subject — and a row whose every reading is
+  // unanswerable is unanswerable itself.
+  const readings = canonicalReadings(subject.readings);
+  if (readings.length > 0) {
+    let answered = 0;
+    for (const reading of readings) {
+      const held = named(
+        leagueId,
+        subject,
+        rolls(subject.kind, subject.mode, reading),
+      );
+      if (held === null) continue;
+      answered++;
+      if (held) return true;
+    }
+    return answered === 0 ? null : false;
+  }
+  return named(leagueId, subject, rolls(subject.kind, subject.mode, undefined));
+}
+
+/** One population's answer for one league, with {@link holds}' three states. */
+function named(
+  leagueId: string,
+  subject: Subject,
+  map: Record<string, readonly string[]> | null,
+): boolean | null {
   if (!map) return null;
   // `""` and `"0"` are Sleeper's roster padding, and a blank subject id would
   // match them — which under `available` would then match every league on
@@ -274,10 +432,10 @@ function holds(
   // every unsynced league into the answer, which is the mistake
   // `PlayerShares.league_count` is written to avoid one grain up.
   if (!roll) return false;
-  const named = roll.includes(subject.id);
+  const listed = roll.includes(subject.id);
   // The one inversion: under `available` the league that does **not** name him
   // is the match, because the map is who holds him rather than who wants him.
-  return subject.mode === "available" ? !named : named;
+  return subject.mode === "available" ? !listed : listed;
 }
 
 /**
