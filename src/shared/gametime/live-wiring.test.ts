@@ -98,8 +98,23 @@ describe("the room's delivery", () => {
   });
 
   test("what to send is `nextDelivery`'s decision", () => {
-    assert.match(deliver, /nextDelivery\(subscriber\.delivery, headerJson, payload\.leagues, force\)/);
+    assert.match(
+      deliver,
+      /nextDelivery\(\s*subscriber\.delivery,\s*headerJson,\s*payload\.leagues,\s*payload\.players,\s*force,?\s*\)/,
+    );
     assert.match(deliver, /if \(next\.kind === "none"\) return;/);
+  });
+
+  test("the stat board is diffed, never carried on the header", () => {
+    // The header is re-serialised on every tick — `read_at` alone sees to
+    // that — so a field named in it is sent whole to every reader every
+    // twenty seconds. The board is a few hundred rows whose identity half
+    // cannot change all week, and most readers never open it. Named there it
+    // would silently be the largest thing on this wire.
+    const header = body(live, "function headerOf(");
+    assert.doesNotMatch(header, /players:/);
+    assert.match(deliver, /for \(const id of next\.players\.changed\)/);
+    assert.match(deliver, /removed_players: next\.players\.removed,/);
   });
 
   const join = body(live, "export async function joinGametime(");
@@ -128,6 +143,14 @@ describe("the feeds", () => {
   test("the solve reads the pricing clocks and the wire reads the display ones", () => {
     assert.match(payload, /clocks: feeds\.pricingClocks,/);
     assert.match(payload, /board: gameBoard\(feeds\.clocks\),/);
+  });
+
+  test("the stat board is folded off the stat lines, never the projections", () => {
+    // Both feeds fold into the same shape, so handing this the wrong one
+    // typechecks and produces a full, plausible, entirely fictional week:
+    // the projections feed carries a row for every player in the league
+    // whether or not a ball has been snapped.
+    assert.match(payload, /players: statBoardLines\(feeds\.stats\),/);
   });
 });
 

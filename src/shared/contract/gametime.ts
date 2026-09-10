@@ -150,6 +150,61 @@ export type GametimeLeague = {
   unknown_slots: string[];
 };
 
+/**
+ * The four positions the stat board reads.
+ *
+ * The board's whole vocabulary, and narrower than Sleeper's on purpose: it is
+ * a fantasy reading of an NFL week, so a kicker, a team defence and an
+ * individual defender have no column on it — there is nothing in `Passing`,
+ * `Rushing` or `Receiving` for them to fill, and a scoring formula that priced
+ * them would need three more groups and a different board. A player whose
+ * `fantasy_positions` name none of these is simply not on it.
+ */
+export type StatBoardPosition = "QB" | "RB" | "WR" | "TE";
+
+/**
+ * One player's week, as the stat board reads it: who he is and what he did.
+ *
+ * **Every figure is a count, and a zero is a real zero.** This is the one
+ * place on this wire where zero and absent are the same reading, and the
+ * board prints an em dash for it — a player who caught nothing caught nothing,
+ * and there is no third state for the columns to be missing rather than empty.
+ * That is what lets the nine numbers always ship rather than being omitted
+ * when they are nought.
+ *
+ * **His game is not on the row**, on {@link GametimePlayer.live}'s own rule
+ * one grain over: the opponent, the clock and the phase are the payload's
+ * `board`, keyed by his `team`. Two hundred rows each carrying a copy of one
+ * of thirty-two games is most of a frame's bytes, repeated once per player on
+ * the same team.
+ *
+ * **And no fantasy points ride it either.** The board prices its own rows on
+ * one stated basis (`ppr` / `half` / `std`), because it is account-wide and
+ * spans leagues on different scorings — a per-league number would be a claim
+ * no single league could support, and a number computed here would have to
+ * pick one of them to be. See `features/gametime/helpers/stat-board`.
+ */
+export type GametimeStatLine = {
+  player_id: string;
+  name: string | null;
+  position: StatBoardPosition;
+  /**
+   * His NFL team, which is also the key his game is under on `board`. Null is
+   * "the feed did not say" and never a guess — such a row still prints its
+   * figures, with its opponent and its clock left as dashes.
+   */
+  team: string | null;
+  pass_yd: number;
+  pass_td: number;
+  pass_int: number;
+  rush_yd: number;
+  rush_td: number;
+  rec: number;
+  rec_yd: number;
+  rec_td: number;
+  fumbles_lost: number;
+};
+
 /** Whether a feed behind the numbers could be read at all. */
 export type GametimeFeedStatus = "ok" | "error";
 
@@ -200,6 +255,18 @@ export type ManagerGametimePayload = {
    * computed from. See the statuses above.
    */
   board: Record<string, GametimeGame>;
+  /**
+   * Every skill player with a scoring line this week, keyed by player id —
+   * the stat board's whole population, and **the account's own leagues have
+   * nothing to do with it**.
+   *
+   * It is one read of the week for everybody watching it rather than a fact
+   * about any roster, which is why it rides here beside `board` rather than
+   * inside `leagues`: a hundred league entries would each carry a copy of it.
+   * Empty where the stats feed could not be read — see `stats` above, and
+   * `statBoardLines` for which rows a published feed produces.
+   */
+  players: Record<string, GametimeStatLine>;
   /** Keyed by league id; absent where nothing could be solved — no slots on file. */
   leagues: Record<string, GametimeLeague>;
 };
@@ -231,7 +298,22 @@ export type GametimeStreamMessage =
  * socket drops payloads and deltas alike) is caught up by the full payload the
  * next join sends.
  */
-export type GametimeDelta = Omit<ManagerGametimePayload, "leagues"> & {
+export type GametimeDelta = Omit<ManagerGametimePayload, "leagues" | "players"> & {
   leagues: Record<string, GametimeLeague>;
   removed: string[];
+  /**
+   * The stat lines that moved, and the ids that left it — the same two-part
+   * diff as the leagues above, over the payload's `players`.
+   *
+   * **It is diffed rather than carried whole, and that is what keeps a Sunday
+   * affordable.** The board is a few hundred rows and its identity half —
+   * name, position, team — cannot change for the length of a week; what moves
+   * on a tick is the handful of players who touched the ball since the last
+   * one. Ridden whole on the header it would be by some distance the largest
+   * thing on this wire, pushed every twenty seconds to every reader, most of
+   * whom never open the board at all — which is the cost the delta was
+   * introduced to remove, reintroduced one field over.
+   */
+  players: Record<string, GametimeStatLine>;
+  removed_players: string[];
 };

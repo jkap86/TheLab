@@ -57,6 +57,8 @@ export {
   type GametimeSide,
   type GametimeLeague,
   type GametimeFeedStatus,
+  type StatBoardPosition,
+  type GametimeStatLine,
   type ManagerGametimePayload,
   type GametimeStreamMessage,
   type GametimeDelta,

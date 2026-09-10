@@ -19,6 +19,8 @@ class Reader {
   state: DeliveryState = newDelivery();
   /** What the browser holds, or null before a payload has ever landed. */
   held: Record<string, string> | null = null;
+  /** The same, for the week's stat board — the second diffed collection. */
+  heldPlayers: Record<string, string> | null = null;
 
   /** Offer a frame; `accepted` is the transport's answer. */
   offer(
@@ -26,20 +28,27 @@ class Reader {
     leagues: Record<string, string>,
     accepted: boolean,
     force = false,
+    players: Record<string, string> = {},
   ): "none" | "payload" | "delta" {
-    const next = nextDelivery(this.state, header, leagues, force);
+    const next = nextDelivery(this.state, header, leagues, players, force);
     if (next.kind === "none") return "none";
     if (!accepted) return next.kind;
 
     if (next.kind === "payload") {
       this.held = { ...leagues };
+      this.heldPlayers = { ...players };
     } else {
-      // The client's own fold: the named leagues replace, the removed ones go,
-      // everything else stands.
+      // The client's own fold: the named entries replace, the removed ones go,
+      // everything else stands. Both collections, the same way.
       const held = { ...(this.held ?? {}) };
       for (const id of next.changed) held[id] = leagues[id];
       for (const id of next.removed) delete held[id];
       this.held = held;
+
+      const board = { ...(this.heldPlayers ?? {}) };
+      for (const id of next.players.changed) board[id] = players[id];
+      for (const id of next.players.removed) delete board[id];
+      this.heldPlayers = board;
     }
     this.state = next.commit;
     return next.kind;
@@ -132,7 +141,7 @@ describe("nextDelivery", () => {
     // One league moves and is dropped; nothing else ever moves.
     reader.offer(H2, { a: "2", b: "1", c: "1" }, false);
     const state = reader.state;
-    const next = nextDelivery(state, H2, { a: "2", b: "1", c: "1" });
+    const next = nextDelivery(state, H2, { a: "2", b: "1", c: "1" }, {});
     assert.equal(next.kind, "delta");
     if (next.kind !== "delta") return;
     assert.deepEqual(next.changed, ["a"]);
@@ -145,9 +154,69 @@ describe("nextDelivery", () => {
     const reader = new Reader();
     reader.offer(H1, { a: "1" }, true);
     const before = reader.state;
-    const next = nextDelivery(before, H2, { a: "2" });
+    const next = nextDelivery(before, H2, { a: "2" }, {});
     assert.notEqual(next.kind, "none");
     assert.equal(reader.state, before);
     assert.equal(before.heldHeader, H1);
+  });
+});
+
+/**
+ * The week's stat board, diffed the same way the leagues are.
+ *
+ * It is the *reason* it is diffed that these exist: carried on the header it
+ * would ride every frame whole, and a frame goes out every twenty seconds
+ * while games run. So the rules that matter are that an unmoved board sends
+ * nothing at all, and that a moved one sends only the rows that moved.
+ */
+describe("nextDelivery, over the stat board", () => {
+  const P1 = { p1: "1", p2: "1" };
+
+  test("the first payload carries the whole board", () => {
+    const reader = new Reader();
+    assert.equal(reader.offer(H1, { a: "1" }, true, false, P1), "payload");
+    assert.deepEqual(reader.heldPlayers, P1);
+  });
+
+  test("a board that moved sends only the rows that moved", () => {
+    const reader = new Reader();
+    reader.offer(H1, { a: "1" }, true, false, P1);
+    const next = nextDelivery(reader.state, H1, { a: "1" }, { p1: "1", p2: "2" });
+    assert.equal(next.kind, "delta");
+    if (next.kind !== "delta") return;
+    assert.deepEqual(next.players.changed, ["p2"]);
+    assert.deepEqual(next.changed, []);
+  });
+
+  test("a board that moved on its own is a frame, with no league in it", () => {
+    // The whole point of the second diff: a scoring play moves the board and
+    // not necessarily any league this reader is in.
+    const reader = new Reader();
+    reader.offer(H1, { a: "1" }, true, false, P1);
+    assert.equal(reader.offer(H1, { a: "1" }, true, false, { p1: "1", p2: "2" }), "delta");
+    assert.deepEqual(reader.heldPlayers, { p1: "1", p2: "2" });
+    assert.deepEqual(reader.held, { a: "1" });
+  });
+
+  test("an unmoved board sends nothing", () => {
+    const reader = new Reader();
+    reader.offer(H1, { a: "1" }, true, false, P1);
+    assert.equal(reader.offer(H1, { a: "1" }, true, false, P1), "none");
+  });
+
+  test("a dropped board delta is cumulative, exactly as a league's is", () => {
+    const reader = new Reader();
+    reader.offer(H1, { a: "1" }, true, false, { p1: "1", p2: "1" });
+    reader.offer(H2, { a: "1" }, false, false, { p1: "2", p2: "1" });
+    reader.offer(H3, { a: "1" }, true, false, { p1: "2", p2: "3" });
+    assert.deepEqual(reader.heldPlayers, { p1: "2", p2: "3" });
+  });
+
+  test("a row that left during a dropped frame still leaves", () => {
+    const reader = new Reader();
+    reader.offer(H1, { a: "1" }, true, false, { p1: "1", gone: "1" });
+    reader.offer(H2, { a: "1" }, false, false, { p1: "1" });
+    reader.offer(H3, { a: "1" }, true, false, { p1: "2" });
+    assert.deepEqual(reader.heldPlayers, { p1: "2" });
   });
 });

@@ -18,6 +18,12 @@
  * the whole week after every drop) is the most expensive frame there is on
  * exactly the connection that has just proved it cannot take one.
  *
+ * **Two collections are diffed and they are diffed the same way** — the
+ * account's leagues, and the week's stat board. The second is not a fact about
+ * any roster and is the same for every reader of the week, but it moves for
+ * the same reason and on the same tick, and carrying it whole would make every
+ * frame the size of the board. See {@link Delivery.players}.
+ *
  * The one thing a delta cannot fix is a reader who has never held a payload:
  * there is nothing to fold it over, and the client drops it. So the first
  * frame is a full payload, and it stays the first frame until one is accepted.
@@ -29,6 +35,8 @@ import { diffLeagues } from "./live-rules.ts";
 export type DeliveryState = {
   /** Each accepted league's own serialisation — {@link diffLeagues}' hold. */
   held: Map<string, string>;
+  /** Each accepted stat line's, the same way — see {@link Delivery.players}. */
+  heldPlayers: Map<string, string>;
   /** The accepted payload header, serialised. */
   heldHeader: string;
   /** Whether a full payload has ever been accepted by this reader. */
@@ -36,7 +44,7 @@ export type DeliveryState = {
 };
 
 export function newDelivery(): DeliveryState {
-  return { held: new Map(), heldHeader: "", seeded: false };
+  return { held: new Map(), heldPlayers: new Map(), heldHeader: "", seeded: false };
 }
 
 /**
@@ -54,6 +62,23 @@ export type Delivery =
       kind: "payload" | "delta";
       changed: string[];
       removed: string[];
+      /**
+       * The same pair over the week's stat board.
+       *
+       * **A second diffed collection rather than a field of the header**, and
+       * the reason is what it costs otherwise. The board is a few hundred rows
+       * whose identity half cannot change for the length of a week, where the
+       * header is re-serialised whole on every tick (`read_at` alone sees to
+       * that) — so carried there it would be the largest thing on this wire,
+       * pushed every twenty seconds to every reader of the page whether or not
+       * they have ever opened the board. Diffed, a tick carries the handful of
+       * players who touched the ball since the last frame that landed.
+       *
+       * It is *not* folded into `changed` beside the leagues: a league id and
+       * a player id are two vocabularies, and one list of both would need a
+       * rule to tell them apart on the far side.
+       */
+      players: { changed: string[]; removed: string[] };
       commit: DeliveryState;
     };
 
@@ -66,24 +91,36 @@ export type Delivery =
  * it can recover without a single number moving, and nothing else on this
  * wire would ever take the warning back off the page.
  */
-export function nextDelivery<L>(
+export function nextDelivery<L, P>(
   state: DeliveryState,
   headerJson: string,
   leagues: Readonly<Record<string, L>>,
+  players: Readonly<Record<string, P>>,
   force = false,
 ): Delivery {
   const diff = diffLeagues(state.held, leagues);
+  const stats = diffLeagues(state.heldPlayers, players);
   const moved =
     diff.changed.length > 0 ||
     diff.removed.length > 0 ||
+    stats.changed.length > 0 ||
+    stats.removed.length > 0 ||
     headerJson !== state.heldHeader;
+
+  const commit: DeliveryState = {
+    held: diff.serialised,
+    heldPlayers: stats.serialised,
+    heldHeader: headerJson,
+    seeded: true,
+  };
 
   if (!state.seeded) {
     return {
       kind: "payload",
       changed: Object.keys(leagues),
       removed: [],
-      commit: { held: diff.serialised, heldHeader: headerJson, seeded: true },
+      players: { changed: Object.keys(players), removed: [] },
+      commit,
     };
   }
   if (!moved && !force) return { kind: "none" };
@@ -92,6 +129,7 @@ export function nextDelivery<L>(
     kind: "delta",
     changed: diff.changed,
     removed: diff.removed,
-    commit: { held: diff.serialised, heldHeader: headerJson, seeded: true },
+    players: { changed: stats.changed, removed: stats.removed },
+    commit,
   };
 }

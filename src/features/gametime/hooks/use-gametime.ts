@@ -208,18 +208,20 @@ export function useGametime(
           return;
         }
         if (message.type === "delta") {
-          // Folded over what is held: the header replaces, the moved leagues
-          // replace their own entries, and the rest stand. A delta with
-          // nothing held is dropped rather than presented as a page of a
-          // handful of leagues — the room only ever sends one to a reader
-          // whose full payload it saw accepted, so this is a guard rather
-          // than a case.
-          const { leagues, removed, ...header } = message.delta;
+          // Folded over what is held: the header replaces, and each of the
+          // two diffed collections has its named entries replaced and its
+          // removed ones dropped while the rest stand. A delta with nothing
+          // held is dropped rather than presented as a page of a handful of
+          // leagues — the room only ever sends one to a reader whose full
+          // payload it saw accepted, so this is a guard rather than a case.
+          const { leagues, removed, players, removed_players, ...header } = message.delta;
           setPayload((prev) => {
             if (!prev) return prev;
             const next = { ...prev.leagues, ...leagues };
             for (const id of removed) delete next[id];
-            return { ...prev, ...header, leagues: next };
+            const board = { ...prev.players, ...players };
+            for (const id of removed_players) delete board[id];
+            return { ...prev, ...header, leagues: next, players: board };
           });
           setConnection("live");
           setStale(null);

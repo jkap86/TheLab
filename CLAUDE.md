@@ -14954,3 +14954,248 @@ hundred cards rather than as a stray mark; whether the 300ms width transition
 reads as movement or as lag when a real frame lands every twenty seconds; and
 whether `--fs-21` still reads as the hero on a phone beside a real
 `LeagueConfigWindow`, which is the one thing the type step traded away.
+
+### The week's stat board
+
+`/gametime/[username]` carried two readings and neither was about the NFL. The
+cards say what *your* lineups are doing and the two Browse panels say which of
+your leagues a player is in; nothing said what any given player actually
+**did** this week. The stat board is that reading — every skill player with a
+scoring line, sortable, searchable and narrowed three ways, behind a 52px
+billet bar pinned to the foot of the console. Applied from a design handoff.
+**It needed no migration** and no new feed: `getWeekStats` has been reading
+`stats/nfl/<season>/<week>` since gametime landed, folded by
+`assembleWeekProjections` into the same board shape the projections take, and
+this is the first reader of it that is not a lineup.
+
+**It is a reference table rather than a drawer, and that is what decides where
+it lives.** A shares drawer is a narrowing control whose press moves the league
+grid behind it; nothing here touches the page at all. So it is a bar at the
+foot rather than a third Browse key — a key in the rack's Browse channel would
+promise a narrowing it does not make — and it is feature-local on
+`features/shared`'s own rule: one reader. It moves there the day the lineup
+checker takes it too.
+
+**The whole table is mounted only while the board is up**, which is
+`usePanelCap`'s `mounted` one component over and for its reason: a few hundred
+rows behind a control most readers never press is a document the page pays for
+on every frame the room pushes. Driven, a closed board is the bar and one
+control; open, it is the table.
+
+#### Which rows exist, and the one rule that is a correctness argument
+
+`statBoardLines` is the fold, pure in `shared/gametime` on `live-rules`' terms.
+Three rules decide a row and each is silent when it is wrong: **a published
+line** (`stats === null` is the fold's own "no game this week", and reading its
+absent map as nine zeroes would seat every rostered player in the league on a
+board of dashes); **a position the board has columns for** — QB, RB, WR, TE,
+which is `StatBoardPosition` and is narrower than Sleeper's deliberately, since
+there is nothing in `Passing`, `Rushing` or `Receiving` for a kicker or a team
+defence to fill; and **something to show**.
+
+That third is the one worth stating twice. A skill player who was active and
+never touched the ball has a published line and nine zeroes — nine em dashes
+and a `0.0`, a row no column can say anything about. Two things go wrong if he
+is kept and the second is not a matter of taste: the bar's `Players` count
+stops being a count of the week and becomes a count of the league's active
+rosters; and **the ramp behind every figure is `sharePercentile`, which is
+anchored on the mean** — so a few hundred zeroes drag that mean toward the
+floor and paint every ordinary afternoon as a career day. What the rule is
+*not* is "he scored points": a lost fumble and nothing else is a real, and
+negative, week, and it keeps its row.
+
+**The row carries no game and no points.** The opponent, the clock and the
+phase are the payload's `board` keyed by his `team` — `GametimePlayer.live`'s
+own rule, since two hundred rows each carrying a copy of one of thirty-two
+games is most of a frame. And no fantasy figure rides the wire because **the
+board prices itself**: it is account-wide and spans leagues on different
+scorings, so a per-league number would be a claim no single league could
+support. It states its basis on the bar (`PPR`, `Half PPR`, `Standard`) for the
+reason `figured()` labels the shares panels `Live` — a reader is never left
+inferring which of three scales they are on.
+
+#### It is a second diffed collection, not a field of the header
+
+`ManagerGametimePayload.players` rides beside `board` rather than inside
+`leagues`, because it is one read of the week for everybody watching it rather
+than a fact about any roster — a hundred league entries would each carry a copy.
+
+**What it is emphatically not is part of the delta's header.** `headerOf` is
+re-serialised on every tick — `read_at` alone sees to that — so anything named
+there is sent whole to every reader on every frame, and the board is a few
+hundred rows whose identity half cannot change for the length of a week. Ridden
+there it would be by some distance the largest thing on this wire, pushed every
+twenty seconds to readers most of whom never open it: the cost the delta was
+introduced to remove, reintroduced one field over. So `nextDelivery` diffs two
+collections rather than one, `DeliveryState` holds a second `Map`, and
+`GametimeDelta` carries `players` and `removed_players` beside `leagues` and
+`removed`. A Sunday tick then carries the handful of players who touched the
+ball since the last frame that *landed* — every rule `live-delivery` already
+states about acceptance and cumulative deltas applies unchanged to both.
+
+They are two lists rather than one: a league id and a player id are two
+vocabularies, and one list of both would need a rule to tell them apart on the
+far side. `live-wiring.test.ts` pins that `headerOf` names no `players`, that
+the delta assembles from `next.players`, and that the fold reads
+`feeds.stats` — handing it the projections board typechecks and produces a
+full, plausible, entirely fictional week.
+
+#### The view's arithmetic is pure, and the order is filter → sort → rank
+
+`features/gametime/helpers/stat-board.ts`, under Node's own runner for
+`seat-compare`'s reason. **The rank is the row's place in the current view**,
+so it renumbers from 1 on every narrowing — a stored place would have a board
+narrowed to tight ends open at rank 41. Two sort rules are pinned because
+neither is visible when wrong: **an absent value sorts last in either
+direction** (a player with no clock is not the earliest kickoff of the week,
+and flipping the arrow must not make him one), and **ties break on the name**,
+because a points column has a great many of them and stable-sort order over a
+record is the order the ids happened to arrive in — a board that reshuffled its
+equal rows between frames with nothing on screen having changed.
+
+**One column table, and the grid template is generated from it.** A second list
+of track widths is a column landing in the wrong track the first time somebody
+inserts one, with every cell after it a place out and nothing failing. The
+group header's spans are read off the `group` runs for the same reason — the
+tool tray's "a run rather than a key" reading one component over — **with one
+extra cut, after the first column, and it is a correctness rule**: that column
+is pinned, and a sticky cell keeps its own width, so one that also covered the
+four beside it would slide across `Passing` and `Rushing` as the table scrolled.
+
+**The ramp is anchored on the unfiltered population.** `sharePercentile` rather
+than a rank, which is that function's own argument — ranking spends full red
+and full green on every view however tight the week was — and over the whole
+board rather than the narrowed one, or a player's colour would move because the
+reader picked his position.
+
+#### Five things a render changed
+
+- **`--rack-channel-bg`, not `CONSOLE_CHANNEL`, for the cap rail.** The handoff
+  names the latter and it is the trap that constant's own doc records: its
+  floor is a black alpha, right for a channel cut into *dark* stock. This one
+  is cut into the board's case, which is near-white in light — so 52% black
+  there is a hole punched through the part, with `--billet-label`'s dark ink on
+  it at **1.6–1.9:1**. Measured after the swap: **5.3–6.3:1**, and dark is
+  unchanged at 9.7:1, both tokens being the same value there. It is the finding
+  the rack's own phone caps already recorded, and this is its second reader.
+- **The header's `overflow-hidden` had to go.** It is what the prototype spells
+  and it costs the header its own pinned columns: an `overflow` other than
+  `visible` makes an element a scroll container, so a sticky descendant sticks
+  to *it* — and the ledge is exactly as wide as the grid, so sticking to it does
+  nothing. Measured at 1024, where the table overflows, the rows' pinned cells
+  held the edge and the heads above them slid away. The radius moved onto the
+  four corner cells, which is what the clip was doing the rest of its work for.
+- **The Player column is `minmax(14rem,1fr)`.** Fifteen fixed tracks sum to
+  68.5rem and leave whatever the case is wider than that as dead space at the
+  *end* of the row — where the pinned Pts cell sat 30px short of the row's own
+  right edge with its rounded corner and its cast stranded in mid-row. The
+  slack goes to the name, which is the column that can use it.
+- **The phone ledge is three rows, where the design's artboard draws two.** Its
+  phone arm omits the Team menu and the Reset key altogether; dropped, a phone
+  reader cannot narrow by team at all and cannot clear three narrowings in one
+  press. They do not fit on either row above — measured at 390, the caps and
+  the count leave ~56px and the Team menu alone wants ~85 — so they take a
+  third, which is ~36px of a board that has ~590 for its table.
+- **The `Search player` label is `sr-only` rather than a placeholder alone**,
+  and the wide arm carries real table semantics (`role="table"` / `"row"` /
+  `"columnheader"` / `"cell"`). A CSS grid has none of its own, so without them
+  a screen reader is read four hundred rows of unlabelled numbers — and
+  `aria-sort` has nowhere to live, since it is a column header's property and a
+  `<button>` that took the role would stop being announced as one. The phone
+  arm is a `<ul>` instead: its row is two lines of readings rather than cells
+  under headers, and there is no header for a column to be under.
+
+**The two arms are two components gated by the cascade**, not one with
+`lg:contents`, because what differs is the *content* rather than its layout —
+nine columns become one stat line and two cells become one. Both are pure
+display and both gates are `display: none`, which takes one out of the
+accessibility tree, so exactly one is ever read: `WeekStepper`'s own precedent
+and its two conditions, checked at both widths.
+
+**`open` persists and nothing else does** (`thelab:stat-board`, on
+`summary-readings.ts`'s terms). A reader who works with the board up should not
+raise it every visit; the search, the position, the team and the sort are a
+lookup rather than a place and come back at rest. It is deliberately not in the
+URL, where `useActiveCard` puts a *card*: a Back press that closed a reference
+table rather than leaving the page is the thing that machinery takes on for
+places.
+
+**It takes `card.chromeClass`, which the handoff says it needs.** That note is
+about layout and is right — the board is `fixed` and takes no part in the
+parked-card box. What it does not cover is that a parked card is sized to the
+fold less a few pixels of breath, so a 52px bar would cover the drawer bars at
+the bottom of its panes. A parked card is the screen and the page's chrome
+steps back for it; the rack stays, because the rack is the app's chrome rather
+than this page's. The grid's own clearance is a **margin** rather than the
+padding the handoff names, for the matching reason: `useActiveCard` writes the
+list's `height` from a measurement, so padding inside a border-box height comes
+out of the card's room — where the same write zeroes the margin, which is
+exactly right.
+
+#### Verified
+
+Driven over CDP against `next dev` through a temporary `/preview` route
+mounting the **real** `StatBoard` against a fixture week, then deleted — the
+method the console-card, shares, rack and timeline passes established, since no
+database is reachable from where this was built. The mechanics are the ones
+this file records: `--no-proxy-server`, `localhost` rather than `127.0.0.1`, a
+phone viewport from `Emulation.setDeviceMetricsOverride` with `mobile: true`,
+`data-theme` **and** `localStorage` rather than `prefers-color-scheme`,
+`--disable-features=OverlayScrollbar`, the
+`--blink-settings=availablePointerTypes=4,…` flags, a client-component harness,
+and a CDP client over Node's own `WebSocket`. One is this pass's own and cost a
+run: **`localStorage.clear()` has to happen before the app hydrates**, so the
+drive navigates, clears, and navigates again — cleared after load, a previous
+width's stored `open` had already been read and the phone arm was measured
+open when it was meant to be shut. The fixtures are 24 players over 14 games,
+including a team on a bye, a player the feed named no team for, and a
+deliberately over-long name.
+
+Every arm landed at 1280 and 390 in both schemes. Closed: **52px** desktop and
+**48px** phone, with **zero rows, zero tables and one control** in the
+document. Open: **810px** at a 900 viewport and **768px** at 844 — the viewport
+less `--rack-clear`'s own 90 and 76 — with rows at **34px** and **52px**, and
+exactly one arm visible at each (a table at 1280, a list at 390). The pinned
+cells are `sticky` at 1280 and `static` at 390, and at 1024 scrolled fully
+sideways the header's Player and Pts cells sit at **the same coordinates as the
+rows'** (29–253 and 896–980) with `Passing`, `Rushing` and `Receiving` all
+visible. Both new shadow tokens turn over — a mint lip over a black cast in
+dark, a white lip over a slate one in light — and so does the zero ink
+(`rgba(159,255,242,0.45)` / `#537b76`) and the ramp (`oklch(0.84 0.18 150)` /
+`oklch(0.52 0.16 150)`).
+
+The controls were driven with real input: pressing `Player` sorted ascending
+(`A.J. Brown`), pressing it again descending, and pressing `Pts` returned the
+board with exactly one `aria-sort` on the page. `TE` took 24 rows to 4 with
+`Showing 4 / 24` and the rank renumbered from 1; searching `kittle` left one
+row; `zzzz` drew `No player matches that narrowing.`; `Reset` restored 24 / 24,
+cleared the query, returned the sort to `Pts ▼` and went `aria-disabled`. The
+Team menu offered 16 options — ALL plus 15 teams, the null-team row correctly
+offering none — and `BAL` left 3. The phone Sort menu offered its six labels
+and `Rush yds` put Derrick Henry (132) above Bijan Robinson (118).
+
+At every width and in both schemes: `document.documentElement.scrollWidth`
+within the viewport, **zero** elements painted past it, nothing clipped but the
+deliberately long fixture name and the phone's own truncating stat line,
+exactly one `<h1>`, and **no console output of any kind**. Under
+`prefers-reduced-motion: reduce` the board's height transition, the lamp's
+animation and the caret's transition all compute to `none`. 2,287 unit tests
+pass (46 more — the fold's row rules, the scoring, the sort, the narrowing, the
+column table and the two diffed collections); `lint`, `typecheck` and `build`
+are clean.
+
+**Not verified against real data**, which is the gap to close first: every
+number above is a fixture, and Sleeper is unreachable from where this was built
+(the proxy denies that host, as this file already records). Five things a render
+cannot check. **How many rows a real Sunday actually produces** — the estimate
+is 350–450 skill players with a line against the fixture's 24, and that figure
+is what decides whether two arms in the DOM and no virtualizer is comfortable,
+and what a first payload weighs. **What a tick's delta actually costs**, which
+is the whole argument for the second diff and wants measuring against a real
+scoring run. **Whether Sleeper publishes a line for an inactive player**, which
+is what the "something to show" rule is guarding against and which only the
+feed can say. **Whether `team` is populated on the stats feed as reliably as on
+the projections one**, since the opponent and the clock join through it. And
+whether the phone's stat line truncates often enough to matter — a dual-threat
+quarterback's `287 PA/3TD/1INT · 44 RU/1TD` already does at 390, which is the
+design's own accepted trade rather than a defect.

@@ -75,6 +75,7 @@ export async function GET(
         read_at: Date.now(),
         games: { pre: 0, live: 0, final: 0 },
         board: {},
+        players: {},
         leagues: {},
       };
       return NextResponse.json(empty);

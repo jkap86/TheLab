@@ -987,6 +987,42 @@
   --row-well-bg: rgba(0, 0, 0, 0.22);
   --row-well-shadow: inset 0 2px 5px rgba(0, 0, 0, 0.68),
     inset 0 -1px 0 rgba(159, 255, 242, 0.1);
+
+  /*
+   * The stat board's two pinned columns, and the ink a zero prints in.
+   *
+   * **A pinned cell has to carry its own fill and its own edge**, and the fill
+   * is the reason: `--row-well-bg` is a translucent black over the glass, so a
+   * sticky cell without one smears every figure it slides across. The cell
+   * therefore paints `--readout-bg` — the glass itself, opaque — which also
+   * paints over the row's own lit lip, so the lip is restated here. The cast
+   * is what says the column is *over* the scroller rather than beside it, and
+   * it points inward from each edge: rightward off the pinned Player column,
+   * leftward off the pinned Pts one.
+   *
+   * Tokens rather than the prototype's literals for this file's standing
+   * reason: an `rgba()` in a class string cannot invert, and both halves of
+   * this do. In light the lip is a white lower edge (the row well's own,
+   * inverted) and the cast goes slate rather than black — `--rack-cast`'s
+   * rule, since a 75%-black cast on pale glass is a bruise rather than a
+   * shadow.
+   */
+  --stat-pin-left-shadow: inset 0 -1px 0 rgba(159, 255, 242, 0.1),
+    4px 0 8px -2px rgba(0, 0, 0, 0.75);
+  --stat-pin-right-shadow: inset 0 -1px 0 rgba(159, 255, 242, 0.1),
+    -4px 0 8px -2px rgba(0, 0, 0, 0.75);
+  /*
+   * What a zero prints as — an em dash, in the quietest ink on this glass.
+   *
+   * Quieter than `--readout-muted`, which is deliberate: a column of figures
+   * is read by its figures, and a row of dashes that shouted would be the
+   * loudest thing on a board about what players *did*. It clears the 3:1 a
+   * graphical element owes with margin (4.1:1 dark, 4.3/3.9 light) and sits
+   * under the 4.5 a word would, which is the honest bar for this mark — the
+   * dash stands for the absence of a figure, and the empty column says the
+   * same thing to a reader who cannot make it out.
+   */
+  --stat-zero-ink: rgba(159, 255, 242, 0.45);
   /*
    * The selected row, drawn as an inset overlay rather than a fill: a fill
    * would flood the channel and the row would stop reading as a cut at all.
@@ -1612,6 +1648,11 @@
   --row-well-bg: rgba(15, 23, 42, 0.08);
   --row-well-shadow: inset 0 2px 5px rgba(15, 23, 42, 0.2),
     inset 0 -1px 0 rgba(255, 255, 255, 0.85);
+  --stat-pin-left-shadow: inset 0 -1px 0 rgba(255, 255, 255, 0.85),
+    4px 0 8px -2px rgba(15, 23, 42, 0.26);
+  --stat-pin-right-shadow: inset 0 -1px 0 rgba(255, 255, 255, 0.85),
+    -4px 0 8px -2px rgba(15, 23, 42, 0.26);
+  --stat-zero-ink: #537b76;
   --row-well-selected-bg: rgba(13, 148, 136, 0.1);
   --row-well-selected-shadow: inset 0 2px 6px rgba(15, 23, 42, 0.24),
     inset 0 -1px 0 rgba(255, 255, 255, 0.9);

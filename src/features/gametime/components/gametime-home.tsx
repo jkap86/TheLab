@@ -58,10 +58,12 @@ import {
   liveSummary,
 } from "../helpers/live-record";
 import { GametimeCard } from "./gametime-card";
+import { StatBoard } from "./stat-board";
 
 /** Stable empty answer, so a render before the read lands hands the memos the same object. */
 const NO_LEAGUES: Record<string, never> = {};
 const NO_BOARD: Record<string, never> = {};
+const NO_LINES: Record<string, never> = {};
 const NO_ENTRIES: WeekLineupEntry[] = [];
 
 /**
@@ -516,7 +518,17 @@ function Live({
             <ul
               ref={listRef}
               {...card.shellProps}
-              className="relative m-0 grid list-none grid-cols-1 gap-[1.125rem] p-0 [overflow-anchor:none]"
+              /* **A margin rather than the padding the handoff names**, and
+                 the difference is what the park does to each. The collapsed
+                 bar is 52px of fixed chrome over the foot of the page, so the
+                 last card needs clearance below it — but while a card is
+                 parked `useActiveCard` writes this list's `height` from a
+                 measurement, and padding inside a border-box height comes out
+                 of the card's own room. The same write zeroes the margin,
+                 which is exactly right: a parked card is the screen, the bar
+                 stands down with the rest of the page's chrome, and there is
+                 nothing left to clear. */
+              className="relative m-0 mb-[5.5rem] grid list-none grid-cols-1 gap-[1.125rem] p-0 [overflow-anchor:none]"
             >
               {visible.map((league) => {
                 const open = card.isOpen(league.league_id);
@@ -585,6 +597,21 @@ function Live({
           onToggle={(s) => setSubjects((prev) => toggleSubject(prev, s))}
         />
       )}
+
+      {/* The week's own reading, which is about the NFL rather than about this
+          account: every skill player with a scoring line, behind a bar pinned
+          to the foot of the console. It is `fixed`, so it takes no part in the
+          parked-card layout — but it takes `chromeClass` all the same, because
+          a parked card is sized to the fold less a few pixels and a 52px bar
+          would cover the drawer bars at the bottom of its panes. The page's
+          chrome steps back for a parked card; the rack stays, because the rack
+          is the app's rather than this page's. */}
+      <StatBoard
+        week={payload?.week ?? null}
+        lines={payload?.players ?? NO_LINES}
+        board={board}
+        chromeClass={card.chromeClass}
+      />
     </div>
   );
 }

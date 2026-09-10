@@ -2,6 +2,7 @@ import type { GametimeLeague, ManagerGametimePayload } from "@/shared/contract";
 import { gameBoard, solveGametimeLeague } from "@/shared/manager";
 import type { ManagerWeekLineupRow } from "@/shared/manager";
 
+import { statBoardLines } from "./stat-lines";
 import type { WeekFeeds } from "./feeds";
 
 /**
@@ -11,6 +12,9 @@ import type { WeekFeeds } from "./feeds";
  *
  * A failed projections read empties `leagues` and says so; a league with no
  * slots on file is absent rather than zero, on `solveWeekLineup`'s rule.
+ * `players` is the week's stat board and stands apart from all of it: it is
+ * folded off the stat lines alone, so it survives a projections read that
+ * emptied every league.
  */
 export function buildGametimePayload(input: {
   season: string;
@@ -45,6 +49,12 @@ export function buildGametimePayload(input: {
     read_at: feeds.readAt,
     games: feeds.games,
     board: gameBoard(feeds.clocks),
+    // The week's own reading, folded off the *stats* feed and no league's
+    // business — see `statBoardLines`. It is built whether or not any league
+    // could be solved, because it does not depend on one: a projections read
+    // that failed empties `leagues` and leaves the board standing, which is
+    // the honest pair.
+    players: statBoardLines(feeds.stats),
     leagues: solved,
   };
 }

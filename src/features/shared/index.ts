@@ -15,6 +15,7 @@ export {
   CONSOLE_BILLET_FACE,
   CONSOLE_CARD,
   CONSOLE_CARD_SHELL,
+  CONSOLE_CHANNEL,
   CONSOLE_CHIP,
   CONSOLE_CHIP_RAISED,
   CONSOLE_CHIP_TRAY,
@@ -47,6 +48,9 @@ export {
 } from "./console-chrome";
 export { errorMessage } from "./error-message";
 export { storeKtcBoard, useKtcBoard } from "./ktc-board";
+// Whether the gametime stat board is up — one boolean on the device, on the
+// theme toggle's own courtesy. See the module for why it is not in the URL.
+export { storeStatBoardOpen, useStatBoardOpen } from "./stat-board-open";
 // Whether an open card keeps its summary readings on screen — one boolean for
 // both league cards, and the fold and the key that read it. See the module.
 export {

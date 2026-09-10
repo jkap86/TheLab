@@ -389,10 +389,19 @@ function payloadFor(room: Room, subscriber: Subscriber): ManagerGametimePayload 
 }
 
 /**
- * The payload's header — everything but the leagues, named field by field so
- * a field the payload grows has to be placed here before it rides a delta.
+ * The payload's header — everything but its two diffed collections, named
+ * field by field so a field the payload grows has to be placed here before it
+ * rides a delta.
+ *
+ * `leagues` and `players` are both absent, and for one reason: each is diffed
+ * against what the reader holds rather than re-sent whole. The header is
+ * re-serialised on every tick — `read_at` moves whether or not anything else
+ * does — so anything named here is carried in full to every reader on every
+ * frame. See `./live-delivery`.
  */
-function headerOf(payload: ManagerGametimePayload): Omit<ManagerGametimePayload, "leagues"> {
+function headerOf(
+  payload: ManagerGametimePayload,
+): Omit<ManagerGametimePayload, "leagues" | "players"> {
   return {
     season: payload.season,
     week: payload.week,
@@ -408,11 +417,12 @@ function headerOf(payload: ManagerGametimePayload): Omit<ManagerGametimePayload,
 /**
  * Solve for one reader and send **what moved**, or nothing.
  *
- * The header (statuses, the board, the read instant) rides every delta,
- * because the board is what moved; the leagues ride it only where their own
- * serialisation differs from the last one the reader *took*. A tick that moved
- * neither sends nothing at all, which is what makes a twenty-second cadence
- * reasonable on a page left open through a quiet afternoon.
+ * The header (statuses, the scoreboard, the read instant) rides every delta,
+ * because the scoreboard is what moved; the leagues and the week's stat lines
+ * ride it only where their own serialisation differs from the last one the
+ * reader *took*. A tick that moved none of them sends nothing at all, which is
+ * what makes a twenty-second cadence reasonable on a page left open through a
+ * quiet afternoon.
  *
  * **The baseline moves only on a frame that was accepted.** A stalled socket
  * drops a payload or a delta (see the stream route), and advancing the hold
@@ -428,7 +438,13 @@ function deliver(room: Room, subscriber: Subscriber, force = false) {
   const payload = payloadFor(room, subscriber);
   const header = headerOf(payload);
   const headerJson = JSON.stringify(header);
-  const next = nextDelivery(subscriber.delivery, headerJson, payload.leagues, force);
+  const next = nextDelivery(
+    subscriber.delivery,
+    headerJson,
+    payload.leagues,
+    payload.players,
+    force,
+  );
   if (next.kind === "none") return;
 
   let frame: RoomFrame;
@@ -437,7 +453,15 @@ function deliver(room: Room, subscriber: Subscriber, force = false) {
   } else {
     const changed: Record<string, ManagerGametimePayload["leagues"][string]> = {};
     for (const id of next.changed) changed[id] = payload.leagues[id];
-    const delta: GametimeDelta = { ...header, leagues: changed, removed: next.removed };
+    const players: Record<string, ManagerGametimePayload["players"][string]> = {};
+    for (const id of next.players.changed) players[id] = payload.players[id];
+    const delta: GametimeDelta = {
+      ...header,
+      leagues: changed,
+      removed: next.removed,
+      players,
+      removed_players: next.players.removed,
+    };
     frame = toRoomFrame({ type: "delta", delta });
   }
 
