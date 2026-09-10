@@ -2,6 +2,8 @@ import assert from "node:assert/strict";
 import { describe, test } from "node:test";
 
 import {
+  canonicalReadings,
+  clearSubjectReadings,
   leaguematePlayerId,
   matchesSubjects,
   NO_SUBJECTS,
@@ -12,9 +14,11 @@ import {
   subjectKey,
   subjectSlot,
   toggleSubject,
+  toggleSubjectReading,
   type LeagueSubjects,
   type Subject,
   type SubjectRolls,
+  type WeekReading,
 } from "./league-subjects.ts";
 
 const ROSTERS = { a: ["p1", "p2"], b: ["p1"], c: [] as string[] };
@@ -304,5 +308,158 @@ describe("leaguematePlayerId", () => {
     ]);
     assert.equal(matchesSubjects("a", one, rolls), true);
     assert.equal(matchesSubjects("b", one, rolls), false);
+  });
+});
+
+/**
+ * The week row's four readings, and the one rule that is silent when it is
+ * wrong: they are **unioned**, because every intersection of two of them is
+ * empty by construction and a narrowing that could only ever empty the grid is
+ * not one a reader could learn from.
+ */
+describe("a week row's readings", () => {
+  // The four populations one league contributed: two rosters, split into who
+  // each side started and who each side sat.
+  const WEEK: Record<string, Record<string, string[]>> = {
+    start: { a: ["p1"], b: ["p2"] },
+    bench: { a: ["p2"], b: ["p1"] },
+    "opp-start": { a: ["p3"], b: ["p1"] },
+    "opp-bench": { a: ["p1"], b: ["p3"] },
+    either: { a: ["p1", "p2", "p3"], b: ["p1", "p2", "p3"] },
+  };
+  const weekRolls: SubjectRolls = (kind, _mode, reading) =>
+    kind === "week" ? (WEEK[reading ?? "either"] ?? null) : null;
+
+  const week = (id: string, readings?: readonly WeekReading[]) =>
+    picked([{ kind: "week" as const, id, ...(readings ? { readings } : {}) }]);
+
+  test("no reading picked is the resting one: fielded either side", () => {
+    // What pressing a row has always meant, and it must keep meaning it.
+    assert.equal(matchesSubjects("a", week("p1"), weekRolls), true);
+    assert.equal(matchesSubjects("a", week("p9"), weekRolls), false);
+  });
+
+  test("one reading reads that population alone", () => {
+    assert.equal(matchesSubjects("a", week("p1", ["start"]), weekRolls), true);
+    assert.equal(matchesSubjects("b", week("p1", ["start"]), weekRolls), false);
+    assert.equal(matchesSubjects("b", week("p1", ["bench"]), weekRolls), true);
+  });
+
+  test("two readings are a union, and it is the only operator with anything to say", () => {
+    // A player sits on one roster per league, so `start ∧ opp-start` is empty
+    // in every league there is — an intersecting selection would empty the grid
+    // whatever was picked.
+    const both = week("p1", ["start", "opp-start"]);
+    assert.equal(matchesSubjects("a", both, weekRolls), true);
+    assert.equal(matchesSubjects("b", both, weekRolls), true);
+    // And a union of two readings neither of which names him is still no.
+    assert.equal(
+      matchesSubjects("a", week("p2", ["opp-start", "opp-bench"]), weekRolls),
+      false,
+    );
+  });
+
+  test("a reading whose map has not arrived is skipped, not counted against the row", () => {
+    // The three-state rule this module keeps one grain out, applied per
+    // population: a half-answered narrowing answers on the half it has.
+    const half: SubjectRolls = (kind, _mode, reading) =>
+      kind === "week" && reading === "start" ? WEEK.start : null;
+    assert.equal(matchesSubjects("a", week("p1", ["start", "opp-start"]), half), true);
+    assert.equal(matchesSubjects("b", week("p1", ["start", "opp-start"]), half), false);
+  });
+
+  test("a row whose every reading is unanswerable is ignored, not failed", () => {
+    // Failing it closed would empty the grid while a payload is in flight.
+    const none: SubjectRolls = () => null;
+    assert.equal(matchesSubjects("a", week("p1", ["start"]), none), true);
+  });
+
+  test("an empty reading list is the resting reading, not a narrowing that matches nothing", () => {
+    assert.equal(matchesSubjects("a", week("p1", []), weekRolls), true);
+  });
+});
+
+describe("canonicalReadings", () => {
+  test("deduped, and in the vocabulary's order rather than the presses'", () => {
+    // Which is what lets `subjectKey` compare two selections at all: a reader
+    // who pressed Bench then Start has the same narrowing as one who did not.
+    assert.deepEqual(
+      canonicalReadings(["opp-bench", "start", "start"]),
+      ["start", "opp-bench"],
+    );
+    assert.deepEqual(canonicalReadings(undefined), []);
+    assert.deepEqual(canonicalReadings([]), []);
+  });
+});
+
+describe("subjectKey and the readings", () => {
+  test("two readings of one row are two narrowings and two keys", () => {
+    const row = { kind: "week" as const, id: "p1" };
+    assert.notEqual(
+      subjectKey({ ...row, readings: ["start"] }),
+      subjectKey({ ...row, readings: ["bench"] }),
+    );
+    // ...and the same two readings in either order are one.
+    assert.equal(
+      subjectKey({ ...row, readings: ["start", "opp-start"] }),
+      subjectKey({ ...row, readings: ["opp-start", "start"] }),
+    );
+  });
+
+  test("the resting reading keys as the bare slot, so nothing changed for it", () => {
+    const row = { kind: "week" as const, id: "p1" };
+    assert.equal(subjectKey(row), subjectSlot(row));
+    assert.equal(subjectKey({ ...row, readings: [] }), subjectSlot(row));
+  });
+
+  test("the slot is the row whatever is picked inside it", () => {
+    // Which is what lets a press on the row clear it however it is narrowed.
+    const row: Subject = { kind: "week", id: "p1" };
+    const narrowed: Subject = { ...row, readings: ["start", "opp-bench"] };
+    assert.equal(subjectSlot(narrowed), subjectSlot(row));
+  });
+});
+
+describe("toggleSubjectReading", () => {
+  const state = picked([
+    { kind: "week", id: "p1", readings: ["start"] },
+    { kind: "week", id: "p2" },
+  ]);
+
+  test("adds a reading, and a second press takes it off", () => {
+    const added = toggleSubjectReading(state, "week", "p1", "opp-start");
+    assert.deepEqual(added.subjects[0].readings, ["start", "opp-start"]);
+    const removed = toggleSubjectReading(added, "week", "p1", "start");
+    assert.deepEqual(removed.subjects[0].readings, ["opp-start"]);
+  });
+
+  test("clearing the last reading leaves the row picked on its resting one", () => {
+    // The row's own press is where a reader reaches to clear the row.
+    const bare = toggleSubjectReading(state, "week", "p1", "start");
+    assert.deepEqual(bare.subjects[0].readings, []);
+    assert.equal(bare.subjects.length, 2);
+  });
+
+  test("in place, so refining a row does not send it to the end of the tray", () => {
+    const moved = toggleSubjectReading(state, "week", "p1", "bench");
+    assert.deepEqual(
+      moved.subjects.map((s) => s.id),
+      ["p1", "p2"],
+    );
+  });
+
+  test("a row that is not picked is left alone", () => {
+    assert.deepEqual(toggleSubjectReading(state, "week", "p9", "start"), state);
+  });
+});
+
+describe("clearSubjectReadings", () => {
+  test("drops the readings and keeps the row", () => {
+    const state = picked([
+      { kind: "week", id: "p1", readings: ["start", "opp-bench"] },
+    ]);
+    const cleared = clearSubjectReadings(state, "week", "p1");
+    assert.deepEqual(cleared.subjects[0].readings, []);
+    assert.equal(cleared.subjects.length, 1);
   });
 });

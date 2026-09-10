@@ -125,6 +125,25 @@ export const CONSOLE_CHANNEL =
   "shadow-[inset_0_4px_10px_rgba(0,0,0,0.95),inset_0_1px_0_rgba(0,0,0,0.9),inset_0_-1px_0_rgba(255,255,255,0.075)]";
 
 /**
+ * The same channel, cut into stock that is **pale in light mode**.
+ *
+ * {@link CONSOLE_CHANNEL}'s own note says why the two are two: that one is a
+ * black alpha, on the rule that a recess must be darker than its surround in
+ * both themes, and it is safe because its callers sit on dark stock either way.
+ * A channel milled into `--key-metal` is not one of those — that face is
+ * near-white in light mode, and 52% black on it is not a channel but a hole
+ * punched through the part, the darkest object on the panel by a wide margin
+ * with four pale keys floating in it. It is `--rack-channel-bg`'s own finding
+ * one part smaller, so it takes `--rack-channel-bg`'s own answer: the same
+ * values in dark, a slate tint and a lit lower lip in light.
+ *
+ * No padding, on {@link CONSOLE_CHANNEL}'s terms — the caller's own `p-*` would
+ * lose the emit-order flip against one written in here.
+ */
+export const CONSOLE_CHANNEL_METAL =
+  "rounded-full bg-[var(--rack-channel-bg)] shadow-[var(--rack-channel-shadow)]";
+
+/**
  * A tray holding **parts**: the columns dialog's bay rack.
  *
  * Deeper than {@link CONSOLE_WELL} deliberately, and the difference is the same
@@ -285,9 +304,23 @@ export const CONSOLE_CARD =
  * overflow-hidden` contract: the scanlines are an absolutely-positioned child,
  * so every window carries one.
  */
-export const CONSOLE_WINDOW =
-  "relative overflow-hidden border border-black/85 bg-[image:var(--readout-bg)] " +
+export const CONSOLE_WINDOW_SHELL =
+  "relative overflow-hidden border bg-[image:var(--readout-bg)] " +
   "shadow-[var(--window-shadow)]";
+
+/**
+ * That shell with its resting border, which is what a window normally wears.
+ *
+ * **Split from it for {@link CONSOLE_KEY_PILL}'s reason**, one property over: a
+ * window that lights when the reading inside it is the one a reader picked
+ * cannot get there by appending `border-active/55` to a string that already
+ * says `border-black/85`. Both are base border-colour utilities of the same
+ * specificity, so which one wins is Tailwind's emit order rather than the class
+ * attribute's — and it is a control that silently never lights rather than an
+ * error. A window that has two states composes the shell with both of them;
+ * everything else takes this and is unchanged.
+ */
+export const CONSOLE_WINDOW = `${CONSOLE_WINDOW_SHELL} border-black/85`;
 
 /**
  * The plate that straddles a housing's top edge — the league name, the record,

@@ -63,7 +63,7 @@ export function DecisionsDeck({
   name: string;
   position: string | null;
   team: string | null;
-  /** Null where the leagues on screen do not agree — see `WeekPlayerShare.figure`. */
+  /** Null where the leagues on screen do not agree — see `WeekTwoSidedShare.figure`. */
   figure: number | null;
   /** What the figure is, in three characters — `Proj`, `Live`. */
   figureLabel: string;

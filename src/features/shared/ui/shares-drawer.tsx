@@ -16,11 +16,12 @@ import {
 
 import { subjectSlot, type Subject, type SubjectKind } from "../league-subjects";
 import {
-  MAX_SHARES_COLUMNS,
+  maxSharesColumns,
   mergeSharesColumns,
   SHARES_COLUMN_WIDTHS,
   SHARES_COLUMNS_BY_KIND,
   type SharesColumnId,
+  sharesColumnBreak,
   sharesColumnLabel,
   sharesColumns,
   storeSharesColumns,
@@ -28,8 +29,11 @@ import {
 } from "../shares-columns";
 import {
   CONSOLE_KEY_PILL,
+  CONSOLE_METAL,
+  CONSOLE_PART_TRAY,
   CONSOLE_TRACK,
   CONSOLE_WINDOW,
+  CONSOLE_WINDOW_SHELL,
 } from "../console-chrome";
 import { Scanlines } from "./card-plate";
 import { CollapseTray } from "./collapse-tray";
@@ -192,6 +196,13 @@ export type SharesDrawerRow = {
    */
   started?: number | null;
   benched?: number | null;
+  /**
+   * The same two over the lineups **facing** the manager, and they are scaled
+   * by a different denominator — see {@link SharesDrawer}'s
+   * `opponentLeagueCount`.
+   */
+  oppStarted?: number | null;
+  oppBenched?: number | null;
 };
 
 /**
@@ -237,6 +248,8 @@ const SORT_ASCENDING: Record<SharesColumnId, boolean> = {
   share: false,
   start: false,
   bench: false,
+  "opp-start": false,
+  "opp-bench": false,
 };
 
 /** The main figure's size, per metric — a record and a share carry two lines. */
@@ -248,6 +261,8 @@ const CELL_TEXT: Record<SharesColumnId, string> = {
   share: "text-[length:var(--fs-11)]",
   start: "text-[length:var(--fs-11)]",
   bench: "text-[length:var(--fs-11)]",
+  "opp-start": "text-[length:var(--fs-11)]",
+  "opp-bench": "text-[length:var(--fs-11)]",
 };
 
 /**
@@ -271,9 +286,17 @@ type Prepared = {
   row: SharesDrawerRow;
   /** {@link SharesDrawerRow.held} as a share of the counted leagues. */
   pct: number;
-  /** The same, for the two week columns. Zero where the row has no figure. */
+  /**
+   * The same, for the four week columns. Zero where the row has no figure.
+   *
+   * The two opposing shares are folded against their **own** denominator,
+   * which is legitimately lower: a league with no opponent to read contributed
+   * a lineup to one side and not the other.
+   */
   startPct: number;
   benchPct: number;
+  oppStartPct: number;
+  oppBenchPct: number;
   /** The name, lower-cased once, for the search. */
   search: string;
   /** `subjectSlot` of this row, for the selection — see `chosen`. */
@@ -286,6 +309,9 @@ type Prepared = {
 // same ordering.
 const NAME_ORDER = new Intl.Collator();
 
+/** A module-level identity for a row with nothing lit — see `ShareRow`. */
+const NO_LIT: SharesColumnId[] = [];
+
 export function SharesDrawer({
   open,
   onClose,
@@ -295,6 +321,7 @@ export function SharesDrawer({
   noun,
   rows,
   leagueCount,
+  opponentLeagueCount,
   leagueTotal,
   filterSummary,
   populationNote,
@@ -303,7 +330,11 @@ export function SharesDrawer({
   deckControls,
   disclosure,
   selectedStrip,
+  litCells,
   matchRow,
+  wide = false,
+  milled = false,
+  noteInline = false,
   loading,
   error,
   onRetry,
@@ -324,6 +355,18 @@ export function SharesDrawer({
   rows: SharesDrawerRow[];
   /** The denominator: leagues that contributed a roster or a member list. */
   leagueCount: number;
+  /**
+   * The denominator the two `opp-*` columns are scaled by, where a panel has
+   * one. Defaults to {@link leagueCount}.
+   *
+   * **Two numbers because two of the four columns are scaled by each**, and the
+   * second is legitimately lower: a future week, a week Sleeper filed without a
+   * pairing and an opponent whose roster is not stored all contribute a lineup
+   * to one side and nothing to the other. Folding both against the larger would
+   * understate every opposing share on the panel; folding both against the
+   * smaller would overstate every one of the reader's own.
+   */
+  opponentLeagueCount?: number;
   /** Every league on the page, unfiltered — the readout's "of 113". */
   leagueTotal: number;
   /** What the league filters have been narrowed to, or null for nothing. */
@@ -394,6 +437,21 @@ export function SharesDrawer({
    */
   selectedStrip?: ((row: SharesDrawerRow) => ReactNode) | null;
   /**
+   * Which of a row's cells are lit, as a delimited string — `|start|opp-start|`
+   * — or null for none.
+   *
+   * **A string rather than a set, and that is the memo rather than a taste.**
+   * Every row is `memo`'d on its props, so what a row is handed has to be a
+   * value its memo can compare: a fresh `Set` per row per render would
+   * re-render several hundred rows to light one cell. The delimiters are what
+   * keep `opp-start` from matching inside a test for `start`.
+   *
+   * A callback rather than a field on the row, on `selectedStrip`'s argument:
+   * the rows are built per row list and this moves with the *selection*, so
+   * folding it into them would rebuild every row on every press.
+   */
+  litCells?: ((row: SharesDrawerRow) => string | null) | null;
+  /**
    * What the search field matches **beyond** a row's own name.
    *
    * The drawer always matches the name itself, off a copy lower-cased once per
@@ -451,6 +509,37 @@ export function SharesDrawer({
    */
   chosen: ReadonlySet<string>;
   onToggle: (subject: Subject) => void;
+  /**
+   * 40rem rather than 34, which is what four 76px cells plus a readable name
+   * column need.
+   *
+   * A prop rather than a width derived from `cols.length`, because the two are
+   * different questions: how many columns a reader has chosen is theirs to
+   * change, and a panel that visibly narrowed when they dropped one would make
+   * the drawer's own box a thing they were editing.
+   */
+  wide?: boolean;
+  /**
+   * The brushed finish: {@link CONSOLE_METAL}'s three surfaces, a key chamfered
+   * on four edges, and a list tray that is a hole rather than a surface.
+   *
+   * **One prop for the three because they are one decision.** A milled panel
+   * holds *parts* — rows cut from key stock — where a moulded one holds
+   * controls, and {@link CONSOLE_PART_TRAY}'s depth against
+   * {@link CONSOLE_WELL}'s is exactly that distinction. Applied as token
+   * overrides on the panel, so not one element inside it moves to get it.
+   */
+  milled?: boolean;
+  /**
+   * The row's `note` sits on the name's own line rather than under it.
+   *
+   * A panel whose note is one short token — an NFL team — can afford the line,
+   * and the merged week panel needs it: its name column is 179px and a second
+   * line there would be a row half again as tall on every one of a thousand
+   * rows. The manager panels keep the second line, where the note is a position
+   * *and* a team and the row is not competing with four cells.
+   */
+  noteInline?: boolean;
 }) {
   const ref = useRef<HTMLDialogElement>(null);
   const panelRef = useRef<HTMLDivElement>(null);
@@ -467,6 +556,8 @@ export function SharesDrawer({
 
   const stored = useSharesColumns();
   const cols = useMemo(() => sharesColumns(stored, kind), [stored, kind]);
+  // A panel with one population reads both halves off it — see the prop.
+  const oppCount = opponentLeagueCount ?? leagueCount;
   // A stored sort key naming a column this reader has since dropped falls back
   // to their own **rightmost** column rather than to a fixed default: the last
   // column is the one nearest the eye, and a fixed fallback would be a fourth
@@ -542,17 +633,19 @@ export function SharesDrawer({
    */
   const prepared = useMemo<Prepared[]>(() => {
     if (!open) return NO_PREPARED;
-    const share = (n: number | null | undefined) =>
-      leagueCount > 0 && n != null ? Math.round((n / leagueCount) * 100) : 0;
+    const share = (n: number | null | undefined, of: number) =>
+      of > 0 && n != null ? Math.round((n / of) * 100) : 0;
     return rows.map((row) => ({
       row,
-      pct: share(row.held),
-      startPct: share(row.started),
-      benchPct: share(row.benched),
+      pct: share(row.held, leagueCount),
+      startPct: share(row.started, leagueCount),
+      benchPct: share(row.benched, leagueCount),
+      oppStartPct: share(row.oppStarted, oppCount),
+      oppBenchPct: share(row.oppBenched, oppCount),
       search: row.name.toLowerCase(),
       slot: subjectSlot({ kind, id: row.id }),
     }));
-  }, [open, rows, leagueCount, kind]);
+  }, [open, rows, leagueCount, oppCount, kind]);
 
   const shown = useMemo(() => {
     // The name is what a search means for every panel; a panel whose rows
@@ -628,7 +721,11 @@ export function SharesDrawer({
         // landed outside the panel.
         if (e.target === e.currentTarget) close();
       }}
-      className={`${SIDES[side].dialog} h-[var(--vvh,100dvh)] max-h-[var(--vvh,100dvh)] w-[min(34rem,calc(100vw-1.5rem))] max-w-full overflow-hidden bg-transparent text-foreground backdrop:bg-[radial-gradient(130%_100%_at_50%_0%,rgba(0,0,0,0.5),rgba(0,0,0,0.78))] backdrop:backdrop-blur-[2.5px]`}
+      className={`${SIDES[side].dialog} h-[var(--vvh,100dvh)] max-h-[var(--vvh,100dvh)] ${
+        wide
+          ? "w-[min(40rem,calc(100vw-1.5rem))]"
+          : "w-[min(34rem,calc(100vw-1.5rem))]"
+      } max-w-full overflow-hidden bg-transparent text-foreground backdrop:bg-[radial-gradient(130%_100%_at_50%_0%,rgba(0,0,0,0.5),rgba(0,0,0,0.78))] backdrop:backdrop-blur-[2.5px]`}
     >
       <div
         ref={panelRef}
@@ -637,15 +734,33 @@ export function SharesDrawer({
         // the `prefers-reduced-motion` rule in globals.css stops all of it at
         // once. There is no exit animation — a native dialog is gone in the
         // frame it closes.
-        className={`@container lab-anim relative flex h-full flex-col overflow-hidden border border-foreground/12 bg-[image:var(--housing-bg)] shadow-[var(--housing-shadow),0_60px_120px_-40px_rgba(0,0,0,0.85)] outline-none ${SIDES[side].panel}`}
+        // The finish is three token overrides plus a fourth for the key's own
+        // four-edge chamfer, so nothing inside the panel moves to get it — see
+        // `milled` and `CONSOLE_METAL`.
+        className={`@container lab-anim relative flex h-full flex-col overflow-hidden border border-foreground/12 bg-[image:var(--housing-bg)] shadow-[var(--housing-shadow),0_60px_120px_-40px_rgba(0,0,0,0.85)] outline-none ${
+          milled ? `${CONSOLE_METAL} [--key-shadow:var(--key-metal-shadow)]` : ""
+        } ${SIDES[side].panel}`}
         style={{
           animation: `${SIDES[side].animation} 0.24s cubic-bezier(0.2,0.9,0.3,1)`,
         }}
       >
+        {/* The grain a moulded panel wears, and the pair a milled one does: a
+            rolled banding and one raking specular, which is what makes a
+            near-flat metal face read as machined rather than as painted. */}
         <span
           aria-hidden
-          className="pointer-events-none absolute inset-0 bg-[image:var(--panel-grain)]"
+          className={`pointer-events-none absolute inset-0 ${
+            milled
+              ? "bg-[image:var(--billet-grain)]"
+              : "bg-[image:var(--panel-grain)]"
+          }`}
         />
+        {milled && (
+          <span
+            aria-hidden
+            className="pointer-events-none absolute inset-0 bg-[image:var(--billet-specular)]"
+          />
+        )}
         <span
           aria-hidden
           className="pointer-events-none absolute inset-x-[12%] top-0 h-px bg-[image:var(--panel-specular)]"
@@ -688,10 +803,28 @@ export function SharesDrawer({
                 `LeaguesHome` hands both drawers the filtered list and the folds
                 count over exactly it — but nothing in here said so. */}
             <span
-              className={`${CONSOLE_WINDOW} order-last flex min-w-0 basis-full items-center rounded-lg px-2.5 py-[0.3125rem] @md:order-none @md:basis-auto @md:flex-[1_1_0]`}
+              className={`${CONSOLE_WINDOW} order-last flex min-w-0 basis-full items-center rounded-lg px-2.5 py-[0.3125rem] ${
+                // **A wide panel keeps it on its own line at every width**, which
+                // is what its readout is long enough to need: two denominators
+                // and a week is ~50 characters, and inline at 628px it takes the
+                // row's whole slack and pushes `Esc` onto a line of its own —
+                // the wrap this arm exists to prevent, one element over.
+                wide ? "" : "@md:order-none @md:basis-auto @md:flex-[1_1_0]"
+              }`}
             >
               <Scanlines />
-              <span className="relative truncate font-mono text-[length:var(--fs-9)] uppercase tracking-[0.14em] text-readout-line">
+              {/* **It wraps rather than truncating where it cannot fit**, on a
+                  wide panel: its readout carries two denominators and a week,
+                  which is ~50 characters and about 47 past a 354px window — so
+                  truncated at a phone's width the clause that goes is `week 3`,
+                  and the one thing on screen saying which week these shares are
+                  of says nothing. Above `@md` it fits on one line and truncates
+                  as every other panel's does. */}
+              <span
+                className={`relative font-mono text-[length:var(--fs-9)] uppercase tracking-[0.14em] text-readout-line ${
+                  wide ? "@md:truncate" : "truncate"
+                }`}
+              >
                 {population(
                   leagueCount,
                   leagueTotal,
@@ -780,8 +913,17 @@ export function SharesDrawer({
         {/* The list tray, recessed into the deck above it. A recess has to be
             **darker than its surround in both themes**, which a black alpha is
             and a `--foreground` alpha is not — the latter inverts with the
-            theme and would light the tray up in light mode. */}
-        <div className="relative m-2 flex min-h-0 flex-1 flex-col rounded-[0.875rem] bg-black/[0.16] shadow-[var(--well-shadow)]">
+            theme and would light the tray up in light mode.
+
+            A milled panel takes `CONSOLE_PART_TRAY`'s depth instead, which is
+            that constant's own distinction: what this one holds is *parts* —
+            rows cut from key stock, standing on their own risers — and a tray
+            holding parts is the absence of a surface rather than one. */}
+        <div
+          className={`relative m-2 flex min-h-0 flex-1 flex-col rounded-[0.875rem] ${
+            milled ? CONSOLE_PART_TRAY : "bg-black/[0.16] shadow-[var(--well-shadow)]"
+          }`}
+        >
           {!detail && shown.length > 0 && (
             <>
               {/* The header is laid out from the same widths the cells are, so
@@ -919,6 +1061,9 @@ export function SharesDrawer({
                       discloseLabel={disclosure?.label ?? null}
                       tray={expanded && disclosure ? disclosure.render(row) : null}
                       strip={picked && selectedStrip ? selectedStrip(row) : null}
+                      lit={litCells?.(row) ?? null}
+                      noteInline={noteInline}
+                      oppLeagueCount={oppCount}
                     />
                   );
                 })}
@@ -983,6 +1128,10 @@ function weightOf(id: SharesColumnId, prepared: Prepared): number | null {
       return prepared.row.started ?? null;
     case "bench":
       return prepared.row.benched ?? null;
+    case "opp-start":
+      return prepared.row.oppStarted ?? null;
+    case "opp-bench":
+      return prepared.row.oppBenched ?? null;
   }
 }
 
@@ -1034,22 +1183,48 @@ function SortTrack({
   active: SharesColumnId | "name";
   onPick: (key: SharesColumnId | "name") => void;
 }) {
-  const keys: { key: SharesColumnId | "name"; label: string }[] = [
-    ...cols.map((id) => ({ key: id, label: sharesColumnLabel(id) })),
-    { key: "name" as const, label: "Name" },
+  // **The groove is cut where the vocabulary changes, not where a panel says
+  // to.** `sharesColumnBreak` reads the columns as runs, so a track offering
+  // the four week readings gets the side boundary between the reader's pair and
+  // their opponent's without being told where it is, and one offering three
+  // season metrics gets none. `Name` never takes one: it is not a column.
+  const keys: {
+    key: SharesColumnId | "name";
+    label: string;
+    groove: boolean;
+  }[] = [
+    ...cols.map((id, i) => ({
+      key: id,
+      label: sharesColumnLabel(id),
+      groove: sharesColumnBreak(id, cols[i - 1]),
+    })),
+    { key: "name" as const, label: "Name", groove: false },
   ];
 
   return (
-    <span className="inline-flex items-center gap-[0.4375rem]">
+    // **The track wraps, where it used to clip.** Its keys are the columns on
+    // screen plus `Name`, so a four-column panel offers five — 486px of them at
+    // a phone's width, inside a 354px panel that clips, with the last two
+    // unreachable and nothing on screen saying so. It is the arrangement the
+    // Columns strip beside it already has, for the same reason.
+    <span className="inline-flex min-w-0 items-center gap-[0.4375rem]">
       <span className="shrink-0 font-mono text-[length:var(--fs-8)] uppercase tracking-[0.18em] text-foreground/42">
         Sort
       </span>
-      <span className={`${CONSOLE_TRACK} inline-flex items-center gap-1 p-1`}>
-        {keys.map(({ key, label }) => {
+      <span
+        className={`${CONSOLE_TRACK} inline-flex min-w-0 flex-wrap items-center gap-1 p-1`}
+      >
+        {keys.map(({ key, label, groove }) => {
           const on = active === key;
           return (
+            <Fragment key={key}>
+              {groove && (
+                <span
+                  aria-hidden
+                  className="mx-0.5 w-px shrink-0 self-stretch bg-[image:var(--groove)] shadow-[var(--groove-highlight)]"
+                />
+              )}
             <button
-              key={key}
               type="button"
               onClick={() => onPick(key)}
               aria-pressed={on}
@@ -1067,6 +1242,7 @@ function SortTrack({
                 </span>
               )}
             </button>
+            </Fragment>
           );
         })}
       </span>
@@ -1083,8 +1259,8 @@ function SortTrack({
  * control groups from reading as one row of eight buttons.
  *
  * **The bounds are enforced by disabling, never by correcting** —
- * `lineup-columns-dialog.tsx`'s rule. The spare keys grey out at
- * {@link MAX_SHARES_COLUMNS} and the last chosen slab's drop control disables
+ * `lineup-columns-dialog.tsx`'s rule. The spare keys grey out at this panel's
+ * own {@link maxSharesColumns} and the last chosen slab's drop control disables
  * at one, so an invalid set cannot be made in the first place.
  *
  * **Reordering is tap-to-lift, tap-to-drop, and it used to be a drag.** The
@@ -1115,7 +1291,8 @@ function ColumnsStrip({
 }) {
   const spares = SHARES_COLUMNS_BY_KIND[kind].filter((id) => !cols.includes(id));
   const locked = cols.length === 1;
-  const full = cols.length >= MAX_SHARES_COLUMNS;
+  const cap = maxSharesColumns(kind);
+  const full = cols.length >= cap;
   const from = lifted ? cols.indexOf(lifted) : -1;
 
   const place = (to: number) => {
@@ -1214,7 +1391,7 @@ function ColumnsStrip({
             disabled={full}
             title={
               full
-                ? `${MAX_SHARES_COLUMNS} columns at most — drop one first`
+                ? `${cap} columns at most — drop one first`
                 : `Add ${sharesColumnLabel(id)}`
             }
             onClick={() => onChange([...cols, id])}
@@ -1283,10 +1460,15 @@ const ShareRow = memo(function ShareRow({
   discloseLabel,
   tray,
   strip,
+  lit,
+  noteInline,
+  oppLeagueCount,
 }: {
   prepared: Prepared;
   cols: readonly SharesColumnId[];
   leagueCount: number;
+  /** The two `opp-*` cells' own denominator — see the drawer's prop. */
+  oppLeagueCount: number;
   selected: boolean;
   onSelect: (id: string) => void;
   expanded: boolean;
@@ -1297,12 +1479,20 @@ const ShareRow = memo(function ShareRow({
   tray: ReactNode;
   /** The picked row's strip, or null. */
   strip: ReactNode;
+  /** Which cells are lit, delimited — see the drawer's `litCells`. */
+  lit: string | null;
+  /** The note rides the name's line rather than a second one. */
+  noteInline: boolean;
 }) {
   const { row } = prepared;
   const open = expanded;
   const disclosure = onDisclose !== null;
   // Picked, or holding something picked inside it — see `SharesDrawerRow.lit`.
   const on = selected || Boolean(row.lit);
+  // The delimited string back out, once per row rather than once per cell.
+  const litIds = lit
+    ? (lit.split("|").filter(Boolean) as SharesColumnId[])
+    : NO_LIT;
 
   return (
     <li
@@ -1344,7 +1534,16 @@ const ShareRow = memo(function ShareRow({
               cannot fit beside it and wrap to a line of their own — see the
               note on `ShareRow`. Above `@md` it is `auto` and the row is one
               line. */}
-          <span className="min-w-0 flex-1 basis-[calc(100%-2.375rem)] @md:basis-auto">
+          {/* **The note is a second line, or the end of the first.** Inline
+              is what a panel with four cells beside the name can afford and
+              what it needs — its name column is 179px, and a second line there
+              is a row half again as tall on every one of a thousand of them.
+              Stacked is what a note that is a position *and* a team wants. */}
+          <span
+            className={`min-w-0 flex-1 basis-[calc(100%-2.375rem)] @md:basis-auto ${
+              noteInline ? "flex items-baseline gap-[0.4375rem]" : ""
+            }`}
+          >
             {/* Full opacity on the accent as text, per the theme rule: an alpha
                 on it drops light mode's teal below AA. */}
             <span
@@ -1355,11 +1554,33 @@ const ShareRow = memo(function ShareRow({
               {row.name}
             </span>
             {row.note && (
-              <span className="block truncate font-mono text-[length:var(--fs-9)] uppercase tracking-[0.16em] text-foreground/46">
+              <span
+                className={`truncate font-mono text-[length:var(--fs-9)] uppercase tracking-[0.16em] text-foreground/46 ${
+                  noteInline ? "shrink-0" : "block"
+                }`}
+              >
                 {row.note}
               </span>
             )}
-            {row.subline && (
+            {/* **The pip a row grows when a reading inside it is narrowing**,
+                and the sentence that is the whole of what it says to a reader
+                who cannot see it — named from the same columns the lit cells
+                are, so the two cannot say different things. It is derived from
+                `lit` rather than taking a line of its own: this row has four
+                cells beside the name and no second line to spend, which is
+                what `subline` is for on the panels that do. */}
+            {litIds.length > 0 && (
+              <>
+                <span
+                  aria-hidden
+                  className="size-[0.4375rem] shrink-0 rounded-full bg-active shadow-[0_0_9px_var(--accent-glow)]"
+                />
+                <span className="sr-only">
+                  {`Narrowed on ${litIds.map(sharesColumnLabel).join(", ")}`}
+                </span>
+              </>
+            )}
+            {!noteInline && row.subline && (
               <span className="block truncate font-mono text-[length:var(--fs-9)] uppercase tracking-[0.16em] text-active">
                 {row.subline}
               </span>
@@ -1372,6 +1593,10 @@ const ShareRow = memo(function ShareRow({
               id={id}
               prepared={prepared}
               leagueCount={leagueCount}
+              oppLeagueCount={oppLeagueCount}
+              // Delimited, so `opp-start` cannot match inside a test for
+              // `start` — see the drawer's `litCells`.
+              lit={litIds.includes(id)}
             />
           ))}
         </button>
@@ -1494,10 +1719,23 @@ function Cell({
   id,
   prepared,
   leagueCount,
+  oppLeagueCount,
+  lit,
 }: {
   id: SharesColumnId;
   prepared: Prepared;
   leagueCount: number;
+  oppLeagueCount: number;
+  /**
+   * This cell's own reading is what the row is narrowed on.
+   *
+   * **The cells light individually**, which is what makes four keys in a tray
+   * legible without opening it: the row's pip says *something* is picked and
+   * the lit window says which. It is a border and a halo rather than a fill —
+   * the figure inside is a reading, and tinting the glass would make the number
+   * mean something different from the identical number two cells over.
+   */
+  lit: boolean;
 }) {
   const { row, pct } = prepared;
 
@@ -1557,12 +1795,37 @@ function Cell({
         trail = `${prepared.benchPct}%`;
       }
       break;
+    // **The opposing pair is scaled by its own denominator**, which is
+    // legitimately lower — see the drawer's `opponentLeagueCount`. Everything
+    // else about them is the reader's own two: the started figure is the lit
+    // one and the benched figure is the quieter, because which of the two a
+    // reader is after is the whole of what the panel is for.
+    case "opp-start":
+      if (row.oppStarted != null) {
+        main = `${row.oppStarted}/${oppLeagueCount}`;
+        trail = `${prepared.oppStartPct}%`;
+      }
+      break;
+    case "opp-bench":
+      quiet = true;
+      if (row.oppBenched != null) {
+        main = `${row.oppBenched}/${oppLeagueCount}`;
+        trail = `${prepared.oppBenchPct}%`;
+      }
+      break;
   }
 
   return (
     <span
       style={{ width: SHARES_COLUMN_WIDTHS[id] }}
-      className={`${CONSOLE_WINDOW} flex shrink-0 flex-col justify-center gap-0.5 self-stretch rounded-[0.4375rem] px-2 py-1.5`}
+      // The border colour is composed onto the *shell*, never appended to
+      // `CONSOLE_WINDOW` — see that constant's split for why the append is a
+      // control that silently never lights.
+      className={`${CONSOLE_WINDOW_SHELL} flex shrink-0 flex-col justify-center gap-0.5 self-stretch rounded-[0.4375rem] px-2 py-1.5 ${
+        lit
+          ? "border-active/55 shadow-[var(--window-shadow),0_0_20px_-8px_var(--accent-glow)]"
+          : "border-black/85"
+      }`}
     >
       <Scanlines />
       <span

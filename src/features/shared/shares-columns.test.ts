@@ -4,9 +4,13 @@ import { describe, test } from "node:test";
 import {
   DEFAULT_SHARES_COLUMNS,
   MAX_SHARES_COLUMNS,
+  maxSharesColumns,
   mergeSharesColumns,
   type SharesColumnId,
+  SHARES_COLUMNS_BY_KIND,
+  sharesColumnBreak,
   sharesColumns,
+  WEEK_READING_COLUMN,
 } from "./shares-columns.ts";
 
 /**
@@ -51,17 +55,30 @@ describe("sharesColumns", () => {
     ]);
   });
 
-  test("a week panel opens on both its columns, not just the last", () => {
-    // The case that made the single-column fallback wrong: `Started` and
-    // `Bench` are one reading split in two, and the stored default is three
-    // season metrics — so *every* first visit hit this branch and would have
-    // been shown the panel's second half alone.
-    for (const kind of ["starter", "opponent"] as const) {
-      assert.deepEqual(sharesColumns(DEFAULT_SHARES_COLUMNS, kind), [
-        "start",
-        "bench",
-      ]);
-    }
+  test("the week panel opens on all four of its columns, not just the last", () => {
+    // The case that made the single-column fallback wrong: the four are one
+    // reading split four ways, and the stored default is three season metrics
+    // — so *every* first visit hits this branch and would otherwise have been
+    // shown a quarter of the panel it opened.
+    assert.deepEqual(sharesColumns(DEFAULT_SHARES_COLUMNS, "week"), [
+      "start",
+      "bench",
+      "opp-start",
+      "opp-bench",
+    ]);
+  });
+
+  test("the week panel's cap is four and every other panel's is three", () => {
+    // A fact about the row's width rather than about how many metrics exist:
+    // that panel is 40rem and these are 34, so one cap for both would let a
+    // manager drawer offer a cell it cannot hold.
+    assert.equal(maxSharesColumns("week"), 4);
+    assert.equal(maxSharesColumns("player"), MAX_SHARES_COLUMNS);
+    assert.equal(
+      sharesColumns(["value", "age", "class", "record", "share"], "player")
+        .length,
+      MAX_SHARES_COLUMNS,
+    );
   });
 
   test("the default is valid on both panels", () => {
@@ -128,5 +145,37 @@ describe("mergeSharesColumns", () => {
     assert.deepEqual(sharesColumns(merged, "leaguemate"), ["share", "record"]);
     // …and the player panel is exactly where it was left.
     assert.deepEqual(sharesColumns(merged, "player"), ["value", "age", "class"]);
+  });
+});
+
+describe("sharesColumnBreak", () => {
+  test("a groove is cut where the side changes and nowhere else", () => {
+    // Read as a run rather than as a key: the boundary is a property of the
+    // vocabulary, so the Sort track gets it without being told where it is.
+    assert.equal(sharesColumnBreak("start", undefined), false);
+    assert.equal(sharesColumnBreak("bench", "start"), false);
+    assert.equal(sharesColumnBreak("opp-start", "bench"), true);
+    assert.equal(sharesColumnBreak("opp-bench", "opp-start"), false);
+  });
+
+  test("the season metrics are one run, so they cut nothing", () => {
+    assert.equal(sharesColumnBreak("age", "value"), false);
+    assert.equal(sharesColumnBreak("share", "record"), false);
+  });
+
+  test("every reading names a column, and they are the same four", () => {
+    // The `Record` is what ties the pure module's vocabulary to this one; the
+    // assertion is that it stayed an identity map, which is the whole point of
+    // spelling them alike.
+    assert.deepEqual(WEEK_READING_COLUMN, {
+      start: "start",
+      bench: "bench",
+      "opp-start": "opp-start",
+      "opp-bench": "opp-bench",
+    });
+    assert.deepEqual(
+      Object.values(WEEK_READING_COLUMN).sort(),
+      [...SHARES_COLUMNS_BY_KIND.week].sort(),
+    );
   });
 });

@@ -2,7 +2,10 @@
 
 import { useMemo } from "react";
 
-import type { SubjectKind } from "./league-subjects.ts";
+import type {
+  SubjectKind,
+  WeekReading,
+} from "./league-subjects.ts";
 import { useLocalValue, writeLocal } from "./local-store.ts";
 
 /*
@@ -31,14 +34,35 @@ import { useLocalValue, writeLocal } from "./local-store.ts";
 const STORAGE_KEY = "thelab:shares-columns";
 
 /**
- * The most columns a row can carry.
+ * The most columns a row can carry, on a panel that has not said otherwise.
  *
  * Three, and the number is about the row rather than about how many metrics
- * exist: a cell is 3.25–4.5rem, the name beside them has to stay readable, and
- * the drawer is 34rem at its widest. Five options and three slots is the picker
- * doing its job.
+ * exist: a cell is 3.25–4.75rem, the name beside them has to stay readable, and
+ * these drawers are 34rem at their widest. Five options and three slots is the
+ * picker doing its job.
  */
 export const MAX_SHARES_COLUMNS = 3;
+
+/**
+ * The week panel's own cap, which is four because its panel is 40rem.
+ *
+ * **A per-kind cap rather than a raised global one**, and the reason is in the
+ * paragraph above: the number is a fact about the row's width, and the merged
+ * week panel is the one panel that is wider. Raising the global to four would
+ * let a 34rem manager drawer offer a fourth cell it measurably cannot hold —
+ * a regression on a panel this change does not touch, made silently, in the
+ * one place a reader would not think to look for it.
+ *
+ * Four is what its four readings need: the two sides' started and benched
+ * counts are one reading split four ways, and a panel showing three of them
+ * would be missing a quarter of what it is named for.
+ */
+const MAX_WEEK_COLUMNS = 4;
+
+/** How many columns this panel's rows can carry. */
+export function maxSharesColumns(kind: SubjectKind): number {
+  return kind === "week" ? MAX_WEEK_COLUMNS : MAX_SHARES_COLUMNS;
+}
 
 /**
  * Every column a shares row can carry, in the order the spare keys offer them.
@@ -55,6 +79,8 @@ const COLUMN_LABELS = {
   share: "Share",
   start: "Started",
   bench: "Bench",
+  "opp-start": "Opp start",
+  "opp-bench": "Opp bench",
 } as const;
 
 export type SharesColumnId = keyof typeof COLUMN_LABELS;
@@ -81,9 +107,63 @@ export const SHARES_COLUMN_WIDTHS: Record<SharesColumnId, string> = {
   class: "3.75rem",
   record: "4.25rem",
   share: "4.5rem",
-  start: "4.5rem",
-  bench: "4.5rem",
+  // **76px, and the four move together**, because they are one reading split
+  // four ways: the merged panel draws all of them on one line and a cell a
+  // quarter-rem narrower than the one beside it would read as a different kind
+  // of number. It is what `n/total` plus a trailing percentage needs at
+  // `--fs-11` without the two colliding.
+  start: "4.75rem",
+  bench: "4.75rem",
+  "opp-start": "4.75rem",
+  "opp-bench": "4.75rem",
 };
+
+/**
+ * Which column each of the four week readings lights.
+ *
+ * **The `Record` is the tie**, which is what lets {@link WeekReading} spell
+ * itself in the pure module with no imports and still be the same vocabulary as
+ * the columns here: a reading renamed on one side stops compiling on the other,
+ * rather than quietly lighting the wrong cell. It is an identity map today, and
+ * being an identity map is the point rather than an accident to be optimised
+ * away.
+ */
+export const WEEK_READING_COLUMN: Record<WeekReading, SharesColumnId> = {
+  start: "start",
+  bench: "bench",
+  "opp-start": "opp-start",
+  "opp-bench": "opp-bench",
+};
+
+/**
+ * Which group a column belongs to, read as a **run** rather than as a key.
+ *
+ * The Sort track cuts a groove wherever the value changes down the list of
+ * columns on screen, which is the tools tray's own rule one control over: the
+ * separator is a property of the vocabulary rather than something a panel
+ * passes in, so a track that offers `Started · Bench · Opp start · Opp bench`
+ * gets the side boundary without being told where it is, and one that offers
+ * three season metrics gets no groove at all.
+ */
+const COLUMN_GROUP: Record<SharesColumnId, string> = {
+  value: "season",
+  age: "season",
+  class: "season",
+  record: "season",
+  share: "season",
+  start: "mine",
+  bench: "mine",
+  "opp-start": "theirs",
+  "opp-bench": "theirs",
+};
+
+/** Whether a groove is cut before this column, given the one before it. */
+export function sharesColumnBreak(
+  id: SharesColumnId,
+  previous: SharesColumnId | undefined,
+): boolean {
+  return previous !== undefined && COLUMN_GROUP[id] !== COLUMN_GROUP[previous];
+}
 
 /**
  * Which columns each drawer can offer.
@@ -97,12 +177,11 @@ export const SHARES_COLUMN_WIDTHS: Record<SharesColumnId, string> = {
  * drops are not omissions: a value, an age and a draft class are facts about a
  * *player*, and there is no honest number of any of them for a person.
  *
- * The two week panels offer neither set. A season's `Rec · Win` and a
- * cross-league `Share` are answers about a whole year, and these two count one
- * week: `Started` and `Bench` are how many of the week's lineups seated a
- * player and how many left him off, which is the only pair either panel can
- * state. A metric a panel cannot offer is dropped from a stored selection
- * rather than rendered blank — see {@link sharesColumns}.
+ * The week panel offers neither set. A season's `Rec · Win` and a cross-league
+ * `Share` are answers about a whole year, and it counts one week: its four are
+ * how many of that week's lineups seated a player and how many left him off, on
+ * each side of the games. A metric a panel cannot offer is dropped from a
+ * stored selection rather than rendered blank — see {@link sharesColumns}.
  */
 export const SHARES_COLUMNS_BY_KIND: Record<
   SubjectKind,
@@ -119,8 +198,11 @@ export const SHARES_COLUMNS_BY_KIND: Record<
   // with that person hold that player, which is exactly what the chip's own pip
   // already says.
   "leaguemate-player": ["share"],
-  starter: ["start", "bench"],
-  opponent: ["start", "bench"],
+  // **All four, and the panel's cap is four**, so a first visit shows every
+  // one: they are one reading split four ways and a panel opening on three of
+  // them would be missing a quarter of what it is named for. See
+  // {@link maxSharesColumns}.
+  week: ["start", "bench", "opp-start", "opp-bench"],
 };
 
 /**
@@ -142,8 +224,8 @@ export const DEFAULT_SHARES_COLUMNS: readonly SharesColumnId[] = [
  * Applied on write *and* read so the two ends cannot disagree about what a
  * valid selection is.
  *
- * **It does not cap.** {@link MAX_SHARES_COLUMNS} is a bound on how many
- * columns a *panel shows*, not on how many the reader has chosen across both:
+ * **It does not cap.** {@link maxSharesColumns} is a bound on how many columns
+ * a *panel shows*, not on how many the reader has chosen across all of them:
  * the leaguemate panel offers two of the five, so a stored sequence carrying
  * three player metrics and two of its own is a perfectly valid record of one
  * reader's choices, and truncating it here would have opening one drawer throw
@@ -215,10 +297,9 @@ export function sharesColumns(
   kind: SubjectKind,
 ): readonly SharesColumnId[] {
   const offered = SHARES_COLUMNS_BY_KIND[kind];
-  const kept = stored
-    .filter((id) => offered.includes(id))
-    .slice(0, MAX_SHARES_COLUMNS);
-  return kept.length > 0 ? kept : offered.slice(0, MAX_SHARES_COLUMNS);
+  const cap = maxSharesColumns(kind);
+  const kept = stored.filter((id) => offered.includes(id)).slice(0, cap);
+  return kept.length > 0 ? kept : offered.slice(0, cap);
 }
 
 /**

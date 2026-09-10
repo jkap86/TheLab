@@ -27,6 +27,7 @@ export {
   CONSOLE_KEY_BLOCK,
   CONSOLE_KEY_PILL,
   CONSOLE_KEY_PILL_BARE,
+  CONSOLE_CHANNEL_METAL,
   CONSOLE_KEY_PILL_SHELL,
   CONSOLE_METAL,
   CONSOLE_METAL_TRACK_SM,
@@ -175,9 +176,9 @@ export { SubjectTokens } from "./ui/subject-tokens";
 // `ManagerPlate` and `SharesDrawer` itself all moved on, and the folder rule
 // that `features/gametime` may not read a sibling feature.
 //
-// Only the two panels, the fold and the entry shape leave this folder.
-// `WeekSharesDrawer` and the decisions view under it are their own parts, on the
-// barrel rule the manager and tools folders keep.
+// Only the panel, the folds and the entry shape leave this folder. The
+// decisions view under the drawer is its own part, on the barrel rule the
+// manager and tools folders keep.
 // What an emptied league grid says, and which of its two narrowings it points
 // at. Three pages read it — see the module for why it is not three copies.
 export { narrowedEmptyState } from "./narrowed-empty-state";
@@ -185,18 +186,17 @@ export type {
   NarrowedEmptyAction,
   NarrowedEmptyState,
 } from "./narrowed-empty-state";
-export { sideOf, weekPlayerShares } from "./week-shares";
+export { sideOf, weekSubjectRolls, weekTwoSidedShares } from "./week-shares";
 export type {
   WeekLineupEntry,
-  WeekPlayerShare,
-  WeekPlayerShares,
   WeekSharePlayer,
   WeekShareSeat,
   WeekShareSide,
   WeekSide,
+  WeekTwoSidedShare,
+  WeekTwoSidedShares,
 } from "./week-shares";
-export { OpponentSharesDrawer } from "./ui/opponent-shares-drawer";
-export { StarterSharesDrawer } from "./ui/starter-shares-drawer";
+export { WeekSharesDrawer } from "./ui/week-shares-drawer";
 export { WEEK_BROWSE_KEYS } from "./ui/week-browse-keys";
 export {
   RackControlsProvider,
