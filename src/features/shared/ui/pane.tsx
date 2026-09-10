@@ -3,7 +3,6 @@ import type { ReactNode } from "react";
 import {
   CONSOLE_BILLET,
   CONSOLE_GLASS,
-  CONSOLE_MILLED_WELL,
   CONSOLE_PANE_TRACK,
   CONSOLE_WINDOW_LEDGE,
 } from "../console-chrome";
@@ -25,10 +24,34 @@ import { Scanlines } from "./card-plate";
  * second is rendered *by* the first — so a `PaneGlass` exported from
  * `league-teams.tsx` and imported back by the breakdown is an import cycle. The
  * surfaces have to sit beside both rather than inside either, which is the same
- * reason `card-plate.tsx` exists one level up. {@link DrawerRow} is here for
- * exactly that reason a second time: the bench rows are the breakdown's and the
- * pick rows are `draft-picks.tsx`'s, and the breakdown imports that file.
+ * reason `card-plate.tsx` exists one level up. {@link PaneRow} sits beside them
+ * for exactly that reason a second time — and for a third: the bench rows are
+ * the breakdown's, the pick rows are `draft-picks.tsx`'s and the breakdown
+ * imports that file, while the checker and gametime are sibling features that
+ * may reach `features/shared` and not each other.
+ *
+ * **`DrawerRow` used to live here and is gone.** It was one of four row
+ * components that had drifted apart; all four are {@link PaneRow} now, and a
+ * drawer's rows are that part with `ground="drawer"` — one step less cast,
+ * since they sit on a part rather than on glass. Everything the *drawer* is
+ * made of is untouched: {@link DrawerBar}, {@link PaneDrawer},
+ * {@link DRAWER_BAR_HEIGHT} and the `--bars` sums do not move.
  */
+
+/**
+ * The row every pane draws, re-exported here because this module is the door
+ * onto a pane's pieces and a caller that already imports `Pane`, `PaneGlass`
+ * and `PaneDrawer` should not have to know that the row lives in a file of its
+ * own. It has one because it is long enough to be one, and because its own
+ * argument — why a row is a part rather than a channel — belongs beside it.
+ */
+export {
+  PaneRow,
+  type PaneRowFace,
+  type PaneRowFigure,
+  type PaneRowLead,
+  type PaneRowStatus,
+} from "./pane-row";
 
 /**
  * The part itself.
@@ -156,83 +179,6 @@ export function PaneGlass({
       <Scanlines />
       {children}
     </div>
-  );
-}
-
-/**
- * The shell every drawer row is cut from — bench and picks alike.
- *
- * **Billet stock, not the glass's own channel.** The drawer is a part bolted
- * over the starters rather than more of the same list, so its rows are cut into
- * that part; drawn in `CONSOLE_ROW_WELL` they would read as the starters
- * continuing under a bar, which is exactly the thing the drawer exists not to
- * be.
- *
- * **Two lines below `lg`, one above it**, which is not this row's own idea — it
- * is the seat rows' arrangement, at the seat rows' breakpoint, because a drawer
- * row is read directly over the seat row it covers and two rows of different
- * heights would not read across. A render is what forced it: at 390 a pane is
- * 168px, and three cells beside a name leave the bench's name **0px** and the
- * pick's **7px** — one character, which is the failure this file records at
- * three other grains.
- *
- * One node with two layouts through `lg:contents`, the trick the app rack's
- * brand row turns: the alternative renders every row twice and reads each of
- * them twice to anything listening.
- *
- * Both cells are `--recess-bg` rather than `--figure-well-bg`, which is the
- * same turning-over the wells one surface up already make — a hole cut in
- * *metal* is the metal's own shadow, where the glass's wells are cut in glass.
- *
- * **The `lg` order is the seat row's, cell for cell**: lead (1), the mark (2),
- * the name (3), the note (4), the figure (5). The children carry their own
- * `lg:order-*` for the two in the middle, because they are the caller's
- * elements; the note is the slot between the name and the figure — a bench
- * player's NFL team — and is drawn in the billet's label ink rather than the
- * glass's mint, since a drawer row is a part rather than glass.
- *
- * 38px at `lg` and 52 below it, the seat row's own heights since the rows were
- * slimmed — a drawer row is read directly over the seat row it covers.
- */
-export function DrawerRow({
-  lead,
-  /** The `lg` width of the leading cell: a position is three characters, a season is four. */
-  leadWidth,
-  figure,
-  note = null,
-  children,
-}: {
-  lead: string;
-  leadWidth: string;
-  figure: string;
-  /** A fact one level below the name, between it and the figure — or nothing. */
-  note?: string | null;
-  /** The row's subject — a face and a name, or a pick and where it came from. */
-  children: ReactNode;
-}) {
-  return (
-    <li
-      className={`${CONSOLE_MILLED_WELL} relative mb-[3px] flex h-[52px] flex-col justify-center gap-[5px] rounded-[7px] px-1.5 lg:h-[38px] lg:flex-row lg:items-center lg:gap-[9px] lg:px-2.5`}
-    >
-      <span className="relative flex w-full min-w-0 items-center gap-1.5 lg:contents">
-        {children}
-      </span>
-      <span className="relative flex w-full items-center gap-1.5 lg:contents">
-        <span
-          className={`shrink-0 overflow-hidden rounded-[5px] bg-[color:var(--recess-bg)] px-1 py-0.5 text-center font-mono text-[length:var(--fs-11)] tabular-nums text-[color:var(--billet-label)] shadow-[var(--figure-well-shadow)] lg:order-1 ${leadWidth}`}
-        >
-          {lead}
-        </span>
-        {note && (
-          <span className="shrink-0 font-mono text-[length:var(--fs-10)] tracking-[0.1em] text-[color:var(--billet-label)] lg:order-4 lg:w-8 lg:text-right lg:text-[length:var(--fs-11)]">
-            {note}
-          </span>
-        )}
-        <span className="min-w-0 flex-1 overflow-hidden rounded-[5px] bg-[color:var(--recess-bg)] px-[5px] py-0.5 text-right font-mono text-[length:var(--fs-12-5)] tabular-nums text-[color:var(--billet-name)] shadow-[var(--figure-well-shadow)] lg:order-5 lg:w-[70px] lg:flex-none">
-          {figure}
-        </span>
-      </span>
-    </li>
   );
 }
 
@@ -452,8 +398,8 @@ export function PaneLedgeTrack({ legend, children }: { legend: string; children:
  * One of a pane's totals, milled into the ledge.
  *
  * The figure sits in a `--recess-bg` cell under `--figure-well-shadow` — a hole
- * cut in *metal*, the same turning-over `DrawerRow` already makes against the
- * glass's own wells one surface down.
+ * cut in *metal*, the same turning-over a drawer's own rows already make against
+ * the glass's wells one surface down.
  *
  * Null draws an em dash rather than a zero, on the contract's own rule: a
  * figure is null where there is no answer, and a `0.0` there is a roster

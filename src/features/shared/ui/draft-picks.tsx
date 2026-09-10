@@ -1,7 +1,7 @@
 import type { RosterPick } from "@/shared/contract";
 
 import { ordinal } from "../format";
-import { DrawerRow } from "./pane";
+import { PaneRow } from "./pane";
 
 /**
  * The roster's future draft picks, as the rows of the roster pane's second
@@ -76,31 +76,34 @@ export function pickSpan(picks: readonly RosterPick[]): string | null {
 }
 
 /**
- * One row per pick, in the drawer's own stock.
+ * One row per pick, as a {@link PaneRow} in the drawer's own stock.
  *
  * The season leads the row, in the well the bench rows opposite put a position
  * in — a portfolio is scanned season by season, picks arrive sorted by season,
  * and the column is what does the grouping the old grid's per-season ledges
  * did. It is wider than that well by four characters against three, which is a
- * year against a position.
+ * year against a position, and it is `numeric` for the same reason: a year is
+ * digits, where the tracking that makes three letters read as a tag is width
+ * spent on nothing.
+ *
+ * **It takes no fill and draws no face**, which are the two arms of the part
+ * that exist for exactly this row. A pick has no position — it is not a
+ * quarterback until somebody spends it — so the milled well shows through; and
+ * its subject is an asset rather than a person, so there is nobody to mount.
+ * Handed a hue or a mount it would be claiming both.
+ *
+ * The name is a node rather than a string because a pick's is two inks — the
+ * pick, then where it came from — which is the one thing about a portfolio that
+ * is not simply a list of rounds.
  */
 export function PickRows({ picks }: { picks: readonly RosterPick[] }) {
   return (
     <ul className="m-0 list-none p-0">
-      {picks.map((pick, i) => (
-        <DrawerRow
-          // Position in the sorted list is the identity the payload keeps — two
-          // acquired picks can share round *and* origin name, so nothing on the
-          // pick itself is unique.
-          key={i}
-          lead={pick.season}
-          leadWidth="lg:w-[54px]"
-          figure={pick.value !== null ? pick.value.toLocaleString("en-US") : "—"}
-        >
-          <span className="relative min-w-0 flex-1 truncate text-[length:var(--fs-13)] lg:order-3">
+      {picks.map((pick, i) => {
+        const name = (
+          <>
             {/* Lit where the pick came from somebody else — the pills' own
-                rule, and the one thing about a portfolio that is not simply a
-                list of rounds. */}
+                rule. */}
             <span
               className={
                 pick.from
@@ -111,14 +114,29 @@ export function PickRows({ picks }: { picks: readonly RosterPick[] }) {
               {pickName(pick)}
             </span>
             {pick.from && (
-              <span className="text-[color:var(--billet-label)]">
-                {" "}
-                from {pick.from}
-              </span>
+              <span className="text-[color:var(--billet-label)]"> from {pick.from}</span>
             )}
-          </span>
-        </DrawerRow>
-      ))}
+          </>
+        );
+
+        return (
+          <PaneRow
+            // Position in the sorted list is the identity the payload keeps —
+            // two acquired picks can share round *and* origin name, so nothing
+            // on the pick itself is unique.
+            key={i}
+            ground="drawer"
+            lead={{ label: pick.season, width: "w-[42px] lg:w-[54px]", numeric: true }}
+            face={null}
+            name={name}
+            shortName={name}
+            figure={{
+              text: pick.value !== null ? pick.value.toLocaleString("en-US") : "—",
+              percentile: null,
+            }}
+          />
+        );
+      })}
     </ul>
   );
 }

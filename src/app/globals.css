@@ -1156,6 +1156,130 @@
   --standing-label-shadow: 0 1px 0 rgba(255, 255, 255, 0.12);
 
   /*
+   * ── The pane row's tile ──────────────────────────────────────────────────
+   *
+   * A row in an expanded card's pane is a **part standing on the glass**
+   * rather than a channel cut into it: billet stock chamfered on four edges,
+   * casting onto the readout behind it. It replaces `--row-well-*` in all four
+   * tools at once — see `PaneRow` — and the reason it is stock rather than a
+   * cut is that the drawer's rows already were: a bench row is a part bolted
+   * over the starters, so drawing the starters as holes and the bench as parts
+   * made the same player two objects one press apart.
+   *
+   * `--tile-shadow` is `--billet-shadow`'s chamfer with a **shorter cast**: a
+   * billet on a housing throws a 20px ambient shadow because it stands on a
+   * card, and forty of these in one scrolling list would be a wash of black
+   * under the glass rather than forty parts on it.
+   *
+   * `--tile-drawer-shadow` is the same chamfer with the cast down one step,
+   * which is the whole of what `ground="drawer"` means: a tile in a drawer
+   * sits on a *part* rather than on glass, and a part throws less onto metal
+   * than onto a lit surface behind it.
+   *
+   * The selected pair is **one atomic list each**, not the resting pair plus
+   * an overlay: a shadow list cannot be appended to — a second `shadow-[…]`
+   * replaces the first, and which wins is Tailwind's emit order — so the lit
+   * state is spelled whole. Its face is the billet's own gradient lifted
+   * toward the accent and its top inset is mint rather than white, which is
+   * what makes a pressed tile read as *lit* rather than merely brighter.
+   */
+  --tile-bg: var(--billet-bg);
+  --tile-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.5),
+    inset 0 -1px 0 rgba(0, 0, 0, 0.6), inset 1px 0 0 rgba(255, 255, 255, 0.1),
+    inset -1px 0 0 rgba(0, 0, 0, 0.35), 0 2px 4px rgba(0, 0, 0, 0.55);
+  --tile-drawer-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.5),
+    inset 0 -1px 0 rgba(0, 0, 0, 0.6), inset 1px 0 0 rgba(255, 255, 255, 0.1),
+    inset -1px 0 0 rgba(0, 0, 0, 0.35), 0 1px 2px rgba(0, 0, 0, 0.4);
+  --tile-selected-bg: linear-gradient(180deg, #5f7d80 0%, #4a6468 26%, #31474b 62%,
+    #223336 100%);
+  --tile-selected-shadow: inset 0 1px 0 rgba(159, 255, 242, 0.6),
+    inset 0 -1px 0 rgba(0, 0, 0, 0.6), inset 0 0 0 1px rgba(0, 255, 229, 0.4),
+    0 3px 7px rgba(0, 0, 0, 0.6), 0 0 16px -4px var(--accent-glow);
+  /*
+   * The initial in a tile's face mount, which is only ever seen where the
+   * headshot behind it has not loaded or does not exist. It is a step quieter
+   * than `--billet-scope` — the quietest ink this file otherwise carries —
+   * because it is a *fallback under a picture* rather than a reading: on the
+   * rows that do have a thumbnail it is invisible, and on the rows that do not
+   * it should read as a mount rather than as a letter somebody chose.
+   */
+  --tile-face-ink: rgba(237, 237, 237, 0.45);
+
+  /*
+   * ── The position palette ─────────────────────────────────────────────────
+   *
+   * A pane row's lead cell prints the **seat** and is filled by the
+   * **position of whoever is in it** — so a flex seat reads `FLX` and is
+   * filled tight-end rose, which is the reading the colour exists for. A seat
+   * with nobody in it, and a standings row's ordinal, take no fill at all: the
+   * milled well shows through and the label keeps `--billet-label`, so "no
+   * position" is the absence of a colour rather than a seventh one.
+   *
+   * **Six hues, one lightness and one chroma.** No position shouts louder than
+   * another, so the hue says which position and nothing else says anything.
+   * Each clears the three colours the card has already spent: the rank ramp's
+   * red (25) and green (150), so a slot can never read as a verdict about the
+   * player standing beside it; and **teal (~190)**, which the console spends on
+   * the reader and on state — the format lamp, a lit pip, `--lit-bar-bg`, and
+   * the drawer bar's own `--billet-accent` when it is open, which is on this
+   * very row. A teal slot would be the third teal on the card and would read
+   * as lit. That is `--median-ink`'s own argument for why the league's median
+   * needed an amber. Tightest gap between two positions is 33°; tightest gap
+   * to a reserved colour is 38° (DEF against teal).
+   *
+   * The ink is the same hue taken down to `--slot-ink-l`, so all six read at
+   * one contrast (~7.7:1 here) rather than as six hand-picked pairs. Measured
+   * against the well's own gradient (`#26343a` → `#33454b`): QB 6.65/5.19,
+   * RB 6.79/5.30, WR 6.74/5.26, TE 6.57/5.13, K 6.90/5.39, DEF 7.04/5.50.
+   *
+   * They are four numbers and six hues rather than twelve colours because the
+   * light scheme moves the two *pairs* and keeps every hue — see the light
+   * block, where both had to be measured rather than dimmed.
+   */
+  --slot-qb: 305;
+  --slot-rb: 268;
+  --slot-wr: 65;
+  --slot-te: 338;
+  --slot-k: 95;
+  --slot-def: 228;
+  --slot-fill-l: 0.8;
+  --slot-fill-c: 0.105;
+  --slot-ink-l: 0.28;
+  --slot-ink-c: 0.07;
+
+  /*
+   * ── The injury lamp ──────────────────────────────────────────────────────
+   *
+   * A raised chip carrying a lit letter — the **inverse of the slot chip
+   * beside it**, and deliberately: the slot is a *label* and reads as a filled
+   * tag, where this is a *warning* and reads as a lamp. Same hue family either
+   * way, so the two are plainly one family at two jobs.
+   *
+   * Two hues, and both are colours the card already spends rather than a
+   * third: the ramp's red for an `O` or an `IR`, which is the only thing on
+   * this row that is unambiguously bad news, and the amber `--median-ink`
+   * already spends on "neither" for a `Q`.
+   *
+   * The face is dark and the letter bright here; the number that carries it is
+   * the **ink on the face** (9.7:1 for `Q`, 6.7:1 for `O`) rather than the
+   * face against the billet, which is 1.2:1 at the stock's own bottom stop —
+   * what separates the chip from the row is its chamfer and its cast, not a
+   * ratio. That is the property the light scheme had to keep, and the reason
+   * it inverts rather than dimming.
+   */
+  --status-face-l: 0.26;
+  --status-face-c: 0.085;
+  --status-ink-l: 0.82;
+  --status-ink-c: 0.15;
+  --status-q-hue: 78;
+  --status-out-hue: 25;
+  --status-chip-shadow: 0 1px 2px rgba(0, 0, 0, 0.5), 0 2px 4px -1px rgba(0, 0, 0, 0.45);
+  --status-chip-chamfer: inset 0 1px 0 rgba(255, 255, 255, 0.24),
+    inset 0 -1px 0 rgba(0, 0, 0, 0.6), inset 1px 0 0 rgba(255, 255, 255, 0.08),
+    inset -1px 0 0 rgba(0, 0, 0, 0.4);
+  --status-ink-shadow: 0 1px 0 rgba(0, 0, 0, 0.6);
+
+  /*
    * ── The bubbling flask ───────────────────────────────────────────────────
    *
    * What the console shows while it is reading — see `bubbling-flask.tsx`.
@@ -1731,6 +1855,95 @@
   --standing-well-shadow: inset 0 3px 6px rgba(15, 23, 42, 0.26),
     inset 0 -1px 0 rgba(255, 255, 255, 0.95);
   --standing-label-shadow: 0 1px 0 rgba(255, 255, 255, 0.9);
+
+  /*
+   * The tile, turned over. A part standing on the glass is the surface
+   * catching the light on this side, so the face goes near-white with the
+   * stock (`--billet-bg`'s own light argument, one part smaller) and the
+   * chamfer inverts with it: the top highlight stays a highlight and the
+   * underside and both casts become the slate every bevel in this file is cut
+   * with here rather than black.
+   *
+   * **The selected face is the one thing that does not simply lighten.** A lit
+   * tile has to be brighter than the stock around it, and the stock here opens
+   * at white — so it is tinted toward the accent rather than lifted, and its
+   * top inset is the light scheme's own teal rather than the mint that reads
+   * as haze on a pale ground. The rim keeps its full opacity: it is the whole
+   * of what says "pressed" once the face can no longer be brighter.
+   */
+  --tile-bg: var(--billet-bg);
+  --tile-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.95),
+    inset 0 -1px 0 rgba(15, 23, 42, 0.28), inset 1px 0 0 rgba(255, 255, 255, 0.7),
+    inset -1px 0 0 rgba(15, 23, 42, 0.16), 0 2px 4px rgba(15, 23, 42, 0.24);
+  --tile-drawer-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.95),
+    inset 0 -1px 0 rgba(15, 23, 42, 0.28), inset 1px 0 0 rgba(255, 255, 255, 0.7),
+    inset -1px 0 0 rgba(15, 23, 42, 0.16), 0 1px 2px rgba(15, 23, 42, 0.18);
+  --tile-selected-bg: linear-gradient(180deg, #e8fbf8 0%, #d6f2ee 26%, #bde5df 62%,
+    #a5d6ce 100%);
+  --tile-selected-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.95),
+    inset 0 -1px 0 rgba(15, 23, 42, 0.22), inset 0 0 0 1px rgba(13, 148, 136, 0.55),
+    0 3px 7px rgba(15, 23, 42, 0.28), 0 0 16px -4px var(--accent-glow);
+  --tile-face-ink: rgba(21, 36, 40, 0.45);
+
+  /*
+   * The position palette, **measured rather than dimmed** — and both halves of
+   * it moved, which is what the handoff's own note said would happen.
+   *
+   * `oklch(0.8 0.105 H)` is a fill measured against the *dark* well
+   * (`#26343a` → `#33454b`). The light well is near-white
+   * (`#b4c5cb` → `#dde7ea`), so the same fill has almost no separation from it
+   * and the chip stops reading as filled at all — 2.6:1 at the handoff's own
+   * suggested `oklch(0.55 0.12 H)`, under the 3:1 a graphical element owes.
+   * So the fill goes **down** and the ink goes **up**, and both were measured
+   * band against band against the well's two stops — `--billet-face`'s own
+   * precedent — rather than against one of them.
+   *
+   * At `oklch(0.48 0.104 H)` the worst fill clears its well at **3.53:1**
+   * (QB 3.84/5.44, RB 3.73/5.28, WR 3.77/5.34, TE 3.89/5.50, K 3.66/5.18,
+   * DEF 3.53/4.99) and the worst near-white ink clears its fill at **5.78:1**,
+   * against the dark scheme's 7.7. The spread across the six is 3.53–3.89,
+   * so the one-lightness-one-chroma property — no position shouting louder
+   * than another — survives the crossing, which is the thing that had to.
+   *
+   * **The six hues do not move.** They are chosen against the three colours
+   * this card spends, and those turn over with the theme rather than moving.
+   */
+  --slot-fill-l: 0.48;
+  --slot-fill-c: 0.104;
+  --slot-ink-l: 0.97;
+  --slot-ink-c: 0.02;
+
+  /*
+   * The injury lamp, **inverted wholesale rather than dimmed** — a light face
+   * with dark ink, hue unchanged, which is what `--alert-face` and
+   * `--cap-accent-*` already do on this side.
+   *
+   * The number that had to survive is the **ink on the face**, not the face
+   * against the stock: the dark chip clears its own face at 9.7:1 and clears
+   * the billet's bottom stop at only 1.2:1, so what separates a lamp from the
+   * row it sits on is its chamfer and its cast. Measured here,
+   * `oklch(0.38 0.078 H)` on `oklch(0.88 0.062 H)` is **7.02:1** for `Q` and
+   * **7.08:1** for `O`/`IR`, with the face sitting 1.44/1.03 against the
+   * billet's two stops — the same relative position the dark chip holds.
+   *
+   * A *mid*-tone face with white ink was the alternative and it fails the one
+   * number: at `oklch(0.62 0.13 H)` the white letter clears its own face at
+   * 3.6:1, half what the dark chip gives, and a lamp whose letter is hard to
+   * read is not a lamp.
+   *
+   * The chamfer and the ink's relief turn over with it: a lit lip beneath dark
+   * ink rather than a dark wall, which is `--billet-name-shadow`'s own rule.
+   */
+  --status-face-l: 0.88;
+  --status-face-c: 0.062;
+  --status-ink-l: 0.38;
+  --status-ink-c: 0.078;
+  --status-chip-shadow: 0 1px 2px rgba(15, 23, 42, 0.22),
+    0 2px 4px -1px rgba(15, 23, 42, 0.2);
+  --status-chip-chamfer: inset 0 1px 0 rgba(255, 255, 255, 0.85),
+    inset 0 -1px 0 rgba(15, 23, 42, 0.28), inset 1px 0 0 rgba(255, 255, 255, 0.6),
+    inset -1px 0 0 rgba(15, 23, 42, 0.18);
+  --status-ink-shadow: 0 1px 0 rgba(255, 255, 255, 0.85);
 
   /* ---- The bubbling flask (light) ------------------------------------- */
 

@@ -420,9 +420,76 @@ export const CONSOLE_MILLED_WELL =
  * reason: the desktop row and the two-line phone row are the same channel at
  * two sizes, and a constant naming a `rounded-*` is a second base utility for
  * the caller's own to lose an emit-order coin flip against.
+ *
+ * **No expanded-card pane draws one any more.** The four row components that
+ * did — the standings row, the two seat rows and the drawer row — are one
+ * `PaneRow` now, and that part is a billet **standing on** the glass rather
+ * than a channel cut into it: see {@link CONSOLE_TILE}, and `pane-row.tsx` for
+ * why the drawer's own rows are what settled it. What still reads this is the
+ * gametime **stat board**, whose rows genuinely are a table on one sheet of
+ * glass rather than a list of subjects — so the channel is not dead, it simply
+ * no longer describes a pane. The distinction it draws against
+ * {@link CONSOLE_MILLED_WELL} is the one place the two materials' grammar is
+ * written down, and it is the reason this note says so rather than the
+ * constant being deleted.
  */
 export const CONSOLE_ROW_WELL =
   "bg-[color:var(--row-well-bg)] shadow-[var(--row-well-shadow)]";
+
+/**
+ * A row **standing on** that glass instead: the tile every pane row is cut
+ * from.
+ *
+ * Billet stock chamfered on four edges, casting onto the readout behind it —
+ * {@link CONSOLE_BILLET} at row scale with a shorter cast, since forty of
+ * these in one scrolling list would otherwise be a wash of black under the
+ * glass rather than forty parts on it.
+ *
+ * **It is a part rather than a channel because the drawer's rows already
+ * were.** A bench row is a part bolted over the starters, drawn in
+ * {@link CONSOLE_MILLED_WELL}; the starters were holes. So the same player was
+ * two different objects one press apart, and unifying them meant picking one —
+ * and a row carrying a face, a name and a figure is a *subject*, which is a
+ * thing rather than an absence of one.
+ *
+ * Carries **no radius, no padding and no `position`**, on
+ * {@link CONSOLE_BILLET}'s own terms: the row is 34px at `lg` and two lines of
+ * 48 below it, the tile is `relative` and `BilletFinish`'s two overlays are
+ * `absolute` children of it, and a constant naming any of the three is a base
+ * utility for the caller's own to lose an emit-order coin flip against.
+ */
+export const CONSOLE_TILE =
+  "overflow-hidden bg-[image:var(--tile-bg)] shadow-[var(--tile-shadow)]";
+
+/**
+ * The same tile **in a drawer**: one step less cast.
+ *
+ * A drawer's rows sit on a *part* rather than on glass, and a part throws less
+ * onto metal than onto a lit surface behind it. It is a second constant rather
+ * than a caller appending a cast for {@link CONSOLE_CHIP_RAISED}'s reason — a
+ * shadow list is atomic, so appending replaces the chamfer instead of adding
+ * to it, and which of two arbitrary `shadow-[…]` utilities wins is Tailwind's
+ * emit order.
+ */
+export const CONSOLE_TILE_DRAWER =
+  "overflow-hidden bg-[image:var(--tile-bg)] shadow-[var(--tile-drawer-shadow)]";
+
+/**
+ * A tile that is **pressed**: teal-rimmed, lifted and cast a little deeper.
+ *
+ * Spelled whole rather than composed onto {@link CONSOLE_TILE}, for that
+ * constant's own reason one property over — both the face and the shadow list
+ * are single base utilities, so a caller appending either would be replacing
+ * rather than adding and the winner would be Tailwind's emit order.
+ *
+ * **A part can carry state that a channel cannot**, which is half of why the
+ * row became one: a selected channel had to be a wash *over* the row (a fill
+ * would flood the cut and the row would stop reading as cut at all), where a
+ * selected part is simply lit — its own face, its own rim, its own cast.
+ */
+export const CONSOLE_TILE_SELECTED =
+  "overflow-hidden bg-[image:var(--tile-selected-bg)] " +
+  "shadow-[var(--tile-selected-shadow)]";
 
 /**
  * The smaller channel cut into a row, which one figure sits in.

@@ -13055,6 +13055,228 @@ on a page of a hundred; and whether the lineup checker's own panel, which takes
 the seam and the foot but has no key, still reads as intended with its 22px sync
 row 8px under the cut.
 
+## The four rows became one tile
+
+An expanded card's pane lists players and teams, and four separately-authored
+row components drew them: `StandingRow` on the manager card's standings,
+`SeatRow`/`BenchRow` in the roster breakdown, the lineup checker's pair,
+gametime's pair, and the `DrawerRow` all three benches and the pick portfolio
+shared. They had drifted, and the drift was the whole reading — **the same
+player was two objects one press apart and four objects one tool apart.** They
+are one `PaneRow` now. Applied from a design handoff, its direction `2a`
+("struck into the face"). **Nothing on the wire moved** — no route, no query,
+no contract type, no payload field, no migration.
+
+What the drift was, and what closes it: a **face** on the manager's seat rows
+and nowhere else, so the checker, gametime and all three drawers drew the same
+player with no picture; a **sans** name on one card and a **mono** one on two,
+where mono belongs on labels, figures and clocks; `J. Chase` **below `lg`** in
+one tool and the whole name printed into a 165px pane in the others; **figure
+cells of 78 / 70 / 56 / 56**, so nothing lined up across the two panes a reader
+compares; a **1px border** on the checker's and gametime's rows and not the
+manager's, which is why two lists declared at 38px were not the same height;
+and three unrelated spellings of **"this row is picked"** — a lit left edge, a
+border colour, and nothing at all.
+
+### The row is a part, not a channel
+
+The rows were channels cut into the pane's glass (`CONSOLE_ROW_WELL`) and the
+**drawer's** rows were already parts — billet stock bolted over the starters,
+which is what says a drawer is a separate reading rather than the list
+continuing. Unifying them meant picking one, and a row carrying a face, a name
+and a figure is a **subject**: a thing, rather than the absence of one. So
+`CONSOLE_TILE` is a billet chamfered on four edges, casting onto the readout
+behind it, with `BilletFinish`'s two overlays as absolutely-positioned children.
+
+Two things fall out and both are worth having. **A part can carry state a
+channel cannot** — a selected channel had to be a wash *over* the row, because
+a fill floods a cut and the row stops reading as cut at all, where a selected
+part is simply lit: its own face, its own teal rim, its own cast
+(`CONSOLE_TILE_SELECTED`, spelled whole, because a shadow list is atomic). And
+**the figure comes out of its well**: with the row raised the only recess left
+on it is the lead cell, so the number is struck straight into the face at
+`--fs-14` and is the largest thing on the row. That is what buys the height
+back — **34px at `lg` against 38, and 48 below it against 52** — the well's own
+vertical padding being what went.
+
+`CONSOLE_TILE_DRAWER` is the same chamfer with the cast down one step, which is
+the whole of what `ground="drawer"` means: a tile in a drawer sits on a *part*
+rather than on glass. `--tile-shadow` itself is `--billet-shadow`'s chamfer with
+a **shorter** cast — a billet on a housing throws a 20px ambient shadow because
+it stands on a card, and forty of these in one scrolling list would be a wash of
+black under the glass rather than forty parts on it.
+
+**`CONSOLE_ROW_WELL` is not dead**, which is where this parts company with the
+handoff. It says the constant loses every reader; the gametime **stat board**
+still draws one, and rightly — its rows are a table on one sheet of glass rather
+than a list of subjects. So the note beside it records that no *pane* draws one
+any more, and the constant keeps the one place the two materials' grammar
+(a channel in glass against a well in metal) is written down.
+
+### The lead cell says the seat and is filled by the position
+
+The cell prints the **seat** and is filled by the **position of whoever is in
+it** — so a flex seat reads `FLX` and is inked tight-end rose, which is a
+reading a seat name alone cannot give and the one thing the row genuinely
+gained. An empty seat, an ordinal and a pick's season take **no fill at all**:
+the milled well shows through and the label keeps `--billet-label`, so "no
+position" is the absence of a colour rather than a seventh one.
+
+**Six hues, one lightness and one chroma**, so the hue says which position and
+nothing else says anything. Each clears the three colours the card has already
+spent: the rank ramp's red (25) and green (150), so a slot can never read as a
+verdict about the player beside it; and **teal (~190)**, which the console
+spends on the reader and on state — the format lamp, a lit pip, `--lit-bar-bg`,
+and the drawer bar's own `--billet-accent` when it is open, which is on this
+very row. A teal slot would be the third teal on the card and would read as lit,
+which is `--median-ink`'s own argument for why the league's median needed an
+amber. Tightest gap between two positions is 33°; tightest to a reserved colour
+is 38° (DEF against teal). The ink is the same hue taken to `--slot-ink-l`, so
+all six read at one contrast rather than as six hand-picked pairs.
+
+### The injury lamp is built and nothing passes one
+
+A raised chip with a dark face and a lit letter — the **inverse of the slot chip
+beside it**, deliberately: the slot is a *label* and reads as a filled tag,
+where this is a *warning* and reads as a lamp. Both hues are colours the card
+already spends — the ramp's red for an `O` or an `IR`, the amber `--median-ink`
+spends on "neither" for a `Q` — and the letter is `aria-hidden` under an
+`sr-only` sentence, on `GameChip`'s rule that a bare `Q` announced as "Q" is not
+a reading.
+
+**`status` is on no payload and all four call sites pass `null`**, which is the
+handoff's own instruction. Reaching it means a field on `LineupPlayer`,
+`LineupCheckPlayer` and `GametimePlayer` plus Sleeper's `injury_status` mapped
+in each of the three producers — and none of those three builds a player from
+the stored players map today: they read the projections feed's inlined player
+object, so it is a join added to the app's three most expensive server paths.
+Nothing in this repo reads `injury_status` at all. The lamp is built rather than
+deferred because it is what the four rows are being unified *to*, and a part
+missing one of its states is a part that has to be reopened.
+
+### Two deviations, each argued
+
+**`mine` and `selected` are two props where the handoff has one `state`.** Its
+props table types `"none" | "mine" | "selected"` and its change list says
+`is_manager ? "mine" : selected ? "selected" : "none"` — and **its own prototype
+contradicts that**: the cross-tool strip draws the standings row as `mine` *and*
+as the selected tile at once. They are two different facts — whose team this is,
+and what the pane opposite is showing — and collapsed into one value `mine` wins
+on the reader's own row, which is the row selected by default. The card would
+open with nothing on screen saying which team the roster pane had solved.
+
+**`lead.width` is a class string and `name` is a node.** Tailwind finds classes
+by scanning source text, so `lg:w-[${n}px]` assembled from a value generates no
+CSS at all — the trap `DRAWER_BAR_HEIGHT` records, where a bar silently rendered
+at the wrong height. A caller passes a literal, which is the idiom `DrawerRow`'s
+own `leadWidth` already used. And `name`/`shortName` widened from `string`
+because a pick's name is two inks (the pick, then where it came from), which is
+the one thing about a portfolio that is not simply a list of rounds.
+
+**And the face is the part's own mount, not `Avatar`.** The handoff says a team
+row keeps `Avatar url={null} size="xs"`; that component is 18/20px in a bordered
+`foreground/5` disc, and beside the design's 20/22px milled mount it would be
+the very drift this pass removes. One mount for every row: `--billet-well-bg`
+under `--standing-well-shadow`, the initial **unconditionally behind** the
+headshot (`PlayerFace`'s existing rule — a background that 404s paints nothing
+and the letter under it is the fallback, where a broken `<img>` paints the
+platform's glyph over it), `background-position: center top`, and **no letter at
+all** for an empty seat, which has no player to take an initial from.
+
+### The two light-mode measurements the handoff asked for
+
+Both had to be made rather than derived by dimming, and both moved.
+
+**The position fill.** `oklch(0.8 0.105 H)` is measured against the *dark* well
+(`#26343a` → `#33454b`), where it clears at 6.65/5.19 (QB) through 7.04/5.50
+(DEF). The light well is near-white (`#b4c5cb` → `#dde7ea`), and at the
+handoff's own suggested `oklch(0.55 0.12 H)` the fill clears it at **2.60:1** —
+under the 3:1 a graphical element owes, so the chip stops reading as filled. So
+the fill goes **down** and the ink goes **up**: at `oklch(0.48 0.104 H)` with a
+near-white `oklch(0.97 0.02 H)` ink, the worst fill clears its well at
+**3.53:1** (spread 3.53–3.89, so the one-lightness-one-chroma property survives
+the crossing) and the worst ink clears its fill at **5.78:1**.
+
+**The injury lamp.** The number that had to survive is the **ink on the face**,
+not the face against the stock: the dark chip clears its own face at 9.7:1 and
+clears the billet's bottom stop at only 1.2:1, so what separates a lamp from the
+row is its chamfer and its cast. `oklch(0.38 0.078 H)` on `oklch(0.88 0.062 H)`
+is **7.02:1** for `Q` and **7.08:1** for `O`/`IR`, with the face at 1.44/1.03
+against the billet's two stops — the same relative position the dark chip holds.
+A *mid*-tone face with white ink was the alternative and fails that one number
+at 3.6:1, half what the dark chip gives; a lamp whose letter is hard to read is
+not a lamp.
+
+### One render changed the code
+
+**At 390 the `meta` cell was squeezed to nothing.** A phone pane is ~160px and
+the second line now carries lead, note, meta, figure and a second reading — five
+cells — so the meta gave up everything and rendered as a bare ellipsis: **11.5px
+for gametime's clock and 17px for the checker's kickoff.** Below `lg` a row
+shows **one** contextual cell rather than two, and where it has both the **meta
+wins**: a clock or a kickoff is a fact about *this week*, where the NFL team is a
+permanent one the shares drawers answer at any width. Nothing that existed is
+lost by it — gametime's clock is where it already was and at the width it always
+had (37.4px, truncating, which that file's own note already documents as the one
+cell that can lose its tail and still read), the checker gains a kickoff it drew
+not at all below `lg` (42.9px), and the manager's rows carry a note and no meta,
+so they are untouched.
+
+### Verified
+
+Driven over CDP against `next dev` with no `DATABASE_URL` — the boot hook skips
+migrations and the four loops log their refusals, which is the server coming up
+healthy against nothing — through a temporary `/preview` route mounting the
+**real** `LeagueTeams`, `LineupBreakdown`, `PickRows`, `WeekPanes` and
+`LivePanes` against fixtures, then deleted. The mechanics are the ones this file
+records: `--no-proxy-server`, `localhost` rather than `127.0.0.1`, a phone
+viewport from `Emulation.setDeviceMetricsOverride` with `mobile: true`,
+`data-theme` **and** `localStorage` rather than `prefers-color-scheme`,
+`--disable-features=OverlayScrollbar`, the
+`--blink-settings=availablePointerTypes=4,…` flags without which every
+`pointer-fine:` rule is inert, a **client-component** harness, and a CDP client
+over Node's own `WebSocket` since Playwright is not in this project's
+`node_modules`. Two mechanics are this pass's own: `Page.captureScreenshot` with
+`captureBeyondViewport` on a 3600px page at DPR 2 never returns, so the probe is
+written to disk **before** the shot rather than after it; and `pkill -f <pattern>`
+matching the running command's own line kills the shell, which is what turned two
+runs into an exit-144 with no output.
+
+**All four renders pass** — 1280 and 390, dark and light: rows **34px** at `lg`
+and **48** below it in *all three tools and in the drawer*, at radius 7 with
+`0 9px 0 6px` / `0 7px` of padding and a 9px / 3px gap, on `--billet-bg` under
+the handoff's own five shadow layers to the value. `document.documentElement.scrollWidth`
+equal to the client width, **zero** unclipped elements past the viewport,
+**zero** clipped elements that are not `sr-only` or `truncate`, exactly one
+`<h1>`, and no console output but the dev server's own React-DevTools and HMR
+lines plus the sandbox's cert refusals for the headshot CDN.
+
+Every cell landed at its width and its order: lead **40px** (the standings'
+ordinal, untracked) / 34 (a slot), face **22**, name, marks, status, note **28**
+at order 6, meta **88** at order 7, figure **70** at order 8, second **56** at
+order 9, and the checker's `GapCell` tail **98** at order 10. Below `lg` both
+wrapping spans are real flex lines and above it both compute `display: contents`.
+The palette resolves per position (`oklch(0.8 0.105 305)` for QB through
+`oklch(0.8 0.105 228)` for DEF, with `DL` and an empty seat unfilled), and
+**both schemes turn over from the tokens alone** — fill `0.8 0.105` → `0.48
+0.104`, ink `0.28 0.07` → `0.97 0.02`, lamp face `0.26 0.085` → `0.88 0.062`,
+lamp ink `0.82 0.15` → `0.38 0.078`, and the selected face `#5f7d80…` →
+`#e8fbf8…` with a teal rim. A hover keeps the chamfer **and** adds the halo,
+which is the one thing a `hover:shadow-[…]` naming only the glow would have
+silently replaced.
+
+2,381 unit tests pass; `lint`, `typecheck` and `build` are clean.
+
+**Not verified against real data**, which is the gap to close first: every
+number above is a fixture and no database was reachable from here. Four things a
+render cannot check — whether the position fill reads as a *label* rather than
+as a verdict on a page of a hundred cards, which is the whole of why six hues
+were chosen against three reserved colours; how the face reads with a picture in
+it, since `sleepercdn.com` is unreachable from the sandbox and every mount
+rendered as its letter; whether a real account's league and player names sit in
+the name column now that the face takes 31px of every row; and what the injury
+lamp does to a row, since nothing passes one until `status` reaches the wire.
+
 ## The summary readings fold when the card opens
 
 An open card is the screen, and its summary kept its full furniture while it

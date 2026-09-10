@@ -12,14 +12,9 @@ import type {
 } from "@/shared/contract";
 import { lineupColumnKey } from "@/shared/ktc/columns";
 
-import { Avatar } from "../avatar";
 // Relative, not through the barrel: this folder's own modules are what a
 // module in it reaches for — the rule the move here brought with it.
-import {
-  CONSOLE_FIGURE_WELL,
-  CONSOLE_PANE_TRACK,
-  CONSOLE_ROW_WELL,
-} from "../console-chrome";
+import { CONSOLE_PANE_TRACK } from "../console-chrome";
 import { ordinal } from "../format";
 import {
   type ColumnValue,
@@ -29,7 +24,7 @@ import {
   metricAxes,
   storeTeamsColumn,
 } from "../lineup-columns";
-import { placeAmong, rankColor, sharePercentile } from "../rank-ramp";
+import { placeAmong, sharePercentile } from "../rank-ramp";
 import { slotMedians } from "../seat-compare";
 import { PANEL_BLEED } from "./expanded-panel";
 import {
@@ -40,7 +35,7 @@ import {
   LineupBreakdown,
   LineupLensKeys,
 } from "./lineup-breakdown";
-import { Pane, PaneGlass, PaneHead, PaneLedge } from "./pane";
+import { Pane, PaneGlass, PaneHead, PaneLedge, PaneRow } from "./pane";
 import { TeamsColumnDialog } from "./teams-column-dialog";
 
 /**
@@ -415,11 +410,15 @@ export function LeagueTeams({
                     the figures under it are. The unit is the same word the card's
                     own tile prints over the same number, which is what keeps the
                     strip above and the table below reading as one instrument.
-                    Truncated at `lg`'s 78px cell rather than abbreviated, since
-                    what it clips is the qualifier and not the noun. */}
+                    Truncated at `lg`'s 70px cell rather than abbreviated, since
+                    what it clips is the qualifier and not the noun.
+
+                    **70px, where this said 78.** One figure width in all four
+                    tools now — see `PaneRow`, and the drift list it closes:
+                    78 / 70 / 56 / 56 across two panes a reader compares. */}
                 <span
                   aria-hidden
-                  className="hidden w-[78px] shrink-0 truncate text-right font-mono text-[length:var(--fs-10)] uppercase tracking-[0.1em] text-[color:var(--billet-label)] lg:block"
+                  className="hidden w-[70px] shrink-0 truncate text-right font-mono text-[length:var(--fs-10)] uppercase tracking-[0.1em] text-[color:var(--billet-label)] lg:block"
                 >
                   {LINEUP_METRIC_LABELS[metric].unit}
                 </span>
@@ -458,14 +457,19 @@ export function LeagueTeams({
                   // another beside it, under a head naming the narrowing. Both
                   // ends read `read()` now, which is the one lookup.
                   value={read(team)}
-                  // Not a rank: see `sharePercentile`. Undefined where nothing
-                  // has been scored — the all-zero rule the server ranks by,
-                  // which is why the totals go to dashes with it — and where
-                  // this column has no answer for this team at all.
-                  tone={
+                  // Not a rank: see `sharePercentile`. Null where nothing has
+                  // been scored — the all-zero rule the server ranks by, which
+                  // is why the totals go to dashes with it — and where this
+                  // column has no answer for this team at all.
+                  //
+                  // **The percentile crosses rather than the colour**, since
+                  // the row moved to the shared part: `PaneRow` needs it for
+                  // the halo as well as the ink, and one input to `rankColor`
+                  // is what keeps the two from being computed twice.
+                  percentile={
                     anyNonZero && read(team) !== undefined
-                      ? rankColor(sharePercentile(read(team) ?? 0, totals))
-                      : undefined
+                      ? sharePercentile(read(team) ?? 0, totals)
+                      : null
                   }
                   shown={anyNonZero}
                   selected={team.roster_id === selected.roster_id}
@@ -601,14 +605,23 @@ function LensControl({
 }
 
 /**
- * One team in the standings, as a channel cut into the pane's glass.
+ * One team in the standings, as a {@link PaneRow}.
  *
- * **Two states are drawn as overlays rather than as fills**, and that is what
- * keeps the row reading as a cut. A selected row takes a wash of accent *and a
- * deeper shadow* — a plain background would flood the channel and the row would
- * flatten — and the manager's own row is marked by a lit edge down its left
- * side, which is the same stock the history rail's fill is drawn from rather
- * than a second green for "this is yours".
+ * **Its cells are the seat row's opposite, in the same widths** — that is the
+ * whole of what the shared part buys here: an ordinal where a seat has a slot,
+ * a team's letter mount where a seat has a face, and one 70px figure where
+ * this list used to draw 78 and the roster 70, so nothing lined up across the
+ * two panes a reader is comparing.
+ *
+ * **The ordinal is 40px and untracked**, which is what this file already drew:
+ * the 0.12em belongs to the seat cell one file over, and at the widths either
+ * of them uses, `12th` with it clips.
+ *
+ * **The reader's own team and the selected team are two facts**, and the row
+ * draws both — the lit rail down the left edge is whose team it is, and the lit
+ * tile is what the pane opposite is solving. They coincide on first render,
+ * which is exactly why they cannot be one value: collapsed, the card would open
+ * with nothing on screen saying which team the roster pane had picked.
  *
  * The colour on the total is the team's **share of the league's points**, not
  * its rank: see `sharePercentile` for why a table where twelve teams sit within
@@ -619,7 +632,7 @@ function StandingRow({
   place,
   metric,
   value,
-  tone,
+  percentile,
   shown,
   selected,
   onSelect,
@@ -639,90 +652,39 @@ function StandingRow({
    * that had used the right one.
    */
   value: number | undefined;
-  /** The share ramp's colour, or undefined where there is nothing to colour. */
-  tone: string | undefined;
+  /** Where that figure stands on the share ramp, or null where nothing is rankable. */
+  percentile: number | null;
   /** False where no roster in the league has scored on this column. */
   shown: boolean;
   selected: boolean;
   onSelect: () => void;
 }) {
+  const answered = shown && value !== undefined;
+
   return (
-    <li>
-      <button
-        type="button"
-        onClick={onSelect}
-        aria-pressed={selected}
-        // 38px at `lg` and 52 below it, since the expanded-card pass — the two
-        // heights the seat row opposite takes, because the two lists are read
-        // across. The selected overlay and the manager's lit edge keep their
-        // insets against the smaller radius.
-        className={`${CONSOLE_ROW_WELL} relative mb-[3px] flex h-[52px] w-full flex-col justify-center gap-[5px] rounded-[7px] px-1.5 text-left transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-active/60 lg:h-[38px] lg:flex-row lg:items-center lg:gap-[9px] lg:px-2.5 ${
-          selected ? "" : "hover:bg-foreground/[0.04]"
-        }`}
-      >
-        {selected && (
-          <span
-            aria-hidden
-            className="pointer-events-none absolute inset-x-0 inset-y-[2px] rounded-[7px] bg-[color:var(--row-well-selected-bg)] shadow-[var(--row-well-selected-shadow)]"
-          />
-        )}
-        {team.is_manager && (
-          <span
-            aria-hidden
-            className="pointer-events-none absolute inset-y-1 left-0 w-[3px] rounded-full bg-[image:var(--lit-bar-bg)] shadow-[0_0_9px_var(--accent-glow)] lg:inset-y-[5px]"
-          />
-        )}
-
-        {/* One node, two layouts: the name shares its line with the mark below
-            `lg` and takes the third cell of the row above it. `lg:contents`
-            rather than two trees — the alternative renders every team twice and
-            reads each of them twice to anything listening.
-
-            **Every cell names its `lg` order**, the mark included: place (1),
-            mark (2), name (3), total (4), which is the order the column heads
-            on the ledge are laid out in. The mark used to carry no order at
-            all and so sorted to 0 — ahead of the place cell, under a `#` head
-            that promised the place first. */}
-        <span className="relative flex w-full min-w-0 items-center gap-1.5 lg:contents">
-          {/* **The letter mount, always** — `LeagueTeam` carries no avatar,
-              and that is what the mark is: a lit initial is a claim about an
-              image that was never fetched. `Avatar`'s fallback is exactly this
-              object (a bordered `foreground/5` disc with a semibold letter at
-              `foreground/40`), so it is the component rather than a hand-drawn
-              copy of its own fallback. `xs` is the 20px / 18px the slimmer row
-              holds, and it turns on `lg` with the row rather than with the
-              pane — see `Avatar`. */}
-          <span className="contents lg:order-2 lg:block lg:shrink-0">
-            <Avatar url={null} name={team.name} size="xs" />
-          </span>
-          <span
-            className={`relative min-w-0 flex-1 truncate text-[length:var(--fs-13)] lg:order-3 ${
-              team.is_manager
-                ? "font-semibold text-readout [text-shadow:var(--readout-text-glow)]"
-                : "text-foreground/86"
-            }`}
-          >
-            {team.name}
-          </span>
-        </span>
-
-        <span className="relative flex w-full items-center justify-between gap-1.5 lg:contents">
-          <span className="shrink-0 font-mono text-[length:var(--fs-11)] tabular-nums text-readout-label lg:order-1 lg:w-10 lg:overflow-hidden lg:rounded-[5px] lg:bg-[color:var(--figure-well-bg)] lg:px-1 lg:py-0.5 lg:text-center lg:text-readout-line lg:shadow-[var(--figure-well-shadow)]">
-            {ordinal(place)}
-          </span>
-          <span
-            className={`${CONSOLE_FIGURE_WELL} shrink-0 px-[5px] py-0.5 text-right font-mono text-[length:var(--fs-12)] tabular-nums lg:order-4 lg:w-[78px] lg:text-[length:var(--fs-12-5)]`}
-          >
-            {/* The colour rides an inner span so it tints the figure rather
-                than the channel the figure sits in. */}
-            <span style={tone ? { color: tone } : undefined}>
-              {/* Two absences, one em dash: no roster has scored on this
-                  column, or this payload carries no answer for it at all. */}
-              {shown && value !== undefined ? formatTotal(metric, value) : "—"}
-            </span>
-          </span>
-        </span>
-      </button>
-    </li>
+    <PaneRow
+      // 40px and untracked — see above. Both arms are literal class strings,
+      // for `PaneRowLead.width`'s reason: a templated one generates no CSS.
+      lead={{ label: ordinal(place), width: "w-[34px] lg:w-10", numeric: true }}
+      // **The letter mount, always** — `LeagueTeam` carries no avatar, and that
+      // is what the mark is: a lit initial is a claim about an image that was
+      // never fetched. The part draws the same 20/22px milled disc a player's
+      // face sits in, which is what makes a standings row and a seat row read
+      // as one object.
+      face={{ playerId: null, name: team.name }}
+      name={team.name}
+      shortName={team.name}
+      // Not on the wire — see `PaneRow`'s lamp.
+      status={null}
+      figure={{
+        // Two absences, one em dash: no roster has scored on this column, or
+        // this payload carries no answer for it at all.
+        text: answered ? formatTotal(metric, value) : "—",
+        percentile: answered ? percentile : null,
+      }}
+      mine={team.is_manager}
+      selected={selected}
+      onPress={onSelect}
+    />
   );
 }

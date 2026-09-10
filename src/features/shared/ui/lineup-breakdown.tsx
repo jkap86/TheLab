@@ -11,23 +11,19 @@ import type {
 
 // Relative, not through the barrel: this folder's own modules are what a
 // module in it reaches for — the rule the move here brought with it.
-import {
-  CONSOLE_FIGURE_WELL,
-  CONSOLE_PANE_TRACK,
-  CONSOLE_ROW_WELL,
-} from "../console-chrome";
-import { ordinal, shortName } from "../format";
+import { CONSOLE_PANE_TRACK } from "../console-chrome";
+import { ordinal, shortName, slotLabel } from "../format";
 import { rankColor, rankPercentile, slotPercentile } from "../rank-ramp";
 import { type Lens, lensValue } from "../seat-compare";
 import { PickRows, pickSpan } from "./draft-picks";
 import {
   DrawerBar,
-  DrawerRow,
   DRAWER_BAR,
   DRAWER_BAR_HEIGHT,
   DRAWER_BARS,
   PaneDrawer,
   PaneGlass,
+  PaneRow,
   type DrawerTray,
 } from "./pane";
 
@@ -75,28 +71,19 @@ import {
  * belongs to the pane holding them. It is still per-card and deliberately
  * unpersisted: a peek at the other valuation, not a page preference.
  *
- * **Every row is a channel cut into the glass, and every figure a smaller one
- * cut into that.** One pattern at two depths, which is the whole of the pane's
- * depth — no gradient, no border, and nothing to draw a rule with.
+ * **Every row is a part standing on the glass, and the figure is struck into
+ * its face.** The rows were channels cut into the glass and the drawer's rows
+ * were already parts, so the same player was two objects one press apart; both
+ * are one {@link PaneRow} now, and with the row raised the only recess left on
+ * it is the lead cell — which is what lets the number be the largest thing on
+ * the row and what buys the height back. See that part for the whole argument,
+ * for the two-line phone arm, and for the cell order every cell names rather
+ * than relies on.
  *
- * **Below `lg` every row is two lines** — the face and the name on the first,
- * the slot and the figure under them. The panes sit side by side at every width
- * (see `LeagueTeams` for why they must, and for why the columns wait until
- * `lg`), which leaves this one ~165px at 390: three cells beside a name there
- * is a name of four characters. One row rather than two trees, through
- * `lg:contents` on the second line's wrapper, which is the trick the app rack's
- * brand row already turns — the alternative renders every seat twice and reads
- * each of them twice to anything listening.
+ * The panes sit side by side at every width (see `LeagueTeams` for why they
+ * must, and for why the columns wait until `lg`), which leaves this one ~165px
+ * at 390 — three cells beside a name there is a name of four characters.
  */
-
-/** Sleeper's slot names, shortened to fit a chip. Unmapped ones render as-is. */
-const SLOT_LABELS: Record<string, string> = {
-  SUPER_FLEX: "SF",
-  WRRB_FLEX: "W/R",
-  REC_FLEX: "W/T",
-  IDP_FLEX: "IDP",
-  FLEX: "FLX",
-};
 
 /**
  * The lens vocabulary lives with the comparison arithmetic, which is pure and
@@ -231,77 +218,7 @@ export function LineupLensKeys({
 }
 
 /**
- * A player's face, in a mount the size of the row's own line.
- *
- * Sleeper publishes a thumbnail per player id and nothing else is needed to
- * reach it, so the face costs no fetch of ours: the mount behind it is what a
- * reader sees while it loads, when there is no such thumbnail, and for an
- * **empty seat**, which has no player at all.
- *
- * **It is a background layer rather than an `<img>`, and a render is what
- * settled that.** The handoff calls for an ordinary `<img>` on the grounds that
- * the prototype's own reason for a background does not apply here — which is
- * true, and there is a second reason that does. A great many of these ids have
- * no thumbnail: a team defence's id is a team code, and Sleeper's board turns
- * over faster than its art does. A **broken `<img>` paints a glyph**, over the
- * letter, even at `alt=""` — measured, on a seat whose thumbnail 404s — where a
- * background that fails paints nothing at all and the mount underneath is
- * exactly the fallback it was put there to be. The element is `aria-hidden`
- * decoration either way, so there is no semantics to lose by it.
- *
- * The mount is `Avatar`'s letter disc spelled here rather than that component
- * reused, and for the same reason: `Avatar` draws *either* a face *or* a
- * letter, where a headshot wants the letter **behind** it.
- *
- * `background-position: center top` because a headshot is framed head and
- * shoulders, and a centred crop of one in a 22px disc is a chin.
- *
- * `lg:order-2` is the seat row's own cell order — slot, face, name, team,
- * figure — spelled on every cell rather than left to DOM order for the reason
- * `StandingRow` gives about its mark.
- */
-function PlayerFace({ player }: { player: LineupPlayer | null }) {
-  return (
-    <span
-      aria-hidden
-      className="relative flex size-[18px] shrink-0 items-center justify-center overflow-hidden rounded-full border border-foreground/10 bg-foreground/5 font-display text-[length:var(--fs-9)] font-semibold text-foreground/40 lg:order-2 lg:size-[22px] lg:text-[length:var(--fs-9-6)]"
-    >
-      {player?.name?.charAt(0).toUpperCase() ?? null}
-      {player && (
-        <span
-          className="absolute inset-0 bg-cover bg-top"
-          style={{
-            backgroundImage: `url(https://sleepercdn.com/content/nfl/players/thumb/${player.player_id}.jpg)`,
-          }}
-        />
-      )}
-    </span>
-  );
-}
-
-/** One seat's name, at both widths, from one node. */
-function SeatName({
-  player,
-  className = "",
-}: {
-  player: LineupPlayer | null;
-  className?: string;
-}) {
-  const name = player ? (player.name ?? player.player_id) : "Empty";
-  const short = player?.name ? shortName(player.name) : name;
-
-  return (
-    <span
-      className={`relative min-w-0 flex-1 truncate text-[length:var(--fs-13)] text-foreground/85 ${className}`}
-    >
-      <span className="lg:hidden">{short}</span>
-      <span className="hidden lg:inline">{name}</span>
-    </span>
-  );
-}
-
-/**
- * One seat, as a channel cut into the pane's glass.
+ * One seat, as a {@link PaneRow}.
  *
  * **The figure's colour is the league's median at this slot**, not its own
  * magnitude and not a rank — see `slotPercentile`. A seat the lens says nothing
@@ -309,18 +226,16 @@ function SeatName({
  * against a median, and painting it red would claim the worst answer in the
  * league for a player nobody has an answer about.
  *
- * **The NFL team sits between the name and the figure**, in a 32px right-aligned
- * column at `lg` so the codes form a column against ragged names, and on the
- * row's second line after the slot below it. Mono, dimmed mint — a fact about
- * the player one level below his name and well below the figure. **An absent
- * team renders nothing at all** rather than an em dash: it sits between a name
- * and a figure, and a dash there reads as a missing *number*. That is the one
- * place this row parts company with the app's three-way grammar, and it is
- * the grammar's own reason — the dash exists to keep an absence from reading
- * as a zero, and there is no zero for a team to be mistaken for.
+ * **The lead cell says the seat and is filled by the position of whoever is in
+ * it**, which is the one reading this row gained: a flex seat still reads `FLX`
+ * and is now inked tight-end rose, so a reader scanning the column can see what
+ * their flex is actually filled with. An empty seat takes no fill — there is no
+ * position to state, and a coloured empty seat would claim there was.
  *
- * 38px at `lg` and 52 below it, since the expanded-card pass; the standings
- * row opposite takes the same two heights because the lists are read across.
+ * The face, the name's ink and the NFL team cell are all the part's now. What
+ * was this row's own and is kept is the em-dash rule on that team: **an absent
+ * team renders nothing at all**, because the cell sits between a name and a
+ * figure and a dash there reads as a missing *number*.
  */
 function SeatRow({
   player,
@@ -335,63 +250,58 @@ function SeatRow({
   median: number;
 }) {
   const value = lensValue(player, lens);
-  const tone = value === null ? undefined : rankColor(slotPercentile(value, median));
+  const name = player ? (player.name ?? player.player_id) : "Empty";
 
   return (
-    <li
-      className={`${CONSOLE_ROW_WELL} relative mb-[3px] flex h-[52px] flex-col justify-center gap-[5px] rounded-[7px] px-1.5 lg:h-[38px] lg:flex-row lg:items-center lg:gap-[9px] lg:px-2.5`}
-    >
-      {/* One node, two layouts: the face and the name share the first line
-          below `lg` and take the row's second and third cells above it. */}
-      <span className="relative flex w-full min-w-0 items-center gap-1.5 lg:contents">
-        <PlayerFace player={player} />
-        <SeatName player={player} className="lg:order-3" />
-      </span>
-
-      <span className="relative flex w-full items-center gap-1.5 lg:contents">
-        <span className="shrink-0 font-mono text-[length:var(--fs-11)] tracking-[0.1em] text-readout/62 lg:order-1 lg:w-[38px] lg:overflow-hidden lg:rounded-[5px] lg:bg-[color:var(--figure-well-bg)] lg:px-1 lg:py-0.5 lg:text-center lg:tracking-[0.12em] lg:shadow-[var(--figure-well-shadow)]">
-          {SLOT_LABELS[slot] ?? slot}
-        </span>
-        {player?.team && (
-          <span className="shrink-0 font-mono text-[length:var(--fs-10)] tracking-[0.1em] text-readout/45 lg:order-4 lg:w-8 lg:text-right lg:text-[length:var(--fs-11)] lg:text-readout/50">
-            {player.team}
-          </span>
-        )}
-        <span
-          className={`${CONSOLE_FIGURE_WELL} min-w-0 flex-1 px-[5px] py-0.5 text-right font-mono text-[length:var(--fs-12-5)] tabular-nums lg:order-5 lg:w-[70px] lg:flex-none`}
-        >
-          <span style={tone ? { color: tone } : undefined}>
-            {figure(value, lens)}
-          </span>
-        </span>
-      </span>
-    </li>
+    <PaneRow
+      lead={{ label: slotLabel(slot), position: player?.positions[0] ?? null }}
+      // An empty seat draws the bare mount with no letter — there is no player
+      // to take an initial from, and `Empty`'s `E` would be one.
+      face={{ playerId: player?.player_id ?? null, name: player ? name : "" }}
+      name={name}
+      shortName={player?.name ? shortName(player.name) : name}
+      // Not on the wire — see `PaneRow`'s lamp.
+      status={null}
+      note={player?.team ?? null}
+      figure={{
+        text: figure(value, lens),
+        percentile: value === null ? null : slotPercentile(value, median),
+      }}
+    />
   );
 }
 
 /**
- * A bench player: a face, a name, his position, his NFL team and what the lens
- * says he is worth. The team takes the seat row's treatment through the drawer
- * row's `note` slot — it is the same reading about the same kind of object —
- * in the billet's label ink rather than the mint, since a drawer row is a part
- * rather than glass.
+ * A bench player: the same tile in the drawer, with his position leading it
+ * rather than a seat's name.
+ *
+ * **`ground="drawer"` is the whole of the difference** — one step less cast,
+ * since the row sits on a part rather than on glass. That the two are otherwise
+ * the same object is the point: a bench row and the seat row it covers are read
+ * directly over each other, and until this pass one of them had a face and the
+ * other did not.
+ *
+ * A bench player's figure has no seat to have a median at, so it takes the
+ * label's ink rather than the ramp's — there is nothing here for a colour to be
+ * a statement about.
  */
 function BenchRow({ player, lens }: { player: LineupPlayer; lens: Lens }) {
+  const name = player.name ?? player.player_id;
+
   return (
-    <DrawerRow
-      lead={player.positions[0] ?? "—"}
-      leadWidth="lg:w-[38px]"
-      figure={figure(lensValue(player, lens), lens)}
+    <PaneRow
+      ground="drawer"
+      lead={{
+        label: player.positions[0] ?? "—",
+        position: player.positions[0] ?? null,
+      }}
+      face={{ playerId: player.player_id, name }}
+      name={name}
+      shortName={player.name ? shortName(player.name) : name}
+      status={null}
       note={player.team}
-    >
-      <PlayerFace player={player} />
-      <span className="relative min-w-0 flex-1 truncate text-[length:var(--fs-13)] text-[color:var(--billet-name)] lg:order-3">
-        <span className="lg:hidden">
-          {player.name ? shortName(player.name) : player.player_id}
-        </span>
-        <span className="hidden lg:inline">{player.name ?? player.player_id}</span>
-      </span>
-    </DrawerRow>
+      figure={{ text: figure(lensValue(player, lens), lens), percentile: null }}
+    />
   );
 }
 

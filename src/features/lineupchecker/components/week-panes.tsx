@@ -4,10 +4,7 @@ import { useId, useState, type ReactNode, type RefObject } from "react";
 
 import type { LineupCheckLeague, LineupCheckPlayer, LineupCheckSeat } from "@/shared/contract";
 import {
-  CONSOLE_FIGURE_WELL,
-  CONSOLE_ROW_WELL,
   DrawerBar,
-  DrawerRow,
   DRAWER_BAR,
   DRAWER_BAR_HEIGHT,
   DRAWER_BARS,
@@ -17,9 +14,11 @@ import {
   PaneHead,
   PaneLedge,
   PaneLedgeTrack,
+  PaneRow,
   PaneTotal,
   PANEL_BLEED,
   rankColor,
+  shortName,
   slotLabel,
   useLinkedScroll,
 } from "@/features/shared";
@@ -44,7 +43,7 @@ import {
  * card's is two *parts* — a billet carrying a ledge and a sheet of glass — with
  * its rows cut as channels into that glass. The two pages list the same leagues
  * and draw the same card, so the open half is the same object too: `Pane`,
- * `PaneLedge`, `PaneGlass`, `CONSOLE_ROW_WELL` and a bench behind a pinned
+ * `PaneLedge`, `PaneGlass`, `PaneRow` and a bench behind a pinned
  * drawer bar, all of them the shared parts rather than a second spelling.
  *
  * **The state lives here rather than on the card**, which is what keeps
@@ -546,19 +545,26 @@ function ColumnHeads({
 
   return (
     <div className="mt-1.5 flex items-baseline gap-[9px] px-[3px] lg:mt-0 lg:px-1 lg:pb-px lg:pt-[7px]">
-      <span aria-hidden className={`w-[38px] text-center tracking-[0.14em] ${head}`}>
+      <span aria-hidden className={`w-[34px] text-center tracking-[0.14em] ${head}`}>
         Slot
       </span>
+      {/* The face has no head — there is nothing to call a picture of somebody
+          — but it holds a column, so the heads need its width or every one of
+          them sits 31px left of the cell it names. */}
+      <span aria-hidden className={`w-[22px] ${head}`} />
       <PaneHead className="min-w-0 flex-1">
         {vs && (
           <span className="tracking-[0.14em] text-[color:var(--billet-label)]">vs </span>
         )}
         {name}
       </PaneHead>
-      <span aria-hidden className={`w-[5.5rem] text-right ${head}`}>
+      {/* The team code the rows now carry between the name and the readings.
+          Unheaded for the face's reason: three letters are their own label. */}
+      <span aria-hidden className={`w-7 ${head}`} />
+      <span aria-hidden className={`w-[88px] text-right ${head}`}>
         Kick
       </span>
-      <span aria-hidden className={`w-14 text-right ${head}`}>
+      <span aria-hidden className={`w-[70px] text-right ${head}`}>
         Pts
       </span>
       {gap && (
@@ -572,34 +578,35 @@ function ColumnHeads({
 
 
 /**
- * One seat, as a channel cut into the pane's glass.
+ * One seat, as a {@link PaneRow}.
  *
- * **38px at `lg` and 52 below it**, which are the manager card's own two row
- * heights and not this list's: the standings and the roster opposite are read
- * across each other there, and these two lineups are read across each other
- * here, so a row of a different height would put the two panes out of step.
+ * **The row is the shared part now**, so every measurement it used to carry is
+ * that part's: the two heights, the two-line phone arm, the cell order, the
+ * name's ink and the face this list did not draw at all. What is still this
+ * row's own is what only a checker seat has — the badges, the kickoff, and the
+ * gap column at the end of it.
  *
- * **One node in two layouts**, turned at `lg` by `lg:contents` on two wrapping
- * spans rather than by rendering the row twice and hiding one — which would put
- * every seat in the DOM twice and read each of them twice to anything
- * listening. Below `lg` the name takes a line of its own and the slot, the
- * points and the gap sit under it; above it they are one row of columns in the
- * order the heads above name: slot (1), name (2), kickoff (3), points (4), gap
- * (5).
+ * Four things about it changed with the move, each closing a drift this list
+ * was on the wrong side of. **The name is sans**, where it was mono: mono stays
+ * on labels, figures and clocks, and a name is none of those. **It shortens to
+ * `J. Chase` below `lg`**, which only the manager card did — this pane is
+ * ~165px at 390 and printed the whole name into it. **The figure is 70px**,
+ * where it was 56 and the manager card's was 70, so nothing lined up across the
+ * two panes a reader compares. And **the 1px border is gone**: it is why two
+ * lists declared at 38px were not the same height, and the selected state no
+ * longer needs it — a lit tile says it on its own face.
  *
- * **The slot and the points are wells cut into the row**, which is the "cut
- * into a cut" nesting that gives the pane its depth without a gradient or a
- * border — `CONSOLE_FIGURE_WELL`'s own argument, and the same treatment the
- * manager card's seat row gives the same two cells.
+ * **The badges share the name's line at both widths**, which is the one thing
+ * the shared part gained for this caller and which a render forced: left loose
+ * in the wrap they went to the *second* line, where a `sit` badge beside a
+ * slot, a figure and a gap overflows and takes the row to three lines — and a
+ * three-line row in one pane against a two-line row in the other is two lineups
+ * that no longer read across, which is the whole purpose of the view.
  *
- * **Press is a lit border and an overlay, never a fill.** A fill floods the
- * channel and the row stops reading as a cut, which is the one thing every
- * surface in this half is arranged to be. The border's *colour* is composed by
- * the caller and its width is in the shape, for `CONSOLE_KEY_PILL`'s reason:
- * two `border-*` utilities of the same specificity are settled by Tailwind's
- * emit order rather than the class attribute. The halo rides the overlay's own
- * shadow rather than being appended to the row's, because a shadow list is
- * atomic and appending replaces it.
+ * **A seat carries its kickoff and an option does not.** When a game starts is
+ * a fact about the lineup as it stands — it is what locks, and what the
+ * seat-order check is about. An options list is a comparison of projections, so
+ * the time is 88px spent on a question nobody is asking there.
  */
 function SeatRow({
   slot,
@@ -626,132 +633,67 @@ function SeatRow({
 }) {
   const kickoff = player ? kickoffTime(player.kickoff) : null;
   const delta = option ? option.delta : (gap?.delta ?? null);
-
-  const body = (
-    <>
-      {selected && (
-        <span
-          aria-hidden
-          className="pointer-events-none absolute inset-x-0 inset-y-[2px] rounded-[7px] bg-[color:var(--row-well-selected-bg)] shadow-[var(--row-well-selected-shadow),0_0_20px_-6px_var(--accent-glow)]"
-        />
-      )}
-
-      {/* **The name and its chips are one line below `lg`, and `lg:contents`
-          is what makes that one node rather than two.** Left loose in the wrap
-          they went to the *second* line, where a `sit` badge beside a slot, a
-          figure and a gap overflows and takes the row to three lines — and a
-          three-line row in one pane against a two-line row in the other is two
-          lineups that no longer read across, which is the whole purpose of the
-          view. On the name's own line the chip has the width and the name
-          truncates to make it, which is the right thing to lose. */}
-      <span className="relative flex w-full min-w-0 items-center gap-1.5 lg:contents">
-        <span className="min-w-0 flex-1 truncate font-mono text-[length:var(--fs-12)] text-readout-line lg:order-2 lg:text-[length:var(--fs-13)]">
-          {player ? (player.name ?? player.player_id) : "Empty"}
-        </span>
-
-        {/* A played game is not a move anybody can make, so it is marked
-            rather than left to look like an oversight. */}
-        {player?.locked && (
-          <span className="shrink-0 font-mono text-[length:var(--fs-9)] uppercase tracking-[0.1em] text-readout-muted lg:order-2 lg:text-[length:var(--fs-10)] lg:tracking-[0.12em]">
-            <span className="sr-only">Locked — </span>
-            <span aria-hidden>locked</span>
-          </span>
-        )}
-        {option?.inSeat && <Chip>in seat</Chip>}
-        {demoted && <Chip tone="error">sit</Chip>}
-        {/* Read off `move_to`, which the server derived with the same
-            `kickoffMoves` the window's count came from — so the badge and the
-            count cannot disagree. */}
-        {moveTo && (
-          <Chip>
-            <span className="sr-only">Re-seat at </span>
-            <span aria-hidden>{"→ "}</span>
-            {slotLabel(moveTo)}
-          </Chip>
-        )}
-      </span>
-
-      <span className="relative flex w-full items-center gap-1.5 lg:contents">
-        <span className="shrink-0 font-mono text-[length:var(--fs-9)] tracking-[0.1em] text-readout/62 lg:order-1 lg:w-[38px] lg:overflow-hidden lg:rounded-[5px] lg:bg-[color:var(--figure-well-bg)] lg:px-1 lg:py-0.5 lg:text-center lg:text-[length:var(--fs-11)] lg:tracking-[0.12em] lg:shadow-[var(--figure-well-shadow)]">
-          {slotLabel(slot)}
-        </span>
-
-        {/* **A seat carries its kickoff and an option does not.** When a game
-            starts is a fact about the lineup as it stands — it is what locks,
-            and what the seat-order check is about. An options list is a
-            comparison of projections, so the time is 88px spent on a question
-            nobody is asking there, and it is 88px off the one column that
-            truncates.
-
-            **88px and untracked, where the design bundle draws 64.** That
-            column was measured against `Sun 1:00`, and this app does not print
-            that string: `kickoffTime` formats in the *reader's own* locale, so
-            an en-US afternoon game is `Sun 12:00 PM`. Measured at `--fs-10` in
-            this build's own Plex Mono, that is **97.4px tracked** and **83.5px
-            untracked** — so at 64px the one reading a reader checks against a
-            clock on the wall was cut, silently, on every row. Letter-spacing is
-            the first thing to spend, which is this card's own rule about its
-            window labels one plane up; 88px clears the longest string the
-            formatter can produce by 4.5px, and a 24-hour locale simply leaves
-            the cell short. The cost is the name column, which is why the head
-            beside it is the only other place this width is written. */}
-        {kickoff && !option && (
-          <span className="order-1 hidden shrink-0 whitespace-nowrap text-right font-mono text-[length:var(--fs-10)] uppercase text-readout/50 lg:order-3 lg:block lg:w-[5.5rem]">
-            {kickoff}
-          </span>
-        )}
-
-        <span
-          className={`${CONSOLE_FIGURE_WELL} ml-auto shrink-0 px-[5px] py-0.5 text-right font-mono text-[length:var(--fs-12)] tabular-nums text-readout-line lg:order-4 lg:ml-0 lg:w-14 lg:text-[length:var(--fs-12-5)]`}
-        >
-          {/* Null is "the feed has no row for him"; a real projected zero is
-              `0.0`. The contract's own grammar, and the reason the gap beside it
-              can be absent while the row still reads. */}
-          {player?.points == null ? "—" : player.points.toFixed(1)}
-        </span>
-
-        <GapCell delta={delta} mode={gapMode} fill={gap} />
-      </span>
-    </>
-  );
-
-  const shape =
-    `${CONSOLE_ROW_WELL} relative mb-[3px] flex h-[52px] w-full flex-col justify-center gap-[5px] ` +
-    "rounded-[7px] border px-1.5 text-left lg:h-[38px] lg:flex-row lg:items-center lg:gap-[9px] lg:px-2.5";
-  const state = selected ? "border-active" : "border-transparent";
-
-  if (!onPress) {
-    return (
-      <li className={`${shape} ${state}`}>
-        {body}
-      </li>
-    );
-  }
+  const name = player ? (player.name ?? player.player_id) : "Empty";
 
   return (
-    <li>
-      <button
-        type="button"
-        onClick={onPress}
-        aria-pressed={selected}
-        className={`${shape} ${state} cursor-pointer transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-active/60 ${
-          selected ? "" : "hover:border-active/45"
-        }`}
-      >
-        {body}
-      </button>
-    </li>
+    <PaneRow
+      lead={{ label: slotLabel(slot), position: player?.positions[0] ?? null }}
+      face={{ playerId: player?.player_id ?? null, name: player ? name : "" }}
+      name={name}
+      shortName={player?.name ? shortName(player.name) : name}
+      // Not on the wire — see `PaneRow`'s lamp.
+      status={null}
+      marks={
+        <>
+          {/* A played game is not a move anybody can make, so it is marked
+              rather than left to look like an oversight. */}
+          {player?.locked && (
+            <span className="relative shrink-0 font-mono text-[length:var(--fs-9)] uppercase tracking-[0.1em] text-[color:var(--billet-label)] lg:order-4 lg:text-[length:var(--fs-10)] lg:tracking-[0.12em]">
+              <span className="sr-only">Locked — </span>
+              <span aria-hidden>locked</span>
+            </span>
+          )}
+          {option?.inSeat && <Chip>in seat</Chip>}
+          {demoted && <Chip tone="error">sit</Chip>}
+          {/* Read off `move_to`, which the server derived with the same
+              `kickoffMoves` the window's count came from — so the badge and the
+              count cannot disagree. */}
+          {moveTo && (
+            <Chip>
+              <span className="sr-only">Re-seat at </span>
+              <span aria-hidden>{"→ "}</span>
+              {slotLabel(moveTo)}
+            </Chip>
+          )}
+        </>
+      }
+      note={player?.team ?? null}
+      meta={option ? null : kickoff}
+      figure={{
+        // Null is "the feed has no row for him"; a real projected zero is
+        // `0.0`. The contract's own grammar, and the reason the gap beside it
+        // can be absent while the row still reads.
+        text: player?.points == null ? "—" : player.points.toFixed(1),
+        // A seat's points are not ranked against anything on this card — the
+        // gap column beside it is where a seat's standing is stated, and a
+        // second colour saying the same thing on a different scale would be
+        // two verdicts on one row.
+        percentile: null,
+      }}
+      tail={<GapCell delta={delta} mode={gapMode} fill={gap} />}
+      selected={selected}
+      onPress={onPress}
+    />
   );
 }
 
 /**
  * A bench player, in the drawer behind the bar.
  *
- * {@link DrawerRow} is the manager card's own bench row, cell for cell — a
- * position, a face-less name, the NFL team in the note slot and the figure in a
- * well — because the two drawers are the same part over two lists. What is this
- * one's alone is the `start` chip: the optimal lineup would seat him, which is
- * the whole reason a reader opens this drawer.
+ * The manager card's own bench row, cell for cell, because the two drawers are
+ * the same part over two lists. What is this one's alone is the `start` chip:
+ * the optimal lineup would seat him, which is the whole reason a reader opens
+ * this drawer.
  */
 function BenchRow({
   player,
@@ -760,24 +702,36 @@ function BenchRow({
   player: LineupCheckPlayer;
   promoted: boolean;
 }) {
+  const name = player.name ?? player.player_id;
+
   return (
-    <DrawerRow
-      lead={player.positions[0] ?? "—"}
-      leadWidth="lg:w-[38px]"
-      figure={player.points == null ? "—" : player.points.toFixed(1)}
+    <PaneRow
+      ground="drawer"
+      lead={{
+        label: player.positions[0] ?? "—",
+        position: player.positions[0] ?? null,
+      }}
+      face={{ playerId: player.player_id, name }}
+      name={name}
+      shortName={player.name ? shortName(player.name) : name}
+      status={null}
+      marks={
+        <>
+          {promoted && <Chip>start</Chip>}
+          {player.locked && (
+            <span className="relative shrink-0 font-mono text-[length:var(--fs-9)] uppercase tracking-[0.1em] text-[color:var(--billet-label)] lg:order-4 lg:text-[length:var(--fs-10)]">
+              <span className="sr-only">Locked — </span>
+              <span aria-hidden>locked</span>
+            </span>
+          )}
+        </>
+      }
       note={player.team}
-    >
-      <span className="relative min-w-0 flex-1 truncate text-[length:var(--fs-13)] text-[color:var(--billet-name)] lg:order-3">
-        {player.name ?? player.player_id}
-      </span>
-      {promoted && <Chip>start</Chip>}
-      {player.locked && (
-        <span className="shrink-0 font-mono text-[length:var(--fs-9)] uppercase tracking-[0.1em] text-[color:var(--billet-label)] lg:text-[length:var(--fs-10)]">
-          <span className="sr-only">Locked — </span>
-          <span aria-hidden>locked</span>
-        </span>
-      )}
-    </DrawerRow>
+      figure={{
+        text: player.points == null ? "—" : player.points.toFixed(1),
+        percentile: null,
+      }}
+    />
   );
 }
 
@@ -809,6 +763,11 @@ type GapMode = "meters" | "mirror" | "delta";
  * unpriced player as zero would hand the other side a maximal, full-length
  * lead on a row whose own figures say there is nothing to compare. The cell
  * keeps its width regardless, so a pane's columns do not shift row to row.
+ *
+ * **It carries its own `lg:order-10`**, which is the contract `PaneRow.tail`
+ * states: the part renders it last and knows nothing about how wide it is, so
+ * the order is the caller's to name — and above `lg` the wrapping span is
+ * `contents`, so this really is a direct flex child of the row.
  */
 function GapCell({
   delta,
@@ -824,7 +783,7 @@ function GapCell({
   const width = mode === "mirror" ? "" : "lg:w-[98px]";
 
   if (delta === null) {
-    return <span aria-hidden className={`shrink-0 lg:order-5 ${width}`} />;
+    return <span aria-hidden className={`shrink-0 lg:order-10 ${width}`} />;
   }
 
   // The rank ramp's own two ends rather than a second green and a second red:
@@ -847,7 +806,7 @@ function GapCell({
 
   return (
     <span
-      className={`relative flex shrink-0 items-center justify-center gap-2.5 lg:order-5 ${width}`}
+      className={`relative flex shrink-0 items-center justify-center gap-2.5 lg:order-10 ${width}`}
     >
       {mode === "meters" && fill && (
         <>

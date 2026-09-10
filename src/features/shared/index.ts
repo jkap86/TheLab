@@ -37,6 +37,9 @@ export {
   CONSOLE_PLATE,
   CONSOLE_READOUT,
   CONSOLE_ROW_WELL,
+  CONSOLE_TILE,
+  CONSOLE_TILE_DRAWER,
+  CONSOLE_TILE_SELECTED,
   CONSOLE_TRACK,
   CONSOLE_TRACK_SM,
   CONSOLE_WELL,
@@ -299,7 +302,6 @@ export { ConsoleGround } from "./ui/console-ground";
 // past this barrel into `features/shared`'s own internals.
 export {
   DrawerBar,
-  DrawerRow,
   DRAWER_BAR,
   DRAWER_BAR_HEIGHT,
   DRAWER_BARS,
@@ -309,12 +311,19 @@ export {
   PaneHead,
   PaneLedge,
   PaneLedgeTrack,
+  PaneRow,
   PaneTotal,
 } from "./ui/pane";
 // Two glass scrollers mirrored — the checker's week view and the gametime
 // panes both read their two lineups across each other.
 export { useLinkedScroll } from "./use-linked-scroll";
-export type { DrawerTray } from "./ui/pane";
+export type {
+  DrawerTray,
+  PaneRowFace,
+  PaneRowFigure,
+  PaneRowLead,
+  PaneRowStatus,
+} from "./ui/pane";
 // The capped inner housing an open card's expanded half is drawn in. It came
 // here from `features/manager` when the trade card became a second reader — the
 // line `LeagueTeams` and `LeagueConfigWindow` moved on, and the same folder

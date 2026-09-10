@@ -4,10 +4,7 @@ import { useId, useState } from "react";
 
 import type { GametimeGame, GametimePlayer, GametimeSeat, GametimeSide } from "@/shared/contract";
 import {
-  CONSOLE_FIGURE_WELL,
-  CONSOLE_ROW_WELL,
   DrawerBar,
-  DrawerRow,
   DRAWER_BAR,
   DRAWER_BAR_HEIGHT,
   DRAWER_BARS,
@@ -17,8 +14,10 @@ import {
   PaneHead,
   PaneLedge,
   PaneLedgeTrack,
+  PaneRow,
   PaneTotal,
   PANEL_BLEED,
+  shortName,
   slotLabel,
   useLinkedScroll,
 } from "@/features/shared";
@@ -35,7 +34,7 @@ import { gameClockLabel, gameScoreLabel } from "../helpers/live-record";
  * reader can still set is what it is about; this is a scoreboard over a
  * lineup that is being played, so the seats are plain rows and the panes are
  * two lists read across — the same parts (`Pane`, `PaneLedge`, `PaneGlass`,
- * `CONSOLE_ROW_WELL`, a bench behind a pinned drawer bar), the same two row
+ * `PaneRow`, a bench behind a pinned drawer bar), the same two row
  * heights, and the same linked scroll, so a reader walking from the checker to
  * here sees one card over one league.
  *
@@ -205,19 +204,25 @@ function ColumnHeads({ name, vs }: { name: string; vs: boolean }) {
 
   return (
     <div className="mt-1.5 flex items-baseline gap-[9px] px-[3px] lg:mt-0 lg:px-1 lg:pb-px lg:pt-[7px]">
-      <span aria-hidden className={`w-[38px] text-center tracking-[0.14em] ${head}`}>
+      <span aria-hidden className={`w-[34px] text-center tracking-[0.14em] ${head}`}>
         Slot
       </span>
+      {/* The face and the team code hold columns and have no head — there is
+          nothing to call a picture of somebody, and three letters are their own
+          label — but the heads need their widths, or each one sits left of the
+          cell it names. */}
+      <span aria-hidden className={`w-[22px] ${head}`} />
       <PaneHead className="min-w-0 flex-1">
         {vs && (
           <span className="tracking-[0.14em] text-[color:var(--billet-label)]">vs </span>
         )}
         {name}
       </PaneHead>
-      <span aria-hidden className={`w-[5.5rem] text-right ${head}`}>
+      <span aria-hidden className={`w-7 ${head}`} />
+      <span aria-hidden className={`w-[88px] text-right ${head}`}>
         Game
       </span>
-      <span aria-hidden className={`w-14 text-right ${head}`}>
+      <span aria-hidden className={`w-[70px] text-right ${head}`}>
         Pts
       </span>
       <span aria-hidden className={`w-14 text-right ${head}`}>
@@ -228,106 +233,106 @@ function ColumnHeads({ name, vs }: { name: string; vs: boolean }) {
 }
 
 /**
- * One seat, as a channel cut into the pane's glass — the checker's row with
- * its cells re-read: slot (1), name (2), game clock (3), points scored (4),
- * live projection (5). One node in two layouts, turned at `lg` by
- * `lg:contents` on the two wrapping spans, for that row's reason.
+ * One seat, as a {@link PaneRow} — the checker's row with its cells re-read.
  *
- * **Below `lg` the name has its line to itself and the clock joins the
- * second**, which a render at 375 forced: the clock beside the name left the
- * name one character — `M…` — on every row, the failure this app has recorded
- * at four other grains. The second line is the slot, the clock (which
- * truncates, being the one cell that can lose its tail and still read), and
- * the two figures; and **the scored cell is dropped there while it has nothing
- * to say**, since an em dash before kickoff on every row of a phone pane is
- * thirty pixels the clock needs more.
+ * **The row is the shared part now**, so the two heights, the two-line phone
+ * arm, the cell order, the face this list did not draw and the sans name it did
+ * not set are all that part's. What is this row's own is the clock and the
+ * second figure.
+ *
+ * **`figure` is what he has scored and `second` is what he is on course for.**
+ * They read left to right in the heads' own order, and neither is on the rank
+ * ramp: a live figure has nothing on this card to be a standing *against* — the
+ * pane opposite is a different roster, not a distribution — so a colour there
+ * would be a verdict nobody computed. What the accent says instead is that the
+ * game is **running**, which is the one thing a reader scanning the column is
+ * looking for.
  *
  * **The clock column is 88px and untracked at `lg`**, the checker's own
  * measurement of the widest string the kickoff formatter can produce;
- * `Q3 05:32` and `Final` are shorter, so the column sized for the kickoff
- * holds every other reading for free.
+ * `Q3 05:32` and `Final` are shorter, so a column sized for the kickoff holds
+ * every other reading for free. Below `lg` it takes the line's own slack and
+ * truncates, which is where it already sat.
  *
  * **The scored figure is null before kickoff and prints an em dash**, on the
  * contract's grammar: nothing has happened yet, which is a different answer
- * from a game he has played and scored nothing in.
+ * from a game he has played and scored nothing in. It is drawn at both widths
+ * now, where the phone arm used to drop it — the part gives the second line a
+ * fixed shape, and a cell that came and went between rows is what made two
+ * lineups stop reading across.
  */
 function SeatRow({ seat, game }: { seat: GametimeSeat; game: GametimeGame | null }) {
   const player = seat.player;
   const clock = gameClockLabel(game);
   const score = gameScoreLabel(game);
-  const title = score ? `${clock.text} · ${score}` : undefined;
+  const name = player ? (player.name ?? player.player_id) : "Empty";
 
   return (
-    <li
-      className={`${CONSOLE_ROW_WELL} relative mb-[3px] flex h-[52px] w-full flex-col justify-center gap-[5px] rounded-[7px] border border-transparent px-1.5 text-left lg:h-[38px] lg:flex-row lg:items-center lg:gap-[9px] lg:px-2.5`}
-    >
-      <span className="relative flex w-full min-w-0 items-center gap-1.5 lg:contents">
-        <span className="min-w-0 flex-1 truncate font-mono text-[length:var(--fs-12)] text-readout-line lg:order-2 lg:text-[length:var(--fs-13)]">
-          {player ? (player.name ?? player.player_id) : "Empty"}
-        </span>
-      </span>
-
-      <span className="relative flex w-full items-center gap-1.5 lg:contents">
-        <span className="shrink-0 font-mono text-[length:var(--fs-9)] tracking-[0.1em] text-readout/62 lg:order-1 lg:w-[38px] lg:overflow-hidden lg:rounded-[5px] lg:bg-[color:var(--figure-well-bg)] lg:px-1 lg:py-0.5 lg:text-center lg:text-[length:var(--fs-11)] lg:tracking-[0.12em] lg:shadow-[var(--figure-well-shadow)]">
-          {slotLabel(seat.slot)}
-        </span>
-
-        <span
-          title={title}
-          className={`min-w-0 flex-1 truncate whitespace-nowrap font-mono text-[length:var(--fs-9)] uppercase lg:order-3 lg:flex-none lg:w-[5.5rem] lg:text-right lg:text-[length:var(--fs-10)] ${
-            clock.live ? "text-readout" : "text-readout/50"
-          }`}
-        >
-          {clock.text}
-        </span>
-
-        <span
-          className={`${CONSOLE_FIGURE_WELL} shrink-0 px-[5px] py-0.5 text-right font-mono text-[length:var(--fs-12)] tabular-nums text-readout-line lg:order-4 lg:w-14 lg:text-[length:var(--fs-12-5)] ${
-            player?.scored == null ? "hidden lg:inline-block" : ""
-          }`}
-        >
-          {player?.scored == null ? "—" : player.scored.toFixed(1)}
-        </span>
-
-        <span
-          className={`${CONSOLE_FIGURE_WELL} shrink-0 px-[5px] py-0.5 text-right font-mono text-[length:var(--fs-12)] tabular-nums lg:order-5 lg:w-14 lg:text-[length:var(--fs-12-5)] ${
-            clock.live ? "text-readout [text-shadow:var(--readout-text-glow)]" : "text-readout-line"
-          }`}
-          title={
-            player?.projected == null
-              ? undefined
-              : `Projected ${player.projected.toFixed(1)} before kickoff`
-          }
-        >
-          {player?.live == null ? "—" : player.live.toFixed(1)}
-        </span>
-      </span>
-    </li>
+    <PaneRow
+      lead={{ label: slotLabel(seat.slot), position: player?.positions[0] ?? null }}
+      face={{ playerId: player?.player_id ?? null, name: player ? name : "" }}
+      name={name}
+      shortName={player?.name ? shortName(player.name) : name}
+      // Not on the wire — see `PaneRow`'s lamp.
+      status={null}
+      note={player?.team ?? null}
+      meta={clock.text || null}
+      figure={{
+        text: player?.scored == null ? "—" : player.scored.toFixed(1),
+        percentile: null,
+      }}
+      second={{
+        text: player?.live == null ? "—" : player.live.toFixed(1),
+        live: clock.live,
+      }}
+      marks={
+        // The score sits on the row's `title` rather than on screen: it is
+        // context for the clock, and a second reading beside four figures is
+        // the column this pane cannot spare.
+        score ? (
+          <span className="sr-only">
+            {clock.text} · {score}
+          </span>
+        ) : undefined
+      }
+    />
   );
 }
 
 /**
- * A bench player, in the drawer behind the bar — `DrawerRow`, the shared
- * bench row, with the live figure in the well and the game clock in the note
- * slot where the checker's puts the NFL team.
+ * A bench player, in the drawer behind the bar — the shared bench row, with the
+ * live figure in the figure cell and the game clock where the checker's puts
+ * the NFL team.
+ *
+ * The clock wins the note slot where there is one, because on a live page where
+ * a bench player's game *is* is the reading, and his NFL team is one press from
+ * the seat rows above. The scored figure rides `second`, which is the same cell
+ * the seats put `Live` in — one column down the pane, whichever list is on it.
  */
 function BenchRow({ player, game }: { player: GametimePlayer; game: GametimeGame | null }) {
   const clock = gameClockLabel(game);
+  const name = player.name ?? player.player_id;
+
   return (
-    <DrawerRow
-      lead={player.positions[0] ?? "—"}
-      leadWidth="lg:w-[38px]"
-      figure={player.live == null ? "—" : player.live.toFixed(1)}
+    <PaneRow
+      ground="drawer"
+      lead={{
+        label: player.positions[0] ?? "—",
+        position: player.positions[0] ?? null,
+      }}
+      face={{ playerId: player.player_id, name }}
+      name={name}
+      shortName={player.name ? shortName(player.name) : name}
+      status={null}
       note={clock.text || player.team}
-    >
-      <span className="relative min-w-0 flex-1 truncate text-[length:var(--fs-13)] text-[color:var(--billet-name)] lg:order-3">
-        {player.name ?? player.player_id}
-      </span>
-      {player.scored != null && (
-        <span className="shrink-0 font-mono text-[length:var(--fs-9)] tabular-nums tracking-[0.08em] text-[color:var(--billet-label)] lg:text-[length:var(--fs-10)]">
-          {player.scored.toFixed(1)} pts
-        </span>
-      )}
-    </DrawerRow>
+      figure={{
+        text: player.scored == null ? "—" : player.scored.toFixed(1),
+        percentile: null,
+      }}
+      second={{
+        text: player.live == null ? "—" : player.live.toFixed(1),
+        live: clock.live,
+      }}
+    />
   );
 }
