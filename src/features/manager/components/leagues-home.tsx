@@ -3,7 +3,6 @@
 import {
   type ReactNode,
   useCallback,
-  useEffect,
   useMemo,
   useRef,
   useState,
@@ -40,7 +39,6 @@ import {
   type RackDrawerKey,
   type SubjectMode,
   type SubjectRolls,
-  invalidateLeagueLineups,
   useActiveCard,
   useKtcBoard,
   useLeagueFilters,
@@ -474,28 +472,6 @@ export function LeaguesHome({
   // applied here, because their ranks are the server's: only it can rank a
   // roster against the other eleven, and a forced market is a board only it can
   // price.
-  /**
-   * A sync landed, so every expanded card's stored answer is out of date.
-   *
-   * **This is the invalidation the per-league split needed.** A card's teams
-   * are read once and kept — closing and re-opening must not pay again — which
-   * is right until the rosters behind them are rewritten, and the leagues
-   * stream settling is exactly when that has happened. The store re-asks for
-   * the keys a card is still reading and drops the rest, so an open card
-   * refreshes in place and a closed one costs nothing.
-   *
-   * The whole store rather than this page's keys: the event is rare (one per
-   * refresh), and a trades card holding a stale league would want the same
-   * news. Fired on the *transition*, not on the state, so a page that arrives
-   * already settled does not throw away an answer it has just read.
-   */
-  const wasRefreshing = useRef(refreshing);
-  useEffect(() => {
-    const settled = wasRefreshing.current && !refreshing;
-    wasRefreshing.current = refreshing;
-    if (settled) invalidateLeagueLineups();
-  }, [refreshing]);
-
   const { payload: lineups, pending: ranksPending } = useManagerLineups(
     username,
     state.season,

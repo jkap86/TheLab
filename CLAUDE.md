@@ -445,6 +445,126 @@ than there is evidence for. A refresh that fails *loudly* behind a served list
 sets `stale` as well, since a refresh that did not land leaves the data exactly
 as old as one that was never attempted.
 
+### The leagues read belongs to the visit, not to the tool
+
+`/manager`, `/lineupchecker` and `/gametime` list the same leagues and each
+mounted `useManagerLeagues` over its own `useState` — so walking between three
+tools opened the stream three times. What that cost per tool change is a
+Postgres read of the whole graph, ~519KB of NDJSON on a 113-league account, a
+`PENDING` state (`refreshing: true`, which is the cold bar) until the first
+result landed, and — once the route's own `SYNC_TTL_MS` had elapsed — a Sleeper
+fan-out. What a reader saw for it was the page they had just been looking at
+going blank and filling in again. The answer lives in a shared store now
+(`features/shared/manager-leagues-cache.ts`) and the read happens when somebody
+arrives on the **site** rather than on a tool. **Nothing on the wire moved** —
+no route, no query, no contract type, no payload field, no migration — and the
+route is untouched: this is entirely about how many times it is asked.
+
+**It is `useLeagueLineup`'s move, and it retires the same two pieces of
+machinery for the same reasons.** There is no abort-on-unmount (the store owns
+the stream's lifetime) and no `request-guard` ticket, because a message for the
+previous manager resolves into the previous manager's entry — which nothing is
+reading. That protection comes from the shape of the store rather than from a
+ticket, exactly as that hook's own note says.
+
+**An in-flight stream is kept when its last reader leaves**, which is the one
+rule this store does not share with `league-lineup-cache` and the one the whole
+thing turns on during a cold sync. Three reasons, and the third is decisive: the
+sync on the other end is *already* not cancelled by a disconnect — the route's
+`closed` — so aborting buys the server nothing and costs the next tool the whole
+stream again; a cold sync is minutes rather than milliseconds, so a half-read
+leagues stream is not the worthless thing a half-read league answer is; and **a
+navigation has a beat with no subscriber**, the old page's cleanup running
+before the new page's effect, so a store that dropped in-flight entries at zero
+readers would restart the stream on every tool change — the case this exists to
+remove, reintroduced by its own eviction rule. What it costs is one connection
+left open for a reader who has walked away from all three tools, and it ends
+when the server closes the stream.
+
+**The bound is two, where the lineup store holds eight, and the unit is why.**
+An entry there is one league's twelve solved rosters; an entry here is a whole
+account's league list, the largest single thing this app parses in a browser.
+Two is the account being read plus the one before it, which is what makes
+looking somebody else up and coming back free. It counts the entries nothing is
+reading, on `MAX_ENTRIES`' own terms one store over — and **evicting an
+in-flight entry aborts it**, which is the only thing that ever aborts one of
+these and therefore the only bound on how many abandoned streams a reader
+walking between accounts can leave open.
+
+**There is no TTL, deliberately.** Freshness is the route's policy —
+`SYNC_TTL_MS`, the crawler's seasonal tiers, and the `stale` flag it answers
+with, which the page already draws as a readout beside the list. A clock here
+would be a second staleness policy answering a question the route answers, and
+what it would buy is the progress bar coming back mid-session, which is the
+thing being removed. A reload is what asks again.
+
+**A failure with nothing to show goes with its last reader**, on the lineup
+store's argument: kept, it would make the one thing anybody would try — opening
+the tool again — a no-op for the life of the page. A failure *behind* a served
+list is kept, because `refreshError` beside leagues is a note on a usable page
+rather than a dead end. And a second reader of a held failure does not restart
+it: a second tool is a second reader, not a fresh attempt.
+
+**Both halves of the subject are in the key, and an unset season is not the same
+question as a spelled one.** The route resolves the active season for the first
+and is told it for the second, so folding them together would serve a
+`?season=`-pinned answer to a page that asked for "now" — a wrong year rather
+than a stale one. In practice `/manager` with no `?season=` passes `undefined`
+and the other two pass nothing, so the ordinary case is one key across the three
+tools.
+
+**The per-league invalidation moved onto the event it was a proxy for.**
+`leagues-home` watched `refreshing` go false and called
+`invalidateLeagueLineups()`, which was wrong in two directions once the answer is
+shared: it fired on every mount of that page, since a fresh stream always went
+pending → settled whether or not a sync ran, and it fired on *no* other page, so
+a sync landing while the reader was on the lineup checker left the store holding
+pre-sync rosters. It sits beside `markTradeDataSynced()` now — the closing
+`result` of a stream that ran a sync, which is the event itself: once per sync,
+on whichever tool is on screen.
+
+#### Verified
+
+Driven over CDP against `next dev` with no `DATABASE_URL` — the boot hook skips
+migrations and the four loops log their refusals, which is the server coming up
+healthy against nothing — with `window.fetch` stubbed at
+`Page.addScriptToEvaluateOnNewDocument` to answer the leagues route from a
+fixture and to count the calls, and every other `/api/` read refused so each
+hook takes its own documented degradation rather than being handed a payload of
+the wrong shape. The navigation is the rack tray's own `next/link`, so what is
+driven is a real client-side navigation rather than a router call. The mechanics
+are the ones this file records: `--no-proxy-server`, `localhost` rather than
+`127.0.0.1`, `--disable-features=OverlayScrollbar` and the
+`--blink-settings=availablePointerTypes=4,…` flags.
+
+**One leagues stream across four tool views** — `/manager/slim` →
+`/lineupchecker/slim` → `/gametime/slim` → `/manager/slim` — with both fixture
+leagues rendered on every one of them, no "Reading"/"Syncing" text at any point,
+and a hard reload asking again (module scope reset). **The before-state was
+reproduced in the same harness** by stashing the diff, which is the check that
+the change is doing something: **eight** streams across the same four views, two
+per view, the second of each being React's development double-mount — which the
+old hook's own note acknowledged and left to the server's admission dedupe to
+absorb. A reload was 2 before and is 1 now, so the double-open went with it. No
+console output of any kind.
+
+2,421 unit tests pass (17 more — the key's three rules, a second reader making no
+request, the resolved and in-flight entries surviving their last reader, the
+retry a dropped failure makes reachable, the bound, the abort on eviction, a
+subscribed entry being neither evicted nor counted, and a commit from an evicted
+stream being ignored); `lint`, `typecheck` and `build` are clean.
+
+**Not verified against real data**, which is the gap to close first: the
+fixtures are two invented leagues and no database was reachable from here. Four
+things this cannot check — whether a 113-league account's list is comfortable to
+hold two of, which is what `MAX_ENTRIES` is set against; how a cold sync started
+on one tool actually reads when it lands while the reader is on another, since
+the fixture stream closes immediately; whether a reader ever wants the list
+re-read mid-session without reloading, which is the one judgement this change
+makes on their behalf and only a reader settles; and whether the invalidation
+moving onto the sync event leaves any expanded card holding rosters a sync has
+since rewritten.
+
 ### Two narrowings, two ways to undo them
 
 The grid is narrowed by the league filters **and** by the subjects picked in the
