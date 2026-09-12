@@ -591,13 +591,17 @@ export function SharesDrawer({
     // not scroll it somewhere else first.
     if (listRef.current) listRef.current.scrollTop = savedScroll.current;
 
-    // Fine pointer → the search field, which is what the drawer is for.
-    // Coarse → the panel itself, so opening it on a phone does not raise the
-    // software keyboard over the list it just showed.
-    const fine =
-      typeof window !== "undefined" &&
-      window.matchMedia?.("(pointer: fine)").matches;
-    (fine ? inputRef.current : panelRef.current)?.focus();
+    // No touchscreen → the search field, which is what the drawer is for.
+    // Touch → the panel itself, so opening it does not raise the software
+    // keyboard over the list it just showed. The query is `globals.css`'s
+    // `touch:` variant, not `pointer: fine`, which an iPad with a keyboard
+    // case reports while still raising a keyboard and zooming the field.
+    const touch =
+      typeof window === "undefined" ||
+      window.matchMedia?.(
+        "(pointer: coarse), (any-pointer: coarse), (hover: none)",
+      ).matches !== false;
+    (touch ? panelRef.current : inputRef.current)?.focus();
   }, [open]);
 
   // Every route out of the drawer clears the search, so reopening it is not a

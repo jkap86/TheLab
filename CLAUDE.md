@@ -15410,6 +15410,43 @@ Web Inspector with the control focused — `matchMedia('(pointer: coarse)').matc
 first is *true* and it still zooms, the cause is not the gate and not the size,
 and the next lever is the dynamic-viewport route rather than more pixels.
 
+### The floor did not hold, so iOS gets `maximum-scale=1`
+
+Tapping the shares drawer's search field on a phone still zoomed the page with
+the 17px floor in place. `IosFocusZoomGuard` (`features/shared/ios-focus-zoom.tsx`,
+mounted in the root layout) adds `maximum-scale=1` to the viewport meta **on
+iOS and iPadOS only**, which is the fix Safari reliably honours.
+
+**It does not reverse the WCAG argument in `layout.tsx`, and that is why it is
+scoped.** Since iOS 10 Safari ignores `maximum-scale` and `user-scalable` for
+the reader's own pinch gestures and uses `maximum-scale` only to decide whether
+a focused field may zoom — so on iOS it costs nobody their zoom. Chrome on
+Android does honour both against pinch, which is the regression the `viewport`
+export refuses; and Android does not zoom a focused field anyway, so it is left
+alone. iPadOS asking for the desktop site reports itself as a Mac and is caught
+by `maxTouchPoints`.
+
+**An effect, not a `generateViewport` reading the user agent**: a request
+header read in the root layout opts the whole app out of static prerendering,
+the cost `theme.ts` refuses a cookie for. The effect runs after hydration, so
+the edited attribute is never a mismatch, and nothing focusable does anything
+before hydration. The floor stays — it still keeps a focused field legible.
+
+The drawer's own focus-on-open took the `touch:` query in the same change,
+where it read `(pointer: fine)`: an iPad with a keyboard case reports a fine
+pointer, so opening the drawer focused the field and raised the keyboard.
+
+**The iPad arm reads `Macintosh` in the user agent, not `navigator.platform`**,
+and a render is what said so: the Browser pane's phone preset spoofs an Android
+user agent while Chrome leaves the platform at `MacIntel`, so on the platform
+test an emulated Android phone read as an iPad and took `maximum-scale=1`.
+Keyed on the user agent it stays untouched — checked in that pane, the meta
+reading `width=device-width, initial-scale=1, interactive-widget=resizes-content`
+under a Pixel user agent, with an iPhone one detected.
+
+**Not verified on a device**: whether Safari's zoom actually stops is the one
+thing no emulator here can answer.
+
 ### The toggle
 
 `ThemeToggle` (in `features/shared`) writes `data-theme` onto `<html>` and
