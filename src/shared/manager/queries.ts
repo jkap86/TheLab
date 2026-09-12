@@ -1305,7 +1305,9 @@ export type ManagerWeekLineupRow = {
   /**
    * The league's own settings blob, for the roster census — `reserve_slots` and
    * `taxi_slots` live here, and some leagues express them only here where
-   * others express them only as `IR`/`TAXI` entries in `roster_positions`.
+   * others express them only as `IR`/`TAXI` entries in `roster_positions` —
+   * and for the IR reading, which judges each designation against the six
+   * `reserve_allow_*` toggles Sleeper writes beside them.
    */
   settings: Record<string, unknown> | null;
   roster_id: number;

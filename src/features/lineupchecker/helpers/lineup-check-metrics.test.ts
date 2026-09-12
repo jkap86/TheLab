@@ -1,11 +1,13 @@
 import assert from "node:assert/strict";
 import { describe, test } from "node:test";
 
-import type { LineupCheckLeague } from "@/shared/contract";
+import type { LineupCheckIrPlayer, LineupCheckLeague } from "@/shared/contract";
 
 import {
   attentionByReason,
   gapCell,
+  irMarkFor,
+  irMoves,
   kickoffCell,
   needsAttention,
   rosterCell,
@@ -37,9 +39,27 @@ function league(over: Partial<LineupCheckLeague> = {}): LineupCheckLeague {
     ir_max: 0,
     taxi_count: 0,
     taxi_max: 0,
+    ir: { reserve: [], stashable: [], unknown: 0 },
     unknown_slots: [],
     ...over,
   };
+}
+
+/** One player as the IR reading judged him. */
+function irPlayer(
+  id: string,
+  status: string | null,
+  eligible: boolean | null,
+  name: string | null = id.toUpperCase(),
+): LineupCheckIrPlayer {
+  return { player_id: id, name, status, eligible };
+}
+
+/** A checked IR reading over the given lists. */
+function ir(
+  over: Partial<NonNullable<LineupCheckLeague["ir"]>> = {},
+): NonNullable<LineupCheckLeague["ir"]> {
+  return { reserve: [], stashable: [], unknown: 0, ...over };
 }
 
 describe("gapCell", () => {
@@ -273,27 +293,193 @@ describe("rosterCell", () => {
     assert.match(cell.title, /refuse an add/);
   });
 
-  test("IR over its own allowance is an alert of its own", () => {
-    // The common real case: an ineligible player parked on IR, on a roster that
-    // is otherwise legal.
+  test("IR over its allowance is one more player to move off it", () => {
+    // Four players the league admits on a three-slot IR: nobody is ineligible,
+    // and one still has to come off. Counted as a move rather than printed as
+    // a ratio, so it reads in the same grammar as `1 over` above and fits the
+    // phone tile that `4/3` at `--fs-17` does not; the ratio is in the title.
+    const parked = ["a", "b", "c", "d"].map((id) => irPlayer(id, "IR", true));
     const cell = rosterCell(
-      league({ roster_count: 10, roster_max: 10, ir_count: 4, ir_max: 3 }),
+      league({
+        roster_count: 10,
+        roster_max: 10,
+        ir_count: 4,
+        ir_max: 3,
+        ir: ir({ reserve: parked }),
+      }),
     );
-    // Counted as an overage rather than printed as a ratio, so it reads in the
-    // same grammar as `1 over` above and fits the phone tile that `4/3` at
-    // `--fs-17` does not. The ratio survives in the title.
-    assert.equal(cell.text, "1 over IR");
+    assert.equal(cell.text, "1 off IR");
     assert.equal(cell.figure, "1");
-    assert.equal(cell.unit, "over IR");
+    assert.equal(cell.unit, "off IR");
     assert.equal(cell.state, "alert");
+    assert.match(cell.title, /over its allowance \(4\/3\)/);
+    assert.doesNotMatch(cell.title, /not IR-eligible/);
   });
 
-  test("the roster figure wins when both are wrong, and the title carries the rest", () => {
+  test("the IR move comes first, and the title carries the overage", () => {
+    // Twelve on a ten-spot roster *and* a healthy player on IR: Sleeper refuses
+    // the fixing drop until IR is legal, so the IR move leads and the title
+    // says what the roster is once he is back on it.
     const cell = rosterCell(
-      league({ roster_count: 12, roster_max: 10, ir_count: 4, ir_max: 3 }),
+      league({
+        roster_count: 12,
+        roster_max: 10,
+        ir_count: 4,
+        ir_max: 3,
+        ir: ir({
+          reserve: [irPlayer("fit", null, false), ...["a", "b", "c"].map((id) => irPlayer(id, "IR", true))],
+        }),
+      }),
     );
-    assert.equal(cell.text, "2 over");
+    assert.equal(cell.text, "1 off IR");
     assert.match(cell.title, /IR 4\/3/);
+    assert.match(cell.title, /13 of 10 and 3 must then be dropped/);
+  });
+
+  test("a healthy player on IR must come off, and the title names him", () => {
+    const cell = rosterCell(
+      league({
+        roster_count: 10,
+        roster_max: 10,
+        ir_count: 1,
+        ir_max: 2,
+        ir: ir({ reserve: [irPlayer("mahomes", null, false, "MAHOMES")] }),
+      }),
+    );
+    assert.equal(cell.text, "1 off IR");
+    assert.equal(cell.state, "alert");
+    assert.match(cell.title, /MAHOMES \(healthy\) is not IR-eligible/);
+    assert.match(cell.title, /refuses transactions until he is off IR/);
+    // Activated onto a full roster, somebody has to go.
+    assert.match(cell.title, /11 of 10 and 1 must then be dropped/);
+  });
+
+  test("an ineligible IR player whose slot a bench player can take is a swap", () => {
+    const cell = rosterCell(
+      league({
+        roster_count: 10,
+        roster_max: 10,
+        ir_count: 1,
+        ir_max: 1,
+        ir: ir({
+          reserve: [irPlayer("fit", null, false)],
+          stashable: [irPlayer("cmc", "Out", true)],
+        }),
+      }),
+    );
+    assert.equal(cell.text, "1 off IR");
+    assert.match(cell.title, /and 1 on \(CMC \(Out\)\)/);
+    assert.match(cell.title, /10 of 10, full/);
+  });
+
+  test("an empty IR slot with an eligible bench player is a stash", () => {
+    const cell = rosterCell(
+      league({
+        roster_count: 10,
+        roster_max: 10,
+        ir_count: 0,
+        ir_max: 1,
+        ir: ir({ stashable: [irPlayer("chubb", "Out", true)] }),
+      }),
+    );
+    assert.equal(cell.text, "1 to IR");
+    assert.equal(cell.figure, "1");
+    assert.equal(cell.unit, "to IR");
+    assert.equal(cell.state, "alert");
+    assert.match(cell.title, /1 IR slot open — 1 player eligible: CHUBB \(Out\)/);
+    // The stash is what opens the spot; the title says so.
+    assert.match(cell.title, /9 of 10 with 1 spot open/);
+  });
+
+  test("more eligible than slots says so", () => {
+    const cell = rosterCell(
+      league({
+        ir_count: 0,
+        ir_max: 1,
+        ir: ir({ stashable: ["a", "b", "c"].map((id) => irPlayer(id, "Out", true)) }),
+      }),
+    );
+    assert.equal(cell.text, "1 to IR");
+    assert.match(cell.title, /3 players eligible/);
+  });
+
+  test("a stash is offered before a drop is demanded", () => {
+    // Eleven on ten with an Out player and an empty IR slot: parking him is
+    // the fix that loses nobody, so it leads the overage.
+    const cell = rosterCell(
+      league({
+        roster_count: 11,
+        roster_max: 10,
+        ir_count: 0,
+        ir_max: 1,
+        ir: ir({ stashable: [irPlayer("out", "Out", true)] }),
+      }),
+    );
+    assert.equal(cell.text, "1 to IR");
+    assert.match(cell.title, /10 of 10, full/);
+  });
+
+  test("ineligible and over the allowance: the larger count wins, and both are said", () => {
+    const cell = rosterCell(
+      league({
+        ir_count: 5,
+        ir_max: 3,
+        ir: ir({
+          reserve: [irPlayer("fit", null, false), ...["a", "b", "c", "d"].map((id) => irPlayer(id, "IR", true))],
+        }),
+      }),
+    );
+    assert.equal(cell.text, "2 off IR");
+    assert.match(cell.title, /FIT \(healthy\) is not IR-eligible, and IR is over its allowance \(5\/3\) — 2 must come off/);
+  });
+
+  test("a stash that outruns the free slots is capped by them", () => {
+    const cell = rosterCell(
+      league({
+        ir_count: 2,
+        ir_max: 3,
+        ir: ir({
+          reserve: [irPlayer("x", null, false), irPlayer("y", "Questionable", false)],
+          stashable: ["a", "b", "c", "d", "e"].map((id) => irPlayer(id, "Out", true)),
+        }),
+      }),
+    );
+    assert.equal(cell.text, "2 off IR");
+    assert.match(cell.title, /5 eligible for 3 slots/);
+  });
+
+  test("an unchecked IR keeps the census answer and says what it could not check", () => {
+    // `Full` is a true count of a real roster; the IR half's absence is a
+    // sentence in the title, never an em dash over a measured figure.
+    const cell = rosterCell(league({ ir: null, ir_count: 0, ir_max: 2 }));
+    assert.equal(cell.text, "Full");
+    assert.equal(cell.state, "clear");
+    assert.match(cell.title, /IR eligibility could not be checked/);
+  });
+
+  test("an unchecked IR in a league with no IR slots has nothing to say about it", () => {
+    const cell = rosterCell(league({ ir: null, ir_count: 0, ir_max: 0 }));
+    assert.equal(cell.state, "clear");
+    assert.doesNotMatch(cell.title, /could not be checked/);
+  });
+
+  test("unread statuses are counted in the title and the tile still answers", () => {
+    const cell = rosterCell(league({ ir_max: 2, ir: ir({ unknown: 2 }) }));
+    assert.equal(cell.state, "clear");
+    assert.match(cell.title, /2 player statuses unread/);
+  });
+
+  test("over the allowance with no eligibility read is still a player off", () => {
+    const cell = rosterCell(league({ ir: null, ir_count: 4, ir_max: 3 }));
+    assert.equal(cell.text, "1 off IR");
+    assert.match(cell.title, /IR eligibility could not be checked/);
+  });
+
+  test("taxi over its own allowance keeps its own arm", () => {
+    const cell = rosterCell(league({ taxi_count: 3, taxi_max: 1 }));
+    assert.equal(cell.text, "2 over taxi");
+    assert.equal(cell.unit, "over taxi");
+    assert.match(cell.title, /must come off/);
   });
 
   test("a league with no taxi squad is not over its taxi limit", () => {
@@ -350,6 +536,112 @@ describe("attentionByReason", () => {
       superflex: 0,
       roster: 0,
     });
+  });
+
+  test("an IR move is a Roster-slots reason, not a fifth one", () => {
+    const checked = {
+      a: league({
+        ir_count: 1,
+        ir_max: 2,
+        ir: ir({ reserve: [irPlayer("fit", null, false)] }),
+      }),
+      b: league({ ir_count: 0, ir_max: 1, ir: ir({ stashable: [irPlayer("out", "Out", true)] }) }),
+    };
+    assert.deepEqual(attentionByReason(leagues, checked), {
+      points: 0,
+      kickoff: 0,
+      superflex: 0,
+      roster: 2,
+    });
+    assert.equal(needsAttention(leagues, checked), 2);
+  });
+});
+
+describe("irMoves", () => {
+  test("no IR allowance on file is no reading", () => {
+    assert.equal(irMoves(league({ ir_max: null })), null);
+  });
+
+  test("the four numbers on a worked case", () => {
+    const moves = irMoves(
+      league({
+        roster_count: 10,
+        roster_max: 10,
+        ir_count: 1,
+        ir_max: 2,
+        ir: ir({
+          reserve: [irPlayer("fit", null, false)],
+          stashable: ["a", "b", "c"].map((id) => irPlayer(id, "Out", true)),
+        }),
+      }),
+    )!;
+    assert.equal(moves.checked, true);
+    assert.equal(moves.off, 1);
+    // Two slots, nobody left on them once he is off.
+    assert.equal(moves.free, 2);
+    assert.equal(moves.stash, 2);
+    // Ten, plus one activated, less two parked.
+    assert.equal(moves.after, 9);
+  });
+
+  test("an unchecked reading still counts the overflow, and nothing else", () => {
+    const moves = irMoves(league({ ir: null, ir_count: 4, ir_max: 3 }))!;
+    assert.equal(moves.checked, false);
+    assert.equal(moves.off, 1);
+    assert.deepEqual(moves.candidates, []);
+    assert.deepEqual(moves.ineligible, []);
+    assert.equal(moves.unknown, 0);
+  });
+
+  test("free floors at zero, so a league with no slots stashes nobody", () => {
+    const candidates = ["a", "b", "c"].map((id) => irPlayer(id, "Out", true));
+    const none = irMoves(league({ ir_count: 0, ir_max: 0, ir: ir({ stashable: candidates }) }))!;
+    assert.equal(none.free, 0);
+    assert.equal(none.stash, 0);
+    // Over the allowance with the overflow coming off leaves no slot either.
+    const over = irMoves(
+      league({
+        ir_count: 5,
+        ir_max: 3,
+        ir: ir({ reserve: ["a", "b", "c", "d", "e"].map((id) => irPlayer(id, "IR", true)), stashable: candidates }),
+      }),
+    )!;
+    assert.equal(over.off, 2);
+    assert.equal(over.free, 0);
+    assert.equal(over.stash, 0);
+  });
+});
+
+describe("irMarkFor", () => {
+  const moves = irMoves(
+    league({
+      ir_count: 2,
+      ir_max: 3,
+      ir: ir({
+        reserve: [irPlayer("fit", null, false), irPlayer("hurt", "IR", true), irPlayer("ghost", null, null)],
+        stashable: [irPlayer("out", "Out", true)],
+      }),
+    }),
+  );
+
+  test("a player on IR wears IR, and off IR where the league does not admit him", () => {
+    assert.equal(irMarkFor("fit", moves), "off");
+    assert.equal(irMarkFor("hurt", moves), "on");
+    // Unjudged is still on IR; it is not a verdict either way.
+    assert.equal(irMarkFor("ghost", moves), "on");
+  });
+
+  test("a candidate wears the move only while there is a slot for one", () => {
+    assert.equal(irMarkFor("out", moves), "to");
+    const full = irMoves(
+      league({ ir_count: 1, ir_max: 1, ir: ir({ reserve: [irPlayer("hurt", "IR", true)], stashable: [irPlayer("out", "Out", true)] }) }),
+    );
+    assert.equal(irMarkFor("out", full), null);
+  });
+
+  test("anybody else, and any row with no reading, wears nothing", () => {
+    assert.equal(irMarkFor("qb", moves), null);
+    assert.equal(irMarkFor("fit", null), null);
   });
 });
 
@@ -430,6 +722,12 @@ describe("a tile's two shapes", () => {
       rosterCell(league({ roster_count: 8, roster_max: 10 })),
       rosterCell(league({ roster_count: 11, roster_max: 10 })),
       rosterCell(league({ roster_count: 10, roster_max: 10 })),
+      rosterCell(
+        league({ ir_count: 1, ir_max: 2, ir: ir({ reserve: [irPlayer("fit", null, false)] }) }),
+      ),
+      rosterCell(
+        league({ ir_count: 0, ir_max: 1, ir: ir({ stashable: [irPlayer("out", "Out", true)] }) }),
+      ),
     ]) {
       assert.equal(cell.scope, `${cell.scope.split(" ")[0]} of 10 held`);
     }

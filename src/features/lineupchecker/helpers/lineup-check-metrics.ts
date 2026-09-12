@@ -1,4 +1,4 @@
-import type { LineupCheckLeague } from "@/shared/contract";
+import type { LineupCheckIrPlayer, LineupCheckLeague } from "@/shared/contract";
 
 import { SLOT_POSITIONS } from "../../../shared/projections/slots.ts";
 
@@ -315,7 +315,114 @@ export function superflexCell(
 }
 
 /**
- * Whether the roster is under or over what the league allows.
+ * The IR moves a league wants, as arithmetic against its census.
+ *
+ * The wire carries *judgements* — who is on IR and whether each may stay, who
+ * on the active roster the league would admit — and this is the one place
+ * those become *moves*, read by the roster tile and by the row marks in the
+ * expanded card alike, so a tile saying `1 to IR` and a bench with two `→ IR`
+ * chips on it cannot be two readings of one league.
+ *
+ * - **`off`** is who must come off IR: every ineligible player, or the overflow
+ *   past the allowance, whichever is more. The two are one number rather than
+ *   two because they are one instruction — a healthy player and a fourth
+ *   player on a three-slot IR are both "move somebody off", and where the
+ *   ineligible one *is* the overflow, moving him fixes both.
+ * - **`free`** is the slots open once they have, floored at zero: `ir_max` less
+ *   what is still parked.
+ * - **`stash`** is how many of the candidates there is room for. Every
+ *   candidate is a true fact about a designation (see the contract), so the
+ *   list is not trimmed to the room; `stash` is.
+ * - **`after`** is the active roster once both moves are made — the count the
+ *   tile's title states the open spots or the forced drops from, which is what
+ *   "factor in adds and drops after this" means on this card.
+ *
+ * Null only where the league states no IR allowance at all (`ir_max` null), on
+ * the census's own rule. An **unchecked** reading (`ir` null: rules unknown, or
+ * the status read failed) still answers — the overflow is a count the census
+ * made — with empty lists and `checked: false`, so the tile can say the one
+ * thing it knows and the one thing it could not.
+ */
+export type IrMoves = {
+  /** Whether the reading was made at all — `league.ir !== null`. */
+  checked: boolean;
+  /** Everyone on IR now; empty when unchecked. */
+  reserve: LineupCheckIrPlayer[];
+  /** Those of them the league's rules do not admit. */
+  ineligible: LineupCheckIrPlayer[];
+  /** Players that must come off IR — the ineligible, or the overflow, whichever is more. */
+  off: number;
+  /** IR slots free once they have; never negative. */
+  free: number;
+  /** Active players the league admits on IR; empty when unchecked. */
+  candidates: LineupCheckIrPlayer[];
+  /** How many of them there is room for. */
+  stash: number;
+  /** The active roster once `off` are activated and `stash` are parked. */
+  after: number;
+  /** Players whose eligibility could not be judged; 0 when unchecked. */
+  unknown: number;
+};
+
+export function irMoves(league: LineupCheckLeague): IrMoves | null {
+  if (league.ir_max === null) return null;
+
+  const reading = league.ir;
+  const reserve = reading?.reserve ?? [];
+  const ineligible = reserve.filter((player) => player.eligible === false);
+  const overflow = Math.max(0, league.ir_count - league.ir_max);
+  const off = Math.max(ineligible.length, overflow);
+  const free = Math.max(0, league.ir_max - (league.ir_count - off));
+  const candidates = reading?.stashable ?? [];
+  const stash = Math.min(free, candidates.length);
+
+  return {
+    checked: reading !== null,
+    reserve,
+    ineligible,
+    off,
+    free,
+    candidates,
+    stash,
+    after: league.roster_count + off - stash,
+    unknown: reading?.unknown ?? 0,
+  };
+}
+
+/**
+ * What a row wears for the IR reading: `off` (on IR and not admitted), `on`
+ * (on IR), `to` (a candidate, and there is a slot for one), or nothing.
+ */
+export type IrMark = "off" | "on" | "to";
+
+/**
+ * The mark for one player's row, off the same {@link irMoves} the tile reads.
+ *
+ * **Every candidate is marked once any slot is free**, not the first `stash`
+ * of them: the chip says *eligible*, which is true of each, and which one goes
+ * is the reader's call — the tile's title is what says how many can. With no
+ * slot free no candidate is marked, because a chip offering a move Sleeper
+ * would refuse is the claim this whole check exists to stop making.
+ */
+export function irMarkFor(
+  playerId: string,
+  moves: IrMoves | null,
+): IrMark | null {
+  if (!moves) return null;
+  const parked = moves.reserve.find((player) => player.player_id === playerId);
+  if (parked) return parked.eligible === false ? "off" : "on";
+  if (
+    moves.stash > 0 &&
+    moves.candidates.some((player) => player.player_id === playerId)
+  ) {
+    return "to";
+  }
+  return null;
+}
+
+/**
+ * Whether the roster is under or over what the league allows, and whether its
+ * IR is set the way the league's own rules would have it.
  *
  * **Three limits, counted apart.** Sleeper enforces IR and taxi against their
  * own allowances rather than against the active roster, so a legal roster with
@@ -331,9 +438,27 @@ export function superflexCell(
  * stays empty — so it belongs in the count beside the over-full leagues rather
  * than sitting silently on a page whose whole purpose is to name the leagues
  * to open. Over is an alert because Sleeper refuses adds until somebody is
- * dropped. IR and taxi over their own limits are alerts too — an ineligible
- * player parked on IR is the common real case — and the roster figure is
- * preferred when both are wrong, with the title carrying the rest.
+ * dropped. Taxi over its own limit is an alert too.
+ *
+ * **IR is two arms of its own, and they come first.** A player on IR the
+ * league does not admit — a healthy one, an `Out` in a league whose toggle is
+ * off — or a fourth player on a three-slot IR is `N off IR`, and it leads
+ * because Sleeper refuses every transaction on that roster until it is fixed,
+ * the fixing drop included. An empty slot beside an active player the league
+ * *would* admit is `N to IR`, ahead of `N over` because a stash clears an
+ * overage without losing a player, and ahead of `N open` because the stash is
+ * what makes the open count true. Both titles state the roster *after* the
+ * move — the spots it opens or the drop it forces — so the reader knows what
+ * the press buys before making it. Off and on in one press are sequential
+ * rather than summed: the tile shows the move Sleeper blocks on, its title
+ * carries the stash that follows, and the next sync redraws the second.
+ *
+ * **A null reading keeps the census answer.** `Full` beside an IR nobody
+ * could judge is still a true count of a real roster, and `none` is the em
+ * dash for *no answer at all*; the IR half's absence rides the title, which is
+ * the kickoff tile's own precedent for two absences told apart in words. An
+ * unjudged player is the same: the tile answers what it knows and says how
+ * many it could not.
  */
 export function rosterCell(
   league: LineupCheckLeague | null | undefined,
@@ -354,6 +479,60 @@ export function rosterCell(
     .join(", ");
   const rest = spare ? ` — ${spare}` : "";
 
+  const moves = irMoves(league);
+  const caveat = irCaveat(league, moves);
+  const now = `Now ${held} filled${rest}${caveat}`;
+
+  if (moves && moves.off > 0) {
+    const overflow = Math.max(0, league.ir_count - (league.ir_max ?? 0));
+    const ineligible = moves.ineligible;
+    const some = ineligible.length;
+    const allowance = `IR is over its allowance (${league.ir_count}/${league.ir_max})`;
+    // Which of the two facts is the reason, or both — the ineligible players
+    // are named wherever there are any, since the name is what the reader
+    // acts on.
+    const reason =
+      some === 0
+        ? `${allowance} — ${moves.off} must come off`
+        : overflow > some
+          ? `${who(ineligible)} ${some === 1 ? "is" : "are"} not IR-eligible, and ${allowance} — ${moves.off} must come off`
+          : `${who(ineligible)} ${some === 1 ? "is" : "are"} not IR-eligible under this league's rules — ` +
+            `Sleeper refuses transactions until ${some === 1 ? "he is" : "they are"} off IR`;
+    const on =
+      moves.stash > 0
+        ? ` and ${moves.stash} on (${who(moves.candidates.slice(0, moves.stash))})`
+        : "";
+    const surplus =
+      moves.stash > 0 && moves.candidates.length > moves.stash
+        ? ` — ${moves.candidates.length} eligible for ${moves.stash} slot${moves.stash === 1 ? "" : "s"}`
+        : "";
+    return {
+      text: `${moves.off} off IR`,
+      figure: `${moves.off}`,
+      unit: "off IR",
+      scope,
+      state: "alert",
+      title:
+        `${reason}. After ${moves.off} off IR${on} the roster is ` +
+        `${moves.after} of ${league.roster_max}${afterTail(moves.after, league.roster_max)}${surplus}. ${now}`,
+    };
+  }
+
+  if (moves && moves.stash > 0) {
+    const eligible = moves.candidates.length;
+    return {
+      text: `${moves.stash} to IR`,
+      figure: `${moves.stash}`,
+      unit: "to IR",
+      scope,
+      state: "alert",
+      title:
+        `${moves.free} IR slot${moves.free === 1 ? "" : "s"} open — ${eligible} player${eligible === 1 ? "" : "s"} ` +
+        `eligible: ${who(moves.candidates)}. After ${moves.stash} on IR the roster is ` +
+        `${moves.after} of ${league.roster_max}${afterTail(moves.after, league.roster_max)}. ${now}`,
+    };
+  }
+
   if (league.roster_count > league.roster_max) {
     const over = league.roster_count - league.roster_max;
     return {
@@ -364,32 +543,28 @@ export function rosterCell(
       state: "alert",
       title:
         `${held} filled — ${over} over the limit, and Sleeper will refuse an add ` +
-        `until somebody is dropped${rest}`,
+        `until somebody is dropped${rest}${caveat}`,
     };
   }
 
-  // The spare squads are asked only once the active roster is legal, so the one
+  // The taxi squad is asked only once the active roster is legal, so the one
   // tile never has to say two things at once; the title carries both regardless.
-  const overIr = league.ir_max !== null && league.ir_count > league.ir_max;
-  const overTaxi = league.taxi_max !== null && league.taxi_count > league.taxi_max;
-  if (overIr || overTaxi) {
+  if (league.taxi_max !== null && league.taxi_count > league.taxi_max) {
     // **Counted as an overage rather than printed as a ratio**, which is what
-    // makes it fit beside the three figures above it: `1 over IR` is the same
-    // fact as `IR 3/2` in the grammar every other arm is written in, and the
+    // makes it fit beside the three figures above it: `1 over taxi` is the same
+    // fact as `taxi 3/2` in the grammar every other arm is written in, and the
     // ratio survives in the title where there is room for it. A `3/2` set at
     // `--fs-17` in a 72px phone tile does not fit at all.
-    const spareOver = overIr
-      ? league.ir_count - (league.ir_max ?? 0)
-      : league.taxi_count - (league.taxi_max ?? 0);
+    const over = league.taxi_count - league.taxi_max;
     return {
-      text: `${spareOver} over ${overIr ? "IR" : "taxi"}`,
-      figure: `${spareOver}`,
-      unit: overIr ? "over IR" : "over taxi",
+      text: `${over} over taxi`,
+      figure: `${over}`,
+      unit: "over taxi",
       scope,
       state: "alert",
       title:
-        `${overIr ? "IR" : "Taxi"} is over its own allowance — an ineligible player is parked there. ` +
-        `${held} filled${rest}`,
+        `Taxi is over its own allowance — ${over} must come off. ` +
+        `${held} filled${rest}${caveat}`,
     };
   }
 
@@ -408,7 +583,7 @@ export function rosterCell(
       // stays open. The `count` state stays in the union for the tone a future
       // figure-that-is-not-a-fault would want.
       state: "alert",
-      title: `${open} roster spot${open === 1 ? "" : "s"} open — ${held} filled${rest}`,
+      title: `${open} roster spot${open === 1 ? "" : "s"} open — ${held} filled${rest}${caveat}`,
     };
   }
 
@@ -418,8 +593,44 @@ export function rosterCell(
     unit: "full",
     scope,
     state: "clear",
-    title: `Every roster spot is filled — ${held}${rest}`,
+    title: `Every roster spot is filled — ${held}${rest}${caveat}`,
   };
+}
+
+/** Each player as a title names him: the name the card prints, and his designation. */
+function who(players: readonly LineupCheckIrPlayer[]): string {
+  return players
+    .map((player) => `${player.name ?? player.player_id} (${player.status ?? "healthy"})`)
+    .join(", ");
+}
+
+/** What the roster is after the IR moves, against its limit. */
+function afterTail(after: number, max: number): string {
+  if (after > max) return ` and ${after - max} must then be dropped`;
+  if (after < max) {
+    const open = max - after;
+    return ` with ${open} spot${open === 1 ? "" : "s"} open`;
+  }
+  return ", full";
+}
+
+/**
+ * The one thing the tile did not measure, appended to whichever arm answered.
+ *
+ * A league with no IR slots at all has nothing to have checked, so a null
+ * reading there says nothing; one with slots says the reading was not made.
+ * Unjudged players are counted rather than hidden, because a `Full` over two
+ * of them is a claim about players nobody looked at.
+ */
+function irCaveat(league: LineupCheckLeague, moves: IrMoves | null): string {
+  if (!moves) return "";
+  if (!moves.checked) {
+    return (league.ir_max ?? 0) > 0 ? ". IR eligibility could not be checked" : "";
+  }
+  if (moves.unknown > 0) {
+    return `. ${moves.unknown} player status${moves.unknown === 1 ? "" : "es"} unread`;
+  }
+  return "";
 }
 
 /**
@@ -432,8 +643,9 @@ export function rosterCell(
  *
  * The two new checks join it on their **alert** state alone, and `rosterCell`
  * answers `alert` for a roster that is under its limit as well as one that is
- * over: both are a trip to Sleeper, which is what this count is of. Only a
- * `Full` roster is clear.
+ * over — and for an IR that wants a move either way: all of them are a trip to
+ * Sleeper, which is what this count is of. Only a `Full` roster with its IR
+ * set is clear.
  */
 export function needsAttention(
   leagues: readonly { league_id: string }[],

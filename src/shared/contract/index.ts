@@ -40,6 +40,8 @@ export {
 export {
   type LineupCheckPlayer,
   type LineupCheckSeat,
+  type LineupCheckIrPlayer,
+  type LineupCheckIr,
   type LineupCheckLeague,
   type LineupCheckStatus,
   type ManagerLineupCheckPayload,

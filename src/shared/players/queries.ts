@@ -7,17 +7,17 @@ import type { PlayerNameRow, PlayerShareRow } from "./summary";
 /**
  * Reads over the stored players map.
  *
- * Three — the trades board resolving a page's ids to names, the same read plus
- * the two dated columns the shares drawer draws its Age and Class from, and the
- * matchable set the KTC name matcher walks. TheLabX's other three (the rookie
- * class, the search, and its two comps reads) arrive with the surfaces that ask
- * them.
+ * Four — the trades board resolving a page's ids to names, the same read plus
+ * the two dated columns the shares drawer draws its Age and Class from, the
+ * injury designations the lineup checker judges IR against, and the matchable
+ * set the KTC name matcher walks. TheLabX's other three (the rookie class, the
+ * search, and its two comps reads) arrive with the surfaces that ask them.
  *
- * **The first two are separate statements rather than one wider one**, and
+ * **The keyed reads are separate statements rather than one wider one**, and
  * deliberately: the trades board resolves several hundred ids per page and
  * renders none of the dated columns, so widening its read would be two casts
  * per row and two fields on the wire for a page that has nothing to do with
- * them.
+ * them — and the same again for a designation the lineup checker alone asks.
  */
 
 /**
@@ -75,6 +75,54 @@ export async function getPlayerShareRows(
   );
 
   const out: Record<string, PlayerShareRow> = {};
+  for (const r of rows) out[r.player_id] = r;
+  return out;
+}
+
+/** A player's injury designation off the stored map, for the IR check. */
+export type PlayerInjuryRow = {
+  player_id: string;
+  /** `full_name`; null for a team defence, which has none. */
+  name: string | null;
+  /**
+   * Sleeper's `injury_status` — `Questionable`, `Out`, `IR`, `PUP`, … — or
+   * null where he is healthy. `""` is folded into null: Sleeper has been seen
+   * to write both for a fit player, and they are one fact.
+   */
+  injury_status: string | null;
+};
+
+/**
+ * Injury designations keyed by id, for the lineup checker's IR reading.
+ *
+ * **This is `data->>'injury_status'`, not the columned `status`.** The column
+ * is the NFL roster status (`Active`, `Inactive`, `Injured Reserve`, …), which
+ * is a fact about the team's list; Sleeper decides IR eligibility on the
+ * designation, which is the fact about the player. No cast is made, so no
+ * regex guard is needed here — the house rule at {@link getPlayerShareRows} is
+ * about junk failing a `::int`, and a string read as a string cannot. An
+ * absent id is absent, on {@link getPlayersByIds}' rule: the caller reads it as
+ * "the sync has not seen him", never as healthy.
+ *
+ * A fourth narrow statement rather than a widening of the first, on the
+ * header's own argument. It is refreshed on the players sync's daily cadence,
+ * which is the one thing about it worth knowing: a designation Sleeper changed
+ * this morning can read as yesterday's until the next tick.
+ */
+export async function getPlayerInjuryStatuses(
+  ids: string[],
+): Promise<Record<string, PlayerInjuryRow>> {
+  if (ids.length === 0) return {};
+
+  const { rows } = await pool.query<PlayerInjuryRow>(
+    `SELECT player_id, full_name AS name,
+            NULLIF(data->>'injury_status', '') AS injury_status
+       FROM players
+      WHERE player_id = ANY($1)`,
+    [ids],
+  );
+
+  const out: Record<string, PlayerInjuryRow> = {};
   for (const r of rows) out[r.player_id] = r;
   return out;
 }

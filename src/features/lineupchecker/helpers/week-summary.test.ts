@@ -36,6 +36,7 @@ function league(over: Partial<LineupCheckLeague> = {}): LineupCheckLeague {
     ir_max: 0,
     taxi_count: 0,
     taxi_max: 0,
+    ir: null,
     unknown_slots: [],
     ...over,
   };

@@ -4724,6 +4724,11 @@ carrying two taxi stashes as two over. Sleeper's `""`/`"0"` slot padding is
 filtered before anything is counted, which `queries.ts` has warned about since
 the graph landed: a raw `players.length` overcounts.
 
+**The IR half of that census has since been rebuilt on eligibility** — see IR,
+on the league's own rules, below. `N over IR` became `N off IR`, the tile
+names the player Sleeper would not admit and the one it would, and its title
+states the roster after the move.
+
 **The census is the one figure on the card that does not move with the week
 stepper**, and it says so in the contract. Sleeper stores no historical
 `reserve` or `taxi`, so "what did your IR look like in October" is not
@@ -5846,6 +5851,148 @@ eight legal bench candidates each is a long page, and there is no cap), how
 often the mixed-scoring rule leaves the `Proj` window on an em dash across a
 real 113-league account, and whether `opponent_lineup` is populated as widely as
 `opponent_points` already is.
+
+### IR, on the league's own rules
+
+The Roster tile counted IR against its allowance and stopped there. `1 over IR`
+was its whole vocabulary for the squad, and the title behind it said "an
+ineligible player is parked there" on the strength of a count overflow alone:
+it could not name him, it said nothing about a *healthy* player sitting inside
+the allowance — the common real case, and the one Sleeper refuses every
+transaction over until he is moved — and it read `Full` beside an empty IR slot
+while an `Out` player sat on the bench who could have been parked there to open
+a spot. The tile checks IR the way Sleeper does now: each player's injury
+designation against the league's own `reserve_allow_*` toggles, on the live
+roster, and it states the roster as it stands *after* the moves it names.
+**Nothing on the schema moved and there is no migration**: the toggles have
+been in `leagues.settings` since the league-graph migration, the three roster
+arrays in `rosters`, and each player's `injury_status` in `players.data` since
+the map first synced. What was missing was a read of the last and a rule for
+the first. No fifth tile and no fifth reason bay — the reading lives inside the
+Roster tile and the "Roster slots" bay absorbs it, because five across does not
+fit a 390px card (`Vs optimal` alone is 61.6px untracked in the ~57 a fifth
+tile would leave it) and because it *is* the roster check: an IR slot is a
+roster slot Sleeper counts apart.
+
+**The rule is Sleeper's, spelled once.** `shared/manager/ir-eligibility.ts`:
+`IR` and `PUP` are always admitted, six toggles admit six designations
+(`reserve_allow_out` → `Out`, `_doubtful`, `_sus`, `_na`, `_cov`, `_dnr`), and
+`Questionable` never is. A toggle is on at `1` or `"1"` — `settingCount`'s
+reading of a count, one type over — and off at anything else, absent included,
+which is the reading that suggests fewer moves rather than more. Three
+decisions in it are silent when wrong and each has a test:
+
+- **A designation this build does not know is "could not say"**, never a
+  verdict. `irEligible` matches exactly; a case variant or a new spelling from
+  Sleeper comes back null, is left out of both lists, and is counted so the tile
+  can say how many players it did not judge. Reading an unknown word as "not
+  eligible" would name a player ineligible on the strength of a spelling.
+- **Healthy is not eligible.** A null or empty `injury_status` is Sleeper's own
+  spelling of a fit player, and a fit player on IR is the case the check exists
+  to catch — so it answers `false`, not null, and the tile names him. What *is*
+  null is an id the map has no row for: the sync has not seen him, and absence
+  is not evidence of health.
+- **`settings === null` is no rule, and no reading.** A league whose settings
+  were never read gets `ir: null` rather than a guess at what it admits.
+
+**The designation comes off the stored players map, and that is a chosen
+cost.** `getPlayerInjuryStatuses` is a fourth narrow statement over `players`
+(`NULLIF(data->>'injury_status', '')`, keyed by the live roster union — never
+the columned `status`, which is the NFL roster list rather than the designation
+Sleeper decides on), issued once per request beside the projections fetch and
+caught on its own promise, so a pool hiccup on the second database read does
+not report as the projections failing and empty the page. The map refreshes on
+the players sync's daily cadence, so a designation Sleeper changed this morning
+can read as yesterday's until the next tick — a Saturday `Out` in a
+`reserve_allow_out` league can lag a day. The projections feed's inlined player
+object is documented as carrying the same field on a five-minute cadence and
+was not used, because it is unverified from where this was built and covers
+only the week's projected players; it is the remedy once confirmed, and the
+seam for it is `readPlayerIdentity`.
+
+**Judgements cross the wire and the moves are arithmetic.** `LineupCheckIr` is
+everyone on IR with whether each may stay, everyone active — not IR, not taxi —
+the league would admit, and a count of the unjudged; `irMoves` on the client
+turns that into `off` (the ineligible, or the overflow past the allowance,
+whichever is more — one number because they are one instruction, and where the
+ineligible one *is* the overflow, moving him fixes both), `free`, `stash`
+(capped by the room, where the candidate list deliberately is not) and `after`,
+the active roster once both moves are made. The lists and the census are handed
+the *same* three id sets (`liveRosterIds`), so `ir.reserve` is `ir_count` long
+by construction — a reading one player longer than the count would be a tile
+whose figure and whose names disagree. The row marks in the expanded card read
+that same `irMoves`, so a tile saying `1 to IR` and a bench wearing two `→ IR`
+chips cannot be two readings of one league.
+
+**Two arms lead the tile, and the order is Sleeper's.** `N off IR` first,
+because Sleeper refuses every transaction on that roster — the fixing drop
+included — until IR is legal, so a roster overage rides the title as "and N
+must then be dropped" rather than leading. `N to IR` before `N over`, because a
+stash clears an overage without losing a player, and before `N open`, because
+the stash is what makes the open count true. Off and on in one press are
+sequential rather than summed: the tile shows the move Sleeper blocks on, its
+title carries the stash that follows ("After 1 off IR and 1 on (…) the roster
+is 10 of 10, full"), and the next sync redraws the second. A merged `2 IR
+moves` would sum two kinds of move into a count nobody acts on as one.
+
+**A null reading keeps the census answer.** `Full` beside an IR nobody could
+judge is still a true count of a real roster, and `none` is the em dash for *no
+answer at all*; the IR half's absence rides the title — "IR eligibility could
+not be checked" — which is the kickoff tile's precedent for two absences told
+apart in words rather than by a fifth state. An unjudged player is the same:
+the tile answers what it knows and says how many it could not. The one place
+this does not apply is a league with no IR slots at all, which has nothing to
+have checked and says nothing.
+
+**`IR`, `off IR` and `→ IR` on the rows**, off `irMarkFor`: every candidate
+wears the move once any slot is free — the chip says *eligible*, which is true
+of each, and which one goes is the reader's call — and none wears it with no
+slot free, because a chip offering a move Sleeper would refuse is the claim the
+check exists to stop making. The reader's rows alone: the opponent's reserve is
+not on the wire, and a move only the reader makes is not a mark for somebody
+else's roster. One grain to know about: the reading is the live roster's and
+the rows are the week's, so on a stepped past week a starter can wear `IR`
+because he is on IR *today*.
+
+#### Verified
+
+Under Node's own runner, since no database is reachable from where this was
+built: 2,467 unit tests pass, 46 of them new. The rule's every arm — each
+toggle on and off, the two always-admitted designations, `Questionable` under
+every toggle, healthy, an unknown spelling, a case variant; the fold's edge
+cases — padding and a repeated id counting once and the same as `ir_count`, a
+player on both `reserve` and `taxi` judged as IR and never a stash, an id the
+map lacks, an empty map as every player unknown, names off the board first;
+and every tile arm — the overflow as a move, the IR move leading a roster
+overage with the drop in its title, a healthy player named with the drop he
+forces, the swap, the stash and the spot it opens, more eligible than slots,
+the stash offered before the drop, the larger of ineligible and overflow, the
+stash capped by the room, `Full` kept under a null reading with its caveat and
+without one where there are no slots, unread statuses counted, taxi keeping its
+own arm. `irMoves` and `irMarkFor` are pinned separately, and an IR move counts
+under the `Roster slots` reason with the four-key `deepEqual`s untouched.
+`lint`, `typecheck` and `build` are clean.
+
+**Not verified against real data**, which is the gap to close first. Four
+things a fixture cannot say: whether this corpus's `settings` blobs carry the
+`reserve_allow_*` toggles at all — `SELECT league_id, settings->'reserve_allow_out'
+FROM leagues WHERE settings ? 'reserve_allow_out' LIMIT 5` is the check, and a
+corpus without them reads every non-`IR`/`PUP` designation as not admitted; how
+often `injury_status` in the stored map is a day behind Sleeper, which is what
+decides whether the feed variant is worth its verification; whether any real
+roster today carries a healthy player on IR, which is the case the whole check
+was written for and the first live page is what shows it; and whether `1 off
+IR` and `1 to IR` read as instructions on a card of a hundred, which the tile
+strings are the length class of `1 over IR` for and no render here can settle.
+
+#### Worth doing next, not drawn here
+
+A per-player `status` on `LineupCheckPlayer`, so `PaneRow`'s injury lamp lights
+on every row rather than the IR-relevant subset — the map read already covers
+every live id, so it is a field and a mapping rather than a join. IR players
+out of the optimal-lineup solver pool, which prices the week's roster while
+`reserve` is live and so was left alone. And the feed-first designation, once
+`injury_status` is confirmed on the projections feed's inlined player.
 
 ## The trades board
 
@@ -13770,9 +13917,12 @@ handoff's own instruction. Reaching it means a field on `LineupPlayer`,
 in each of the three producers — and none of those three builds a player from
 the stored players map today: they read the projections feed's inlined player
 object, so it is a join added to the app's three most expensive server paths.
-Nothing in this repo reads `injury_status` at all. The lamp is built rather than
-deferred because it is what the four rows are being unified *to*, and a part
-missing one of its states is a part that has to be reopened.
+`injury_status` is read once now — `getPlayerInjuryStatuses`, for the lineup
+checker's IR reading, off the stored map rather than the feed (see IR, on the
+league's own rules) — and no payload carries a per-player `status`, so the lamp
+is still unlit. It is built rather than deferred because it is what the four
+rows are being unified *to*, and a part missing one of its states is a part
+that has to be reopened.
 
 ### Two deviations, each argued
 
