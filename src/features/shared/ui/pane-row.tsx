@@ -13,6 +13,23 @@ import { BilletFinish } from "./card-plate";
  * One row of an expanded league card's pane, in every tool: a **tile**
  * carrying a lead cell, a face, a name, and up to four readings.
  *
+ * ## Dead, and kept
+ *
+ * **It has no reader.** The four lists it was written to unify — the manager
+ * card's standings, its roster seats, its bench and its pick portfolio — are
+ * {@link PaneWeekRow} now, so a reader walking between the three tools sees one
+ * row shape over one league. `PaneRowLead`, `PaneRowFigure` and `PaneRowValue`
+ * went with it; `PaneRowFaceMount` and `StatusLamp` are still live, both being
+ * the week row's own.
+ *
+ * It is kept on `peekActiveSeason`'s terms, and the terms
+ * `CONSOLE_HOUSING_INSET` and `--housing-inset-shadow` are already kept on: the
+ * argument below — why a row is a *part* rather than a channel, and what it
+ * cost to find that out — is the thing a later reader would otherwise
+ * reconstruct, and it is what the tile the week row draws is built on. What is
+ * genuinely gone is only the four-lists-at-four-heights problem it solved;
+ * the solution is one component over.
+ *
  * It replaces four separately-authored row components that had drifted apart —
  * `StandingRow` on the manager card's standings, `SeatRow`/`BenchRow` in the
  * roster breakdown, the lineup checker's pair, gametime's pair, and the
@@ -636,6 +653,26 @@ export type PaneWeekSeat = {
    */
   position?: string | null;
   /**
+   * The bay prints **digits** rather than a slot tag.
+   *
+   * A standings ordinal (`12th`) and a pick's season (`2026`) are numbers: the
+   * `0.04em` that makes three letters read as a tag is width spent on nothing,
+   * and `12th` with it clips the phone's 28px bay. It is `PaneRowLead.numeric`'s
+   * own argument, moved — and it takes `tabular-nums` with it, so a column of
+   * ordinals or seasons sets on one grid.
+   */
+  numeric?: boolean;
+  /**
+   * Anodise the insert by a hue the seat has no position to name.
+   *
+   * `SLOT_METAL[position]` answers nothing for a standings ordinal, and the
+   * reader's own team is the one row a reader scans a table of twelve for — so
+   * that row takes `--slot-metal-mine` and the ordinal goes accent. Ignored
+   * where `position` already resolves, since a seat anodised by anything but
+   * who is sitting in it is the one claim the colour must not make.
+   */
+  hue?: string;
+  /**
    * The slot kickoff order would seat him in instead. Drawn *inside* the bay,
    * under a chevron, because it is a fact about the seat rather than about the
    * player — which is what took it off the name's line, where it was a badge
@@ -734,10 +771,12 @@ export function PaneWeekRow({
   status = null,
   marks,
   note = null,
-  opponent = null,
+  // No default: absent and null are two states here — see the prop's own note.
+  opponent,
   meta = null,
   figure,
   second = null,
+  line2 = true,
   selected = false,
   onPress,
   ground = "glass",
@@ -762,7 +801,14 @@ export function PaneWeekRow({
    * game, which is what it is about.
    */
   marks?: ReactNode;
-  /** His NFL team. Drawn beside the position on the second line, at `lg` only. */
+  /**
+   * His NFL team. Drawn beside the position on the second line.
+   *
+   * **At `lg` only where the row has a game, and at both widths where it does
+   * not** — see `opponent`, which is what decides that. A ~150px phone line
+   * carrying a game has better uses for the width than a position the bay is
+   * already printing; one carrying nothing else would simply be empty.
+   */
   note?: string | null;
   /**
    * Who his team plays, already spelled — `opponentLabel(opponent, home)`.
@@ -771,6 +817,20 @@ export function PaneWeekRow({
    * {@link PaneRow.note}'s rule and right for the opposite reason: this sits in
    * a run of game facts rather than beside a name, so an absence reads as an
    * absence rather than as a missing number.
+   *
+   * **Absent — not null — is the row saying it has no game at all**, and the
+   * whole run goes with it: the groove, the em dash, the clock and the scored
+   * total. That is the manager card's four lists, whose payload carries no game
+   * data of any kind (`LineupPlayer` is a name, positions, a team and three
+   * valuations), where a `—` would be a column answering a question the card is
+   * not asking. It is a third state rather than a fourth prop for
+   * `parseRequestedSeason`'s reason: null is an answer — *no opponent this
+   * week* — and collapsing it with "never asked" is how a bye would come to
+   * read as a league with no schedule.
+   *
+   * Every week caller passes it, and `week-rows.test.ts` pins that textually:
+   * a week row that lost the prop would quietly lose its clock, its scored
+   * total and its `locked` word, and render a perfectly ordinary row.
    */
   opponent?: string | null;
   /** The kickoff, or gametime's game clock — the same cell one tense later. */
@@ -786,6 +846,18 @@ export function PaneWeekRow({
    * facts it is about — what he has done, beside where the game is.
    */
   second?: string | null;
+  /**
+   * Draw a second line at all.
+   *
+   * A standings team and a draft pick have nothing to put on one — a team has a
+   * place, a name and a total, and a pick is not a person — so the row is a
+   * single line **vertically centred at the same height**, which is what keeps
+   * the two panes reading across each other row for row. False skips the whole
+   * span rather than drawing an empty one: a bare `gap-[2px]` under a name
+   * pushes it off the row's optical centre, which on a list of twelve is
+   * visible as a wobble rather than as anything a reader could name.
+   */
+  line2?: boolean;
   /** The seat the pane opposite is solving: lit four ways. */
   selected?: boolean;
   /** Absent renders an `<li>`; present renders an `<li><button>`. */
@@ -793,8 +865,28 @@ export function PaneWeekRow({
   /** Where the row stands — `drawer` is the bench and the options list. */
   ground?: "glass" | "drawer";
 }) {
-  const hue = (seat.position && SLOT_METAL[seat.position]) ?? null;
+  // The palette first, so a seat anodised by who is sitting in it can never be
+  // overridden by a caller's own mark — see `PaneWeekSeat.hue`.
+  const positionHue = (seat.position && SLOT_METAL[seat.position]) ?? null;
+  const hue = positionHue ?? seat.hue ?? null;
   const locked = seat.locked === true;
+
+  // Three inks, because the hue arrives from two places and means two things.
+  // A position is the palette and takes the palette's near-white engraving; a
+  // caller's own hue is a *mark* — the reader's team — and takes the accent,
+  // since anodising alone at this chroma is a fine distinction on a teal
+  // console. No hue at all is the absence of a colour rather than a seventh
+  // one, which is the chip's own rule.
+  const bayInk = locked
+    ? "var(--slot-locked-ink)"
+    : positionHue
+      ? METAL_INK
+      : hue
+        ? "var(--billet-accent)"
+        : "var(--billet-label)";
+
+  // A row with no game draws no run of game facts — see `opponent`.
+  const game = opponent !== undefined || meta !== null || second !== null || locked;
 
   const surface = selected
     ? CONSOLE_TILE_LIT
@@ -860,16 +952,15 @@ export function PaneWeekRow({
           />
         )}
 
+        {/* Two whole strings rather than a base plus an override, on this
+            file's own rule: `tabular-nums` and `lg:tracking-[0.04em]` are two
+            base utilities of the same specificity, and which won would be
+            Tailwind's emit order rather than the caller's. */}
         <span
-          className="relative font-mono text-[length:var(--fs-9)] font-medium lg:text-[length:var(--fs-12)] lg:tracking-[0.04em]"
-          style={{
-            color: locked
-              ? "var(--slot-locked-ink)"
-              : hue
-                ? METAL_INK
-                : "var(--billet-label)",
-            textShadow: "var(--slot-engrave)",
-          }}
+          className={`relative font-mono text-[length:var(--fs-9)] font-medium lg:text-[length:var(--fs-12)] ${
+            seat.numeric ? "tabular-nums" : "lg:tracking-[0.04em]"
+          }`}
+          style={{ color: bayInk, textShadow: "var(--slot-engrave)" }}
         >
           {seat.label}
         </span>
@@ -897,7 +988,11 @@ export function PaneWeekRow({
         <PaneRowFaceMount face={face} className="hidden size-10 text-[length:var(--fs-15)] lg:flex" />
       )}
 
-      <span className="relative flex min-w-0 flex-1 flex-col gap-[2px]">
+      <span
+        className={`relative flex min-w-0 flex-1 ${
+          line2 ? "flex-col gap-[2px]" : "items-center"
+        }`}
+      >
         {/* ── Line one: who he is, and — below `lg` — what he projects ──── */}
         <span className="flex min-w-0 items-center gap-[5px] lg:gap-[7px]">
           {face && (
@@ -926,51 +1021,61 @@ export function PaneWeekRow({
             than two lines one of which is hidden: what differs between the
             widths is which *facts* fit, not how they are drawn, and a second
             copy would be a second place for the wording to drift. */}
-        <span
-          className={`flex min-w-0 items-baseline gap-1 font-mono text-[length:var(--fs-9)] uppercase tracking-[0.02em] lg:items-center lg:gap-[7px] lg:text-[length:var(--fs-10)] lg:tracking-[0.08em] ${
-            locked
-              ? "text-[color:var(--billet-scope)] lg:text-[color:var(--billet-label)]"
-              : "text-[color:var(--billet-label)]"
-          }`}
-        >
-          {/* The position and the team. **Dropped below `lg`**, and the bay is
-              why: it is already printing the seat, and on a ~150px line the
-              game is the reading the row does not otherwise carry. */}
-          <span className="hidden shrink-0 lg:inline">
-            {`${seat.position ?? "—"} · ${note ?? "—"}`}
-          </span>
+        {line2 && (
           <span
-            aria-hidden
-            className="hidden h-[11px] w-px shrink-0 bg-[image:var(--groove)] lg:block"
-          />
-          <span className="shrink-0 lg:text-[color:var(--billet-unit)]">
-            {opponent ?? "—"}
+            className={`flex min-w-0 items-baseline gap-1 font-mono text-[length:var(--fs-9)] uppercase tracking-[0.02em] lg:items-center lg:gap-[7px] lg:text-[length:var(--fs-10)] lg:tracking-[0.08em] ${
+              locked
+                ? "text-[color:var(--billet-scope)] lg:text-[color:var(--billet-label)]"
+                : "text-[color:var(--billet-label)]"
+            }`}
+          >
+            {/* The position and the team. **Dropped below `lg` where the row
+                has a game**, and the bay is why: it is already printing the
+                seat, and on a ~150px line the game is the reading the row does
+                not otherwise carry. Where there is no game it is the whole of
+                the line, so dropping it would leave the line empty — which is
+                the manager card's four lists. */}
+            <span className={game ? "hidden shrink-0 lg:inline" : "min-w-0 truncate"}>
+              {`${seat.position ?? "—"} · ${note ?? "—"}`}
+            </span>
+            {game && (
+              <>
+                <span
+                  aria-hidden
+                  className="hidden h-[11px] w-px shrink-0 bg-[image:var(--groove)] lg:block"
+                />
+                <span className="shrink-0 lg:text-[color:var(--billet-unit)]">
+                  {opponent ?? "—"}
+                </span>
+                {/* A locked row drops its clock below `lg`: the padlock in the
+                    bay and the word at the end of this line are already saying
+                    the clock has run out, and the ~150px line has better uses
+                    for it. */}
+                {meta && (
+                  <span className={locked ? "hidden min-w-0 truncate lg:block" : "min-w-0 flex-1 truncate lg:flex-initial"}>
+                    <span aria-hidden className="lg:hidden">
+                      {"· "}
+                    </span>
+                    {meta}
+                  </span>
+                )}
+                {locked && (
+                  <span className="ml-auto shrink-0 whitespace-nowrap text-[color:var(--billet-scope)] lg:ml-0">
+                    <span className="sr-only">Locked — his game has kicked off</span>
+                    <span aria-hidden>
+                      <span className="hidden lg:inline">{"· "}</span>locked
+                    </span>
+                  </span>
+                )}
+                {second !== null && (
+                  <span className="ml-auto shrink-0 whitespace-nowrap tabular-nums text-[color:var(--billet-unit)]">
+                    {second}
+                  </span>
+                )}
+              </>
+            )}
           </span>
-          {/* A locked row drops its clock below `lg`: the padlock in the bay
-              and the word at the end of this line are already saying the clock
-              has run out, and the ~150px line has better uses for it. */}
-          {meta && (
-            <span className={locked ? "hidden min-w-0 truncate lg:block" : "min-w-0 flex-1 truncate lg:flex-initial"}>
-              <span aria-hidden className="lg:hidden">
-                {"· "}
-              </span>
-              {meta}
-            </span>
-          )}
-          {locked && (
-            <span className="ml-auto shrink-0 whitespace-nowrap text-[color:var(--billet-scope)] lg:ml-0">
-              <span className="sr-only">Locked — his game has kicked off</span>
-              <span aria-hidden>
-                <span className="hidden lg:inline">{"· "}</span>locked
-              </span>
-            </span>
-          )}
-          {second !== null && (
-            <span className="ml-auto shrink-0 whitespace-nowrap tabular-nums text-[color:var(--billet-unit)]">
-              {second}
-            </span>
-          )}
-        </span>
+        )}
       </span>
 
       {/* The figure as a row cell, from `lg` up. */}

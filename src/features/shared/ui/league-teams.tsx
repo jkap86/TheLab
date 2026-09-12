@@ -35,7 +35,7 @@ import {
   LineupBreakdown,
   LineupLensKeys,
 } from "./lineup-breakdown";
-import { Pane, PaneGlass, PaneHead, PaneLedge, PaneRow } from "./pane";
+import { Pane, PaneGlass, PaneHead, PaneLedge, PaneWeekRow } from "./pane";
 import { TeamsColumnDialog } from "./teams-column-dialog";
 
 /**
@@ -605,23 +605,34 @@ function LensControl({
 }
 
 /**
- * One team in the standings, as a {@link PaneRow}.
+ * One team in the standings, as a {@link PaneWeekRow}.
  *
  * **Its cells are the seat row's opposite, in the same widths** — that is the
  * whole of what the shared part buys here: an ordinal where a seat has a slot,
- * a team's letter mount where a seat has a face, and one 70px figure where
- * this list used to draw 78 and the roster 70, so nothing lined up across the
- * two panes a reader is comparing.
+ * a team's letter mount where a seat has a face, and one 70px figure, so the
+ * two panes a reader is comparing line up row for row.
  *
- * **The ordinal is 40px and untracked**, which is what this file already drew:
- * the 0.12em belongs to the seat cell one file over, and at the widths either
- * of them uses, `12th` with it clips.
+ * **One line, at the week row's own height** (48px at `lg`, 52 below), which is
+ * the whole reason it is `line2={false}` rather than a shorter tile: a team has
+ * a place, a name and a total and nothing else the card has not already said —
+ * the starters/bench split is on the bench bar in the pane opposite and the
+ * pick count is on the picks bar — so what it needs is not a second line but
+ * the same height, vertically centred, so the rows still read across.
  *
- * **The reader's own team and the selected team are two facts**, and the row
- * draws both — the lit rail down the left edge is whose team it is, and the lit
- * tile is what the pane opposite is solving. They coincide on first render,
- * which is exactly why they cannot be one value: collapsed, the card would open
- * with nothing on screen saying which team the roster pane had picked.
+ * **The ordinal is `numeric`**, which is what this file already drew one part
+ * ago: the tracking that makes three letters read as a tag is width spent on
+ * digits, and `12th` with it clips the phone's 28px bay.
+ *
+ * **Whose team this is and what the roster pane is solving stay two facts**,
+ * and the row draws both. The lit rail `PaneRow` ran down a row's left edge has
+ * nowhere to go here — the bay runs to the tile's own edge and is clipped by
+ * its radius, which is why the tile has no left padding — so *yours* moved into
+ * the bay, anodised at `--slot-metal-mine` with the ordinal engraved in the
+ * accent. What the pane opposite is solving is the other four cues the part
+ * already draws: the lit tile, the accent name, the right-hand rail and
+ * `--slot-bay-lit-shadow`. They coincide on first render, which is exactly why
+ * they cannot be one value: collapsed, the card would open with nothing on
+ * screen saying which team the roster pane had picked.
  *
  * The colour on the total is the team's **share of the league's points**, not
  * its rank: see `sharePercentile` for why a table where twelve teams sit within
@@ -662,27 +673,34 @@ function StandingRow({
   const answered = shown && value !== undefined;
 
   return (
-    <PaneRow
-      // 40px and untracked — see above. Both arms are literal class strings,
-      // for `PaneRowLead.width`'s reason: a templated one generates no CSS.
-      lead={{ label: ordinal(place), width: "w-[34px] lg:w-10", numeric: true }}
+    <PaneWeekRow
+      seat={{
+        label: ordinal(place),
+        // A team has no position to anodise by, which is the arm `hue` exists
+        // for: the reader's own is the one row a reader scans twelve of.
+        position: null,
+        numeric: true,
+        hue: team.is_manager ? "var(--slot-metal-mine)" : undefined,
+      }}
       // **The letter mount, always** — `LeagueTeam` carries no avatar, and that
       // is what the mark is: a lit initial is a claim about an image that was
-      // never fetched. The part draws the same 20/22px milled disc a player's
-      // face sits in, which is what makes a standings row and a seat row read
-      // as one object.
+      // never fetched. The part draws the same milled disc a player's face sits
+      // in, which is what makes a standings row and a seat row one object.
       face={{ playerId: null, name: team.name }}
       name={team.name}
+      // The whole name at both widths, where a seat row opposite shortens a
+      // player's: a team name is somebody's own words rather than a first
+      // initial and a surname, so there is no rule to shorten it by.
       shortName={team.name}
-      // Not on the wire — see `PaneRow`'s lamp.
+      // Not on the wire — see the lamp.
       status={null}
+      line2={false}
       figure={{
         // Two absences, one em dash: no roster has scored on this column, or
         // this payload carries no answer for it at all.
         text: answered ? formatTotal(metric, value) : "—",
         percentile: answered ? percentile : null,
       }}
-      mine={team.is_manager}
       selected={selected}
       onPress={onSelect}
     />

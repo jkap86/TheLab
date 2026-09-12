@@ -1363,6 +1363,26 @@
   --slot-metal-k: 155;
   --slot-metal-def: 235;
   /*
+   * The reader's own team, which has no position to be anodised by.
+   *
+   * Teal is what this console already spends on the reader and on state, so it
+   * is the one angle in the palette that is not a seventh position — and it is
+   * deliberately the *bay* rather than a badge on the name: the lit rail
+   * `PaneRow` drew down a row's left edge has nowhere to go on this tile, the
+   * bay running to the tile's own edge and being clipped by its radius.
+   *
+   * It is one of **two** cues on that row and neither is load-bearing alone:
+   * the anodising is a fine distinction to make on a teal console at the metal
+   * palette's own chroma (0.05–0.06), so the ordinal is engraved in
+   * `--billet-accent` rather than the near-white `--slot-metal-ink-*`. Whose
+   * team this is and what the roster pane is solving stay two facts — they
+   * coincide on first render, which is exactly why they cannot be one value.
+   *
+   * `:root` only, like the six above: a hue is a number and has nothing to
+   * turn over for the light scheme.
+   */
+  --slot-metal-mine: 190;
+  /*
    * **Numbers rather than a whole gradient**, which is the palette above's own
    * shape and is forced rather than chosen: a custom property's `var()`s are
    * substituted where it is *declared*, so a `--slot-metal-face` naming
