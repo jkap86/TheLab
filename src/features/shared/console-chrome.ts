@@ -492,6 +492,21 @@ export const CONSOLE_TILE_SELECTED =
   "shadow-[var(--tile-selected-shadow)]";
 
 /**
+ * The selected tile **lit four ways at once** — the week tools' seat row, where
+ * "picked" is not the claim: the pane opposite is solving this seat, and a
+ * reader scanning nine of them misses a state spelled once. The face and the
+ * rim and the halo are here (see `--tile-lit-shadow`), the name turns accent,
+ * and the row draws a rail down the edge facing the pane that is answering it.
+ *
+ * A third constant rather than an override on {@link CONSOLE_TILE_SELECTED},
+ * for that one's own reason: both the face and the shadow list are single base
+ * utilities, so a caller appending either replaces rather than adds and the
+ * winner is Tailwind's emit order.
+ */
+export const CONSOLE_TILE_LIT =
+  "overflow-hidden bg-[image:var(--tile-selected-bg)] shadow-[var(--tile-lit-shadow)]";
+
+/**
  * The smaller channel cut into a row, which one figure sits in.
  *
  * One pattern used twice at two depths — a row in the glass, a figure in the

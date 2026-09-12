@@ -4,6 +4,7 @@ import { describe, test } from "node:test";
 import { solveWeekLineup } from "./week-lineups.ts";
 import type { WeekLineupLeague } from "./week-lineups.ts";
 import type { WeekProjections } from "../projections/week.ts";
+import type { TeamGame } from "../schedule/parse.ts";
 
 const SLOTS = ["QB", "RB", "WR", "FLEX", "BN", "BN"];
 
@@ -160,11 +161,28 @@ describe("solveWeekLineup", () => {
   });
 });
 
+/**
+ * The week's scoreboard, from kickoff instants alone.
+ *
+ * The solve takes the games rather than the instants — one fetch answers both a
+ * player's kickoff and his opponent — so a fixture about *ordering* says what it
+ * is about and lets the rest of the row default. The opponent is deliberately
+ * left null here: these tests are the seat order's, and a fixture that named one
+ * would be asserting a fact no assertion below reads.
+ */
+function games(
+  kickoffs: readonly (readonly [string, number])[],
+): Map<string, TeamGame> {
+  return new Map(
+    kickoffs.map(([team, at]) => [team, { opponent: null, home: false, kickoff: at }]),
+  );
+}
+
 describe("solveWeekLineup and kickoff order", () => {
   // WR in the strict seat kicks off late; WR in the flex kicks off early. The
   // ordering wants those swapped so the flex — which more players are eligible
   // for — stays open longest.
-  const KICKOFFS = new Map([
+  const KICKOFFS = games([
     ["KC", Date.UTC(2026, 9, 18, 17, 0)],
     ["BUF", Date.UTC(2026, 9, 18, 20, 25)],
   ]);
@@ -210,7 +228,7 @@ describe("solveWeekLineup and kickoff order", () => {
   test("kickoffs within the hour buffer generate no move", () => {
     // The Sunday 4:05/4:25 case: two kickoffs, one decision. Asking a manager
     // to trade seats over twenty minutes is a press that buys nothing.
-    const close = new Map([
+    const close = games([
       ["KC", Date.UTC(2026, 9, 18, 20, 5)],
       ["BUF", Date.UTC(2026, 9, 18, 20, 25)],
     ]);
@@ -233,7 +251,7 @@ describe("solveWeekLineup in a best-ball league", () => {
       league({ best_ball: true }),
       board(),
       NO_LOCKS,
-      new Map([["KC", 1], ["BUF", 2]]),
+      games([["KC", 1], ["BUF", 2]]),
     );
     assert.equal(solved?.points_left, 0);
     assert.equal(solved?.kickoff_moves, null);

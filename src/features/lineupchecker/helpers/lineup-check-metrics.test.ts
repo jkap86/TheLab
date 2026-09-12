@@ -196,6 +196,8 @@ function seat(
             points: 10,
             team: "KC",
             kickoff: null,
+            opponent: null,
+            home: false,
             locked: false,
           },
     move_to: null,

@@ -29,6 +29,7 @@ import type { KickoffPlayer } from "../projections/kickoff-order.ts";
 import { compareLineup } from "../projections/optimal.ts";
 import type { RosterPlayer } from "../projections/optimal.ts";
 import { scoreStatLine } from "../projections/score.ts";
+import type { TeamGame } from "../schedule/parse.ts";
 import type { WeekProjections } from "../projections/week.ts";
 import { irReading } from "./ir-eligibility.ts";
 import type { PlayerStatusMap, RosterIds } from "./ir-eligibility.ts";
@@ -131,9 +132,13 @@ export type WeekLineupOpponent = {
  * route drops those from the payload, where a reader sees a league that says
  * nothing rather than a league that says zero.
  *
- * `kickoffs` is null where there is nothing honest to order against: a week the
- * schedule publishes no instants for, or a read that failed. It travels to
- * `kickoff_moves` as null — "no answer", never "already in order".
+ * `games` is the week's scoreboard keyed by team — where each side's game is,
+ * which end of it they are on, and when it starts. Null is a read that failed;
+ * a map with no *dated* game in it is a week the schedule has not published
+ * yet, and both travel to `kickoff_moves` as null — "no answer", never "already
+ * in order". It is one map rather than the instants it used to be because the
+ * kickoff and the opponent are the same row of the same fetch, and reading them
+ * apart is two chances to disagree about which listing of a team won.
  *
  * `statuses` is the stored players map's injury designations for the live
  * roster's ids, or null where that read failed — which travels to `ir: null`,
@@ -146,7 +151,7 @@ export function solveWeekLineup(
   league: WeekLineupLeague,
   board: WeekProjections,
   locked: ReadonlySet<string>,
-  kickoffs: ReadonlyMap<string, number> | null,
+  games: ReadonlyMap<string, TeamGame> | null,
   statuses: PlayerStatusMap | null = null,
 ): LineupCheckLeague | null {
   const positions = league.roster_positions;
@@ -165,8 +170,18 @@ export function solveWeekLineup(
     league,
     board,
     locked,
-    kickoffs,
+    games,
   );
+
+  // **A week with games but no *instants* still has no ordering**, and that is
+  // the one thing the widened parameter could have quietly lost. The route used
+  // to hand over a kickoff map and null it when it was empty; a games map is
+  // non-empty the moment the scoreboard names a fixture, dated or not. Asked to
+  // order against a board of nulls, `kickoffMoves` would answer zero moves —
+  // "already in order" — where the honest answer is null, "no answer at all",
+  // which is the distinction `kickoff_moves` exists to draw.
+  const ordersByKickoff =
+    games !== null && [...games.values()].some((g) => g.kickoff !== null);
   const byId = new Map(priced.map((p) => [p.player_id, p]));
   const pool = solverPool(priced);
 
@@ -181,7 +196,7 @@ export function solveWeekLineup(
   // Best ball has no seat order to set — Sleeper seats it after the games — so
   // there is no ordering to ask for, exactly as there is no gap to report.
   const ordered =
-    league.best_ball || !kickoffs
+    league.best_ball || !ordersByKickoff
       ? null
       : orderLineupByKickoff({
           lineup: comparison.current,
@@ -216,7 +231,7 @@ export function solveWeekLineup(
   // Solved through the same `compareLineup` on the same board, so the figure on
   // the plate and the lineup the Opponents panel counts are one measurement.
   const opponent = league.opponent
-    ? solveOpponentLineup(league, league.opponent, board, locked, kickoffs)
+    ? solveOpponentLineup(league, league.opponent, board, locked, games)
     : null;
 
   // The league's median, over the same board and the same comparison. The
@@ -425,7 +440,7 @@ function priceRoster(
   league: WeekLineupLeague,
   board: WeekProjections,
   locked: ReadonlySet<string>,
-  kickoffs: ReadonlyMap<string, number> | null,
+  games: ReadonlyMap<string, TeamGame> | null,
 ): LineupCheckPlayer[] {
   const rostered = [...new Set([...(players ?? []), ...starters])].filter(
     (id) => id && id !== "0",
@@ -433,6 +448,12 @@ function priceRoster(
 
   return rostered.map((id) => {
     const line = board[id];
+    // **One lookup for both facts.** The kickoff and the opponent are the same
+    // row of the same fetch, so reading them apart is two chances to disagree
+    // about which listing of a team won — the argument `getWeekGames` is
+    // written under, and the reason this takes the games rather than the
+    // instants it used to.
+    const game = line?.team ? (games?.get(line.team) ?? null) : null;
     return {
       player_id: id,
       name: line?.name ?? null,
@@ -441,7 +462,9 @@ function priceRoster(
       // real zero — see the contract, and `./week` for why the row is kept.
       points: line ? scoreStatLine(line.stats, league.scoring_settings) : null,
       team: line?.team ?? null,
-      kickoff: kickoffFor(line?.team ?? null, kickoffs),
+      kickoff: game?.kickoff ?? null,
+      opponent: game?.opponent ?? null,
+      home: game?.home ?? false,
       locked: locked.has(id),
     };
   });
@@ -505,7 +528,7 @@ function solveOpponentLineup(
   opponent: WeekLineupOpponent,
   board: WeekProjections,
   locked: ReadonlySet<string>,
-  kickoffs: ReadonlyMap<string, number> | null,
+  games: ReadonlyMap<string, TeamGame> | null,
 ): {
   points: number;
   optimal_points: number;
@@ -519,7 +542,7 @@ function solveOpponentLineup(
     league,
     board,
     locked,
-    kickoffs,
+    games,
   );
   const byId = new Map(priced.map((p) => [p.player_id, p]));
 
@@ -546,11 +569,3 @@ function solveOpponentLineup(
   };
 }
 
-/** A player's kickoff, or null where his team or the week's schedule is unknown. */
-function kickoffFor(
-  team: string | null,
-  kickoffs: ReadonlyMap<string, number> | null,
-): number | null {
-  if (team === null || !kickoffs) return null;
-  return kickoffs.get(team) ?? null;
-}

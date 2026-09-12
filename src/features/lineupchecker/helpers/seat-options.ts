@@ -22,10 +22,15 @@ import { SLOT_POSITIONS } from "../../../shared/projections/slots.ts";
  * which is the call `compareLineup` already makes when it drops one into
  * `unknown_slots`: a build that does not know what a slot holds must not guess.
  *
- * **A locked player is not a choice, at either end.** A seat whose game has
- * kicked off offers nothing — the pane says so rather than listing moves
- * Sleeper would refuse — and a locked player on the bench is out of the pool
- * for every *other* seat too, which is the contract's own wording.
+ * **A locked *seat* offers nothing, and a locked *candidate* is still listed.**
+ * The two halves used to be one rule and they are two questions. A seat whose
+ * game has kicked off answers with the note and an empty list, because a list
+ * of moves Sleeper would refuse is a claim the reader would act on. A locked
+ * player on the bench stays on it, because his row carries a padlock saying
+ * exactly why he cannot take the seat — where dropping him reads as a player
+ * the app has lost. What is unchanged either way is the *solver's* pool: a
+ * locked player is out of it for every other seat, which is the contract's own
+ * wording and is `compareLineup`'s business rather than this list's.
  */
 
 /** Which side of the game a pane is showing. */
@@ -47,8 +52,6 @@ export type SeatPick = { side: Side; index: number };
 /** One row of an options pane. */
 export type SeatOption = {
   player: LineupCheckPlayer;
-  /** He is the seat's current holder, and is chipped rather than offered. */
-  inSeat: boolean;
   /**
    * What seating him would gain or lose against whoever holds the seat now.
    *
@@ -59,26 +62,6 @@ export type SeatOption = {
    */
   delta: number | null;
 };
-
-/** A seat's gap to the same seat opposite, as the meter draws it. */
-export type SeatGap = {
-  /** This seat less the one opposite. Null where either has no figure. */
-  delta: number | null;
-  /** How much of the track to fill, 0–100. Zero where there is no gap. */
-  fill: number;
-  /** Which side leads it, and therefore which of the two tracks fills. */
-  lead: "mine" | "theirs" | null;
-};
-
-/**
- * Seat-level gaps are small beside the seat's own scale — a three-point edge
- * at a flex is a real result and 3% of a 44px track is a sliver — so the bar is
- * drawn against a fraction of the span rather than against the whole of it.
- * The clamp at 100 is what stops the widest gap in a lopsided week from
- * overflowing its track. The same figure `seat-compare` draws its bars at, and
- * deliberately: two grains of the same comparison on two pages.
- */
-const GAP_SCALE = 1.4;
 
 /**
  * What a seat is projected for, as a comparison reads it.
@@ -116,44 +99,40 @@ export function seatTakes(slot: string, positions: readonly string[]): boolean {
  * lineups are solved from it, so `lineup[i]` is the same seat on both sides —
  * which is also what makes a league with two `RB` slots compare RB1 to RB1.
  *
- * `span` is the larger of the two figures rather than the whole pane's, so a
- * gap at quarterback and a gap at a kicker are not drawn on one yardstick. The
- * floor of 1 is only ever reached where both sides are zero, and a zero gap
- * draws nothing anyway.
+ * **It is a bare delta now, where it used to be the meter's three numbers.**
+ * The two-track gap column is gone — the row's figure is where the comparison
+ * lives, inked by the ramp's two ends — so what a caller reads is the *sign*,
+ * and the scaling that drew a bar against a fraction of the seat's own span
+ * went with the bar. That argument is not lost: `features/shared/seat-compare`
+ * carries the identical one for the manager card's seat rows, which still draw
+ * meters, and this file has always cited it as the other grain of the same
+ * comparison.
  */
 export function seatGap(
   mine: LineupCheckSeat,
   theirs: LineupCheckSeat | undefined,
-): SeatGap {
+): number | null {
   const a = theirs === undefined ? null : seatPoints(mine);
   const b = theirs === undefined ? null : seatPoints(theirs);
-  if (a === null || b === null) return { delta: null, fill: 0, lead: null };
-
-  const delta = a - b;
-  const span = Math.max(1, a, b);
-  return {
-    delta,
-    fill:
-      delta === 0
-        ? 0
-        : Math.min(100, Math.round((Math.abs(delta) / span) * GAP_SCALE * 100)),
-    lead: delta > 0 ? "mine" : delta < 0 ? "theirs" : null,
-  };
+  if (a === null || b === null) return null;
+  return a - b;
 }
 
 /**
- * Everyone on this roster who may legally sit in this seat, best first, with
- * the current holder among them.
+ * Everyone *else* on this roster who may legally sit in this seat, best first.
  *
- * **The holder is always listed and never filtered**, whatever his positions
- * say: he is in the seat, and a list that omitted him would be answering a
- * different question from the one the header asks. He is chipped rather than
- * offered — `inSeat` — and carries no delta against himself.
+ * **The holder is not on the list**, which reverses what this function used to
+ * do and is the stronger reading: he was the first row, selected and chipped
+ * `in seat`, and that row answers nothing — pressing his seat is what opened
+ * the pane, and the lineup opposite is still showing him. Every delta here is
+ * measured against his figure, which stays on screen throughout.
  *
- * **A locked seat has no options at all**, which is the whole reason the pane
- * has a second state: his game has kicked off, Sleeper will refuse the move,
- * and an empty list under a note naming him is the honest answer where a list
- * of alternatives is a lie the reader would act on.
+ * **A locked candidate stays on the list**, which reverses the other half. He
+ * was filtered out on the grounds that Sleeper will refuse the move; the
+ * padlock in his bay says exactly that, where an absence reads as a player the
+ * app has lost. What has not changed is the seat end of the same rule: **a
+ * locked seat has no options at all**, because there the list itself would be
+ * the lie — an empty list under a note naming him is the honest answer.
  *
  * The order is the bench's own — best first, an unprojected player last rather
  * than treated as the cheapest — and ties break on name so a pane does not
@@ -168,23 +147,15 @@ export function seatOptions(
   const held = seat.player;
   const anchor = seatPoints(seat);
 
-  const alternatives = bench
-    // A player whose own game has kicked off is out of the pool for every seat
-    // — the contract's wording, and the same rule that empties a locked seat.
-    .filter((player) => !player.locked && seatTakes(seat.slot, player.positions))
+  return bench
+    .filter((player) => seatTakes(seat.slot, player.positions))
     .filter((player) => player.player_id !== held?.player_id)
     .map((player): SeatOption => ({
       player,
-      inSeat: false,
       delta:
         anchor === null || player.points === null ? null : player.points - anchor,
-    }));
-
-  const pool = held
-    ? [{ player: held, inSeat: true, delta: null } as SeatOption, ...alternatives]
-    : alternatives;
-
-  return pool.sort(byProjection);
+    }))
+    .sort(byProjection);
 }
 
 /**
