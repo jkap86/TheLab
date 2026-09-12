@@ -71,6 +71,23 @@ export type WeekShareSeat = {
 
 /** The seats and the bench one side of a league's game fielded. */
 export type WeekShareSide = {
+  /**
+   * Who fielded them, on `leagueTeamName`'s rule, or null where no name is
+   * stored.
+   *
+   * **A property of the side rather than of the entry**, which is what lets
+   * one field answer for either of them: a breakdown naming the leagues a
+   * player was started in wants the *opposing* manager's name in every group
+   * — `vs Corn Squad` where the reader started him, `Corn Squad started him`
+   * where the manager across from them did — and both are this field, read off
+   * the entry's opponent.
+   *
+   * Null is a side the stored `league_users` has no name for, and it reads as
+   * the absence of a clause rather than as an em dash: a row that cannot say
+   * who is across from you still names its league and its slot, which is most
+   * of what it is for.
+   */
+  team_name: string | null;
   lineup: readonly WeekShareSeat[];
   bench: readonly WeekSharePlayer[];
 };

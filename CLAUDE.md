@@ -17774,6 +17774,184 @@ changed and the one no measurement closes; and whether nineteen columns with
 six of them pinned is comfortable on a real 1280 laptop, where the fixture's
 short names give the flexible track more slack than a real board would.
 
+### The board narrowed to two questions
+
+The drawer was a twenty-column table — a full box score, four pinned league
+share cells as `n/12` fractions, a per-row tray of narrowing keys and a
+decisions pane — and none of it could be read without scrolling sideways past
+the other three. It is the two questions a reader actually asks on a Sunday:
+**who is scoring what**, a vertical list carrying one figure, and **where do I
+stand on this guy**, a press away, which names their twelve leagues in five
+groups. Applied from a design handoff, its `2a` / `2b` / `2c`. One field on the
+wire and no migration.
+
+**The box score came off rather than moving behind a disclosure**, and that is
+the change everything else follows from: with the splits gone there is no
+horizontal scroll, so the list is four columns at every width — Player, Game,
+Your leagues, Pts — and the row is one press rather than a row plus a tray key.
+
+**The two opposing counts became one**, which is this list's own call rather
+than the fold's. The four partition the leagues a player appears in, and the
+two on the reader's own side are decisions *they* made where the two opposite
+are one fact about somebody else's roster: he is on it. Whether the manager
+across from you left him on their bench is a question about their week, and a
+nineteen-column board was the only place there was room to ask it. So the row
+sums them as `Against` and the breakdown, which has room, still tells the two
+apart.
+
+**A tag is omitted at zero and the empty note reads `held`, never the tag
+count.** A held player his leagues never seated carries no tag *and* is not one
+they have never heard of — the distinction `StatRow.start` is written by, and
+the reason a null sorts last in either direction while a zero sorts as a zero.
+That last rule is also what replaces the `Mine` cap the redesign drops: one
+press on `Started` floats every player the reader holds above every player they
+do not, because every unheld row is a null.
+
+### Where the reader stands is named, not counted
+
+`player-breakdown.ts` is the other half, pure and under Node's own runner for
+`stat-board.ts`' reason: a league filed under the wrong group, a slot read off
+the wrong side or a bench player counted as a starter all render a perfectly
+ordinary list and say something untrue.
+
+**It walks the entries rather than reading the fold's `leagues`.**
+`WeekTwoSidedShare` already carries the named leagues behind each count, which
+is most of what a breakdown needs and not all of it: a row also names the
+**slot** he occupied, and a slot is a fact about the seat rather than about the
+league. So the walk goes back to the seats — and the fifth group, the leagues he
+is in neither side of, falls out for free, being the entries no group claimed.
+
+**Every entry is placed, so the five groups partition the leagues.** "He is not
+in this one" is an answer a reader scanning twelve leagues wants told rather
+than inferred from a list shorter than it should be. **The manager's own side is
+asked first and a league is claimed once**, which is what makes that a partition
+rather than five overlapping lists: Sleeper's arrays occasionally name a player
+twice, and asking in order is what settles it. A starting seat beats a bench
+entry within one side for the same reason.
+
+**A league with no opposing side falls to `none`** whenever the reader's own
+side does not hold him — the absent-is-not-empty rule `WeekLineupEntry.opponent`
+is written by, arriving here as the one branch that needs no special case.
+
+**The one field the wire gained is `WeekShareSide.team_name`**, because every
+group names the manager *across* from the reader — `vs Corn Squad` where they
+started him, `Corn Squad started him` where that manager did. Their own team
+name is the same in all twelve rows and says nothing. Gametime fills it from
+`GametimeSide.team_name` and the checker from `LineupCheckLeague.opponent_team_name`,
+so the reader's own side passes nothing and takes the null.
+
+**The pane prompts at rest rather than seeding itself with the week's top
+scorer**, which the prototype does by starting with a player picked: a pane that
+opened already answering would be claiming a reader had asked about somebody.
+
+### What the trays took with them
+
+The row trays were the only thing on this page that made a subject, so
+`weekSubjectRolls`, `matchesSubjects` and the token strip that reported a
+selection all went with them — **the board no longer narrows the league grid
+behind it.** What replaces that answer is a better one at the question's own
+grain: the breakdown *names* the leagues rather than leaving a reader to read a
+filtered grid for them. The lineup checker still asks all three of the same
+shared modules; it is this page that stopped having a second question to ask.
+`narrowedEmptyState` is still called, with `false` for the subject arm — that is
+the true answer to its second question here, and the sentences it holds are the
+ones `/manager` and `/lineupchecker` draw.
+
+### Three things measured against the design rather than taken from it
+
+- **The grid's two templates share their slack differently.** At `lg` the free
+  space is ~230px and a reader's three tags (`Started 7 · Sat 1 · Against 3`)
+  need 236 of the `Your leagues` track — so on the design's own `0.9fr` that
+  cell came out 223 and clipped all three, silently, inside its own
+  `overflow-hidden`. The compact arm gives the narrower column the larger share
+  (`1.15fr` against `0.85fr`), which lands them at ~260 and ~242; the name has
+  `truncate` and degrades honestly where the tags had no way to. At `xl` there
+  is room for the design's own split. Safe as two utilities because one carries
+  a variant, which is the one case `CONSOLE_CARD_SHELL`'s trap is not.
+- **The matchup waits for `xl`.** At 1120 — the design's artboard — the Player
+  cell is 304px and both fit; at `lg` it is 242, where the name would be left
+  ~99px on the one column whose whole job is naming a player. So between 1024
+  and 1280 the row keeps the name whole and gives up the NFL matchup, which the
+  breakdown's own meta line still states in full.
+- **Every group swatch and ring is a token.** The bundle is dark-only and four
+  of its five are raw alphas over a near-white: carried across,
+  `rgba(214,255,250,0.14)` is simply *not there* on the pale window — rendered
+  in light, that group's swatch was missing — and `rgba(255,212,135,0.85)` is
+  the dark scheme's amber rather than the one the rest of the light page uses.
+  `--readout-line` is the ghost's own ink and inverts, so a `color-mix` of it
+  reads on both; `--median-ink` and `--accent` invert for the other two.
+
+**`--tag-lit-shadow` is the one token added**, and its light half is derived
+rather than carried: the design gives the dark value alone, and both layers it
+adds to `--figure-well-shadow` are wrong on a pale ground for the reason this
+file states everywhere — an `rgba()` of the dark accent is not a dimmer version
+of itself on white, it is invisible.
+
+**The popovers close on an outside press and on Escape, and Escape returns
+focus to the trigger** — `ToolsMenu`'s own spelling, and the handoff names both
+as needed in the real build. They stay open on a press, deliberately: the whole
+point of a multi-select is picking more than one.
+
+#### Verified
+
+Driven over CDP against `next dev` with no `DATABASE_URL` — the boot hook skips
+migrations and the four loops log their refusals, which is the server coming up
+healthy against nothing — through a temporary `/preview` route mounting the
+**real** `StatBoard` against fixtures, then deleted. The mechanics are the ones
+this file records: `--no-proxy-server`, `localhost` rather than `127.0.0.1`, a
+phone viewport from `Emulation.setDeviceMetricsOverride` with `mobile: true`,
+`data-theme` **and** `localStorage`, `--disable-features=OverlayScrollbar`, the
+`--blink-settings=availablePointerTypes=4,…` flags built as a template literal,
+a **client-component** harness, a CDP client over Node's own `WebSocket`, and a
+fresh `--remote-debugging-port` per run. The fixtures are fourteen players over
+twelve leagues — one on a bye, one nobody holds, one league with no opposing
+side at all, one with no stored opposing name, and a deliberately over-long
+name.
+
+**169 of 169 checks pass at 1280, 1120, 1024 and 390 in both schemes.** The
+list is four columns with no horizontal scroll (`overflow-x: hidden`,
+`scrollWidth === clientWidth` on the scroller at every width); pressing
+`Started` lights one cap of four, clears the `Pts` arrow, moves the accent to
+`Your leagues` and lights **13 of 13** rows' `Started` wells; the Pos menu opens
+with `All` lit and five caps inside the viewport, a second press adds rather
+than replacing (`QB · RB`) and leaves it open, Escape closes it and returns
+focus, and an outside press dismisses it. A row press opens the breakdown
+grouped `You started him / You sat him / Against you — they started him /
+Against you — they sat him / Not in this league`, with `FLEX`, `BN`, `RB1` and a
+dash in the slot chips and the rival named per group. On the phone the press
+replaces the list, the bar carries `‹ List` and the player's name and Pts, and
+`‹ List` returns. Every group's swatch reads against the glass in both schemes,
+measured as a colour distance rather than by eye. A shut bar mounts **zero**
+rows.
+
+At every width and in both schemes: `document.documentElement.scrollWidth`
+within the viewport, **zero** unclipped elements past it, nothing clipped inside
+the board but a deliberate truncate, exactly one `<h1>`, and no console output
+of any kind. The real `/gametime/[username]` was driven too and renders the
+board, with one `<h1>`, no overflow and no console output.
+
+2,598 unit tests pass (62 more — the breakdown's seventeen and the arithmetic's
+rewritten forty-five); `lint`, `typecheck` and `check:full` from a cleared
+`.next` are clean.
+
+**One measurement is an artifact rather than a finding**, and it is worth
+writing down because it cost a run: the bar's caret is `-rotate-90`, so its
+*axis-aligned bounding box* is 22px where its own box is 16 and the parent's
+`scrollWidth` reads 3px over — with the glyph well inside the bar's box, and the
+markup byte-identical to the board this replaces. Tailwind v4 spells that as the
+`rotate` **property** rather than a transform, which is why a check testing
+`transform` for a matrix missed it.
+
+**Not verified against real data**, which is the gap to close first: every
+number above is a fixture and no database was reachable from here. Four things a
+render cannot check — what a real Sunday's list costs now that a press walks
+every league's two lineups per player rather than reading a count; whether
+`team_name` is populated widely enough on a real corpus for the rival clause to
+be worth its column, since a null simply drops it; whether losing the `Mine` cap
+is felt, given that `Started` now floats a reader's own players to the top; and
+whether the league grid's narrowing is missed at all, which is the one capability
+this pass removes and only a reader settles.
+
 ### The countdown to the next kickoff is the page's hero
 
 With games still to come and none running, the page said so in one pill beside

@@ -45,7 +45,7 @@ function one(
 ): WeekLineupEntry {
   return {
     league: { league_id: id, name: `League ${id}` } as unknown as ManagerLeague,
-    mine: { lineup, bench },
+    mine: { team_name: null, lineup, bench },
     opponent: null,
     set_by_manager: true,
     ...over,
@@ -55,7 +55,7 @@ function one(
 const side = (
   lineup: WeekShareSeat[],
   bench: WeekSharePlayer[],
-): WeekShareSide => ({ lineup, bench });
+): WeekShareSide => ({ team_name: null, lineup, bench });
 
 describe("weekTwoSidedShares", () => {
   test("counts the seats and the bench apart, on the manager's side", () => {

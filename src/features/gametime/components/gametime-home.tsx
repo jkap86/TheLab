@@ -1,6 +1,6 @@
 "use client";
 
-import { type ReactNode, useCallback, useMemo, useRef, useState } from "react";
+import { type ReactNode, useCallback, useMemo, useRef } from "react";
 
 import {
   activeFilterCount,
@@ -14,17 +14,9 @@ import {
   LeagueFiltersDialog,
   ManagerBillet,
   matchesFilters,
-  matchesSubjects,
   narrowedEmptyState,
-  NO_SUBJECTS,
   PLATE_KEY,
-  removeSubject,
   storeLeagueFilters,
-  subjectCount,
-  SubjectTokens,
-  type LeagueSubjects,
-  type Subject,
-  type SubjectRolls,
   type WeekLineupEntry,
   type WeekSharePlayer,
   type WeekShareSide,
@@ -33,7 +25,6 @@ import {
   useLeagueFilters,
   useStatBoardOpen,
   useUrlParam,
-  weekSubjectRolls,
   weekTwoSidedShares,
   WeekGauge,
   WeekStepper,
@@ -95,6 +86,7 @@ const figured = (player: GametimePlayer): WeekSharePlayer => ({
 
 /** One side of a league's game, as the shared fold reads it. */
 const asSide = (side: GametimeSide): WeekShareSide => ({
+  team_name: side.team_name,
   lineup: side.lineup.map((seat) => ({
     slot: seat.slot,
     player: seat.player ? figured(seat.player) : null,
@@ -168,24 +160,19 @@ function Live({
   const filters = useLeagueFilters();
   const setFilters = storeLeagueFilters;
   /**
-   * The board's half of the narrowing, which the page owns rather than the
-   * panel.
-   *
-   * **It has to be the page's**, and that is what has kept it here across two
-   * arrangements of the panel: the board is `fixed` chrome a reader shuts, and
-   * a selection held inside it would be a grid that unnarrowed itself the
-   * moment the bar came down.
-   */
-  const [subjects, setSubjects] = useState<LeagueSubjects>(NO_SUBJECTS);
-  /**
-   * Whether the merged panel is up — the gate on the expensive fold below.
+   * Whether the panel is up — the gate on the expensive fold below.
    *
    * A read of the same store the board's bar writes rather than a latch of its
-   * own, which is what the drawer's Browse key used to be: the panel is the
-   * board now, so "has a reader asked for this" and "is the board open" are one
-   * fact. Nothing latches, deliberately — a reader who opens and shuts it with
-   * nothing picked stops paying, where a latch would keep the walk alive for
-   * the life of the page.
+   * own: the panel is the board, so "has a reader asked for this" and "is the
+   * board open" are one fact. Nothing latches, deliberately — a reader who
+   * opens and shuts it stops paying, where a latch would keep the walk alive
+   * for the life of the page.
+   *
+   * **It used to be `boardOpen || something is picked`**, because the board's
+   * row trays narrowed the league grid and a narrowing had to outlive the bar
+   * coming down. The redesign took those trays off — the panel answers *where
+   * do I stand* by naming the leagues rather than by filtering the grid — so
+   * there is nothing left to keep alive and the gate is the bar alone.
    */
   const boardOpen = useStatBoardOpen();
 
@@ -229,18 +216,12 @@ function Live({
   );
 
   /**
-   * **Nothing is folded until the board is up or something is picked**, which
-   * is `/api/trades/facets`' own bargain: a reader who never opens the panel
-   * pays nothing for it. The walk below is over every player of every roster
-   * on the account, and `matchesSubjects` returns true without asking the
-   * resolver while the selection is empty — so before either is true there is
-   * nothing to answer for.
-   *
-   * The second half is what keeps a narrowing alive after the bar comes down:
-   * the grid is still narrowed by whatever the reader picked, and the maps that
-   * answer it have to keep being built.
+   * **Nothing is folded until the board is up**, which is
+   * `/api/trades/facets`' own bargain: a reader who never opens the panel pays
+   * nothing for it. The walk below is over every player of every roster on the
+   * account, and on a live page it would re-run on every frame the room pushes.
    */
-  const browsed = boardOpen || subjectCount(subjects) > 0;
+  const browsed = boardOpen;
 
   /**
    * One league's contribution to a week fold, adapted to the shared side shape
@@ -280,74 +261,37 @@ function Live({
     [browsed, leagueFiltered, solved],
   );
 
-  // The five populations a subject picked on this page is answered from: who
-  // each side started and who each side sat, plus the resting reading a row
-  // picked with no key pressed means. Folded from the same entries the panel
-  // reads rather than by hand here — a page whose grid narrowed differently
-  // from the page beside it is the drift `weekSubjectRolls` exists to prevent.
-  //
-  // A league with no opponent is simply absent from the two opposing maps,
-  // which the predicate reads as "this league does not hold them" — correct,
-  // and a different state from the map not having arrived at all.
-  const rolls = useMemo(() => weekSubjectRolls(entries), [entries]);
+  /**
+   * The list the page draws, which is the league filters and nothing else.
+   *
+   * **There is no second narrowing any more.** The board's row trays were the
+   * only thing on this page that made a subject, and the redesign replaced them
+   * with a breakdown that *names* a player's leagues — so `weekSubjectRolls`,
+   * `matchesSubjects` and the token strip that reported a selection all went
+   * with them. The lineup checker still asks all three of the same leagues; it
+   * is this page that stopped having a second question to ask.
+   */
+  const visible = leagueFiltered;
 
   /**
-   * The four counts per player, folded once per entry list.
+   * The three counts per player, folded once per entry list.
    *
-   * **Here rather than in the board**, on the rule the drawer's own note
-   * states: it is the expensive half of the merge — a walk over every player
-   * of every roster on a 113-league account — and it is folded over the
-   * *league-filtered, subject-unnarrowed* list, which is the one population
-   * that answers the question the columns ask. Folded over the selection every
-   * row would collapse to the row just picked and could not be widened again
-   * without clearing first.
+   * **Here rather than in the board**, on the rule the panel's own note states:
+   * it is the expensive half — a walk over every player of every roster on a
+   * 113-league account — and it is folded over the *league-filtered* list,
+   * which is the one population that answers the question the `Your leagues`
+   * cell asks.
    *
-   * Null until the gate above opens, which the board draws as four dashes a
-   * column: the honest reading of a question nobody has asked yet.
+   * Null until the gate above opens, which the list draws as `Nobody in your
+   * leagues` on every row: the honest reading of a question nobody has asked
+   * yet.
    */
   const shares = useMemo(
     () => (browsed ? weekTwoSidedShares(entries) : null),
     [browsed, entries],
   );
 
-  // Null until the first frame lands, which `matchesSubjects` reads as "nothing
-  // here can say" and ignores — the only reading that matches what is on
-  // screen, since failing it closed would empty the grid while a read is in
-  // flight.
-  const subjectRolls = useCallback<SubjectRolls>(
-    (kind, _mode, reading) => {
-      if (payload === null || kind !== "week") return null;
-      return rolls[reading ?? "either"];
-    },
-    [payload, rolls],
-  );
-
-  const visible = useMemo(
-    () =>
-      leagueFiltered.filter((league) =>
-        matchesSubjects(league.league_id, subjects, subjectRolls),
-      ),
-    [leagueFiltered, subjects, subjectRolls],
-  );
-
   const narrowing = activeFilterCount(filters) > 0;
-
-  // A token names what the reader picked. The folded lineups are the only place
-  // those names live, so an id that outlives its payload falls back to itself
-  // rather than to a blank chip.
-  const subjectName = (subject: Subject) => {
-    for (const entry of entries) {
-      for (const fielded of [entry.mine, entry.opponent]) {
-        if (!fielded) continue;
-        const found =
-          fielded.lineup.find((s) => s.player?.player_id === subject.id)
-            ?.player ??
-          fielded.bench.find((p) => p.player_id === subject.id);
-        if (found?.name) return found.name;
-      }
-    }
-    return subject.id;
-  };
 
   const listRef = useRef<HTMLUListElement | null>(null);
   const ids = useMemo(() => visible.map((l) => l.league_id), [visible]);
@@ -364,19 +308,19 @@ function Live({
 
   /**
    * What to say, and what to offer, when the grid narrows to nothing — see
-   * `narrowedEmptyState`. Two things narrow it, they are undone by two
-   * different controls, and a message naming the wrong one comes with a key
-   * that does nothing.
+   * `narrowedEmptyState`.
+   *
+   * **The subject arm is passed `false` rather than dropped**, and that is a
+   * statement rather than a stub: that helper answers *which of the two
+   * narrowings* emptied a page, because a message naming the wrong one comes
+   * with a key that does nothing — and on this page there is now only one, so
+   * `false` is the true answer to its second question. It stays a call because
+   * the sentences it holds are the same sentences `/manager` and
+   * `/lineupchecker` draw, and inlining the one arm this page can reach would
+   * be a third spelling of them.
    */
-  const empty = narrowedEmptyState(
-    narrowing,
-    subjectCount(subjects) > 0,
-    filterSummary(filters),
-  );
-  const clearNarrowing = () => {
-    if (empty.action !== "subjects") setFilters(DEFAULT_LEAGUE_FILTERS);
-    if (empty.action !== "filters") setSubjects(NO_SUBJECTS);
-  };
+  const empty = narrowedEmptyState(narrowing, false, filterSummary(filters));
+  const clearNarrowing = () => setFilters(DEFAULT_LEAGUE_FILTERS);
 
   const name = user ? user.display_name || user.username : username;
 
@@ -474,22 +418,6 @@ function Live({
       {readout.countdownTo !== null && (
         <KickoffCountdown at={readout.countdownTo} className={card.chromeClass} />
       )}
-
-      {/* The drawers hide their own state once closed, so the narrowing they
-          left behind needs a home on the page — the manager console's own
-          argument, and the same strip. `contents` at rest so the layout is what
-          it was, and the stylesheet gives it a box for as long as it is fading
-          with the rest of the page: opacity has no effect on an element with
-          none. */}
-      <div className={`contents ${card.chromeClass}`}>
-        <SubjectTokens
-          subjects={subjects}
-          names={subjectName}
-          onRemove={(s) => setSubjects((prev) => removeSubject(prev, s))}
-          onMatch={(match) => setSubjects((prev) => ({ ...prev, match }))}
-          onClear={() => setSubjects(NO_SUBJECTS)}
-        />
-      </div>
 
       {error ? (
         <Alert>{error}</Alert>
@@ -616,10 +544,10 @@ function Live({
           card; the rack stays, because the rack is the app's rather than this
           page's.
 
-          `entries` is the league-filtered, subject-unnarrowed list on both
-          seams — the fold's population above and the decisions walk's here —
-          which is `weekTwoSidedShares`' own rule and the reason a row's
-          `7 of 12` and the list a press opens are counting the same leagues. */}
+          `entries` is the league-filtered list on both seams — the fold's
+          population above and the breakdown's walk here — which is
+          `weekTwoSidedShares`' own rule and the reason a row's `Started 7` and
+          the leagues a press names are counting the same leagues. */}
       <StatBoard
         week={payload?.week ?? null}
         lines={payload?.players ?? NO_LINES}
@@ -627,11 +555,6 @@ function Live({
         chromeClass={card.chromeClass}
         shares={shares}
         entries={entries}
-        subjects={subjects}
-        onSubjects={setSubjects}
-        /* The live projection: this page's own figure, and the one every total
-           on it is a sum of. See `figured`. */
-        figureLabel="Live"
       />
     </div>
   );

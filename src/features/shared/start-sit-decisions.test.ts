@@ -43,7 +43,7 @@ function league(id: string, rosterPositions: string[]): ManagerLeague {
 const side = (
   lineup: WeekShareSeat[],
   bench: WeekSharePlayer[],
-): WeekShareSide => ({ lineup, bench });
+): WeekShareSide => ({ team_name: null, lineup, bench });
 
 function one(
   id: string,

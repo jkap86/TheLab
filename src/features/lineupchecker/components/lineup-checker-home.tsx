@@ -90,7 +90,17 @@ const figured = (player: LineupCheckPlayer): WeekSharePlayer => ({
 const asSide = (
   lineup: readonly LineupCheckSeat[],
   bench: readonly LineupCheckPlayer[],
+  /**
+   * Who fielded them, where the wire names them.
+   *
+   * This payload carries `opponent_team_name` and nothing for the manager's
+   * own side, which is the right way round for the one thing the field is
+   * read for — a breakdown names the manager *across* from the reader in
+   * every group. So the reader's own side passes nothing and takes the null.
+   */
+  teamName: string | null = null,
 ): WeekShareSide => ({
+  team_name: teamName,
   lineup: lineup.map((seat) => ({
     slot: seat.slot,
     player: seat.player ? figured(seat.player) : null,
@@ -301,7 +311,11 @@ function Checker({
           mine: asSide(entry.lineup, entry.bench),
           opponent:
             entry.opponent_lineup && entry.opponent_bench
-              ? asSide(entry.opponent_lineup, entry.opponent_bench)
+              ? asSide(
+                  entry.opponent_lineup,
+                  entry.opponent_bench,
+                  entry.opponent_team_name,
+                )
               : null,
           // Sleeper seats a best-ball lineup itself, so nothing in it is a call
           // anybody made — see `WeekLineupEntry.set_by_manager`.

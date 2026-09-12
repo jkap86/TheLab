@@ -1129,6 +1129,22 @@
   --figure-well-shadow: inset 0 2px 5px rgba(0, 0, 0, 0.8),
     inset 0 -1px 0 rgba(159, 255, 242, 0.14);
   /*
+   * The same channel with the accent ring and glow that says "this is the
+   * column the board is ordered by" — worn by the one tag on each row whose
+   * reading the Sort caps are lit on.
+   *
+   * It is `--figure-well-shadow` *plus* two layers rather than a second
+   * shadow beside it, on `CONSOLE_CHIP_RAISED`'s rule: **a shadow list is
+   * atomic**, so a caller appending a ring to the well would replace the
+   * chamfer rather than add to it, and which of the two arbitrary
+   * `shadow-[…]` utilities won would be Tailwind's emit order. Composing the
+   * pair here is what keeps the lit tag a lit *well* rather than a ring
+   * floating where a cut used to be.
+   */
+  --tag-lit-shadow: inset 0 2px 5px rgba(0, 0, 0, 0.8),
+    inset 0 -1px 0 rgba(159, 255, 242, 0.14), 0 0 0 1px rgba(0, 255, 229, 0.45),
+    0 0 18px -6px var(--accent-glow);
+  /*
    * The lit bar: the history rail's fill and the mark down the manager's own
    * row. One gradient because they are one object at two sizes, and a second
    * spelling is two greens for "this is yours" on one card.
@@ -2069,6 +2085,20 @@
   --figure-well-bg: rgba(15, 23, 42, 0.12);
   --figure-well-shadow: inset 0 2px 5px rgba(15, 23, 42, 0.26),
     inset 0 -1px 0 rgba(255, 255, 255, 0.9);
+  /*
+   * Its light half, **derived rather than carried over** — the design bundle
+   * spells the dark value alone, and the two layers it adds are both wrong on
+   * a pale ground for the reason this file states everywhere: an `rgba()` of
+   * the dark accent is not a dimmer version of itself on white, it is
+   * invisible. `--accent` is the light scheme's deep teal here, so the ring
+   * takes the alpha that ink needs to read against a near-white well (0.55
+   * against the dark scheme's 0.45) and the outer glow follows the same
+   * `--accent-glow` the scheme already inverts. The chamfer under both is the
+   * light well's own, so a lit tag and an unlit one are the same cut.
+   */
+  --tag-lit-shadow: inset 0 2px 5px rgba(15, 23, 42, 0.26),
+    inset 0 -1px 0 rgba(255, 255, 255, 0.9), 0 0 0 1px rgba(11, 109, 99, 0.55),
+    0 0 18px -6px var(--accent-glow);
   /* The accent's light-mode teal, which is the one the ramp and every lit key
      already use — a mint bar on a pale console reads as nothing at all. */
   --lit-bar-bg: linear-gradient(180deg, #14a294, #0b6d63);
