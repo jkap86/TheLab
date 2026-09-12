@@ -41,7 +41,6 @@ import {
   type SubjectRolls,
   invalidateLeagueLineups,
   useActiveCard,
-  usePublishRackControls,
   useKtcBoard,
   useLineupColumns,
   useSummaryReadings,
@@ -61,6 +60,7 @@ import {
   modeRolls,
   leaguematePlayerRolls,
 } from "../helpers/leaguemate-rosters";
+import { BrowseDock } from "./browse-dock";
 import { LeaguematesMark, PlayersMark } from "./browse-marks";
 import { LeagueCard } from "./league-card";
 import { LeaguemateSharesDrawer } from "./leaguemate-shares-drawer";
@@ -82,18 +82,23 @@ const MODE_WORDS: Record<SubjectMode, string> = {
 const EMPTY_KTC: ManagerLineupsPayload["ktc"] = [];
 
 /**
- * The two Browse keys this page puts in the rack: their legends, and the
- * glyphs the rack draws them as below `md`.
+ * The two Browse keys: their legends, and the glyphs drawn beside them.
  *
- * **Module scope, not a literal in the render**, and that is the requirement
- * `usePublishRackControls` states rather than a habit: the publish effect
- * depends on this array, so one rebuilt each render would publish each render,
- * set an ancestor's state and re-render — a loop rather than a stale value.
- * The two `icon` elements are built once here for the same reason.
+ * **They are the dock's now rather than the rack's.** They used to be published
+ * upward into the rack, which is where the `RackDrawerKey` shape comes from and
+ * why it is still the shape: the dock takes the identical array, so the day a
+ * page wants them in either place there is one vocabulary rather than two. See
+ * `browse-dock.tsx` for what moved and why.
  *
- * The glyphs are this folder's — see `browse-marks.tsx` — because the rack
- * cannot `switch` on the route, which is the argument that made the legends
- * data one grain earlier.
+ * **Module scope, not a literal in the render**, which was `usePublishRackControls`'
+ * own requirement and survives the move for a smaller reason: `BrowseDock` is
+ * one component rather than a hundred, so an array rebuilt each render costs a
+ * re-render of it rather than a loop through an ancestor's state. The two
+ * `icon` elements are built once here on the same terms.
+ *
+ * The glyphs are this folder's — see `browse-marks.tsx` — because the page owns
+ * its own vocabulary, which is the argument that made the legends data back
+ * when the rack could not `switch` on the route.
  */
 const BROWSE_KEYS: readonly RackDrawerKey[] = [
   { kind: "player", label: "Players", icon: <PlayersMark /> },
@@ -563,13 +568,22 @@ export function LeaguesHome({
     [],
   );
 
-  // **The two Browse keys, and nothing else.** Filters and Columns came back
-  // down onto the plate and the tray under it — see the header below — so the
-  // rack no longer needs the filter state, the unfiltered league list, the
-  // column selection or the KTC pair, and none of them is published. Publishing
-  // a field the rack does not read is a field that looks load-bearing to the
-  // next reader of either file.
-  usePublishRackControls({ keys: BROWSE_KEYS, drawer, onOpenDrawer: openDrawer });
+  // **This page publishes nothing into the rack**, and the two keys that were
+  // the last thing it did open the same two drawers from `BrowseDock`, which is
+  // the first thing in the tree below and is drawn at the foot of the viewport.
+  //
+  // Filters and Columns came down onto the plate and the tray under it first —
+  // a Filters key in the rack said "a filter is on" while the plate's
+  // `Leagues 9 / 14` said the same thing with a number, and neither named what
+  // had been narrowed. What is left went the other way rather than back up: the
+  // Browse pair does not describe the page at all, so it is not header
+  // furniture, and the scroll-depth argument that kept it in the rack is
+  // answered better by a control pinned to the viewport than by one pinned to
+  // the top of it. `usePublishRackControls` is untouched and still live — the
+  // two week tools publish their own pair — so what this page's silence changes
+  // up there is only that the rack's wordmark no longer yields its legend to
+  // controls that are not there. See `app-rack.tsx`, where that gate is
+  // measured and is deliberately left alone.
 
   /**
    * What to say, and what to offer, when the grid narrows to nothing.
@@ -591,6 +605,24 @@ export function LeaguesHome({
 
   return (
     <div className="relative">
+      {/*
+        **First in the tree, and pinned to the bottom-right of the viewport.**
+
+        Where it is drawn and where it sits in the tab order are two questions,
+        and a `fixed` part is what lets them be answered separately. These two
+        keys are the page's exits, and in the rack a keyboard reader reached
+        them immediately — rendered where they are drawn they would be behind a
+        hundred league cards and two dialogs, which is a reach this change has
+        no business costing. So the DOM says what the rack said and the
+        stylesheet puts it where the design does.
+      */}
+      <BrowseDock
+        keys={BROWSE_KEYS}
+        drawer={drawer}
+        onOpen={openDrawer}
+        parked={card.parked}
+        chromeClass={card.chromeClass}
+      />
       {/* The page's own header stands down while a card is parked: it is
           `display: none` rather than unmounted, so the two dialogs it holds
           keep their draft state and neither is rebuilt when the card closes.

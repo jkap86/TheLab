@@ -573,6 +573,56 @@
   --track-shadow-deep: inset 0 3px 9px rgba(0, 0, 0, 0.95),
     inset 0 -1px 0 rgba(255, 255, 255, 0.06);
 
+  /*
+   * **The Browse dock: the same cap vocabulary, floating over the page.**
+   *
+   * The two keys it holds were in the rack, published up there by the manager
+   * page, and the argument for the move is the one the rack itself makes about
+   * them: they are the only thing in the rack that acts on the page
+   * *underneath* it. Pinned to the bottom-right of the viewport they are in
+   * thumb reach at any scroll depth rather than at the top of a page that is
+   * one card per league — which is what the rack's own pinning was for, one
+   * corner over.
+   *
+   * **Its housing is translucent where every other housing here is stock**,
+   * and that is the whole of what makes it read as lit hardware floating above
+   * the cards rather than one more billet cut from the same metal. So the fill
+   * alphas are deliberately low and the blur deliberately short: the card
+   * behind it has to stay legible through it, and an earlier pass at 55% fill
+   * over a 14px blur was an opaque panel with a card hidden under it.
+   *
+   * **The channel is a lightened `--rack-channel-*` rather than that pair**,
+   * and it has to be: those values are cut for *stock*, and a 52% floor under
+   * a deep inset stacks with the translucent housing and kills the blur the
+   * housing exists for. It is the same argument that split `--rack-channel-bg`
+   * off `CONSOLE_CHANNEL` one surface up, so this is named for the dock rather
+   * than borrowed from either.
+   *
+   * **The light half is derived rather than dimmed**, on this file's standing
+   * rule. Three things turn over and none of them is an alpha change. The fill
+   * runs white-over-pale, because a part floating above a light page is the
+   * surface catching the light rather than a shadow on it. The rim is a 20%
+   * alpha of `#00ffe5` in dark, which is invisible as a 20% alpha of light
+   * mode's much darker `--accent`, so it takes the alpha the same ink needs to
+   * read. And both casts go slate, `--rack-cast`'s reason: pure black over a
+   * near-white page reads as dirt.
+   *
+   * The cap itself is `--cap-accent-*` unmodified — one cap in the app, and it
+   * already inverts — with one layer added. `--dock-cap-glow` is what keeps a
+   * cap lit against a translucent housing, where the rack's own opaque channel
+   * is contrast enough. It is appended to `--cap-accent-shadow` at the call
+   * site rather than folded in here, because a shadow list is atomic and the
+   * rack's caps must not gain a halo they were not drawn with.
+   */
+  --dock-bg: linear-gradient(180deg, rgba(150, 200, 205, 0.14), rgba(10, 20, 22, 0.16));
+  --dock-rim: rgba(0, 255, 229, 0.2);
+  --dock-shadow: 0 0 0 1px rgba(0, 0, 0, 0.55), 0 14px 28px -8px rgba(0, 0, 0, 0.8),
+    0 0 34px -6px var(--accent-glow);
+  --dock-channel-bg: rgba(0, 0, 0, 0.22);
+  --dock-channel-shadow: inset 0 2px 6px rgba(0, 0, 0, 0.5),
+    inset 0 -1px 0 rgba(255, 255, 255, 0.06);
+  --dock-cap-glow: 0 0 18px -2px var(--accent-glow);
+
   --readout-bg: linear-gradient(180deg, #04100f, #061816);
   --readout-shadow: inset 0 3px 8px rgba(0, 0, 0, 0.95), inset 0 0 20px rgba(0, 255, 229, 0.11);
   --readout-scanlines: repeating-linear-gradient(to bottom, rgba(0, 255, 229, 0.07) 0 1px, transparent 1px 3px);
@@ -1570,6 +1620,21 @@
 
   --track-shadow-deep: inset 0 3px 9px rgba(15, 23, 42, 0.22),
     inset 0 -1px 0 rgba(255, 255, 255, 0.9);
+
+  /* The Browse dock, derived rather than dimmed — see the note on the dark
+     values. The fill runs white-over-pale, since a part floating above a light
+     page is the surface catching the light; the rim carries the alpha this
+     much darker accent needs to read at all against it; the channel is a slate
+     recess closed by a white lower lip, which is what every recess in this
+     scheme is; and both casts go slate rather than black. */
+  --dock-bg: linear-gradient(180deg, rgba(255, 255, 255, 0.52), rgba(196, 214, 219, 0.42));
+  --dock-rim: rgba(11, 109, 99, 0.38);
+  --dock-shadow: 0 0 0 1px rgba(15, 23, 42, 0.16), 0 14px 28px -8px rgba(15, 23, 42, 0.34),
+    0 0 34px -6px var(--accent-glow);
+  --dock-channel-bg: rgba(15, 23, 42, 0.1);
+  --dock-channel-shadow: inset 0 2px 6px rgba(15, 23, 42, 0.22),
+    inset 0 -1px 0 rgba(255, 255, 255, 0.9);
+  --dock-cap-glow: 0 0 18px -2px var(--accent-glow);
 
   /* The account readout: a lit window, not a card. */
   --readout-bg: linear-gradient(180deg, #eaf6f4, #dcefeb);

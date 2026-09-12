@@ -9062,6 +9062,227 @@ faces it holds are within a few percent of each other at their bottom stops —
 the same closeness `--billet-well-bg` already lives with one part over, and the
 one thing a contrast figure cannot answer.
 
+### The Browse pair left the rack for a dock
+
+The two keys the manager page publishes into the rack — **Players** and
+**Leaguemates** — are a floating dock pinned to the bottom-right of the viewport
+now, and `/manager` publishes nothing at all. Applied from a design handoff.
+**Nothing on the wire moved** — no route, no query, no contract type, no payload
+field, no migration — and the dialogs, their state and their handlers are
+untouched: what changed is where the two keys stand.
+
+**It is the argument the rack already makes about this pair, taken one step
+further.** `rack-controls-keys.tsx` has said since it was written that these are
+the only things up there that act on the page *underneath* the rack — the brand
+link and the tool tray navigate and the tool-name readout only reports, which is
+why the pair is the rack's one filled object. Filters and Columns came down onto
+the plate before this because they *describe* the page; the Browse keys do not
+describe it either, so they went the other way rather than back up. What kept
+them in the rack was reach — the header scrolls away after two cards — and a
+control pinned to the viewport answers that better than one pinned to the top of
+it, which is the argument the rack's own pinning is built on, one corner over.
+
+**The vocabulary is the rack's and the material is not.** A housing, a channel
+cut into it, two filled accent caps travelling in that channel — `--cap-accent-*`
+unmodified, so the cap that inverts in the rack inverts here. The one thing that
+differs is that the housing is **translucent over a short blur**, which is the
+whole of what makes this read as lit hardware above the cards rather than
+another billet cut from the same stock. The fill alphas are 14–16% and the blur
+is 5px deliberately: the handoff records an earlier pass at 55% over 14px that
+was an opaque panel with a card hidden under it.
+
+**The channel is a lightened `--rack-channel-*` rather than that pair**, and it
+had to be: those values are cut for stock, and a 52% floor under a deep inset
+stacks with a translucent housing and kills the blur the housing exists for. It
+is the same split `--rack-channel-bg` itself made off `CONSOLE_CHANNEL` one
+surface up, so the new pair is named for the dock rather than borrowed from
+either.
+
+**Every literal became a token with a derived light half**, which the handoff
+names as a candidate and this file's standing rule settles: an `rgba()` typed
+into a class string cannot invert, and all six of these are dark-scheme values.
+Three of them turn over rather than dimming. The fill runs white-over-pale,
+because a part floating above a light page is the surface catching the light
+rather than a shadow on it. The rim is a 20% alpha of `#00ffe5`, which at the
+same alpha of light mode's much darker `--accent` is not there at all, so it
+takes the alpha that ink needs to read (0.38). And both casts go slate, on
+`--rack-cast`'s rule — pure black over a near-white page reads as dirt.
+`--dock-cap-glow` is the one layer added to the cap, and it is appended at the
+call site rather than folded into `--cap-accent-shadow`, because a shadow list
+is atomic and the rack's own caps must not gain a halo they were not drawn with.
+
+#### Three decisions the handoff leaves open, and the render that settled a fourth
+
+**The dock stands down while a card is parked**, taking `ActiveCard.chromeClass`
+like the gametime stat board's bar — the established answer for a fixed part at
+the foot of a page a card has taken over. Two things decide it. A parked card is
+sized to the fold less a little breath, so a part at the bottom-right of the
+viewport sits on the bottom-right of the card, which on this page is the roster
+pane's own drawer bars: a control over a control. And the page is *locked* there
+— `useActiveCard` writes `overflow: hidden` on `documentElement` — so a dock that
+had gone away on the way down would have no scroll left to bring it back. What it
+costs is a press: in the rack these keys were reachable while a card was parked,
+and `openDrawer`'s own note argues that press is meaningful (it closes the card
+and takes the reader back to the grid they are about to narrow). That press is
+Escape and then the key now, which is the cheaper of the two losses.
+
+**It is first in the page's tree and drawn at the bottom of the viewport**, which
+a `fixed` part is what lets you do. In the rack a keyboard reader reached these
+two immediately; rendered where they are drawn they would be behind a hundred
+league cards and two dialogs, and a change about *reach* has no business costing
+that. Driven on the real page, the caps are tab stops 2 and 3 of 4 — directly
+after the brand link and the tool key, which is where the rack put them.
+
+**Under `prefers-reduced-motion` it simply never hides.** `.lab-anim` clears the
+transition and not the transform, so a dock that still hid would jump off screen
+rather than travel — the handoff's own second option, and the one that leaves a
+control where the reader left it. The preference is read per qualifying scroll
+rather than once, so a change mid-session is honoured on the next one. A dock
+with **focus inside it** does not leave either: arrow keys scroll the page while
+a button is focused, and without that guard a keyboard reader on a cap would
+watch it go `inert` under them and be dropped to `<body>`.
+
+**And `inert` while hidden rather than `pointer-events-none`**, which is
+`CollapseTray`'s finding: the mouse is stopped by the one and a keyboard reader
+is not, so without it Tab lands on a control translated off the bottom of a
+viewport that cannot be scrolled to reach it.
+
+#### Two things are silent when wrong, and one of them shipped wrong first
+
+`dock-scroll.ts` is the rule, pure and under Node's own runner, for
+`seat-compare.ts`'s reason: a flipped comparison is a dock that hides on the way
+*up*, a threshold on the wrong side of the branch is one that flickers through a
+flick, and a baseline updated where it should not be is one that never leaves at
+all — none of which throws, and none of which a render of a settled page would
+show. The jitter floor is 6px and deliberately does **not** move the baseline,
+so a slow drift still accumulates into a decision rather than being filtered away
+a pixel at a time; `scrollY < 24` stands the dock up whatever the direction,
+which also means a page too short to scroll past it never hides one.
+
+**`DockScroll.from` is nullable, and that null is what keeps the page's own jumps
+out of the reading.** `useActiveCard` scrolls the window twice per card — to the
+top when it parks one, and back to wherever leaves that card on the line it is
+standing on when it closes — and both land as ordinary `scroll` events. The
+second is a large positive delta that is emphatically not the reader scrolling
+away, and read as one it would hide the dock **every time a card was closed**. So
+the baseline is nulled on both edges of a park and the first event after that
+sets it and decides nothing; whichever of the two effects runs first, the jump is
+spent on the baseline. The cost is one scroll event at mount, during which the
+dock is standing anyway.
+
+**The hidden transform is an arbitrary `transform`, and both halves of that are
+things the render had to say.** Tailwind's own `translate-y-*` sets the
+`translate` *property* rather than `transform`, so `transition-property: transform`
+beside it names a property that never moves — the dock would jump rather than
+travel, with nothing in the computed style looking wrong. And an arbitrary value
+is whitespace-stripped, so `calc(100%+1.25rem)` reaches the browser exactly as
+written and is **invalid CSS**: the declaration is dropped. Shipped that way the
+dock faded in place and never moved at all — `translate: 0px`, `top` unchanged in
+both states — which is what the first drive of this found and no test would have.
+The underscores are what put the spaces back.
+
+**One value follows the handoff's prose over its own prototypes**: the channel's
+padding is `0.25rem`, which its token table states and both HTML files draw at
+`0.3125rem`. The files are reference renderings and say so; the table is the
+document written to be implemented from. The same reading settles the cap, which
+the desktop prototype draws at `0.5rem 1rem` with an automatic height against the
+table's `0.625rem 0.875rem` at `2.75rem` — and the table is also the only one of
+the two that meets the handoff's own "44px tall in every variant".
+
+#### Verified
+
+Driven over CDP against `next dev` with no `DATABASE_URL` — the boot hook skips
+migrations and the four loops log their refusals, which is the server coming up
+healthy against nothing — through a temporary `/preview` route mounting the
+**real** `BrowseDock`, `PageShell`, `ConsoleGround` and the page's own
+`browse-marks` glyphs, then deleted, plus the real `/manager/[username]` and
+`/lineupchecker/[username]` for everything above the fold. The mechanics are the
+ones this file records: `--no-proxy-server`, `localhost` rather than
+`127.0.0.1`, a phone viewport from `Emulation.setDeviceMetricsOverride` with
+`mobile: true`, `data-theme` **and** `localStorage` rather than
+`prefers-color-scheme`, `--disable-features=OverlayScrollbar`, the
+`--blink-settings=availablePointerTypes=4,…` flags built as a template literal,
+a **client-component** harness, a CDP client over Node's own `WebSocket` since
+Playwright is not installed here, and a fresh `--remote-debugging-port` per run.
+Two are this pass's own, and both cost a run: `pkill -f` matching the running
+command's own line kills the shell (exit 144, no output), and a dev server's
+generated `.next/dev/types/validator.ts` outlives a deleted route, so `typecheck`
+fails on a file nobody wrote until `.next` is cleared.
+
+Every value is the handoff's. The housing is `fixed`, `z-50`, **bottom 24 /
+right 24** at `sm` and up and **20 / 8** below, a row at `items-center` and a
+column at `items-stretch`, radius full and **26px** (1.625rem), padding **5px**,
+a 1px rim, `linear-gradient(rgba(150,200,205,0.14), rgba(10,20,22,0.16))`,
+`blur(5px) saturate(1.4)`, and the three shadow layers to the digit
+(`0 0 0 1px rgba(0,0,0,0.55)`, `0 14px 28px -8px rgba(0,0,0,0.8)`,
+`0 0 34px -6px` the accent glow). The channel is radius full / **22px**
+(1.375rem), padding **4px**, gap **7px** (0.4375rem) and **5px** (0.3125rem),
+over its own two insets. Both caps are **exactly 44px tall at both widths**,
+radius full, padding `0 14px`, gap 8px, `--fs-11` (12.76px at the desktop type
+scale, 12.54 at the phone's) with **2.0416px of tracking at `sm` and 1.7556px
+below** — the handoff's 0.16em/0.14em split — in IBM Plex Mono, uppercase, with
+`--cap-ink-emboss` on the legend and `--cap-glyph-emboss` as a filter on the
+glyph. The cap's shadow is ten layers: `--cap-accent-shadow`'s five and
+`--dock-cap-glow` last. Stacked, **both caps measure 157.03px** — the
+`items-stretch` claim — and justify `flex-start` so their glyphs line up in a
+column, against `center` in the row.
+
+**Both schemes turn over from the tokens alone**, with no light-mode block
+written in the component: the rim `rgba(0,255,229,0.2)` → `rgba(11,109,99,0.38)`,
+the fill's two stops → `rgba(255,255,255,0.52)` / `rgba(196,214,219,0.42)`, the
+channel `rgba(0,0,0,0.22)` → `rgba(15,23,42,0.1)` under a white lower lip, the
+casts slate, and the cap's ink `rgb(4,50,44)` → `rgb(244,255,253)`.
+
+The hide was driven as positions rather than as classes. It travels
+**translateY(88px)** at 1280 — 64px of housing plus the 24px offset, landing its
+top edge at exactly `innerHeight` — and **133px** at 390 (113 + 20), fully off
+screen in both, and returns to the identity matrix on the way up. Seven scroll
+arms land: a 5px push does nothing, 600 hides, a 3px bounce does nothing, 37 up
+returns it, down hides again, and a scroll into `scrollY < 24` stands it up
+whatever the direction. Hidden, **0 of its 2 buttons are reachable** (`inert`);
+shown, 2. A press moves `aria-expanded` to `["true","false"]`. With focus on a
+cap, a scroll to 900 leaves it at opacity 1 and still focused. Under
+`prefers-reduced-motion: reduce` its `transition-property` computes to `none` and
+a scroll down leaves it at opacity 1, transform identity and not inert.
+
+The parked arm was driven against the real stylesheet rule by writing
+`data-card-stage="parked"` onto the `<main>` the way `useActiveCard` does:
+`display` goes **flex → none → flex**. Sent away, parked and brought back, the
+dock returns **standing** — opacity 1, identity transform, not inert — which is
+the render-time reset. And a close that jumps the page **3,000px** leaves it at
+opacity 1, which is the null baseline doing its one job.
+
+On the real pages: `/manager` renders **zero** Browse groups in the rack and one
+dock inside `<main>`, its caps at tab positions 2 and 3 of 4. The rack's wordmark
+now draws at **1280, 390, 375 and 360** there, carrying a bare `inline-block`
+where it used to carry the gate — while `/lineupchecker` keeps
+`hidden min-[24.375rem]:inline-block` and still drops its legend at 375 and 360.
+So the handoff's question about that rule is answered by leaving it alone: it
+fires for the two pages that still publish controls and no longer fires for the
+one that does not, which is the whole of the change up there. The rack is one row
+at every width and **50px tall at 390** on `/manager` — its no-track arm, the 77px
+Browse channel having gone. At 1280 and 390 in both schemes:
+`document.documentElement.scrollWidth` equal to the client width, **zero**
+elements painted past it that an ancestor does not clip, exactly one `<h1>`, the
+dock clear of the rack, and **no console output of any kind**.
+
+2,391 unit tests pass (ten more, all `dockScroll`'s — the two jitter arms, the
+drift that accumulates through them, the floor in both directions, the eaten
+first event, and the identity return that lets the caller skip a render of a
+hundred cards); `lint`, `typecheck` and `build` are clean.
+
+**Not verified against real data**, which is the gap to close first: no database
+was reachable from here, so every page the dock was driven over was an error
+card or a fixture grid. Four things a render cannot check — whether the blur is
+short enough that a real league card stays legible through it, which is the one
+claim the whole material rests on and the one no empty page can show; whether
+the dock sitting over the bottom-right of the last card is felt, since
+hide-on-scroll means it is away exactly when a reader is at the foot of the
+list; whether a hundred cards' worth of scroll on a real account keeps the 6px
+floor from reading as lag; and whether readers find two keys at the bottom-right
+as readily as they found them in the rack, which is the one question only the
+first real page answers.
+
 ### The rank is the reading, and the denominator is the config window's
 
 `formatRank` prints `2nd`, not `2nd of 12`. A tile takes an equal quarter of a
