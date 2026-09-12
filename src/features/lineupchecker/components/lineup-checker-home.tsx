@@ -24,6 +24,7 @@ import {
   NO_SUBJECTS,
   PLATE_KEY,
   removeSubject,
+  storeLeagueFilters,
   subjectCount,
   WeekSharesDrawer,
   SubjectTokens,
@@ -37,6 +38,7 @@ import {
   type WeekShareSide,
   useManagerLeagues,
   useActiveCard,
+  useLeagueFilters,
   usePublishRackControls,
   useSummaryReadings,
   useUrlParam,
@@ -229,7 +231,12 @@ function Checker({
   // the check for every league on the account.
   const cold = leagues.length === 0 && refreshing;
 
-  const [filters, setFilters] = useState(DEFAULT_LEAGUE_FILTERS);
+  // **The selection is the device's, shared with `/manager` and `/gametime`**
+  // and outliving the visit: the three tools list one account's leagues, so a
+  // reader who narrows to their dynasty leagues on one has narrowed them on all
+  // three. See `features/shared/league-filters-store`.
+  const filters = useLeagueFilters();
+  const setFilters = storeLeagueFilters;
   // The drawers' half of the narrowing, on `LeaguesHome`'s terms. `opened` is a
   // latch rather than the open flag: a picked subject keeps narrowing the grid
   // after its drawer closes, and both panels keep their own search and scroll

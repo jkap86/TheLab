@@ -2547,11 +2547,11 @@ The per-rule count is what that rule *alone* leaves — the answer to "is this t
 rule that emptied my list", which a running total cannot give once there are
 three.
 
-**The selection is per-manager and unpersisted**, on `LeagueTeams`' terms: it is
-a way of reading this list, not a device preference, so it is `useState` rather
-than a `local-store` wrapper. The reset when the manager changes happens
-*during render*, the idiom `useManagerLeagues` documents — an effect would paint
-one frame of the new manager's leagues under the old manager's filters.
+**The selection was per-manager and unpersisted** — "a way of reading this list,
+not a device preference", so `useState` rather than a `local-store` wrapper, and
+reset during render when the manager changed. **Superseded: it is the device's
+now, shared by three tools and outliving the session.** See The selection is the
+device's, below, which is also where the reset went.
 
 Two things on the page must keep reading the **unfiltered** array: `cold`, which
 decides whether the page is a progress bar, and the gate on `useManagerLineups`.
@@ -2566,6 +2566,170 @@ text.** TheLabX draws an already-added quick-add dimmed at `text-active/40`,
 which is ~2:1 on light mode's teal. Here an added preset is drawn *lit* instead
 — the same treatment the rails give a chosen option, which is also a no-op to
 press again, and which has the advantage of being true.
+
+### The selection is the device's
+
+Four pages built league filters and every one of them threw the selection away:
+`/manager`, `/lineupchecker` and `/gametime` each held their own `useState`, so
+walking between three tools that list **the same leagues** meant narrowing three
+times, and `/manager` cleared its filters when the manager changed. A reload
+cleared all four. The selection lives in `local-store` now —
+`features/shared/league-filters-store` — and nothing on the wire moved: no route,
+no query, no contract type, no payload field, no migration.
+
+**Two keys, and the split is which leagues the question is about.** The three
+manager-scoped tools list one account's leagues, so they share one value on
+`summary-readings.ts`' own terms: three tools over one object, and a narrowing
+that held on one and not the next is the drift the convergence passes removed,
+one setting deep. **`/trades` is a different question wearing the same
+vocabulary** and owns its own key. Its leagues are every league in the corpus
+that traded this season rather than anybody's account, so "my dynasty leagues" is
+not a narrowing it can be asked for; and its filters *cross the wire* as a league
+scope, where the other three narrow a list already in hand — so one key would let
+a press on `/manager` silently re-page a scrolled keyset walk on a board the
+reader is not looking at. What the two stores share is the mechanism and nothing
+else.
+
+**Neither key is the manager's**, which is what reverses `leagues-home.tsx`'s
+render-time reset. A selection is a vocabulary — dynasty, superflex, a trade
+deadline — and it means the same thing of anybody's leagues, so walking to a
+second account keeps the question and changes the answer. The three subject
+halves still reset, because a player id narrows *rosters* and names nobody on the
+next account; and writing the store during render would be a side effect there
+anyway. An account with no league matching the carried selection is not a
+silence: `narrowedEmptyState`'s filters arm names what narrowed and offers the
+key that undoes it.
+
+**`setFilters` is the store's write**, module-level rather than a `useCallback`,
+on `toggleSummaryReadings`' terms — it is handed straight to the dialog as
+`onChange` and to the `Clear` key beside it, and every existing call site already
+passed a value rather than an updater. It also keeps `LeagueFiltersDialog`'s
+`memo` holding, which that component's note depends on: its props are now a store
+read memoized on its raw string and a module-level write, both identity-stable,
+where they were state and a state setter.
+
+**The dialog's draft is what makes the selection safe to persist**, and it was
+already right. `local-store` reads null for the hydration render, so
+`useLeagueFilters` answers the neutral selection for one render and the stored one
+after it — and the dialog **seeds its draft on open** rather than syncing it, so
+the `useState` seeding it is a draft nobody can reach and a reader pressing the
+key gets the stored value. A draft seeded once and never re-seeded would commit
+that first render's defaults over whatever the device held, with nothing on screen
+saying so. The note in that file now says this, because the line it depends on was
+written for a different reason (an edit discarded by an upstream re-render) and
+reversing it would break the store invisibly.
+
+**`normalizeLeagueFilters` is the rule a stored value is held to**, applied on
+write as well as read so the two ends cannot disagree, and living in
+`league-filters/` rather than beside the store because what it decides is a fact
+about the *vocabulary* — the seventh concern in that folder's own split — and
+because keeping it free of React is what lets Node's runner drive it. Four
+decisions carry it:
+
+- **The recovery is per field, not per selection.** A bad `type` costs the type
+  rail and nothing else. Throwing the selection away on one stale field would
+  turn one bad rule into a reader losing the four they had built beside it.
+- **A rule this build cannot evaluate is dropped rather than kept**, which is the
+  decision the module turns on. Every predicate fails *closed*: `compare` falls
+  through its switch on an op outside `COMPARE_OPS`, `slotCount` answers null for
+  a group it does not know, and `compare` against `NaN` is false on every op — so
+  a rule this build cannot read matches **no league at all**, and keeping one
+  would empty the grid for the life of the stored value, under a chip nothing but
+  `Clear` could undo. Dropping it widens the selection by one rule, which the
+  trigger's count and the summary sentence both state honestly, being derived from
+  the same list.
+- **The three lists validate their keys differently, and the asymmetry is the
+  point.** Slot keys are a **closed** vocabulary — `SLOT_GROUP_BY_KEY` is the whole
+  of what `slotCount` can count — so an unknown group is exactly that
+  empties-the-grid case. Settings and scoring keys are **open**: both menus are
+  built from the keys the leagues in hand actually carry, and `storedSetting` and
+  `scoringValue` read an unranked key perfectly well, so checking those against a
+  table would throw away a house rule somebody deliberately asked about.
+- **The fixed filters are validated by walking `FIXED_FILTERS`** rather than
+  restating the two unions — the walk `activeFilters` and `clearFilter` already
+  take, and for its reason: an option added to a rail is storable with no second
+  edit, and a value no rail can render can never be read back out.
+
+**One gate was added and it is `useTradeDataStamp`'s argument one input over.**
+`resolveLeagueScope` answers `all` for a population that has not loaded —
+deliberately, since `include: []` would blank the board for the beat before the
+leagues arrive — so a reader whose narrowing is *stored* rather than pressed had a
+request that was honest and wrong the moment the page hydrated: it fetched the
+unnarrowed page one, painted trades from leagues they had filtered out, and
+re-fetched when the list landed. `scopeReady` waits that out, and only where the
+wait buys something: with nothing narrowed the scope is `all` either way, so the
+common case pays nothing, and `useTradeLeagues`' `loading` settles on a failure as
+well as an answer, so a leagues read that fails leaves the board unnarrowed with
+its own error beside it — that hook's documented degradation — rather than hanging
+on a list that is never coming. The three list pages need no gate at all: a filter
+there narrows a list the browser already holds, and no request names it.
+
+#### Verified
+
+Driven over CDP against `next dev` with no `DATABASE_URL` — the boot hook skips
+migrations and the four loops log their refusals, which is the server coming up
+healthy against nothing — through a temporary `/preview` route mounting the
+**real** `LeagueFiltersDialog` over the **real** store against four fixture
+leagues, then deleted. Three panes: two on the shared key, standing in for
+`/manager` and `/gametime`, and one on the trades key. The mechanics are the ones
+this file records: `--no-proxy-server`, `localhost` rather than `127.0.0.1`,
+`--disable-features=OverlayScrollbar`, the
+`--blink-settings=availablePointerTypes=4,…` flags, a **client-component**
+harness, a CDP client over Node's own `WebSocket` since Playwright is not in this
+project's `node_modules`, and a fresh `--remote-debugging-port` per run.
+
+**21 of 21 checks passed**, and the three that failed first were the harness
+rather than the code — worth writing down, because each is a thing a driver gets
+wrong about this UI: a rail's option button reads `Dynasty2`, label **plus its
+cross-tab count**, so an exact-text match finds nothing; `COMPARE_OPS` renders
+`≥` and not `>=`, so a summary compared against the ASCII spelling never matches;
+and a `Clear` key on screen may belong to **another pane**, so a count of them is
+not an assertion about the one under test.
+
+Every arm landed. A clean device drew 4 / 4 on all three panes with both keys
+`null` and no `Clear` key anywhere. Applying `Dynasty` through the real dialog
+narrowed the pane that applied it to **2 / 4** (`Dynasty One`, `Dynasty Two`),
+narrowed **the other shared-key pane** to 2 / 4 reading `dynasty`, left the trades
+pane at 4 / 4 with its key still `null`, and wrote `{"type":"2",…}`. A **full
+reload** brought both shared panes back at 2 / 4 with the `Clear` key raised on
+those two and not on trades. Re-opening the dialog after that reload showed
+**`Dynasty` lit and `All types` not** — the draft seeding from the stored value —
+and `Apply` with no edit left the store intact rather than committing the
+hydration render's defaults, which is the failure that note exists for. The trades
+pane then narrowed to **1 / 4** on `best ball` under its own key with the shared
+panes unmoved at 2 / 4, and a second reload brought **both back, each its own**
+(shared 2 / 4, trades 1 / 4). `Clear` restored 4 / 4 on both shared panes, wrote
+the neutral selection rather than deleting the key, and left the trades selection
+alone.
+
+The hostile-value arms are the normalizer end to end. A stored value carrying a
+`type` of `"9"`, a `bestBall` of `"maybe"`, an unknown slot group beside a real
+one, a valid settings rule and a `scoring` that is not a list came back as
+`teams ≥ 12 · qb ≥ 1` over **4 / 4** — every bad field recovered on its own, the
+two good rules kept, and **no emptied grid**. `"{not json"` read as the neutral
+selection with no `Clear` key on that pane.
+
+No horizontal overflow, one `<h1>`, and **no console output** on `/preview` beyond
+the dev server's own HMR line — no hydration mismatch, no React warning about the
+store. `/trades`, `/manager/[username]`, `/lineupchecker/[username]`,
+`/gametime/[username]` and `/tools` all answer 200, their own console noise being
+the sandbox's 403 to `api.sleeper.app` and the 500/502s of a page with no
+database. 2,388 unit tests pass (seven more — the round trip, a value that is not
+a selection, per-field recovery, the nine shapes of unevaluable rule, the
+open-vs-closed key asymmetry, a rule rebuilt to three fields, and every rail
+option being storable); `lint`, `typecheck` and `build` are clean.
+
+**Not verified against real data**, which is the gap to close first: the fixtures
+are four invented leagues and no database was reachable from here. Four things a
+render cannot check — whether a selection carried from one account to another is
+*wanted* as often as it is correct, which is the one judgement this change makes
+on the reader's behalf and only a reader settles; what a stored narrowing costs
+the trades board on a real corpus, since `scopeReady` now holds page one until the
+leagues list lands and nothing has measured how long that is; whether a stored
+scoring or settings key that no league on a second account carries reads as an
+honest empty grid or as a fault, which is the case the carried selection makes
+newly reachable; and whether two keys is the split a reader expects, since
+nothing on either page says the trades board narrows separately.
 
 ## Shares and leaguemates
 

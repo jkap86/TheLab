@@ -10,12 +10,14 @@ import {
   LeagueFiltersDialog,
   activeFilterCount,
   filterSummary,
+  storeTradeLeagueFilters,
   storeTradeValueBasis,
   useActiveCard,
   useKtcBoard,
   useTeamsColumn,
   useStoredAccount,
   useTradeDataStamp,
+  useTradeLeagueFilters,
   useTradeValueBasis,
 } from "@/features/shared";
 
@@ -78,13 +80,24 @@ export function TradesHome({
   // before they did — see `features/shared/trade-freshness` for why the two
   // routes keep their cache headers and this rides the URL instead.
   const { stamp, resolved: stampResolved } = useTradeDataStamp();
-  const { leagues, byId, error: leaguesError } = useTradeLeagues(
-    season,
-    stamp,
-    stampResolved,
-  );
+  const {
+    leagues,
+    byId,
+    loading: leaguesLoading,
+    error: leaguesError,
+  } = useTradeLeagues(season, stamp, stampResolved);
 
-  const [leagueFilters, setLeagueFilters] = useState(DEFAULT_LEAGUE_FILTERS);
+  // **The league narrowing is the device's and outlives the visit**, on its own
+  // key rather than the one the three manager-scoped tools share: this board's
+  // leagues are every league in the corpus that traded this season rather than
+  // anybody's account, and its filters cross the wire as a league scope where
+  // theirs narrow a list already in hand. See
+  // `features/shared/league-filters-store`. Nothing has to be gated for it — the
+  // paging hook already waits on `stampResolved`, which flips on the same
+  // post-hydration render the stored selection lands on, so the first page
+  // fetched is the narrowed one.
+  const leagueFilters = useTradeLeagueFilters();
+  const setLeagueFilters = storeTradeLeagueFilters;
   const [filters, setFilters] = useState<TradeFilters>(DEFAULT_TRADE_FILTERS);
   const [seek, setSeek] = useState<TradeSeek>(DEFAULT_TRADE_SEEK);
   const [searchOpen, setSearchOpen] = useState(false);
@@ -110,6 +123,27 @@ export function TradesHome({
   const teamsColumn = useTeamsColumn();
 
   const narrowingLeagues = activeFilterCount(leagueFilters) > 0;
+  /**
+   * Whether the scope this request would carry is the one the reader asked for.
+   *
+   * `resolveLeagueScope` answers `all` for a population that has not loaded —
+   * deliberately, since `include: []` would blank the board for the beat before
+   * the leagues arrive — so a reader whose narrowing is **stored** rather than
+   * pressed has a request that is honest and wrong the moment the page hydrates:
+   * it fetches the unnarrowed page one, paints trades from leagues they have
+   * filtered out, and re-fetches when the list lands. That is
+   * `useTradeDataStamp`'s own argument one input over, and it waits the same way
+   * — a round trip it is about to throw away, and this one shows the reader the
+   * wrong rows on the way.
+   *
+   * It waits only where the wait buys something. With nothing narrowed the scope
+   * is `all` whether or not the leagues are in, so the common case pays nothing;
+   * and `loading` settles on a failure as well as an answer, so a leagues read
+   * that fails leaves the board unnarrowed with its own error beside it — that
+   * hook's documented degradation — rather than hanging on a list that is never
+   * coming.
+   */
+  const scopeReady = !narrowingLeagues || !leaguesLoading;
 
   // The request is memoised because it is the paging hook's input and the
   // subject key is derived from it; rebuilding it per render is fine, but the
@@ -150,7 +184,9 @@ export function TradesHome({
     retry,
     error,
     loadMoreError,
-  } = useTrades(request, requestKey, { enabled: stampResolved });
+  } = useTrades(request, requestKey, {
+    enabled: stampResolved && scopeReady,
+  });
 
   // Names come off whatever the board has loaded; a facet can name a player no
   // loaded page does, which is why the panel merges its own `names` in. The id

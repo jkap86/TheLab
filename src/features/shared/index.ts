@@ -111,6 +111,14 @@ export * from "./league-filters";
 // `ManagerPlate` moved on. Only the dialog is exported: the rails, bays and
 // rows are its own parts, on the folder rule the header above states.
 export { LeagueFiltersDialog } from "./league-filters-dialog/league-filters-dialog";
+// Where a selection is kept. Two keys: one the three manager-scoped tools share,
+// one the trades board owns. See the module for why that is two and not one.
+export {
+  storeLeagueFilters,
+  storeTradeLeagueFilters,
+  useLeagueFilters,
+  useTradeLeagueFilters,
+} from "./league-filters-store";
 export {
   adpBoardLabel,
   column,

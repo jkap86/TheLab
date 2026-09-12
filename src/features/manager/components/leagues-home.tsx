@@ -32,6 +32,7 @@ import {
   removeSubject,
   setSubjectMode,
   shortName,
+  storeLeagueFilters,
   SubjectTokens,
   toggleSubject,
   type LeagueSubjects,
@@ -42,6 +43,7 @@ import {
   invalidateLeagueLineups,
   useActiveCard,
   useKtcBoard,
+  useLeagueFilters,
   useLineupColumns,
   useSummaryReadings,
   toggleSummaryReadings,
@@ -185,12 +187,16 @@ export function LeaguesHome({
   // for every league on the account.
   const cold = leagues.length === 0 && refreshing;
 
-  // **The selection is per-manager and unpersisted** — a way of reading this
-  // list, not a device preference. The reset happens during render rather than
-  // in an effect, the idiom `useManagerLeagues` documents: an effect would
-  // paint one frame of the new manager's leagues under the old manager's
-  // filters.
-  const [filters, setFilters] = useState(DEFAULT_LEAGUE_FILTERS);
+  // **The selection is the device's and outlives both the page and the
+  // manager**, which reverses what this file used to say — it was per-manager
+  // and unpersisted, "a way of reading this list, not a device preference". It
+  // is both: a reader who has narrowed to their dynasty leagues is asking the
+  // same question of `/lineupchecker` and of tomorrow's visit, so the store is
+  // where it lives and `setFilters` is the write. See
+  // `features/shared/league-filters-store` for the two keys and why the trades
+  // board owns the other one.
+  const filters = useLeagueFilters();
+  const setFilters = storeLeagueFilters;
   // The drawers' half of the narrowing, on the same terms. `opened` is a latch
   // rather than the open flag: a picked subject keeps narrowing the grid after
   // its drawer closes, and the predicate still needs the map behind it.
@@ -202,10 +208,13 @@ export function LeaguesHome({
   const [renderedSubject, setRenderedSubject] = useState(subject);
   if (renderedSubject !== subject) {
     setRenderedSubject(subject);
-    setFilters(DEFAULT_LEAGUE_FILTERS);
-    // All four reset together: a subject picked for one manager narrows nothing
-    // on the next, and a latch carried over would fetch the new manager's maps
-    // before anyone asked to see them.
+    // The three subject halves reset together: a subject picked for one manager
+    // narrows nothing on the next, and a latch carried over would fetch the new
+    // manager's maps before anyone asked to see them. **The league filters
+    // deliberately do not** — they are a vocabulary rather than a pick, and
+    // `dynasty` means the same thing of anybody's leagues, so walking to a
+    // second account keeps the question and changes the answer. Writing the
+    // store here would also be a side effect during render.
     setSubjects(NO_SUBJECTS);
     setDrawer(null);
     setOpened(new Set());
