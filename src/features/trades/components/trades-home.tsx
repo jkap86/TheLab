@@ -12,8 +12,10 @@ import {
   filterSummary,
   storeTradeLeagueFilters,
   storeTradeValueBasis,
+  toggleSummaryReadings,
   useActiveCard,
   useKtcBoard,
+  useSummaryReadings,
   useTeamsColumn,
   useStoredAccount,
   useTradeDataStamp,
@@ -223,6 +225,14 @@ export function TradesHome({
     [data],
   );
   const card = useActiveCard({ param: "trade", ids, listRef });
+  // Whether an open card keeps its two hauls on screen — one boolean per
+  // device, shared with the manager card's `Ranks` key and the lineup
+  // checker's `Checks`, so a reader who asked for the readings on one tool
+  // finds them on the next. Composed with `open` per card below rather than
+  // handed over as itself: a flip then moves one prop on the one card that is
+  // open rather than dropping `TradeCard`'s memo for every row this board has
+  // loaded. See `useSummaryReadings`.
+  const readingsShown = useSummaryReadings();
 
   return (
     // The page sits on the ground the route renders rather than on a panel of
@@ -412,6 +422,12 @@ export function TradesHome({
           basis={basis}
           board={ktcBoard}
           teamsColumn={teamsColumn}
+          summaryFolded={(id) => card.isOpen(id) && !readingsShown}
+          // The store's own module-level function, never a `useCallback` over
+          // the current value — that would be a new identity on every toggle
+          // and every card on the board re-rendered to move the one that is
+          // open. See `toggleSummaryReadings`.
+          onToggleReadings={toggleSummaryReadings}
           // The page's own season, and the stored account read once here rather
           // than by each of hundreds of memo'd cards — `TradeCard` carries the
           // rule. An opened card solves and rewinds the league it names, and

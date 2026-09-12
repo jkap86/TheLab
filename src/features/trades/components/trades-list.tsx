@@ -65,6 +65,8 @@ export function TradesList({
   teamsColumn,
   season,
   username,
+  summaryFolded,
+  onToggleReadings,
   hasMore,
   loadingMore,
   loadMoreError,
@@ -107,6 +109,20 @@ export function TradesList({
    */
   season: string;
   username: string | null;
+  /**
+   * Whether an open card's two hauls are folded away, and the press that
+   * brings them back.
+   *
+   * Composed at the page rather than here, and per card: `isOpen(id) &&
+   * !readingsShown` is false for every row but the one that is open, so a
+   * reader flipping the preference re-renders that card and nothing else. Read
+   * as itself it would be one boolean changing on every loaded row — the
+   * subscription `basis` and `board` are threaded to avoid, arrived at from
+   * the other direction. See `useSummaryReadings`.
+   */
+  summaryFolded: (id: string) => boolean;
+  /** The `Assets` key's press — a module-level function, so the memo holds. */
+  onToggleReadings: () => void;
   hasMore: boolean;
   loadingMore: boolean;
   /** A later page failed. The cards above it stay exactly as they are. */
@@ -168,6 +184,8 @@ export function TradesList({
               open={card.isOpen(trade.transaction_id)}
               lit={card.isLit(trade.transaction_id)}
               onToggle={card.toggle}
+              summaryFolded={summaryFolded(trade.transaction_id)}
+              onToggleReadings={onToggleReadings}
             />
           ))}
         </ValueLensProvider>
