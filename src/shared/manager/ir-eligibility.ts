@@ -145,12 +145,18 @@ export function irEligible(
  * off the board first, since that is the name every other row on the card
  * prints, then the map, then null — never the id, which the tile falls back to
  * itself.
+ *
+ * `locked` is the week's lock set, the one `priceRoster` stamps every seat and
+ * bench row with, and it rides each judged player rather than narrowing the
+ * lists here: a locked player's designation is still what it is, and which
+ * moves that lock rules out is the client's arithmetic to make.
  */
 export function irReading(
   ids: RosterIds,
   settings: Record<string, unknown> | null,
   statuses: PlayerStatusMap | null,
   board: Readonly<Record<string, { name: string | null } | undefined>>,
+  locked: ReadonlySet<string>,
 ): LineupCheckIr | null {
   const allowed = irAllowedStatuses(settings);
   if (allowed === null || statuses === null) return null;
@@ -166,6 +172,7 @@ export function irReading(
       name: board[id]?.name ?? row?.name ?? null,
       status,
       eligible: row ? irEligible(status, allowed) : null,
+      locked: locked.has(id),
     };
   };
 

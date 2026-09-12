@@ -5944,11 +5944,22 @@ the tile answers what it knows and says how many it could not. The one place
 this does not apply is a league with no IR slots at all, which has nothing to
 have checked and says nothing.
 
+**A locked player is not a stash.** An admitted player whose game has kicked
+off is a move Sleeper would refuse this week, so `irMoves` leaves him out of
+the candidates — the wire's `stashable` still lists him, with `locked` on the
+player, because his designation is what it is and which moves a lock rules out
+is the client's arithmetic to make, beside `off`, `free` and `stash`. It is the
+same lock `LineupCheckPlayer.locked` carries, for the week on screen, so a seat
+row reading `locked` and a tile offering that seat as `1 to IR` cannot happen.
+What the tile says instead is the room: `Full` with "1 IR-eligible player
+locked this week" in its title, rather than a `Full` that reads as nothing to
+do beside an empty slot and an `Out` starter.
+
 **`IR`, `off IR` and `→ IR` on the rows**, off `irMarkFor`: every candidate
 wears the move once any slot is free — the chip says *eligible*, which is true
 of each, and which one goes is the reader's call — and none wears it with no
-slot free, because a chip offering a move Sleeper would refuse is the claim the
-check exists to stop making. The reader's rows alone: the opponent's reserve is
+slot free or with his game under way, because a chip offering a move Sleeper
+would refuse is the claim the check exists to stop making. The reader's rows alone: the opponent's reserve is
 not on the wire, and a move only the reader makes is not a mark for somebody
 else's roster. One grain to know about: the reading is the live roster's and
 the rows are the week's, so on a stepped past week a starter can wear `IR`
@@ -5957,7 +5968,7 @@ because he is on IR *today*.
 #### Verified
 
 Under Node's own runner, since no database is reachable from where this was
-built: 2,467 unit tests pass, 46 of them new. The rule's every arm — each
+built: 2,472 unit tests pass, 51 of them new. The rule's every arm — each
 toggle on and off, the two always-admitted designations, `Questionable` under
 every toggle, healthy, an unknown spelling, a case variant; the fold's edge
 cases — padding and a repeated id counting once and the same as `ir_count`, a
@@ -5967,9 +5978,9 @@ and every tile arm — the overflow as a move, the IR move leading a roster
 overage with the drop in its title, a healthy player named with the drop he
 forces, the swap, the stash and the spot it opens, more eligible than slots,
 the stash offered before the drop, the larger of ineligible and overflow, the
-stash capped by the room, `Full` kept under a null reading with its caveat and
-without one where there are no slots, unread statuses counted, taxi keeping its
-own arm. `irMoves` and `irMarkFor` are pinned separately, and an IR move counts
+stash capped by the room, a locked candidate left out with the room named in
+the title, `Full` kept under a null reading with its caveat and without one
+where there are no slots, unread statuses counted, taxi keeping its own arm. `irMoves` and `irMarkFor` are pinned separately, and an IR move counts
 under the `Roster slots` reason with the four-key `deepEqual`s untouched.
 `lint`, `typecheck` and `build` are clean.
 

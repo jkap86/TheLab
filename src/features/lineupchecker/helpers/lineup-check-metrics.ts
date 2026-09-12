@@ -330,6 +330,12 @@ export function superflexCell(
  *   ineligible one *is* the overflow, moving him fixes both.
  * - **`free`** is the slots open once they have, floored at zero: `ir_max` less
  *   what is still parked.
+ * - **`candidates`** are the stashable players whose game has not kicked off.
+ *   A locked player is not a move anybody can make this week, and a tile
+ *   offering one is the claim the whole check exists to stop making — so the
+ *   lock rules him out here, where the moves are made, and the wire's list
+ *   stays what the rules say. `lockedOut` counts them so the title can say
+ *   the room is there and the move is not.
  * - **`stash`** is how many of the candidates there is room for. Every
  *   candidate is a true fact about a designation (see the contract), so the
  *   list is not trimmed to the room; `stash` is.
@@ -354,9 +360,11 @@ export type IrMoves = {
   off: number;
   /** IR slots free once they have; never negative. */
   free: number;
-  /** Active players the league admits on IR; empty when unchecked. */
+  /** Active players the league admits on IR whose game has not kicked off; empty when unchecked. */
   candidates: LineupCheckIrPlayer[];
-  /** How many of them there is room for. */
+  /** Admitted players left out of `candidates` because their game has kicked off. */
+  lockedOut: number;
+  /** How many of the candidates there is room for. */
   stash: number;
   /** The active roster once `off` are activated and `stash` are parked. */
   after: number;
@@ -373,7 +381,8 @@ export function irMoves(league: LineupCheckLeague): IrMoves | null {
   const overflow = Math.max(0, league.ir_count - league.ir_max);
   const off = Math.max(ineligible.length, overflow);
   const free = Math.max(0, league.ir_max - (league.ir_count - off));
-  const candidates = reading?.stashable ?? [];
+  const stashable = reading?.stashable ?? [];
+  const candidates = stashable.filter((player) => !player.locked);
   const stash = Math.min(free, candidates.length);
 
   return {
@@ -383,6 +392,7 @@ export function irMoves(league: LineupCheckLeague): IrMoves | null {
     off,
     free,
     candidates,
+    lockedOut: stashable.length - candidates.length,
     stash,
     after: league.roster_count + off - stash,
     unknown: reading?.unknown ?? 0,
@@ -401,8 +411,9 @@ export type IrMark = "off" | "on" | "to";
  * **Every candidate is marked once any slot is free**, not the first `stash`
  * of them: the chip says *eligible*, which is true of each, and which one goes
  * is the reader's call — the tile's title is what says how many can. With no
- * slot free no candidate is marked, because a chip offering a move Sleeper
- * would refuse is the claim this whole check exists to stop making.
+ * slot free no candidate is marked, and a locked player is not a candidate at
+ * all, because a chip offering a move Sleeper would refuse is the claim this
+ * whole check exists to stop making.
  */
 export function irMarkFor(
   playerId: string,
@@ -481,7 +492,14 @@ export function rosterCell(
 
   const moves = irMoves(league);
   const caveat = irCaveat(league, moves);
-  const now = `Now ${held} filled${rest}${caveat}`;
+  // An admitted player whose game has started is room the reader cannot use
+  // this week; said once, wherever the tile lands, so a `Full` beside an empty
+  // IR slot and an `Out` starter does not read as nothing to do.
+  const lockedOut =
+    moves && moves.lockedOut > 0
+      ? `. ${moves.lockedOut} IR-eligible player${moves.lockedOut === 1 ? "" : "s"} locked this week`
+      : "";
+  const now = `Now ${held} filled${rest}${lockedOut}${caveat}`;
 
   if (moves && moves.off > 0) {
     const overflow = Math.max(0, league.ir_count - (league.ir_max ?? 0));
@@ -543,7 +561,7 @@ export function rosterCell(
       state: "alert",
       title:
         `${held} filled — ${over} over the limit, and Sleeper will refuse an add ` +
-        `until somebody is dropped${rest}${caveat}`,
+        `until somebody is dropped${rest}${lockedOut}${caveat}`,
     };
   }
 
@@ -564,7 +582,7 @@ export function rosterCell(
       state: "alert",
       title:
         `Taxi is over its own allowance — ${over} must come off. ` +
-        `${held} filled${rest}${caveat}`,
+        `${held} filled${rest}${lockedOut}${caveat}`,
     };
   }
 
@@ -583,7 +601,7 @@ export function rosterCell(
       // stays open. The `count` state stays in the union for the tone a future
       // figure-that-is-not-a-fault would want.
       state: "alert",
-      title: `${open} roster spot${open === 1 ? "" : "s"} open — ${held} filled${rest}${caveat}`,
+      title: `${open} roster spot${open === 1 ? "" : "s"} open — ${held} filled${rest}${lockedOut}${caveat}`,
     };
   }
 
@@ -593,7 +611,7 @@ export function rosterCell(
     unit: "full",
     scope,
     state: "clear",
-    title: `Every roster spot is filled — ${held}${rest}${caveat}`,
+    title: `Every roster spot is filled — ${held}${rest}${lockedOut}${caveat}`,
   };
 }
 

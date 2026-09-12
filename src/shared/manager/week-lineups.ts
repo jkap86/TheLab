@@ -253,7 +253,7 @@ export function solveWeekLineup(
     lineup,
     bench,
     ...rosterCensus(live, league.settings, positions),
-    ir: irReading(live, league.settings, statuses, board),
+    ir: irReading(live, league.settings, statuses, board, locked),
     unknown_slots: comparison.unknown_slots,
   };
 }

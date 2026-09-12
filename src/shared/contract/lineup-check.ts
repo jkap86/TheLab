@@ -76,6 +76,13 @@ export type LineupCheckIrPlayer = {
    * — and is never read as either answer.
    */
   eligible: boolean | null;
+  /**
+   * His game has kicked off — the same lock {@link LineupCheckPlayer.locked}
+   * carries, for the week on screen. A locked player is not a move anybody
+   * can make, so he is never offered as a stash; the eligibility beside it is
+   * still a fact about his designation and is kept as one.
+   */
+  locked: boolean;
 };
 
 /**
@@ -92,7 +99,9 @@ export type LineupCheckIr = {
   reserve: LineupCheckIrPlayer[];
   /**
    * Active players — not on IR, not on taxi — whose designation the league
-   * admits on IR. Every one of them, whether or not there is a slot free.
+   * admits on IR. Every one of them, whether or not there is a slot free and
+   * whether or not his game has kicked off: the list is what the rules say,
+   * and the client's `irMoves` is what leaves the locked ones out.
    */
   stashable: LineupCheckIrPlayer[];
   /**

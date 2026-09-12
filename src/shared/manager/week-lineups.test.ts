@@ -612,6 +612,24 @@ describe("solveWeekLineup and IR eligibility", () => {
     assert.equal(solved?.ir?.reserve[0].name, "FLEXHIGH");
   });
 
+  test("a locked candidate is still listed, and says he is locked", () => {
+    const solved = solveWeekLineup(
+      league({
+        roster_positions: IR_SLOTS,
+        settings: { reserve_allow_out: 1 },
+        reserve: ["flexhigh"],
+      }),
+      board(),
+      new Set(["flexlow"]),
+      null,
+      STATUSES,
+    );
+    assert.deepEqual(
+      solved?.ir?.stashable.map((player) => [player.player_id, player.locked]),
+      [["flexlow", true]],
+    );
+  });
+
   test("a healthy player on IR is named ineligible", () => {
     const solved = solveWeekLineup(
       league({ roster_positions: IR_SLOTS, settings: {}, reserve: ["nobody"] }),

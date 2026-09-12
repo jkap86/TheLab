@@ -51,8 +51,9 @@ function irPlayer(
   status: string | null,
   eligible: boolean | null,
   name: string | null = id.toUpperCase(),
+  locked = false,
 ): LineupCheckIrPlayer {
-  return { player_id: id, name, status, eligible };
+  return { player_id: id, name, status, eligible, locked };
 }
 
 /** A checked IR reading over the given lists. */
@@ -475,6 +476,40 @@ describe("rosterCell", () => {
     assert.match(cell.title, /IR eligibility could not be checked/);
   });
 
+  test("a locked player is not a stash, and the title says the room is there", () => {
+    // An `Out` starter whose game has kicked off is a move Sleeper would
+    // refuse this week, so the empty slot beside him is not `1 to IR` — but a
+    // `Full` that said nothing about him would read as nothing to do.
+    const cell = rosterCell(
+      league({
+        ir_count: 0,
+        ir_max: 1,
+        ir: ir({ stashable: [irPlayer("out", "Out", true, "OUT", true)] }),
+      }),
+    );
+    assert.equal(cell.text, "Full");
+    assert.equal(cell.state, "clear");
+    assert.match(cell.title, /1 IR-eligible player locked this week/);
+  });
+
+  test("an unlocked candidate is stashed and a locked one is counted beside him", () => {
+    const cell = rosterCell(
+      league({
+        ir_count: 0,
+        ir_max: 2,
+        ir: ir({
+          stashable: [
+            irPlayer("free", "Out", true),
+            irPlayer("gone", "Out", true, "GONE", true),
+          ],
+        }),
+      }),
+    );
+    assert.equal(cell.text, "1 to IR");
+    assert.match(cell.title, /1 player eligible: FREE \(Out\)/);
+    assert.match(cell.title, /1 IR-eligible player locked this week/);
+  });
+
   test("taxi over its own allowance keeps its own arm", () => {
     const cell = rosterCell(league({ taxi_count: 3, taxi_max: 1 }));
     assert.equal(cell.text, "2 over taxi");
@@ -637,6 +672,19 @@ describe("irMarkFor", () => {
       league({ ir_count: 1, ir_max: 1, ir: ir({ reserve: [irPlayer("hurt", "IR", true)], stashable: [irPlayer("out", "Out", true)] }) }),
     );
     assert.equal(irMarkFor("out", full), null);
+  });
+
+  test("a locked candidate wears nothing, whatever the room", () => {
+    const withLock = irMoves(
+      league({
+        ir_count: 0,
+        ir_max: 2,
+        ir: ir({ stashable: [irPlayer("out", "Out", true, "OUT", true), irPlayer("free", "Out", true)] }),
+      }),
+    );
+    assert.equal(irMarkFor("out", withLock), null);
+    assert.equal(irMarkFor("free", withLock), "to");
+    assert.equal(withLock?.lockedOut, 1);
   });
 
   test("anybody else, and any row with no reading, wears nothing", () => {

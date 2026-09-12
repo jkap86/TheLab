@@ -34,6 +34,7 @@ function statuses(over: PlayerStatusMap = {}): PlayerStatusMap {
 }
 
 const NO_BOARD = {};
+const NO_LOCKS = new Set<string>();
 
 describe("irAllowedStatuses", () => {
   test("no settings is no rule", () => {
@@ -99,11 +100,11 @@ describe("irEligible", () => {
 
 describe("irReading", () => {
   test("no settings is no reading", () => {
-    assert.equal(irReading(ids(), null, statuses(), NO_BOARD), null);
+    assert.equal(irReading(ids(), null, statuses(), NO_BOARD, NO_LOCKS), null);
   });
 
   test("a failed status read is no reading", () => {
-    assert.equal(irReading(ids(), OPEN_ONLY, null, NO_BOARD), null);
+    assert.equal(irReading(ids(), OPEN_ONLY, null, NO_BOARD, NO_LOCKS), null);
   });
 
   test("a healthy player on IR is judged ineligible and named", () => {
@@ -112,27 +113,28 @@ describe("irReading", () => {
       OPEN_ONLY,
       statuses(),
       NO_BOARD,
+      NO_LOCKS,
     )!;
     assert.deepEqual(reading.reserve, [
-      { player_id: "bench", name: "Bench Guy", status: null, eligible: false },
+      { player_id: "bench", name: "Bench Guy", status: null, eligible: false, locked: false },
     ]);
   });
 
   test("an eligible player on IR may stay", () => {
-    const reading = irReading(ids(), OPEN_ONLY, statuses(), NO_BOARD)!;
+    const reading = irReading(ids(), OPEN_ONLY, statuses(), NO_BOARD, NO_LOCKS)!;
     assert.equal(reading.reserve[0].eligible, true);
     assert.equal(reading.reserve[0].status, "IR");
   });
 
   test("stashable is the active roster the league admits — never taxi, never IR", () => {
-    const reading = irReading(ids(), OPEN_ONLY, statuses(), NO_BOARD)!;
+    const reading = irReading(ids(), OPEN_ONLY, statuses(), NO_BOARD, NO_LOCKS)!;
     assert.deepEqual(
       reading.stashable.map((player) => player.player_id),
       ["stash"],
     );
     // The same roster with the toggle off has nobody to stash: `Out` is the
     // only designation on it that a toggle decides.
-    assert.deepEqual(irReading(ids(), {}, statuses(), NO_BOARD)!.stashable, []);
+    assert.deepEqual(irReading(ids(), {}, statuses(), NO_BOARD, NO_LOCKS)!.stashable, []);
   });
 
   test("a player on both reserve and taxi is an IR player and not a stash", () => {
@@ -141,6 +143,7 @@ describe("irReading", () => {
       OPEN_ONLY,
       statuses(),
       NO_BOARD,
+      NO_LOCKS,
     )!;
     assert.deepEqual(
       reading.reserve.map((player) => player.player_id),
@@ -155,9 +158,10 @@ describe("irReading", () => {
       OPEN_ONLY,
       statuses(),
       NO_BOARD,
+      NO_LOCKS,
     )!;
     assert.deepEqual(reading.reserve, [
-      { player_id: "ghost", name: null, status: null, eligible: null },
+      { player_id: "ghost", name: null, status: null, eligible: null, locked: false },
     ]);
     assert.equal(reading.unknown, 1);
   });
@@ -168,6 +172,7 @@ describe("irReading", () => {
       OPEN_ONLY,
       statuses({ bench: { name: "Bench Guy", injury_status: "Emergency" } }),
       NO_BOARD,
+      NO_LOCKS,
     )!;
     assert.ok(!reading.stashable.some((player) => player.player_id === "bench"));
     assert.equal(reading.unknown, 1);
@@ -179,16 +184,28 @@ describe("irReading", () => {
       OPEN_ONLY,
       statuses(),
       { hurt: { name: "BOARD NAME" } },
+      NO_LOCKS,
     )!;
     assert.equal(reading.reserve[0].name, "BOARD NAME");
     assert.equal(reading.reserve[1].name, null);
   });
 
   test("an empty map is every player unknown, and still a reading", () => {
-    const reading = irReading(ids(), OPEN_ONLY, {}, NO_BOARD)!;
+    const reading = irReading(ids(), OPEN_ONLY, {}, NO_BOARD, NO_LOCKS)!;
     assert.notEqual(reading, null);
     assert.equal(reading.unknown, ids().held.length - ids().taxi.length);
     assert.deepEqual(reading.stashable, []);
+  });
+
+  test("the lock rides the player and narrows nothing here", () => {
+    // A locked candidate is still on the list with his designation — the
+    // client's `irMoves` is what leaves him out of the stash — so the fact and
+    // the rule that reads it stay in two places that cannot silently agree.
+    const reading = irReading(ids(), OPEN_ONLY, statuses(), NO_BOARD, new Set(["stash"]))!;
+    assert.deepEqual(
+      reading.stashable.map((player) => [player.player_id, player.locked]),
+      [["stash", true]],
+    );
   });
 
   test("the reserve list keeps Sleeper's own order", () => {
@@ -197,6 +214,7 @@ describe("irReading", () => {
       OPEN_ONLY,
       statuses(),
       NO_BOARD,
+      NO_LOCKS,
     )!;
     assert.deepEqual(
       reading.reserve.map((player) => player.player_id),
