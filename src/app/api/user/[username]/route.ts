@@ -1,8 +1,8 @@
 import { NextResponse } from "next/server";
 
+import { interactiveRoute } from "@/shared/api";
 import type { ApiErrorPayload } from "@/shared/contract";
 import { resolveManagerUser, toUserInfo } from "@/shared/user";
-import { withInteractiveSleeper } from "@/shared/sleeper";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -18,10 +18,11 @@ export async function GET(
   context: { params: Promise<{ username: string }> },
 ) {
   // Interactive Sleeper traffic — a reader is waiting on this handler, so the
-  // reads under it are bounded rather than queueing behind a crawl batch. No
-  // `signal`: see `shared/sleeper/request-policy`, which is where both halves
-  // of that decision are argued.
-  return withInteractiveSleeper(() => readUser(request, context));
+  // reads under it share one bounded budget rather than queueing behind a crawl
+  // batch, and an overload is answered as one rather than as a 500 (see
+  // `shared/api`). No `signal`: see `shared/sleeper/request-policy`, which is
+  // where both halves of that decision are argued.
+  return interactiveRoute(() => readUser(request, context));
 }
 
 async function readUser(

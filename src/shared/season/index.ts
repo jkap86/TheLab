@@ -1,4 +1,9 @@
-import { DEFAULT_SEASON, getNflState } from "@/shared/sleeper";
+import {
+  awaitShared,
+  DEFAULT_SEASON,
+  getNflState,
+  withBackgroundSleeper,
+} from "@/shared/sleeper";
 
 import { createSeasonResolver } from "./resolve";
 
@@ -29,7 +34,19 @@ const globalForSeason = globalThis as unknown as {
 };
 
 const resolver = (globalForSeason.seasonResolver ??= createSeasonResolver({
-  fetchState: getNflState,
+  // **The refresh runs as background traffic whoever starts it** —
+  // `sleeper/shared-wait`'s producer rule, at the one grain above the memo.
+  // One `refresh()` serves every concurrent caller, so a page that happened to
+  // be first would otherwise set a twelve-second ladder on the state call a
+  // crawl tick is also waiting for, and a page's own disconnect would reject
+  // it for them. Declared here rather than inside `./resolve`, which is pure
+  // and must stay so.
+  fetchState: () => withBackgroundSleeper(getNflState),
+  // And the waiter half: a caller joining a refresh already in flight waits
+  // only as long as its own request has left, then falls back rather than
+  // holding the response open behind somebody else's ladder.
+  waitForRefresh: (refresh) =>
+    awaitShared(refresh, { label: "the active season" }),
   fallback: DEFAULT_SEASON,
   // Read per call rather than captured, so setting it on a running process
   // takes effect.

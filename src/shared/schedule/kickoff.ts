@@ -56,6 +56,15 @@ const cache = (globalScope[CACHE_KEY] ??= new Map<string, WeekCacheEntry>());
  * **One entry serves both readers**, which is why the cache holds the games and
  * not the instants: a caller naming a player's opponent and a caller ordering
  * his seat read the same fetch.
+ *
+ * **It caches the answer rather than the promise, which is why it needs no
+ * producer/waiter split.** Every other in-process Sleeper cache in this app
+ * holds the in-flight fetch so concurrent callers share it, and pays for that
+ * with `sleeper/shared-wait`: whoever started it would otherwise choose the
+ * ladder for everyone who joined. Here two concurrent misses simply make two
+ * requests — twice a half-day, for thirty-two small rows — so each caller's
+ * read is its own, runs under its own budget, and cannot be lengthened or
+ * shortened by anybody else's.
  */
 export async function getWeekGames(
   season: string,

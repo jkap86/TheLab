@@ -1,5 +1,7 @@
 import { sleeperGet, sleeperUrl } from "./client";
 import { memoizeNflState } from "./memoize-nfl-state";
+import { withBackgroundSleeper } from "./request-policy";
+import { awaitShared } from "./shared-wait";
 import type { SleeperNflState } from "./types/sleeper.types";
 
 /**
@@ -17,8 +19,22 @@ import type { SleeperNflState } from "./types/sleeper.types";
  */
 export const DEFAULT_SEASON = "2026";
 
+/**
+ * The read behind the memo, under a policy belonging to nobody.
+ *
+ * **Background, though a page is usually what asks first**, and that is the
+ * producer half of `./shared-wait`'s split: the promise this returns is handed
+ * to every caller for the next minute — a route, a crawl tick, four loops — so
+ * whoever happened to arrive first must not choose the ladder, the retries or
+ * the cancellation for all of them. Under the reader's own budget a background
+ * tick joining would inherit a twelve-second ceiling on work nothing else
+ * retries; under this one the reader is unaffected, because
+ * {@link getNflState} bounds its *wait* rather than the work.
+ */
 function fetchNflState(): Promise<SleeperNflState | null> {
-  return sleeperGet<SleeperNflState | null>(sleeperUrl("state", "nfl"), null);
+  return withBackgroundSleeper(() =>
+    sleeperGet<SleeperNflState | null>(sleeperUrl("state", "nfl"), null),
+  );
 }
 
 /**
@@ -40,5 +56,9 @@ const memoized = (globalScope[MEMO_KEY] ??= memoizeNflState(fetchNflState));
  * and three loops per tick, and none of them wants a fresher answer than that.
  */
 export function getNflState(): Promise<SleeperNflState | null> {
-  return memoized();
+  // The waiter half: the memo hands over whatever fetch is in flight and this
+  // caller waits on it only as long as its own request has left. Timing out
+  // does not touch the fetch — it goes on filling the memo for the next reader
+  // and for whichever loop needed it. See `./shared-wait`.
+  return awaitShared(memoized(), { label: "the NFL state" });
 }

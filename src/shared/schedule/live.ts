@@ -1,4 +1,4 @@
-import { getNflWeekScores } from "@/shared/sleeper";
+import { awaitShared, getNflWeekScores, withBackgroundSleeper } from "@/shared/sleeper";
 
 import { gameClocks } from "./game-clock";
 import type { GameClock } from "./game-clock";
@@ -80,9 +80,15 @@ export async function getWeekGameClocks(
   if (entry.held && Date.now() - entry.held.at < LIVE_SCORES_TTL_MS) {
     return entry.held;
   }
-  if (entry.inflight) return entry.inflight;
+  if (entry.inflight) return join(entry, entry.inflight);
 
-  entry.inflight = (async () => {
+  // **Background, though a reader is often what asks first** — `shared-wait`'s
+  // producer half. One scoreboard read serves every reader of the week and
+  // every twenty-second tick of the room they are watching, so the class of
+  // whoever arrived first must not be the class it runs under; and a reader's
+  // disconnect must not reject the clocks the room is about to price a whole
+  // week against.
+  entry.inflight = withBackgroundSleeper(async () => {
     try {
       const clocks = gameClocks(await getNflWeekScores(season, week));
       const read: WeekClocksRead = { clocks, ok: true, at: Date.now() };
@@ -92,15 +98,38 @@ export async function getWeekGameClocks(
       // Stale rather than nothing, and marked: the previous answer is worth
       // more than an empty map to a reader mid-game, and worth exactly as much
       // as its own age says.
-      return {
-        clocks: entry.held?.clocks ?? new Map<string, GameClock>(),
-        ok: false,
-        at: entry.held?.at ?? Date.now(),
-      };
+      return degraded(entry);
     } finally {
       entry.inflight = null;
     }
-  })();
+  });
 
-  return entry.inflight;
+  return join(entry, entry.inflight);
+}
+
+/**
+ * Wait on the read in flight for no longer than this caller's own request has
+ * left — and answer the degraded read rather than throwing when it runs out.
+ *
+ * **The waiter half, kept inside this module's own promise never to throw.**
+ * Everything read off these clocks sits on *top* of a week's lineups rather
+ * than under them, so a caller whose budget expires mid-fetch wants the same
+ * answer a failed fetch gives it: whatever was last read, marked `ok: false`,
+ * which the payload carries as `scores: "error"` and the solve prices every
+ * projection whole against. The fetch itself is untouched and lands for the
+ * next reader.
+ */
+function join(entry: CacheEntry, inflight: Promise<WeekClocksRead>) {
+  return awaitShared(inflight, { label: "the live scoreboard" }).catch(() =>
+    degraded(entry),
+  );
+}
+
+/** The last successful read if there is one, marked as not current. */
+function degraded(entry: CacheEntry): WeekClocksRead {
+  return {
+    clocks: entry.held?.clocks ?? new Map<string, GameClock>(),
+    ok: false,
+    at: entry.held?.at ?? Date.now(),
+  };
 }

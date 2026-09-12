@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 
+import { interactiveRoute, mapOverload } from "@/shared/api";
 import type {
   ApiErrorPayload,
   ManagerPlayersPayload,
@@ -14,7 +15,6 @@ import { getManagerRosters } from "@/shared/manager";
 import { getPlayerShareRows, toPlayerShareSummary } from "@/shared/players";
 import { getActiveSeason, parseRequestedSeason } from "@/shared/season";
 import { resolveManagerUser } from "@/shared/user";
-import { withInteractiveSleeper } from "@/shared/sleeper";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -49,10 +49,11 @@ export async function GET(
   context: { params: Promise<{ username: string }> },
 ) {
   // Interactive Sleeper traffic — a reader is waiting on this handler, so the
-  // reads under it are bounded rather than queueing behind a crawl batch. No
-  // `signal`: see `shared/sleeper/request-policy`, which is where both halves
-  // of that decision are argued.
-  return withInteractiveSleeper(() => readPlayerShares(request, context));
+  // reads under it share one bounded budget rather than queueing behind a crawl
+  // batch, and an overload is answered as one rather than as a 500 (see
+  // `shared/api`). No `signal`: see `shared/sleeper/request-policy`, which is
+  // where both halves of that decision are argued.
+  return interactiveRoute(() => readPlayerShares(request, context));
 }
 
 async function readPlayerShares(
@@ -114,6 +115,12 @@ async function readPlayerShares(
     };
     return NextResponse.json(payload);
   } catch (error) {
+    // An overload is not a fault: a refused permit or a spent request
+    // budget is the app shedding, and `shared/api` is the one place that
+    // decides what that answers with. Everything else falls through to
+    // the 500 below, unchanged.
+    const shed = mapOverload(error);
+    if (shed) return shed;
     console.error(`[players] failed for ${username} ${season}:`, error);
     const payload: ApiErrorPayload = { error: "Failed to load rosters" };
     return NextResponse.json(payload, { status: 500 });

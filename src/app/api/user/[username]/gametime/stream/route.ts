@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 
+import { interactiveRoute } from "@/shared/api";
 import type {
   ApiErrorPayload,
   GametimeStreamMessage,
@@ -9,7 +10,7 @@ import { joinGametime, toRoomFrame } from "@/shared/gametime";
 import type { RoomListener } from "@/shared/gametime";
 import { currentWeek, parseRequestedWeek } from "@/shared/projections";
 import { getActiveSeason, parseRequestedSeason } from "@/shared/season";
-import { getNflState, withInteractiveSleeper } from "@/shared/sleeper";
+import { getNflState } from "@/shared/sleeper";
 import { resolveManagerUser } from "@/shared/user";
 
 export const runtime = "nodejs";
@@ -70,10 +71,11 @@ export async function GET(
   context: { params: Promise<{ username: string }> },
 ) {
   // Interactive Sleeper traffic — a reader is waiting on this handler, so the
-  // reads under it are bounded rather than queueing behind a crawl batch. No
-  // `signal`: see `shared/sleeper/request-policy`, which is where both halves
-  // of that decision are argued.
-  return withInteractiveSleeper(() => openGametimeStream(request, context));
+  // reads under it share one bounded budget rather than queueing behind a crawl
+  // batch, and an overload is answered as one rather than as a 500 (see
+  // `shared/api`). No `signal`: see `shared/sleeper/request-policy`, which is
+  // where both halves of that decision are argued.
+  return interactiveRoute(() => openGametimeStream(request, context));
 }
 
 async function openGametimeStream(

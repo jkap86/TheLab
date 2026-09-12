@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 
+import { interactiveRoute, mapOverload } from "@/shared/api";
 import type {
   ApiErrorPayload,
   LeaguematePayload,
@@ -9,11 +10,7 @@ import type {
 import { getRosProjections, restOfSeasonStart } from "@/shared/projections";
 import type { RosProjections } from "@/shared/projections";
 import { getActiveSeason, parseRequestedSeason } from "@/shared/season";
-import {
-  getNflState,
-  sleeperAvatarUrl,
-  withInteractiveSleeper,
-} from "@/shared/sleeper";
+import { getNflState, sleeperAvatarUrl } from "@/shared/sleeper";
 
 import {
   collectEnrichmentIds,
@@ -104,11 +101,11 @@ const TRADE_ENRICHMENT_DB_CONCURRENCY = 4;
  * background scope of its own.
  */
 export async function GET(request: Request) {
-  return withInteractiveSleeper(() => readTradesPage(request));
+  return interactiveRoute(() => readTradesPage(request));
 }
 
 export async function POST(request: Request) {
-  return withInteractiveSleeper(() => readTradesPage(request));
+  return interactiveRoute(() => readTradesPage(request));
 }
 
 async function readTradesPage(request: Request) {
@@ -158,6 +155,12 @@ async function readTradesPage(request: Request) {
       },
     });
   } catch (error) {
+    // An overload is not a fault: a refused permit or a spent request
+    // budget is the app shedding, and `shared/api` is the one place that
+    // decides what that answers with. Everything else falls through to
+    // the 500 below, unchanged.
+    const shed = mapOverload(error);
+    if (shed) return shed;
     console.error("[trades] page query failed:", error);
     const payload: ApiErrorPayload = { error: "Failed to load trades" };
     return NextResponse.json(payload, { status: 500 });

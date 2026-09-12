@@ -110,18 +110,25 @@ export class AdmissionTimeoutError extends Error {
  * Matched by name rather than by class, which is what lets a reader of this
  * predicate stay free of runtime imports.
  *
- * **TheLabX carries a third, `RequestBudgetExhaustedError`, and this app
- * deliberately does not.** That error is what a request budget throws when a
- * caller runs out of safe lifetime *before* a slot is taken, which is exactly
- * what {@link AdmissionTimeoutError} already says here: the budget landed as
- * `maxWaitMs` on the wait rather than as a clock a caller carries around, so
- * the refusal it produces is the one this list already names. See
- * `./request-policy`, which is where an interactive read's four seconds comes
- * from.
+ * **The third name arrived, and the note that said it would not is worth
+ * keeping.** This list carried two where TheLabX carries three, on the argument
+ * that `RequestBudgetExhaustedError` — thrown there when a caller runs out of
+ * safe lifetime before a slot is taken — was already said by
+ * {@link AdmissionTimeoutError}, "because the budget landed as `maxWaitMs` on
+ * the wait rather than as a clock a caller carries around". A request now
+ * carries exactly such a clock (`SleeperRequestPolicy.expiresAt`), so the two
+ * are different facts: one says no slot came free in the time this caller had,
+ * the other says the caller had no time at all and never queued. Folding them
+ * together would make a log unable to tell a busy limiter from a spent request.
+ *
+ * `SleeperBudgetExhaustedError` is declared in `./request-policy`, beside the
+ * clock it reports on, and named here as a string for the reason above: this
+ * predicate stays free of runtime imports.
  */
 const ADMISSION_REFUSALS = new Set([
   "AdmissionAbortedError",
   "AdmissionTimeoutError",
+  "SleeperBudgetExhaustedError",
 ]);
 
 /**

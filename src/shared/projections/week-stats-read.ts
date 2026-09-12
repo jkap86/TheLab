@@ -1,4 +1,9 @@
-import { sleeperDataUrl, sleeperGet } from "@/shared/sleeper";
+import {
+  awaitShared,
+  sleeperDataUrl,
+  sleeperGet,
+  withBackgroundSleeper,
+} from "@/shared/sleeper";
 import type { SleeperProjection } from "@/shared/sleeper";
 
 import { assembleWeekProjections } from "./week";
@@ -78,7 +83,7 @@ export function getWeekStats(season: string, week: number): Promise<WeekStatsRea
   if (cached && Date.now() - cached.at < WEEK_STATS_TTL_MS) {
     cache.delete(key);
     cache.set(key, cached);
-    return cached.read;
+    return awaitShared(cached.read, { label: `week ${key} stats` });
   }
 
   const entry: WeekCacheEntry = {
@@ -97,16 +102,26 @@ export function getWeekStats(season: string, week: number): Promise<WeekStatsRea
     cache.delete(oldest.value);
   }
 
-  return entry.read;
+  return awaitShared(entry.read, { label: `week ${key} stats` });
 }
 
-async function fetchWeek(season: string, week: number): Promise<WeekStatsRead> {
-  const rows = await sleeperGet<SleeperProjection[]>(
-    `${sleeperDataUrl("stats", "nfl", season, week)}?season_type=regular`,
-    [],
-  );
-  const lines = Array.isArray(rows) ? rows : [];
-  return { board: assembleWeekProjections(lines), stamp: statsStamp(lines) };
+/**
+ * The read behind the cache, under a policy belonging to nobody —
+ * `./week-read`'s producer rule, and the feed it matters most for. A gametime
+ * room ticks this every twenty seconds for however many readers are watching,
+ * and a reader of the plain route joins whichever tick is in flight: neither
+ * may choose the other's ladder, and a reader who navigates away must not
+ * reject the board the room is about to solve from.
+ */
+function fetchWeek(season: string, week: number): Promise<WeekStatsRead> {
+  return withBackgroundSleeper(async () => {
+    const rows = await sleeperGet<SleeperProjection[]>(
+      `${sleeperDataUrl("stats", "nfl", season, week)}?season_type=regular`,
+      [],
+    );
+    const lines = Array.isArray(rows) ? rows : [];
+    return { board: assembleWeekProjections(lines), stamp: statsStamp(lines) };
+  });
 }
 
 /** The row count and the newest revision on the response — see {@link WeekStatsRead}. */

@@ -1,4 +1,9 @@
-import { sleeperDataUrl, sleeperGet } from "@/shared/sleeper";
+import {
+  awaitShared,
+  sleeperDataUrl,
+  sleeperGet,
+  withBackgroundSleeper,
+} from "@/shared/sleeper";
 import type { SleeperProjection } from "@/shared/sleeper";
 
 import { assembleWeekProjections } from "./week";
@@ -83,7 +88,7 @@ export function getWeekProjections(
     // that week fall out from under it.
     cache.delete(key);
     cache.set(key, cached);
-    return cached.board;
+    return awaitShared(cached.board, { label: `week ${key} projections` });
   }
 
   const entry: WeekCacheEntry = {
@@ -102,19 +107,29 @@ export function getWeekProjections(
     cache.delete(oldest.value);
   }
 
-  return entry.board;
+  return awaitShared(entry.board, { label: `week ${key} projections` });
 }
 
-async function fetchWeek(
-  season: string,
-  week: number,
-): Promise<WeekProjections> {
-  // The same URL `./ros-read` builds for each week of its span — one week of
-  // it. A week with no data is a null body, folded to an empty board rather
-  // than thrown.
-  const rows = await sleeperGet<SleeperProjection[]>(
-    `${sleeperDataUrl("projections", "nfl", season, week)}?season_type=regular`,
-    [],
-  );
-  return assembleWeekProjections(rows);
+/**
+ * The read behind the cache, under a policy belonging to nobody.
+ *
+ * **Background, though a reader is usually what asks first** — `shared-wait`'s
+ * producer half. This board serves the lineup checker's request, the gametime
+ * route's, and every twenty-second tick of a gametime room for the next five
+ * minutes, so the class of whoever arrived first must not be the class it runs
+ * under: a room tick joining a reader's fetch would inherit a twelve-second
+ * ladder, and a reader's disconnect would reject the board every other awaiter
+ * is holding. Each caller bounds its own *wait* instead, above.
+ */
+function fetchWeek(season: string, week: number): Promise<WeekProjections> {
+  return withBackgroundSleeper(async () => {
+    // The same URL `./ros-read` builds for each week of its span — one week of
+    // it. A week with no data is a null body, folded to an empty board rather
+    // than thrown.
+    const rows = await sleeperGet<SleeperProjection[]>(
+      `${sleeperDataUrl("projections", "nfl", season, week)}?season_type=regular`,
+      [],
+    );
+    return assembleWeekProjections(rows);
+  });
 }

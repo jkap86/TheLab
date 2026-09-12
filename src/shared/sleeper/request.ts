@@ -14,7 +14,14 @@
  */
 
 import type { Limiter } from "./limiter.ts";
-import { resolveSleeperPolicy } from "./request-policy.ts";
+import {
+  SleeperBudgetExhaustedError,
+  ladderBudgetMs,
+  queueBudgetMs,
+  requestBudgetOverdueMs,
+  requestBudgetExhausted,
+  resolveSleeperPolicy,
+} from "./request-policy.ts";
 import type { SleeperRequestOptions } from "./request-policy.ts";
 
 /**
@@ -55,25 +62,65 @@ export type SleeperRequest = <T>(
  * answer in time. They are different operational facts and they reject with
  * different errors — `AdmissionTimeoutError` against `HttpTimeoutError` — which
  * is what lets a log line say which of the two a bad minute was.
+ *
+ * **And both are spent out of one pot, which is the third number.** A policy
+ * carrying an `expiresAt` — every interactive one does — is a whole request's
+ * Sleeper budget rather than one read's, so each read clamps its queue budget
+ * and its ladder budget against what is left of it and a read that arrives with
+ * nothing left is refused without touching the limiter. Four sequential reads
+ * on a handler therefore share twelve seconds; before, each was handed its own.
  */
 export function createSleeperRequest(
   limiter: Limiter,
   get: SleeperHttpGet,
+  options: { now?: () => number } = {},
 ): SleeperRequest {
+  const now = options.now ?? Date.now;
+
   return function sleeperRequest<T>(
     url: string,
-    options?: SleeperRequestOptions,
+    callOptions?: SleeperRequestOptions,
   ): Promise<T | null> {
-    const policy = resolveSleeperPolicy(options);
+    const policy = resolveSleeperPolicy(callOptions);
+
+    // **Refused before the limiter, not inside it.** A request with nothing
+    // left must not take a permit to discover that, and must not be queued
+    // behind callers that can still use one. It is also what makes the
+    // invariant cheap: once a route has spent its budget, every remaining
+    // Sleeper read in it costs one clock read.
+    const before = now();
+    if (requestBudgetExhausted(policy, before)) {
+      return Promise.reject(
+        new SleeperBudgetExhaustedError(
+          requestBudgetOverdueMs(policy, before),
+          url,
+        ),
+      );
+    }
+
     return limiter.run(
-      () =>
-        get<T | null>(url, {
+      () => {
+        // **Read again, after admission.** The queue and the ladder spend from
+        // one pot in sequence, so a ladder budget taken before the wait would
+        // be handed time the wait has since eaten — `maxWaitMs + deadlineMs`
+        // exceeding what the request had, which is the arithmetic this whole
+        // clamp exists to close. A caller admitted with nothing left is refused
+        // here rather than given a one-millisecond attempt to fail.
+        const after = now();
+        if (requestBudgetExhausted(policy, after)) {
+          throw new SleeperBudgetExhaustedError(
+            requestBudgetOverdueMs(policy, after),
+            url,
+          );
+        }
+        return get<T | null>(url, {
           signal: policy.signal,
           timeoutMs: policy.timeoutMs,
           retries: policy.retries,
-          deadlineMs: policy.deadlineMs,
-        }).then((response) => response.data),
-      { signal: policy.signal, maxWaitMs: policy.maxWaitMs },
+          deadlineMs: ladderBudgetMs(policy, after),
+        }).then((response) => response.data);
+      },
+      { signal: policy.signal, maxWaitMs: queueBudgetMs(policy, before) },
     );
   };
 }

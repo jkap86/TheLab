@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 
+import { interactiveRoute, mapOverload } from "@/shared/api";
 import type {
   ApiErrorPayload,
   KtcFormat,
@@ -37,7 +38,7 @@ import type {
 import { getRosProjections, restOfSeasonStart } from "@/shared/projections";
 import type { RosProjections } from "@/shared/projections";
 import { getActiveSeason, parseRequestedSeason } from "@/shared/season";
-import { getNflState, withInteractiveSleeper } from "@/shared/sleeper";
+import { getNflState } from "@/shared/sleeper";
 import { resolveManagerUser } from "@/shared/user";
 import { jsonWithPayloadSize } from "@/shared/util";
 
@@ -146,10 +147,11 @@ export async function GET(
   context: { params: Promise<{ username: string }> },
 ) {
   // Interactive Sleeper traffic — a reader is waiting on this handler, so the
-  // reads under it are bounded rather than queueing behind a crawl batch. No
-  // `signal`: see `shared/sleeper/request-policy`, which is where both halves
-  // of that decision are argued.
-  return withInteractiveSleeper(() => readLineups(request, context));
+  // reads under it share one bounded budget rather than queueing behind a crawl
+  // batch, and an overload is answered as one rather than as a 500 (see
+  // `shared/api`). No `signal`: see `shared/sleeper/request-policy`, which is
+  // where both halves of that decision are argued.
+  return interactiveRoute(() => readLineups(request, context));
 }
 
 async function readLineups(
@@ -301,6 +303,12 @@ async function readLineups(
       startedAt,
     );
   } catch (error) {
+    // An overload is not a fault: a refused permit or a spent request
+    // budget is the app shedding, and `shared/api` is the one place that
+    // decides what that answers with. Everything else falls through to
+    // the 500 below, unchanged.
+    const shed = mapOverload(error);
+    if (shed) return shed;
     console.error(`[lineups] failed for ${username} ${season}:`, error);
     const payload: ApiErrorPayload = { error: "Failed to load lineups" };
     return NextResponse.json(payload, { status: 500 });

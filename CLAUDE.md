@@ -137,7 +137,8 @@ the worst case one Sleeper read adds to a handler: 4 + 12 = 16, leaving a route
 its Postgres reads, its solve and its serialisation inside the deadline.
 `request-policy.test.ts` pins that arithmetic rather than leaving it in a
 comment — including that the deadline *binds*, since `timeoutMs × (retries + 1)`
-alone would outlast it.
+alone would outlast it. **That 16 is now the whole handler's rather than one
+read's** — see A request's deadline is one number, below.
 
 **`deadlineMs` is the field `timeoutMs` and `retries` cannot express between
 them**, and it is the one thing this added to `shared/http`. Four attempts at
@@ -207,25 +208,196 @@ textually in `request-scopes.test.ts`, on `crawl-writes.test.ts`' terms and for
 its reason: a route that lost its scope and a sync that lost its scope both
 render a perfectly ordinary page.
 
-**One gap is structural rather than unmeasured, and it is worth naming.** The
-class belongs to the *call*, so where two classes share a memoized promise —
-`getNflState`, the projections span, a KeepTradeCut board — whoever populates it
-decides the budget for everyone awaiting it, and a background tick that got
-there first can hold an interactive caller past its own 12 seconds. Fixing that
-means either not coalescing those reads, which the second performance pass
-introduced deliberately, or racing a per-caller deadline against a promise other
-callers still want, which turns one reader giving up into a rejection they all
-see. Neither is worth it: a shared cached read is shared work by definition, and
-the case is a cold memo and a busy upstream at the same instant.
+**Two gaps were named here as structural, and both are closed** — see The
+producer's lifetime and the caller's patience, and A request's deadline is one
+number, below, which supersede the paragraphs this one replaced. The first was
+that a memoized promise let whoever populated it choose the budget for everyone
+awaiting it; the second was that each read got a fresh 12 seconds, so a handler
+making four of them could spend 48. What the earlier note got right is that
+neither is fixed by dropping the coalescing or by rejecting a promise other
+callers still want; what it got wrong is the conclusion, because there is a
+third answer and it is one line: **separate the producer's lifetime from the
+caller's patience**.
 
 **Not verified against real traffic**, which is the gap to close first. Three
 things a test cannot say: whether four seconds is the right queue budget against
 a real crawl batch on one dyno, which is the one number a live
-`AdmissionTimeoutError` rate would settle; whether any interactive path makes
-enough *sequential* Sleeper reads for 16 seconds apiece to add up inside the
-platform's 30; and whether the picktracker route's signal ever actually fires,
-since a snapshot that fast is usually answered before a reader can navigate
-away.
+`AdmissionTimeoutError` rate would settle; whether the whole-request budget of
+12 seconds is enough for a route that makes several *cold* Sleeper reads on a
+bad minute, which is the number a live `SleeperBudgetExhaustedError` rate would
+settle; and whether the picktracker route's signal ever actually fires, since a
+snapshot that fast is usually answered before a reader can navigate away.
+
+### A request's deadline is one number
+
+`deadlineMs` is read fresh by every `http.get`, so a handler making four
+sequential Sleeper reads was handed four 12-second ladders — 48 seconds of a
+request whose platform deadline is 30, with every number in the policy looking
+defensible on its own. `SleeperRequestPolicy.expiresAt` is the fix and it is an
+*instant* rather than a span: `withInteractiveSleeper` stamps
+`now + INTERACTIVE_REQUEST_BUDGET_MS` once, when the scope opens, and every read
+under it clamps against what is left of it.
+
+**Both budgets clamp, and they are read at different moments.** `queueBudgetMs`
+is the smaller of the class's `maxWaitMs` and the remainder, read *before* the
+limiter; `ladderBudgetMs` is the smaller of `deadlineMs` and the remainder, read
+*after admission*. That second reading is the one that is silent when wrong: the
+two are spent out of one pot in sequence, so a ladder measured when the caller
+joined the queue would be handed time the queue has since eaten, and
+`maxWaitMs + deadlineMs` would come out larger than the request ever had.
+
+**A read that arrives with nothing left is refused before the limiter**, with
+`SleeperBudgetExhaustedError` — the third name in `ADMISSION_REFUSALS`, and the
+one `limiter.ts` said would never be needed. Its note argued the budget was
+already said by `AdmissionTimeoutError` "because the budget landed as
+`maxWaitMs` on the *wait* rather than as a clock a caller carries around"; there
+is such a clock now, so the two are different facts and a log that folded them
+together could not tell a busy limiter from a spent request.
+
+**The whole-request budget is the same number as the per-ladder one**, which is
+deliberate: read alone `deadlineMs` says "the longest one ladder may run", and
+read as `INTERACTIVE_REQUEST_BUDGET_MS` it says "the longest every ladder in
+this request may run between them". So the worst case a handler adds to Heroku's
+30 is one queue budget plus 12 — 16 seconds, which is what one read used to cost
+and is now what all of them do.
+
+**A nested interactive scope inherits the deadline rather than minting a
+second.** A handler is the outermost interactive scope and anything under it
+that re-declares the class is describing the same request; minting afresh would
+put the multiplication straight back, one wrap at a time. `withBackgroundSleeper`
+does the opposite and replaces the whole policy, so durable work started from
+inside a request carries no deadline at all — which is what keeps a sync running
+after the reader who triggered it has run out of budget.
+
+### The producer's lifetime and the caller's patience
+
+Every in-process Sleeper cache holds the **promise** rather than the answer, so
+concurrent callers share one request. The consequence nobody had spelled out is
+that whoever created it chose the budget for everybody who later awaited it: a
+crawl tick starts the NFL-state fetch, a page joins it a moment later and is
+behind a ladder of 30s × 4; or a page starts it, a durable sync joins, and the
+sync gives up after 12 seconds on work nothing else retries. Both are invisible
+— the page is slow and the corpus is thin, and every module involved is doing
+exactly what it says.
+
+**`sleeper/shared-wait.ts` is the seam, and the split is one sentence each.**
+The **producer** runs under a policy belonging to nobody: every cache populates
+itself inside `withBackgroundSleeper`, because a value held for the next reader
+is durable work by definition, and because that scope is the one that drops an
+ambient signal — a shared promise rejected by one browser navigating away is
+every other reader's answer gone. The **caller** waits only as long as its own
+request has left, through `awaitShared`, which reads the ambient policy so a
+call site is one wrap and no plumbing.
+
+**Giving up waiting is not cancelling**, which is the property the whole thing
+turns on: nothing aborts, rejects or touches the producer, so an interactive
+reader can bail out of a fetch a background loop still needs, and the value
+lands for whoever comes next. A rejection is always handled on the producer, so
+a waiter that walked away cannot leave an unhandled rejection behind — and every
+other awaiter still receives it.
+
+**Six caches take both halves**: the NFL state, a week's projections, a week's
+stats, the rest-of-season span, the live scoreboard, and the season resolver's
+own refresh (whose `waitForRefresh` seam exists because that dedupe is a grain
+*above* the memo — a page joining a tick's `refresh()` would otherwise be behind
+its ladder however the state read was scoped). The live scoreboard's waiter
+degrades rather than throwing, which is that module's own promise never to
+throw: a budget that runs out mid-fetch answers the last read marked
+`ok: false`, exactly as a failed fetch does.
+
+**Three do not, each for a stated reason.** `schedule/kickoff` caches the
+*answer* rather than the promise, so two concurrent misses simply make two
+requests and no caller can lengthen another's. The manager lookup takes the
+waiter half and keeps its producer under the caller's class: it is reached from
+route handlers and nothing else, so there is no background caller to protect,
+and its fan-out is one fetch per distinct username anybody can type — under the
+background ladder a permit held for two minutes rather than twelve seconds per
+name. And the two SSE room `openings` maps are awaited from inside a `start`
+callback, by which point the response has already been returned and there is no
+platform deadline left to protect; a bounded wait there would trade a slightly
+later first frame for a reconnect into the same cold open.
+
+**Verified under Node's own runner**, which is what the modules' relative `.ts`
+imports are for: 15 tests in `shared-wait.test.ts` drive the two directions end
+to end — a background-first producer that an interactive caller joins and
+abandons on its own clock without ending it, and an interactive-first producer
+that a background caller goes on waiting for — plus the unhandled-rejection
+bookkeeping, the abort path, and a reader's signal never reaching a producer.
+What a unit test cannot reach — that the *real* caches wire both halves — is
+pinned textually in `request-scopes.test.ts`, on `crawl-writes.test.ts`' terms.
+
+### An overload is answered as one
+
+`sleeperGet` has three ways of refusing a caller before Sleeper is touched, and
+all three are the app deliberately shedding load. Reaching a handler's `catch`
+they became `{ error: "Failed to load …" }` with a 500 — the same answer a null
+dereference gives, which sends an operator looking for a fault that is not
+there, tells a browser nothing about retrying, and buries the one signal that
+would show the shed rate.
+
+**`shared/api` is the one place that decides.** `interactiveRoute` is the
+route-shaped composition of `withInteractiveSleeper`: it opens the scope, mints
+the request's deadline, and turns a refusal into **503 with `Retry-After: 5`**
+however deep in the handler it came from. That last clause is why it exists
+rather than a bare `catch` in each route: every handler in this app resolves its
+manager and its season *before* the `try` it wraps the rest in — deliberately,
+because those two produce their own statuses — so a refusal from either escaped
+every catch on the page and reached Next as an unhandled exception.
+
+**Anything that is not a refusal is rethrown**, which is what makes it safe in
+front of sixteen routes: a 400, a 404, a 502 and a genuine exception all reach
+the caller exactly as they did. A handler that catches for itself keeps doing
+so and asks `mapOverload(error)` first — one shared call rather than a status
+and a header spelled fifteen times. And `resolveManagerId` rethrows a refusal
+rather than folding it into its 502, because "the process declined to ask" is a
+fourth thing beside the three that ladder classifies.
+
+**Where a read already degrades, it goes on degrading.** A refused projections
+span is still `projections: "error"` with the rest of the page rendered, which
+is a better answer than a 503; only a failure that would otherwise have been a
+500 becomes one.
+
+#### Verified
+
+Under Node's own runner, 2,557 tests pass (69 more), and `check:full` — the
+production build, then lint, typecheck and the suite — is clean. What the suite
+covers is the arithmetic and the two directions of the producer/waiter split;
+what it cannot reach is a real route, so two things were driven against one.
+
+**A real route answers an overload as one.** With `SLEEPER_MAX_CONCURRENCY=1`
+and the process's single permit held, `GET /api/user/[username]/gametime`
+answered **503** with `Retry-After: 5`, `Cache-Control: no-store` and the
+overload body, after **4,011ms** — the interactive queue budget to the
+millisecond. The refusal came from `resolveManagerUser`, which runs *before* the
+handler's own `try`: the case a per-handler `catch` could not have covered.
+
+**And sequential reads share one budget.** With Sleeper stubbed at
+`globalThis.fetch` to take seven seconds a document — `verify-crawl-pressure`'s
+arrangement — the same route made two reads and the handler finished at
+**12,023ms**: the manager answered at 7,321ms, the NFL state was asked for at
+7,326ms, and the waiter let go at the request's own deadline with **the fetch
+still in flight**, which is the producer surviving the waiter on a real page.
+**The before-state was reproduced in the same harness** by neutering the one
+line that mints `expiresAt`: **14,029ms**, both reads answered, each having been
+handed its own twelve seconds. A third read would have been 21 seconds then and
+is still 12 now.
+
+Both probes are scratch scripts rather than committed ones: they need
+`next/server` resolved by hand outside a Next server and a stubbed upstream, and
+what they prove about the wiring is pinned in `overload.test.ts` and
+`request.test.ts` where it can be run by anybody.
+
+**Not verified against real data**, which is the gap to close first: no database
+and no route to Sleeper from where this was built, so the second probe's route
+ends at its own 500 for Postgres — correctly, which is itself the check that a
+non-overload failure keeps the route's own handling. Three things neither probe
+can say: whether twelve seconds is enough for a route that makes several cold
+Sleeper reads on a genuinely bad minute, which is what a live
+`SleeperBudgetExhaustedError` rate would settle; whether moving the shared
+producers to the background ladder measurably lengthens how long a permit is
+held on a busy dyno; and whether the manager lookup's exception — the one cache
+that keeps its producer under the caller's class — is the right call against a
+real burst of distinct usernames.
 
 ### Known drift
 
@@ -236,13 +408,14 @@ with it and is what pins the two properties that are silent when wrong: the slot
 *transfer* in `release()` that keeps the bound from widening across the
 microtask gap, and a cancelled waiter leaving the queue rather than being handed
 a permit it has stopped waiting for. One thing is still trimmed:
-`ADMISSION_REFUSALS` names two errors where TheLabX names three, and it will
-stay that way. The third is `RequestBudgetExhaustedError`, which that repo
-throws when a caller runs out of safe lifetime before a slot is taken — which is
-exactly what `AdmissionTimeoutError` says here: the budget landed as `maxWaitMs`
-on the *wait* rather than as a clock a caller carries around, so the refusal it
-produces is one this list already names. See A request's budget is what it is
-for, above.
+`ADMISSION_REFUSALS` named two errors where TheLabX names three, and **the third
+arrived**: that repo's `RequestBudgetExhaustedError` is thrown when a caller
+runs out of safe lifetime before a slot is taken, which this list argued was
+already said by `AdmissionTimeoutError` "because the budget landed as
+`maxWaitMs` on the *wait* rather than as a clock a caller carries around". A
+request carries exactly such a clock now, so `SleeperBudgetExhaustedError` is a
+different fact and is named beside the other two. See A request's deadline is
+one number, above.
 
 `sleeper/types/sleeper.types.ts` doc comments still cite `SLEEPER_DATA_BASE` and
 `manager/crawl-ttl`, which arrive with the projections and crawler ports. Most

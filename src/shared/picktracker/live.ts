@@ -171,6 +171,10 @@ export async function joinRoom(
     openings.set(leagueId, opening);
   }
 
+  // Not bounded by a joining reader's budget, on `gametime/live`'s reason: the
+  // only caller is a stream route whose response has already been returned, so
+  // there is no request deadline left for a bounded wait to protect. The read
+  // behind it is background either way (see `openRoom`).
   const opened = await opening;
   // `Room` carries no `ok`, so its presence is the discriminant.
   if ("ok" in opened) return opened;

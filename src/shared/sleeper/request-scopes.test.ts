@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
-import { join } from "node:path";
+import { readFileSync, readdirSync } from "node:fs";
+import { join, sep } from "node:path";
 import { describe, test } from "node:test";
 
 /**
@@ -114,53 +114,231 @@ describe("every background loop ticks as background traffic", () => {
   });
 });
 
+/**
+ * Every `route.ts` under `src/app`, found rather than listed.
+ *
+ * **The list was the hole.** The routes were enumerated by hand, so the failure
+ * this suite exists to catch — somebody adds a Sleeper-backed route and forgets
+ * the scope — was caught only if the same somebody also remembered to add it
+ * here, which is the thing they had just forgotten to do. A route nobody listed
+ * passed by not being looked at.
+ */
+function routeFiles(dir = join(process.cwd(), "src", "app")): string[] {
+  const found: string[] = [];
+  for (const entry of readdirSync(dir, { withFileTypes: true })) {
+    const path = join(dir, entry.name);
+    if (entry.isDirectory()) found.push(...routeFiles(path));
+    else if (entry.name === "route.ts") found.push(path);
+  }
+  return found.sort();
+}
+
+/** A repo-relative path, so a failure names the file the way a reader would. */
+const relative = (path: string) =>
+  path.slice(process.cwd().length + 1).split(sep).join("/");
+
+/**
+ * The names that reach `sleeperGet`, directly or a few modules down.
+ *
+ * Deliberately a list of *readers* rather than a transitive import walk: what
+ * matters is whether a handler can end up queueing on the Sleeper limiter, and
+ * these are the doors to it. A compiler-grade reachability analysis would catch
+ * more and would be a second build system to maintain; this catches the case
+ * that actually happens, which is a new handler calling one of these by name.
+ *
+ * The last four are the client itself, for a route that skips the helpers and
+ * fetches Sleeper directly — the shape a future route is most likely to take
+ * and the one a list of helper names would miss.
+ */
+const SLEEPER_DOORS = [
+  "getActiveSeason",
+  "resolveManagerUser",
+  "getNflState",
+  "currentWeek",
+  "restOfSeasonStart",
+  "getRosProjections",
+  "getWeekProjections",
+  "getWeekStats",
+  "getWeekGames",
+  "getWeekKickoffs",
+  "getWeekGameClocks",
+  "getNflWeekScores",
+  "trackPlaceholderDraft",
+  "readWeekFeeds",
+  "syncManagerLeagues",
+  "getAllPlayers",
+  "getSleeperUser",
+  "sleeperGet",
+  "sleeperGetOptional",
+];
+
+/**
+ * A route may reach Sleeper and still not open a scope, but only on purpose and
+ * only with the reason written down here.
+ *
+ * Keyed by repo-relative path, so an exemption for a route that is later
+ * deleted or renamed fails as a stale entry rather than quietly covering
+ * nothing. Empty today, which is the honest state: every Sleeper-backed route
+ * in this app answers a reader.
+ */
+const EXEMPT: Record<string, string> = {};
+
+/** Which doors a source names, for the failure message. */
+const doorsIn = (source: string): string[] =>
+  SLEEPER_DOORS.filter((name) =>
+    new RegExp(`\\b${name}\\b`).test(source),
+  );
+
 describe("every route that reaches Sleeper declares the interactive budget", () => {
-  /**
-   * The names that reach `sleeperGet`, directly or a few modules down.
-   *
-   * Deliberately a list of *readers* rather than a transitive import walk: what
-   * matters is whether a handler can end up queueing on the Sleeper limiter,
-   * and these are the seven doors to it. `refreshLeague` and
-   * `extendLeagueHistory` are absent on purpose — they open their own
-   * background scope, so a route whose only Sleeper reach is one of those has
-   * nothing to declare.
-   */
-  const REACHES_SLEEPER =
-    /getActiveSeason|resolveManagerUser|getNflState|currentWeek|restOfSeasonStart|getRosProjections|getWeekProjections|getWeekStats|getNflWeekScores|trackPlaceholderDraft|readWeekFeeds|syncManagerLeagues/;
+  const routes = routeFiles();
 
-  const ROUTES: string[][] = [
-    ["src", "app", "api", "trades", "route.ts"],
-    ["src", "app", "api", "trades", "leagues", "route.ts"],
-    ["src", "app", "api", "trades", "facets", "route.ts"],
-    ["src", "app", "api", "user", "[username]", "route.ts"],
-    ["src", "app", "api", "user", "[username]", "players", "route.ts"],
-    ["src", "app", "api", "user", "[username]", "leaguemates", "route.ts"],
-    ["src", "app", "api", "user", "[username]", "leaguemate-rosters", "route.ts"],
-    ["src", "app", "api", "user", "[username]", "leagues", "route.ts"],
-    ["src", "app", "api", "user", "[username]", "lineups", "route.ts"],
-    ["src", "app", "api", "user", "[username]", "lineup-check", "route.ts"],
-    ["src", "app", "api", "user", "[username]", "gametime", "route.ts"],
-    ["src", "app", "api", "user", "[username]", "gametime", "stream", "route.ts"],
-    ["src", "app", "api", "league", "[leagueId]", "lineup", "route.ts"],
-    ["src", "app", "api", "league", "[leagueId]", "timeline", "route.ts"],
-    ["src", "app", "api", "picktracker", "[leagueId]", "route.ts"],
-    ["src", "app", "trades", "page.tsx"],
-  ];
+  test("there are routes to check at all", () => {
+    // A discovery that silently found nothing would make every assertion below
+    // vacuous, which is the one way an automatic list is worse than a hand one.
+    assert.ok(routes.length >= 15, `found ${routes.length} route files`);
+  });
 
-  for (const route of ROUTES) {
-    const path = route.join("/");
-    test(path, () => {
-      const source = read(...route);
+  for (const path of routes) {
+    const name = relative(path);
+    test(name, () => {
+      const source = readFileSync(path, "utf8");
+      const doors = doorsIn(source);
+      if (doors.length === 0) return;
+
+      if (name in EXEMPT) {
+        assert.ok(
+          EXEMPT[name].length > 0,
+          `${name} is exempt and must say why`,
+        );
+        return;
+      }
+
+      // `interactiveRoute` is the route-shaped composition of
+      // `withInteractiveSleeper` — it opens the same scope and turns an
+      // admission refusal into a 503 — and is what a handler should reach for;
+      // the bare scope is accepted because a route that streams or that is not
+      // answering with a `Response` may legitimately want it.
       assert.match(
         source,
-        REACHES_SLEEPER,
-        `${path} is listed here because it reaches Sleeper; if it no longer does, remove it`,
-      );
-      assert.match(
-        source,
-        /withInteractiveSleeper\(/,
-        `${path} answers a reader and must say so`,
+        /interactiveRoute\(|withInteractiveSleeper\(/,
+        `${name} reaches Sleeper (${doors.join(", ")}) and must declare the ` +
+          `interactive budget, or be listed in EXEMPT with a reason`,
       );
     });
   }
+
+  test("no exemption names a route that is gone", () => {
+    const names = new Set(routes.map(relative));
+    for (const exempt of Object.keys(EXEMPT)) {
+      assert.ok(names.has(exempt), `EXEMPT names ${exempt}, which is not a route`);
+    }
+  });
+
+  test("no exemption names a route that no longer reaches Sleeper", () => {
+    for (const [exempt, why] of Object.entries(EXEMPT)) {
+      const source = readFileSync(join(process.cwd(), ...exempt.split("/")), "utf8");
+      assert.ok(
+        doorsIn(source).length > 0,
+        `EXEMPT names ${exempt} ("${why}"), which reaches Sleeper no more`,
+      );
+    }
+  });
+});
+
+describe("a page that reaches Sleeper declares it too", () => {
+  // Pages are not discovered: there are dozens of them, nearly all of which
+  // read Postgres or nothing at all, and a walk of every `page.tsx` for one
+  // caller is a slow test that says little. This is the one, and it is listed
+  // so that its scope cannot be dropped in passing.
+  test("src/app/trades/page.tsx", () => {
+    const source = read("src", "app", "trades", "page.tsx");
+    assert.match(source, /getActiveSeason/);
+    assert.match(source, /withInteractiveSleeper\(/);
+  });
+});
+
+describe("the interactive budget is a request's, not a read's", () => {
+  test("the route scope is the one place a handler's overload is answered", () => {
+    // Nothing under test here can be reached by Node's runner — the module
+    // imports `@/shared/sleeper` — so what is pinned is that the composition
+    // still does both of its jobs. A version that opened the scope and dropped
+    // the mapping would leave every route's `resolveManagerUser` and
+    // `getActiveSeason` — both of which run *before* the handler's own `try` —
+    // reaching Next as an unhandled exception.
+    const source = read("src", "shared", "api", "interactive-route.ts");
+    assert.match(source, /withInteractiveSleeper\(/);
+    assert.match(source, /mapOverload\(/);
+    // And rethrows anything else, which is what makes it safe in front of every
+    // route: a handler's own 500s are untouched.
+    assert.match(source, /throw error;/);
+  });
+
+  test("the interactive scope mints one deadline for the whole request", () => {
+    // The invariant in one line of source: a scope that read
+    // `INTERACTIVE_SLEEPER_POLICY` without stamping an `expiresAt` would give
+    // every read in a handler its own twelve seconds, which is the state this
+    // work exists to leave. Driven properly in `request-policy.test.ts`; pinned
+    // here because it is the line a later edit is most likely to simplify away.
+    const source = read("src", "shared", "sleeper", "request-policy.ts");
+    const start = source.indexOf("export function withInteractiveSleeper<T>(");
+    assert.notEqual(start, -1);
+    const scope = source.slice(start, source.indexOf("\n}", start));
+    // Minted from a whole-request budget rather than from the per-ladder one…
+    assert.match(scope, /INTERACTIVE_REQUEST_BUDGET_MS/);
+    // …stamped onto the policy every read under it resolves against…
+    assert.match(scope, /expiresAt/);
+    // …and *inherited* where one is already in force, so a handler that wraps
+    // twice does not get two budgets.
+    assert.match(scope, /ambient\.expiresAt/);
+  });
+});
+
+describe("a shared Sleeper read is produced by nobody in particular", () => {
+  /**
+   * The in-process caches that hold a *promise* rather than an answer.
+   *
+   * Each is a fetch several callers join, so each has to do two things that no
+   * test outside this file can check: populate itself inside a background scope
+   * (so neither class chooses the other's ladder, and no reader's disconnect
+   * rejects a board other readers hold) and hand its promise over through
+   * `awaitShared` (so each caller waits only as long as its own request has
+   * left). Both are silent when wrong — the page is slow and the loop is thin,
+   * and every module involved is doing what it says.
+   */
+  const CACHES: [file: string[], what: string][] = [
+    [["src", "shared", "sleeper", "state.ts"], "the NFL state"],
+    [["src", "shared", "projections", "week-read.ts"], "a week's projections"],
+    [["src", "shared", "projections", "week-stats-read.ts"], "a week's stats"],
+    [["src", "shared", "projections", "ros-read.ts"], "the rest-of-season span"],
+    [["src", "shared", "schedule", "live.ts"], "the live scoreboard"],
+    [["src", "shared", "season", "index.ts"], "the active season"],
+  ];
+
+  for (const [file, what] of CACHES) {
+    test(`${what} — a background producer and a bounded waiter`, () => {
+      const source = read(...file);
+      assert.match(
+        source,
+        /withBackgroundSleeper\(/,
+        `${what} is shared, so the fetch behind it must belong to nobody`,
+      );
+      assert.match(
+        source,
+        /awaitShared\(/,
+        `${what} is shared, so every caller must bound its own wait`,
+      );
+    });
+  }
+
+  test("the manager lookup bounds its waiters and says why it keeps its producer", () => {
+    // The one deliberate exception, and the reason is in the file: this memo
+    // has no background caller at all, so there is nothing to protect from a
+    // reader's ladder — and its fan-out is one fetch per distinct username
+    // anybody can type, which under the background ladder is a permit held for
+    // two minutes rather than twelve seconds per name.
+    const source = read("src", "shared", "user", "resolve-manager-user.ts");
+    assert.match(source, /awaitShared\(/);
+    assert.doesNotMatch(source, /withBackgroundSleeper\(/);
+    assert.match(source, /producer half is\n \* deliberately not taken here/);
+  });
 });

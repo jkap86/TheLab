@@ -20,7 +20,12 @@
  */
 
 import { LAST_REGULAR_WEEK } from "@/shared/manager";
-import { sleeperDataUrl, sleeperGet } from "@/shared/sleeper";
+import {
+  awaitShared,
+  sleeperDataUrl,
+  sleeperGet,
+  withBackgroundSleeper,
+} from "@/shared/sleeper";
 import type { SleeperProjection } from "@/shared/sleeper";
 import { collectWithConcurrency } from "@/shared/util";
 
@@ -83,7 +88,7 @@ export function getRosProjections(
 
   const cached = globalScope[CACHE_KEY];
   if (cached && cached.key === key && Date.now() - cached.at < ROS_PROJECTIONS_TTL_MS) {
-    return cached.board;
+    return awaitShared(cached.board, { label: `the ${key} projections span` });
   }
 
   const entry: RosCacheEntry = {
@@ -98,10 +103,27 @@ export function getRosProjections(
     if (globalScope[CACHE_KEY] === entry) globalScope[CACHE_KEY] = undefined;
   });
 
-  return entry.board;
+  return awaitShared(entry.board, { label: `the ${key} projections span` });
 }
 
-async function fetchSpan(season: string, first: number): Promise<RosProjections> {
+/**
+ * The span, under a policy belonging to nobody — `shared-wait`'s producer half,
+ * and the read with the most to lose from getting it wrong.
+ *
+ * A cold span is up to eighteen requests behind a concurrency of four, held for
+ * half an hour and shared by every route that prices a roster. Run under the
+ * budget of whichever reader arrived first it would be abandoned twelve seconds
+ * in — and abandoned *after* spending most of the Sleeper traffic, leaving the
+ * next reader to start over — while a reader's disconnect would reject a board
+ * several other requests are already awaiting. Callers bound their own wait
+ * instead, so a reader still gives up at twelve seconds; what changes is that
+ * the work survives them.
+ */
+function fetchSpan(season: string, first: number): Promise<RosProjections> {
+  return withBackgroundSleeper(() => readSpan(season, first));
+}
+
+async function readSpan(season: string, first: number): Promise<RosProjections> {
   const weeks: number[] = [];
   for (let week = first; week <= LAST_REGULAR_WEEK; week++) weeks.push(week);
 

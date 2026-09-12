@@ -10,9 +10,12 @@ import { createSleeperRequest } from "./request.ts";
 import type { SleeperHttpGet } from "./request.ts";
 import {
   BACKGROUND_SLEEPER_POLICY,
+  INTERACTIVE_REQUEST_BUDGET_MS,
   INTERACTIVE_SLEEPER_POLICY,
+  SleeperBudgetExhaustedError,
   withBackgroundSleeper,
   withInteractiveSleeper,
+  withSleeperRequests,
 } from "./request-policy.ts";
 
 /**
@@ -76,13 +79,49 @@ describe("createSleeperRequest — what reaches the limiter and the ladder", () 
       },
     };
 
-    const request = createSleeperRequest(spy, get);
-    await withInteractiveSleeper(() => request("https://sleeper.test/a"));
+    // A frozen clock, because both budgets are now *what is left of the
+    // request* — read against a moving one the ladder would come out a
+    // millisecond short of the policy's own figure and the assertion would be
+    // about scheduling rather than about the wiring.
+    const at = 1_000_000;
+    const request = createSleeperRequest(spy, get, { now: () => at });
+    await withInteractiveSleeper(
+      () => request("https://sleeper.test/a"),
+      { now: () => at },
+    );
 
     assert.deepEqual(waits, [INTERACTIVE_SLEEPER_POLICY.maxWaitMs]);
     assert.equal(calls[0]?.options.timeoutMs, INTERACTIVE_SLEEPER_POLICY.timeoutMs);
     assert.equal(calls[0]?.options.retries, INTERACTIVE_SLEEPER_POLICY.retries);
     assert.equal(calls[0]?.options.deadlineMs, INTERACTIVE_SLEEPER_POLICY.deadlineMs);
+  });
+
+  test("a fresh interactive request spends no more than its whole budget", async () => {
+    // The same wiring read against a real clock, which is what production
+    // does: the numbers are the policy's less however long the handler took to
+    // get here, and what must hold is that neither *exceeds* it.
+    const { calls, get } = recorder();
+    const waits: (number | undefined)[] = [];
+    const limiter = createLimiter(4);
+    const spy = {
+      ...limiter,
+      run: <T>(fn: () => Promise<T>, options?: { maxWaitMs?: number }) => {
+        waits.push(options?.maxWaitMs);
+        return limiter.run(fn, options);
+      },
+    };
+
+    const request = createSleeperRequest(spy, get);
+    await withInteractiveSleeper(() => request("https://sleeper.test/a"));
+
+    const wait = waits[0];
+    const deadline = calls[0]?.options.deadlineMs;
+    assert.ok(wait !== undefined && deadline !== undefined);
+    assert.ok(wait <= (INTERACTIVE_SLEEPER_POLICY.maxWaitMs ?? 0));
+    assert.ok(deadline <= INTERACTIVE_REQUEST_BUDGET_MS);
+    // And not clamped to nothing by an off-by-one in the arithmetic: a fresh
+    // request has essentially all of it.
+    assert.ok(deadline > INTERACTIVE_REQUEST_BUDGET_MS - 1_000);
   });
 
   test("a background read carries neither, which is what it always did", async () => {
@@ -313,5 +352,152 @@ describe("createSleeperRequest — the bound the policy must not widen", () => {
     const request = createSleeperRequest(limiter, get);
     await assert.rejects(request("https://sleeper.test/boom"));
     assert.equal(limiter.stats().active, 0);
+  });
+});
+
+describe("createSleeperRequest — one deadline for the whole request", () => {
+  /**
+   * A limiter that records every wait budget it was asked for, and a getter
+   * that records every ladder budget, against a clock the test moves by hand.
+   *
+   * Fake time rather than real: what is under test is arithmetic across several
+   * seconds of a request's life, and a suite that actually slept for it would
+   * be the twelve-second test this whole change exists to make unnecessary.
+   */
+  function bench() {
+    let clock = 1_000_000;
+    const { calls, get } = recorder();
+    const waits: (number | undefined)[] = [];
+    const limiter = createLimiter(4);
+    let admissions = 0;
+    const spy = {
+      ...limiter,
+      run: <T>(fn: () => Promise<T>, options?: { maxWaitMs?: number }) => {
+        admissions += 1;
+        waits.push(options?.maxWaitMs);
+        return limiter.run(fn, options);
+      },
+    };
+    const request = createSleeperRequest(spy, get, { now: () => clock });
+    return {
+      calls,
+      waits,
+      request,
+      get admissions() {
+        return admissions;
+      },
+      advance: (ms: number) => {
+        clock += ms;
+      },
+      /** A scope minted at the clock's current reading. */
+      scope: <T>(fn: () => T): T =>
+        withSleeperRequests(
+          { ...INTERACTIVE_SLEEPER_POLICY, expiresAt: clock + INTERACTIVE_REQUEST_BUDGET_MS },
+          fn,
+        ),
+    };
+  }
+
+  test("a second read gets what the first one left, not a fresh deadline", async () => {
+    const b = bench();
+    await b.scope(async () => {
+      await b.request("https://sleeper.test/a");
+      // Seven of the twelve gone inside the first read.
+      b.advance(7_000);
+      await b.request("https://sleeper.test/b");
+      b.advance(3_000);
+      await b.request("https://sleeper.test/c");
+    });
+
+    assert.equal(b.calls.length, 3);
+    assert.equal(b.calls[0]?.options.deadlineMs, INTERACTIVE_REQUEST_BUDGET_MS);
+    // ~5 seconds, and emphatically not 12 again.
+    assert.equal(b.calls[1]?.options.deadlineMs, INTERACTIVE_REQUEST_BUDGET_MS - 7_000);
+    assert.equal(b.calls[2]?.options.deadlineMs, INTERACTIVE_REQUEST_BUDGET_MS - 10_000);
+    // The queue budget is clamped by the same remainder once it is the smaller
+    // of the two: four seconds of queueing does not fit in two seconds left.
+    assert.equal(b.waits[0], INTERACTIVE_SLEEPER_POLICY.maxWaitMs);
+    assert.equal(b.waits[1], INTERACTIVE_SLEEPER_POLICY.maxWaitMs);
+    assert.equal(b.waits[2], INTERACTIVE_REQUEST_BUDGET_MS - 10_000);
+  });
+
+  test("the ladder is measured after admission, so the two cannot sum past the budget", async () => {
+    // A queue wait is spent out of the same pot as the ladder. Read before the
+    // wait, a four-second queue and a twelve-second ladder are sixteen seconds
+    // of a twelve-second request; read after, the ladder is what is left.
+    const limiterDelay = 2_500;
+    const { calls, get } = recorder();
+    let clock = 1_000_000;
+    const real = createLimiter(1);
+    const spy = {
+      ...real,
+      run: async <T>(fn: () => Promise<T>, options?: { maxWaitMs?: number }) => {
+        // Stand in for a queue that took two and a half seconds to come free.
+        clock += limiterDelay;
+        return real.run(fn, options);
+      },
+    };
+    const request = createSleeperRequest(spy, get, { now: () => clock });
+    await withSleeperRequests(
+      {
+        ...INTERACTIVE_SLEEPER_POLICY,
+        expiresAt: clock + INTERACTIVE_REQUEST_BUDGET_MS,
+      },
+      () => request("https://sleeper.test/queued"),
+    );
+    assert.equal(
+      calls[0]?.options.deadlineMs,
+      INTERACTIVE_REQUEST_BUDGET_MS - limiterDelay,
+    );
+  });
+
+  test("a read past the deadline fails at once, without a permit or a request", async () => {
+    const b = bench();
+    await b.scope(async () => {
+      await b.request("https://sleeper.test/a");
+      // The whole budget, and then some.
+      b.advance(INTERACTIVE_REQUEST_BUDGET_MS + 1);
+      await assert.rejects(
+        b.request("https://sleeper.test/b"),
+        (error: unknown) =>
+          error instanceof SleeperBudgetExhaustedError && error.overdueMs === 1,
+      );
+    });
+
+    assert.equal(b.calls.length, 1, "the second read never reached Sleeper");
+    assert.equal(b.admissions, 1, "and never reached the limiter");
+  });
+
+  test("a background read is unaffected by any of it", async () => {
+    // The half of the split that must not move: a loop has no `expiresAt`, so
+    // no clamp applies however long it has been running.
+    const b = bench();
+    await withBackgroundSleeper(async () => {
+      await b.request("https://sleeper.test/a");
+      b.advance(10 * 60 * 1000);
+      await b.request("https://sleeper.test/b");
+    });
+    assert.deepEqual(b.waits, [undefined, undefined]);
+    assert.equal(b.calls[0]?.options.deadlineMs, undefined);
+    assert.equal(b.calls[1]?.options.deadlineMs, undefined);
+  });
+
+  test("durable work started inside a spent request still runs", async () => {
+    // The invariant from the other side, and the one that would bite hardest:
+    // a route whose budget is gone still starts syncs whose answer is rows, and
+    // `withBackgroundSleeper` replacing the whole policy is what keeps them
+    // from being refused on the reader's clock.
+    const b = bench();
+    await b.scope(async () => {
+      b.advance(INTERACTIVE_REQUEST_BUDGET_MS + 5_000);
+      await assert.rejects(
+        b.request("https://sleeper.test/reader"),
+        (error: unknown) => error instanceof SleeperBudgetExhaustedError,
+      );
+      await withBackgroundSleeper(() => b.request("https://sleeper.test/sync"));
+    });
+    assert.equal(b.calls.length, 1);
+    assert.equal(b.calls[0]?.url, "https://sleeper.test/sync");
+    assert.equal(b.calls[0]?.options.deadlineMs, undefined);
   });
 });

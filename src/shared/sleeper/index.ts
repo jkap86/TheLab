@@ -51,7 +51,14 @@ export {
   currentSleeperPolicy,
   resolveSleeperPolicy,
   isInteractive,
+  ladderBudgetMs,
+  queueBudgetMs,
+  remainingRequestBudgetMs,
+  requestBudgetExhausted,
+  requestBudgetOverdueMs,
+  SleeperBudgetExhaustedError,
   BACKGROUND_SLEEPER_POLICY,
+  INTERACTIVE_REQUEST_BUDGET_MS,
   INTERACTIVE_SLEEPER_POLICY,
 } from "./request-policy";
 export type {
@@ -59,6 +66,12 @@ export type {
   SleeperRequestOptions,
   SleeperRequestPolicy,
 } from "./request-policy";
+// Waiting on work somebody else started, under *your* budget rather than
+// theirs. Every in-process Sleeper cache in this app is a caller of this;
+// `waitForShared` is the pure half and is a sibling with no caller outside the
+// folder, so only the ambient one is exported. See `./shared-wait`.
+export { awaitShared } from "./shared-wait";
+export type { SharedWaitOptions } from "./shared-wait";
 export { classifyUserLeagues } from "./enumeration";
 export type { UserLeaguesEnumeration } from "./enumeration";
 export { isMissingResource } from "./missing";

@@ -145,6 +145,15 @@ export async function joinGametime(
       opening = openRoom(key, input.season, input.week);
       openings.set(key, opening);
     }
+    // **Deliberately not bounded by the joining reader's budget**, which is the
+    // one shared promise in this app that `sleeper/shared-wait`'s waiter rule
+    // is not applied to, and the reason is where this runs. By the time a
+    // `start` callback is executing the response has already been returned, so
+    // there is no platform deadline left to protect: what a bounded wait would
+    // buy is a reader told "no" after twelve seconds instead of a first frame
+    // after fifteen, and what it would cost is a reconnect into the same cold
+    // open. The read behind it is background (see `openRoom`), so nothing about
+    // the *producer* half is skipped — only the patience.
     room = await opening;
   }
 

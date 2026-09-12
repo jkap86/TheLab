@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 
+import { interactiveRoute, mapOverload } from "@/shared/api";
 import type {
   ApiErrorPayload,
   LineupCheckLeague,
@@ -19,7 +20,7 @@ import type { WeekProjections } from "@/shared/projections";
 import { getWeekGames } from "@/shared/schedule";
 import type { TeamGame } from "@/shared/schedule";
 import { getActiveSeason, parseRequestedSeason } from "@/shared/season";
-import { getNflState, withInteractiveSleeper } from "@/shared/sleeper";
+import { getNflState } from "@/shared/sleeper";
 import { resolveManagerUser } from "@/shared/user";
 import { easternDate } from "@/shared/util";
 
@@ -71,10 +72,11 @@ export async function GET(
   context: { params: Promise<{ username: string }> },
 ) {
   // Interactive Sleeper traffic — a reader is waiting on this handler, so the
-  // reads under it are bounded rather than queueing behind a crawl batch. No
-  // `signal`: see `shared/sleeper/request-policy`, which is where both halves
-  // of that decision are argued.
-  return withInteractiveSleeper(() => readLineupCheck(request, context));
+  // reads under it share one bounded budget rather than queueing behind a crawl
+  // batch, and an overload is answered as one rather than as a 500 (see
+  // `shared/api`). No `signal`: see `shared/sleeper/request-policy`, which is
+  // where both halves of that decision are argued.
+  return interactiveRoute(() => readLineupCheck(request, context));
 }
 
 async function readLineupCheck(
@@ -241,6 +243,12 @@ async function readLineupCheck(
     };
     return NextResponse.json(payload);
   } catch (error) {
+    // An overload is not a fault: a refused permit or a spent request
+    // budget is the app shedding, and `shared/api` is the one place that
+    // decides what that answers with. Everything else falls through to
+    // the 500 below, unchanged.
+    const shed = mapOverload(error);
+    if (shed) return shed;
     console.error(`[lineup-check] failed for ${username} ${season}:`, error);
     const payload: ApiErrorPayload = { error: "Failed to load lineups" };
     return NextResponse.json(payload, { status: 500 });

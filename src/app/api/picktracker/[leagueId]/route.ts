@@ -1,8 +1,8 @@
 import { NextResponse } from "next/server";
 
+import { interactiveRoute } from "@/shared/api";
 import type { ApiErrorPayload } from "@/shared/contract";
 import { toPicktrackerPayload, trackPlaceholderDraft } from "@/shared/picktracker";
-import { withInteractiveSleeper } from "@/shared/sleeper";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -37,7 +37,7 @@ export async function GET(
   // routes that reach a shared projections span or a cached board pass none;
   // see `shared/sleeper/request-policy`. Aborting lands in `track.ts`'s own
   // catch and answers 502 to a client that is not listening.
-  return withInteractiveSleeper(() => readBoard(request, context), {
+  return interactiveRoute(() => readBoard(request, context), {
     signal: request.signal,
   });
 }

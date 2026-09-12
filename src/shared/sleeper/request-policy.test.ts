@@ -1,11 +1,19 @@
 import assert from "node:assert/strict";
 import { describe, test } from "node:test";
 
+import { isAdmissionRefusal } from "./limiter.ts";
 import {
   BACKGROUND_SLEEPER_POLICY,
+  INTERACTIVE_REQUEST_BUDGET_MS,
   INTERACTIVE_SLEEPER_POLICY,
+  SleeperBudgetExhaustedError,
   currentSleeperPolicy,
   isInteractive,
+  ladderBudgetMs,
+  queueBudgetMs,
+  remainingRequestBudgetMs,
+  requestBudgetExhausted,
+  requestBudgetOverdueMs,
   resolveSleeperPolicy,
   withBackgroundSleeper,
   withInteractiveSleeper,
@@ -190,5 +198,146 @@ describe("the scopes", () => {
     ]);
     assert.equal(a, "interactive");
     assert.equal(b, "background");
+  });
+});
+
+describe("the interactive scope mints one budget for the whole request", () => {
+  test("entering it stamps an absolute deadline", () => {
+    const at = 1_000_000;
+    const policy = withInteractiveSleeper(
+      () => currentSleeperPolicy()!,
+      { now: () => at },
+    );
+    assert.equal(policy.expiresAt, at + INTERACTIVE_REQUEST_BUDGET_MS);
+    assert.equal(policy.requestClass, "interactive");
+  });
+
+  test("a nested interactive scope inherits it rather than minting a second", () => {
+    // The failure this closes is a handler that wraps twice — or a helper that
+    // wraps defensively inside one that already had — quietly getting twelve
+    // seconds per wrap, which is the multiplication the budget exists to stop.
+    const at = 1_000_000;
+    const inner = withInteractiveSleeper(
+      () =>
+        withInteractiveSleeper(() => currentSleeperPolicy()!, {
+          now: () => at + 9_000,
+        }),
+      { now: () => at },
+    );
+    assert.equal(inner.expiresAt, at + INTERACTIVE_REQUEST_BUDGET_MS);
+  });
+
+  test("re-entering interactive from inside background mints a fresh one", () => {
+    // Nothing in the app does this today, and the answer has to be *some*
+    // budget rather than none: a background scope carries no deadline to
+    // inherit, so the honest reading of "this part answers a reader" is a
+    // reader's budget starting now.
+    const at = 1_000_000;
+    const policy = withInteractiveSleeper(
+      () =>
+        withBackgroundSleeper(() =>
+          withInteractiveSleeper(() => currentSleeperPolicy()!, {
+            now: () => at + 5_000,
+          }),
+        ),
+      { now: () => at },
+    );
+    assert.equal(policy.expiresAt, at + 5_000 + INTERACTIVE_REQUEST_BUDGET_MS);
+  });
+
+  test("the background scope carries no deadline at all", () => {
+    const policy = withInteractiveSleeper(
+      () => withBackgroundSleeper(() => currentSleeperPolicy()!),
+      { now: () => 1_000_000 },
+    );
+    assert.equal(policy.expiresAt, undefined);
+    assert.equal(policy.signal, undefined);
+  });
+
+  test("the whole-request budget is the per-ladder one, and says so", () => {
+    // If these two ever diverge it should be because somebody decided they
+    // should: a request budget *smaller* than one ladder would make a single
+    // cold read unable to finish, and a much larger one would put the
+    // multiplication back.
+    assert.equal(INTERACTIVE_REQUEST_BUDGET_MS, INTERACTIVE_SLEEPER_POLICY.deadlineMs);
+    const { maxWaitMs } = INTERACTIVE_SLEEPER_POLICY;
+    assert.ok(maxWaitMs !== undefined);
+    // Heroku's router gives up at thirty seconds; the worst case a handler can
+    // spend on Sleeper is now one queue budget plus the whole request budget.
+    assert.ok(maxWaitMs + INTERACTIVE_REQUEST_BUDGET_MS <= 20_000);
+  });
+});
+
+describe("what is left of a request's budget", () => {
+  const at = 1_000_000;
+  const interactive = { ...INTERACTIVE_SLEEPER_POLICY, expiresAt: at + 12_000 };
+
+  test("a policy with no deadline has an infinite remainder", () => {
+    assert.equal(remainingRequestBudgetMs(BACKGROUND_SLEEPER_POLICY, at), Infinity);
+    assert.equal(requestBudgetExhausted(BACKGROUND_SLEEPER_POLICY, at), false);
+    assert.equal(requestBudgetOverdueMs(BACKGROUND_SLEEPER_POLICY, at), 0);
+  });
+
+  test("the remainder never goes negative; overdue is where that goes", () => {
+    assert.equal(remainingRequestBudgetMs(interactive, at + 20_000), 0);
+    assert.equal(requestBudgetExhausted(interactive, at + 20_000), true);
+    assert.equal(requestBudgetOverdueMs(interactive, at + 20_000), 8_000);
+  });
+
+  test("both budgets are the smaller of the class's and the request's", () => {
+    // Early: the class binds, because there is more request left than either
+    // of its own ceilings.
+    assert.equal(queueBudgetMs(interactive, at), INTERACTIVE_SLEEPER_POLICY.maxWaitMs);
+    assert.equal(ladderBudgetMs(interactive, at), 12_000);
+    // Late: the request binds, on both.
+    assert.equal(queueBudgetMs(interactive, at + 10_000), 2_000);
+    assert.equal(ladderBudgetMs(interactive, at + 10_000), 2_000);
+  });
+
+  test("a background policy is bounded by neither", () => {
+    assert.equal(queueBudgetMs(BACKGROUND_SLEEPER_POLICY, at), undefined);
+    assert.equal(ladderBudgetMs(BACKGROUND_SLEEPER_POLICY, at), undefined);
+  });
+
+  test("a deadline on a policy with no class ceilings still binds", () => {
+    // A background-shaped policy handed a request deadline — which is what a
+    // caller passing `expiresAt` explicitly would produce — must be bounded by
+    // it rather than falling through to "as long as it takes".
+    const bounded = { ...BACKGROUND_SLEEPER_POLICY, expiresAt: at + 3_000 };
+    assert.equal(queueBudgetMs(bounded, at), 3_000);
+    assert.equal(ladderBudgetMs(bounded, at), 3_000);
+  });
+
+  test("`resolveSleeperPolicy` carries the deadline through an override", () => {
+    // The line this merge is most dangerous to forget: a read that overrode any
+    // one field would otherwise come out with no request deadline at all.
+    const resolved = resolveSleeperPolicy({ retries: 0 }, interactive);
+    assert.equal(resolved.expiresAt, interactive.expiresAt);
+    assert.equal(resolved.retries, 0);
+  });
+
+  test("and lets a caller state one where the scope has none", () => {
+    const resolved = resolveSleeperPolicy(
+      { expiresAt: at + 500 },
+      BACKGROUND_SLEEPER_POLICY,
+    );
+    assert.equal(ladderBudgetMs(resolved, at), 500);
+  });
+});
+
+describe("a spent budget is an admission refusal", () => {
+  test("`isAdmissionRefusal` classifies it", () => {
+    // What the routes turn into a 503, and the reason the name is in
+    // `limiter.ts`'s set: to a caller it means the same thing every other
+    // refusal means, which is that no request was made.
+    assert.equal(isAdmissionRefusal(new SleeperBudgetExhaustedError(4)), true);
+    assert.equal(isAdmissionRefusal(new Error("upstream")), false);
+  });
+
+  test("it says how far past the deadline it was", () => {
+    const error = new SleeperBudgetExhaustedError(1_250, "the NFL state");
+    assert.equal(error.name, "SleeperBudgetExhaustedError");
+    assert.equal(error.overdueMs, 1_250);
+    assert.match(error.message, /1250ms before the NFL state/);
   });
 });

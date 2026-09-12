@@ -1,8 +1,8 @@
 import { NextResponse } from "next/server";
 
+import { interactiveRoute, mapOverload } from "@/shared/api";
 import type { ApiErrorPayload, TradeLeaguesPayload } from "@/shared/contract";
 import { getActiveSeason, parseRequestedSeason } from "@/shared/season";
-import { withInteractiveSleeper } from "@/shared/sleeper";
 import { lookupSeasonTradeLeagues } from "@/shared/trades";
 
 export const runtime = "nodejs";
@@ -26,7 +26,7 @@ export async function GET(request: Request) {
   // A reader is waiting, so the season resolve below — the one Sleeper read on
   // this route — takes the interactive budget. See
   // `shared/sleeper/request-policy`.
-  return withInteractiveSleeper(() => readSeasonLeagues(request));
+  return interactiveRoute(() => readSeasonLeagues(request));
 }
 
 async function readSeasonLeagues(request: Request) {
@@ -54,6 +54,12 @@ async function readSeasonLeagues(request: Request) {
       },
     });
   } catch (error) {
+    // An overload is not a fault: a refused permit or a spent request
+    // budget is the app shedding, and `shared/api` is the one place that
+    // decides what that answers with. Everything else falls through to
+    // the 500 below, unchanged.
+    const shed = mapOverload(error);
+    if (shed) return shed;
     console.error("[trades] leagues query failed:", error);
     const payload: ApiErrorPayload = { error: "Failed to load leagues" };
     return NextResponse.json(payload, { status: 500 });

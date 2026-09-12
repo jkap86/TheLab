@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 
+import { interactiveRoute, mapOverload } from "@/shared/api";
 import type { ApiErrorPayload, LeagueHistoryPayload } from "@/shared/contract";
 import { extendLeagueHistory } from "@/shared/manager";
 import type { LeagueHistoryResult } from "@/shared/manager";
@@ -8,7 +9,6 @@ import {
   parseKtcLineupChoice,
 } from "@/shared/ktc/board-choice";
 import { getActiveSeason, parseRequestedSeason } from "@/shared/season";
-import { withInteractiveSleeper } from "@/shared/sleeper";
 import { getLeagueTimeline, resolveTimelinePayload } from "@/shared/timeline";
 import { resolveManagerUser } from "@/shared/user";
 
@@ -68,10 +68,11 @@ export async function GET(
   context: { params: Promise<{ leagueId: string }> },
 ) {
   // Interactive Sleeper traffic — a reader is waiting on this handler, so the
-  // reads under it are bounded rather than queueing behind a crawl batch. No
-  // `signal`: see `shared/sleeper/request-policy`, which is where both halves
-  // of that decision are argued.
-  return withInteractiveSleeper(() => readLeagueTimeline(request, context));
+  // reads under it share one bounded budget rather than queueing behind a crawl
+  // batch, and an overload is answered as one rather than as a 500 (see
+  // `shared/api`). No `signal`: see `shared/sleeper/request-policy`, which is
+  // where both halves of that decision are argued.
+  return interactiveRoute(() => readLeagueTimeline(request, context));
 }
 
 async function readLeagueTimeline(
@@ -112,6 +113,12 @@ async function readLeagueTimeline(
       },
     });
   } catch (error) {
+    // An overload is not a fault: a refused permit or a spent request
+    // budget is the app shedding, and `shared/api` is the one place that
+    // decides what that answers with. Everything else falls through to
+    // the 500 below, unchanged.
+    const shed = mapOverload(error);
+    if (shed) return shed;
     console.error(`[league] timeline failed for ${leagueId}:`, error);
     const body: ApiErrorPayload = { error: "Failed to load the league's history" };
     return NextResponse.json(body, { status: 500 });
@@ -155,6 +162,12 @@ export async function POST(
     }
     return NextResponse.json(historyPayload(result));
   } catch (error) {
+    // An overload is not a fault: a refused permit or a spent request
+    // budget is the app shedding, and `shared/api` is the one place that
+    // decides what that answers with. Everything else falls through to
+    // the 500 below, unchanged.
+    const shed = mapOverload(error);
+    if (shed) return shed;
     // `extendLeagueHistory` turns everything Sleeper can do into a status, so
     // reaching here means the database did not answer — which is not this
     // league's problem and not something a reader can act on by pressing again.

@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 
+import { interactiveRoute, mapOverload } from "@/shared/api";
 import type { ApiErrorPayload, LeaguesStreamMessage } from "@/shared/contract";
 import {
   getManagerLeagues,
@@ -10,7 +11,6 @@ import {
   syncManagerLeagues,
 } from "@/shared/manager";
 import { getActiveSeason, parseRequestedSeason, peekActiveSeason } from "@/shared/season";
-import { withInteractiveSleeper } from "@/shared/sleeper";
 import { resolveManagerUser, toUserInfo } from "@/shared/user";
 
 export const dynamic = "force-dynamic";
@@ -43,10 +43,11 @@ export async function GET(
   context: { params: Promise<{ username: string }> },
 ) {
   // Interactive Sleeper traffic — a reader is waiting on this handler, so the
-  // reads under it are bounded rather than queueing behind a crawl batch. No
-  // `signal`: see `shared/sleeper/request-policy`, which is where both halves
-  // of that decision are argued.
-  return withInteractiveSleeper(() => readLeaguesStream(request, context));
+  // reads under it share one bounded budget rather than queueing behind a crawl
+  // batch, and an overload is answered as one rather than as a 500 (see
+  // `shared/api`). No `signal`: see `shared/sleeper/request-policy`, which is
+  // where both halves of that decision are argued.
+  return interactiveRoute(() => readLeaguesStream(request, context));
 }
 
 async function readLeaguesStream(
@@ -90,6 +91,12 @@ async function readLeaguesStream(
       getManagerLeagues(user.user_id, season),
     ]);
   } catch (error) {
+    // An overload is not a fault: a refused permit or a spent request
+    // budget is the app shedding, and `shared/api` is the one place that
+    // decides what that answers with. Everything else falls through to
+    // the 500 below, unchanged.
+    const shed = mapOverload(error);
+    if (shed) return shed;
     console.error("[leagues] cache read failed:", error);
     const payload: ApiErrorPayload = { error: "Failed to load leagues" };
     return NextResponse.json(payload, { status: 500 });

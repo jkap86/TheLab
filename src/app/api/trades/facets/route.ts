@@ -1,8 +1,8 @@
 import { NextResponse } from "next/server";
 
+import { interactiveRoute, mapOverload } from "@/shared/api";
 import type { ApiErrorPayload } from "@/shared/contract";
 import { getActiveSeason, parseRequestedSeason } from "@/shared/season";
-import { withInteractiveSleeper } from "@/shared/sleeper";
 import {
   parseTradeQuery,
   readTradeFacets,
@@ -39,11 +39,11 @@ export const dynamic = "force-dynamic";
  * background scope of its own.
  */
 export async function GET(request: Request) {
-  return withInteractiveSleeper(() => readFacets(request));
+  return interactiveRoute(() => readFacets(request));
 }
 
 export async function POST(request: Request) {
-  return withInteractiveSleeper(() => readFacets(request));
+  return interactiveRoute(() => readFacets(request));
 }
 
 async function readFacets(request: Request) {
@@ -67,6 +67,12 @@ async function readFacets(request: Request) {
       headers: { "Cache-Control": "private, max-age=60" },
     });
   } catch (error) {
+    // An overload is not a fault: a refused permit or a spent request
+    // budget is the app shedding, and `shared/api` is the one place that
+    // decides what that answers with. Everything else falls through to
+    // the 500 below, unchanged.
+    const shed = mapOverload(error);
+    if (shed) return shed;
     console.error("[trades] facets query failed:", error);
     const payload: ApiErrorPayload = { error: "Failed to load filter options" };
     return NextResponse.json(payload, { status: 500 });

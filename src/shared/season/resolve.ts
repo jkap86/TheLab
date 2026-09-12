@@ -106,6 +106,24 @@ export type SeasonResolverOptions = {
    * retrying, not a claim that the answer is current.
    */
   failureBackoffMs?: number;
+  /**
+   * How a caller *waits* on the one refresh this resolver has in flight.
+   *
+   * **The one place a cold caller can be made to wait on somebody else's
+   * budget**, and the reason it is a seam rather than an `await`. One state
+   * call serves every concurrent caller — which is right, and is what
+   * {@link SeasonResolverOptions.fetchState} being shared means — but a *page*
+   * that joins a crawl tick's refresh is then behind that tick's ladder, which
+   * is minutes rather than the seconds it has. Wired to
+   * `sleeper/shared-wait`'s `awaitShared`, this bounds the wait by whatever the
+   * joining request has left and leaves the refresh running for everyone else.
+   *
+   * A rejection from it is not a failure of the refresh: it is this caller
+   * declining to wait any longer, so {@link SeasonResolver.resolve} answers
+   * from the ladder below it exactly as a failed attempt would. Identity by
+   * default, which is the behaviour this module had before the option existed.
+   */
+  waitForRefresh?: (refresh: Promise<string>) => Promise<string>;
 };
 
 export type SeasonResolver = {
@@ -159,6 +177,7 @@ export function createSeasonResolver(
     now = Date.now,
     ttlMs = SEASON_TTL_MS,
     failureBackoffMs = SEASON_FAILURE_BACKOFF_MS,
+    waitForRefresh = (refresh) => refresh,
   } = options;
 
   let cached: { season: string; at: number } | null = null;
@@ -204,6 +223,9 @@ export function createSeasonResolver(
   const retrying = () =>
     failedAt === null || now() - failedAt >= failureBackoffMs;
 
+  /** The cached season as it stands *now*, past any narrowing. */
+  const held = (): string | undefined => cached?.season;
+
   return {
     async resolve() {
       const forced = override?.();
@@ -231,7 +253,18 @@ export function createSeasonResolver(
       // should learn the real season before answering. Unless the upstream just
       // failed, in which case it has already told us what waiting would buy.
       if (!retrying()) return fallback;
-      return startRefresh();
+      try {
+        return await waitForRefresh(startRefresh());
+      } catch {
+        // This caller ran out of budget while somebody else's refresh was in
+        // flight. The refresh is untouched and will fill the cache for the next
+        // request; this one answers off the same ladder a failed attempt takes,
+        // because rule one of this module is that the app answers with a season.
+        // Read through `held` rather than `cached`: the narrowing taken by the
+        // `if (cached)` above is still in force here and would claim the
+        // refresh cannot have filled it, which is exactly what it may have done.
+        return held() ?? fallback;
+      }
     },
     peek: () => cached,
     peekSeason() {
