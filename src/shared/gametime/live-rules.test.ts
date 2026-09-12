@@ -10,6 +10,7 @@ import {
   LEAGUES_TTL_MS,
   LIVE_INTERVAL_MS,
   MAX_WAIT_MS,
+  nextKickoff,
   pollIntervalMs,
   rowsDueAt,
   WAITING_INTERVAL_MS,
@@ -17,6 +18,54 @@ import {
 import type { FeedState } from "./live-rules.ts";
 
 const NOW = Date.UTC(2026, 8, 13, 12, 0, 0);
+
+describe("nextKickoff", () => {
+  test("the earliest game still to start, whatever order the board is in", () => {
+    assert.equal(
+      nextKickoff([
+        { phase: "pre", kickoff: NOW + 3 * 60 * 60_000 },
+        { phase: "pre", kickoff: NOW + 60 * 60_000 },
+        { phase: "pre", kickoff: NOW + 2 * 60 * 60_000 },
+      ]),
+      NOW + 60 * 60_000,
+    );
+  });
+
+  test("a running or finished game is not a kickoff to come, and neither is an undated one", () => {
+    assert.equal(
+      nextKickoff([
+        { phase: "live", kickoff: NOW - 60 * 60_000 },
+        { phase: "final", kickoff: NOW - 4 * 60 * 60_000 },
+        { phase: "pre", kickoff: null },
+        { phase: "pre", kickoff: NOW + 90 * 60_000 },
+      ]),
+      NOW + 90 * 60_000,
+    );
+    assert.equal(nextKickoff([{ phase: "pre", kickoff: null }]), null);
+    assert.equal(nextKickoff([]), null);
+  });
+
+  test("a kickoff already past is still the next one while its game reads pre", () => {
+    // The scoreboard lags the snap; the pill says "kicking off" and the room
+    // polls at the live cadence, rather than both skipping to the next window.
+    const late = NOW - 30_000;
+    assert.equal(
+      nextKickoff([
+        { phase: "pre", kickoff: NOW + 3 * 60 * 60_000 },
+        { phase: "pre", kickoff: late },
+      ]),
+      late,
+    );
+  });
+
+  test("reads a map's values as readily as the wire's board", () => {
+    const clocks = new Map([
+      ["BUF", { phase: "pre" as const, kickoff: NOW + 60_000 }],
+      ["MIA", { phase: "pre" as const, kickoff: NOW + 60_000 }],
+    ]);
+    assert.equal(nextKickoff(clocks.values()), NOW + 60_000);
+  });
+});
 
 describe("pollIntervalMs", () => {
   test("a running game is the live cadence whatever else is on the board", () => {

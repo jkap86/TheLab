@@ -1,7 +1,7 @@
 import type { RosterPick } from "@/shared/contract";
 
 import { ordinal } from "../format";
-import { PaneRow } from "./pane";
+import { PaneWeekRow } from "./pane";
 
 /**
  * The roster's future draft picks, as the rows of the roster pane's second
@@ -36,9 +36,9 @@ import { PaneRow } from "./pane";
  * **The season leads the row rather than grouping it.** The grid was scanned
  * season by season ("what do I have in 2027?") and put the year on a ledge over
  * each plate; a list a third the width has no room for that, and picks arrive
- * sorted by season anyway — so the year is the row's own first cell, in the
- * well the bench rows opposite put a position in. The reading is the same and
- * the column does the grouping.
+ * sorted by season anyway — so the year is the row's own first cell, in the bay
+ * the bench rows opposite put a position in. The reading is the same and the
+ * column does the grouping.
  *
  * **The timeline is the second reader**, and two of the three fields on a
  * rewound pick are null by construction: see `timelinePickAssets` for why a
@@ -76,21 +76,26 @@ export function pickSpan(picks: readonly RosterPick[]): string | null {
 }
 
 /**
- * One row per pick, as a {@link PaneRow} in the drawer's own stock.
+ * One row per pick, as a {@link PaneWeekRow} in the drawer's own stock.
  *
- * The season leads the row, in the well the bench rows opposite put a position
+ * The season leads the row, in the bay the bench rows opposite put a position
  * in — a portfolio is scanned season by season, picks arrive sorted by season,
  * and the column is what does the grouping the old grid's per-season ledges
- * did. It is wider than that well by four characters against three, which is a
- * year against a position, and it is `numeric` for the same reason: a year is
- * digits, where the tracking that makes three letters read as a tag is width
- * spent on nothing.
+ * did. It is `numeric` for that reason: a year is digits, where the tracking
+ * that makes three letters read as a tag is width spent on nothing. The
+ * `width` the lead cell needed does not come with it, and the measurement is
+ * why — a season sets **33.4px in the 48px bay and 24.6px in the phone's 28px**
+ * one, so the week bay holds a year at both widths as it stands.
  *
- * **It takes no fill and draws no face**, which are the two arms of the part
- * that exist for exactly this row. A pick has no position — it is not a
- * quarterback until somebody spends it — so the milled well shows through; and
- * its subject is an asset rather than a person, so there is nobody to mount.
- * Handed a hue or a mount it would be claiming both.
+ * **It takes no anodising and draws no face**, which are the two arms of the
+ * part that exist for exactly this row. A pick has no position — it is not a
+ * quarterback until somebody spends it — so the milled bay shows billet
+ * through; and its subject is an asset rather than a person, so there is nobody
+ * to mount. Handed a hue or a mount it would be claiming both.
+ *
+ * **One line**, for the standings row's reason one pane over: there is nothing
+ * a second could carry, a pick having no position and no team, and an empty one
+ * would push the name off the row's optical centre.
  *
  * The name is a node rather than a string because a pick's is two inks — the
  * pick, then where it came from — which is the one thing about a portfolio that
@@ -120,17 +125,20 @@ export function PickRows({ picks }: { picks: readonly RosterPick[] }) {
         );
 
         return (
-          <PaneRow
+          <PaneWeekRow
             // Position in the sorted list is the identity the payload keeps —
             // two acquired picks can share round *and* origin name, so nothing
             // on the pick itself is unique.
             key={i}
             ground="drawer"
-            lead={{ label: pick.season, width: "w-[42px] lg:w-[54px]", numeric: true }}
+            seat={{ label: pick.season, position: null, numeric: true }}
             face={null}
             name={name}
             shortName={name}
+            line2={false}
             figure={{
+              // KeepTradeCut's price **whatever lens the seats above are on** —
+              // a pick has no projection and no draft capital.
               text: pick.value !== null ? pick.value.toLocaleString("en-US") : "—",
               percentile: null,
             }}

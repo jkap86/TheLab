@@ -14622,6 +14622,174 @@ rendered as its letter; whether a real account's league and player names sit in
 the name column now that the face takes 31px of every row; and what the injury
 lamp does to a row, since nothing passes one until `status` reaches the wire.
 
+### The manager card took the week tools' tile
+
+**Superseded, one tool over.** That pass unified four separately-authored rows
+into `PaneRow`; the two week tools then drew a *second* shape — a bay milled the
+full height of the tile's left edge with an anodised insert seated in it, a 40px
+face, a two-line name column and a hero figure — on the argument that they are
+one object and the manager card's browser is a different reading. That argument
+is still right about what a week row *is* and was wrong about the split it
+justified: a reader walking `/manager` → `/lineupchecker` → `/gametime` sees one
+league drawn as two row shapes one press apart, which is the drift `PaneRow`
+exists to remove, one grain up. All four of the manager card's lists are
+`PaneWeekRow` now. Applied from a design handoff. **Nothing on the wire moved** —
+no route, no query, no contract type, no payload field, no migration — and one
+token was added, which is a hue.
+
+**`PaneRow` is dead and kept**, on `peekActiveSeason`'s terms and the terms
+`CONSOLE_HOUSING_INSET` is already kept on: the argument in its doc — why a row
+is a *part* rather than a channel, and what it cost to find that out — is the
+thing a later reader would otherwise reconstruct, and it is what the tile the
+week row draws is built on. `PaneRowLead`, `PaneRowFigure` and `PaneRowValue`
+went with it; `PaneRowFaceMount` and `StatusLamp` are still live, both being the
+week row's own.
+
+**Three additions to `PaneWeekRow`, and each is a fact the week tools never had
+to state.**
+
+- **`numeric`** — the bay prints digits. A standings ordinal and a pick's season
+  are numbers, where the `0.04em` that makes three letters read as a tag is width
+  spent on nothing and `12th` with it clips the phone's 28px bay. It is
+  `PaneRowLead.numeric`'s own argument, moved, and it takes `tabular-nums` with
+  it so a column of ordinals sets on one grid. **Two whole class strings**, not a
+  base plus an override: `tabular-nums` and `lg:tracking-[0.04em]` are two base
+  utilities of the same specificity, and which won would be Tailwind's emit
+  order.
+- **`hue`** — anodise a bay whose subject has no position. The palette is asked
+  first, so a seat anodised by who is sitting in it can never be overridden by a
+  caller's mark.
+- **`line2`** — a row with nothing to put on a second line draws **one line,
+  vertically centred, at the same height**. That last clause is the whole of it:
+  a team has a place, a name and a total and nothing else the card has not
+  already said, and what it needs is not a second line but the same 48px, so the
+  two panes still read across each other row for row. False skips the span
+  rather than drawing an empty one — a bare `gap-[2px]` under a name pushes it
+  off the row's optical centre, which on a list of twelve is visible as a wobble
+  rather than as anything a reader could name.
+
+**A row with no game draws no run of game facts, and that is a third state on
+`opponent` rather than a fourth prop.** The manager payload has no game data of
+any kind — `LineupPlayer` is a name, positions, a team and three valuations — so
+the week row's groove, its `opponent ?? "—"`, its clock and its scored total
+would be a column of em dashes answering a question the card is not asking.
+**Absent is not null**: null is an answer — *no opponent this week*, which draws
+the em dash the week tools want — and collapsing the two is how a bye would come
+to read as a league with no schedule. It is `parseRequestedSeason`'s three
+states at a prop's grain.
+
+That distinction lives in a prop's *presence*, so nothing fails when it is
+dropped: a week row that lost `opponent` renders a perfectly ordinary row one
+line shorter, with its clock, its scored total and its `locked` word gone, and a
+manager row that gained one prints `— · —` under every name. Neither throws and
+neither typechecks differently, so `week-rows.test.ts` pins both directions
+textually on `crawl-writes.test.ts`' terms — which call sites pass it, which
+must not, which draw one line, and that the hue is declared once and only in the
+dark block. Four deliberate mutations were checked against it and each fails a
+named assertion.
+
+**`POS · TEAM` is kept at both widths**, which is where these rows part company
+with `PaneWeekRow`'s own arm. The week row hides the position below `lg` because
+the bay is already printing the seat and a ~150px line has better uses for the
+width — the game. Here there is no game, so hiding it leaves the line empty.
+
+**The reader's own team moved into the bay, because the rail it was drawn with
+has nowhere to go.** `PaneRow` ran a lit rail down a row's left edge; the bay
+runs to the tile's own edge and is clipped by its radius, which is why the tile
+has no left padding. So `--slot-metal-mine: 190` anodises the insert and the
+ordinal is engraved in `--billet-accent` rather than the palette's near-white —
+**two cues, because one is a fine distinction on a teal console**, the metal
+palette running at 0.05–0.06 chroma. Teal is the one angle in the palette that
+is not a seventh position, being what this console already spends on the reader
+and on state; it is `:root` only, since a hue is a number and has nothing to turn
+over.
+
+**Whose team this is and what the roster pane is solving stay two facts.** They
+coincide on first render, which is exactly why they cannot be one value — and
+the render is what confirms it: pressing another team moves the lit tile, the
+accent name, the right-hand rail and `--slot-bay-lit-shadow` to that row while
+the anodised bay and its mint ordinal **stay where they were**, at
+`aria-pressed="false"`.
+
+#### Verified
+
+Driven over CDP against `next dev` with no `DATABASE_URL` — the boot hook skips
+migrations and the four loops log their refusals, which is the server coming up
+healthy against nothing — through a temporary `/preview` route mounting the
+**real** `LeagueTeams` and `PickRows` against a twelve-team fixture, then
+deleted. The mechanics are the ones this file records: `--no-proxy-server`,
+`localhost` rather than `127.0.0.1`, a phone viewport from
+`Emulation.setDeviceMetricsOverride` with `mobile: true`, `data-theme` **and**
+`localStorage` rather than `prefers-color-scheme`,
+`--disable-features=OverlayScrollbar`, the
+`--blink-settings=availablePointerTypes=4,…` flags built as a **template
+literal**, a client-component harness, a CDP client over Node's own `WebSocket`
+since Playwright is not in this project's `node_modules`, a fresh
+`--remote-debugging-port` per run, and the browser at
+`/opt/pw-browsers/chromium-1194/chrome-linux/chrome` rather than on `PATH`.
+
+Every value is the handoff's. Rows **48px at `lg` and 52 below**, radius 7,
+padding `0 10px 0 0` / `0 7px 0 0`, gap 10 / 6, `overflow: hidden`; the bay
+**48 / 28px** and full height, its insert inset **4 / 3px** at radius **5 / 4**;
+the bay label `--fs-12` / `--fs-9`; the face **40px** at `--fs-15` with the
+17px copy `display: none`, and the reverse below `lg`; the hero figure **70px**
+at `--fs-21` (24.36px). The standings and pick rows compute
+`flex-direction: row` and `align-items: center` with **one** line; the seats and
+bench rows two, their second reading `QB · BUF` with **one child** — no groove,
+no opponent, no clock — at both widths. A pick row draws **zero** face mounts
+and its billet insert shows through; its season measures **33.38px in the 48px
+bay and 24.61px in the phone's 28px**, which is what makes the `width` prop the
+lead cell needed unnecessary (the handoff estimates ~29 and ~23).
+
+**The two panes line up row for row**: at 1280 both lists' rows sit at
+`75, 127, 179, 231, 283, 335` — identical, and the whole reason the team tile is
+one line at 48px rather than one line at 34. At 390 the rows are again the same
+height and the same 56px pitch, with the two panes' *origins* 2px apart — which
+the before-state reproduces exactly and so predates this.
+
+**The before-state was measured in the same harness** by stashing the diff,
+which is the check that the change is doing something: rows **34 → 48px** at
+`lg` and **48 → 52** below, with `documentElement.scrollWidth` and **zero**
+elements painted past the viewport unchanged at both widths.
+
+Both schemes turn over from the tokens alone: `--billet-accent`
+`#9ffff2 → #08554d`, `--billet-label` `→ #3a4d54`, `--billet-figure`
+`→ #152428`, the rank ramp `oklch(0.84 0.18 150) → oklch(0.52 0.16 150)`. The
+insert's face and `METAL_INK` deliberately do **not** move — a dark part seated
+in a hole reads the same on both sides, which is what `--slot-bay-shadow`'s own
+note already says. An empty seat draws no anodising and an em dash with **no
+colour**; an unprojected player the same. Exactly one `<h1>`, and **no console
+output** beyond the sandbox's cert refusals for the headshot CDN, which is the
+letter-mount fallback being exercised rather than a fault.
+
+2,497 unit tests pass (10 more); `lint`, `typecheck` and `build` are clean.
+
+**One finding, reported rather than patched, and it is where the handoff's own
+prose does not hold.** Its check list says a phone team name "truncates hard
+beside a six-figure KTC total — that is the existing constraint". It is not:
+measured at 390 on the KTC column, the name column goes **118px → 36.67px**, and
+what renders is **two characters and an ellipsis** (`W…`, `Ch…`) where the old
+row rendered about thirteen. The arithmetic is `PaneWeekRow`'s own phone
+geometry — a ~150px pane, less the 17px face, less two 5px gaps, less a figure
+that is 53px at six digits — and it is the same trade this file already recorded
+for the week tools at **54px, about seven characters**; what makes it worse here
+is only that a total is wider than a week's projection. So it is the design's
+constraint rather than an accident, and it is *not* inherited. The two levers are
+a designer's call rather than a silent edit, and both are contained to the
+one-line arm no week tool uses: let a `line2={false}` row put its figure on a
+second line below `lg`, which is the shape the old row had and gives the name
+back ~95px, or drop the 17px face there, which gives back ~22.
+
+**Not verified against real data**, which is the gap to close first: every
+number above is a fixture and no database was reachable from here. Four things a
+render cannot check — whether a real account's league names are readable at two
+characters on a phone, which is the finding above and only a reader settles;
+whether the anodised teal bay reads as *yours* rather than as a seventh position
+on a page of a hundred cards; how the 14px-taller row reads on a real
+twelve-team solve, where a laptop sees roughly three fewer rows before
+scrolling; and how the faces read with pictures in them, since `sleepercdn.com`
+is unreachable from the sandbox and every mount rendered as its letter.
+
 ## The summary readings fold when the card opens
 
 An open card is the screen, and its summary kept its full furniture while it
@@ -15582,6 +15750,43 @@ Web Inspector with the control focused — `matchMedia('(pointer: coarse)').matc
 `font-size` (17px after this change, whatever the first answer was). If the
 first is *true* and it still zooms, the cause is not the gate and not the size,
 and the next lever is the dynamic-viewport route rather than more pixels.
+
+### The floor did not hold, so iOS gets `maximum-scale=1`
+
+Tapping the shares drawer's search field on a phone still zoomed the page with
+the 17px floor in place. `IosFocusZoomGuard` (`features/shared/ios-focus-zoom.tsx`,
+mounted in the root layout) adds `maximum-scale=1` to the viewport meta **on
+iOS and iPadOS only**, which is the fix Safari reliably honours.
+
+**It does not reverse the WCAG argument in `layout.tsx`, and that is why it is
+scoped.** Since iOS 10 Safari ignores `maximum-scale` and `user-scalable` for
+the reader's own pinch gestures and uses `maximum-scale` only to decide whether
+a focused field may zoom — so on iOS it costs nobody their zoom. Chrome on
+Android does honour both against pinch, which is the regression the `viewport`
+export refuses; and Android does not zoom a focused field anyway, so it is left
+alone. iPadOS asking for the desktop site reports itself as a Mac and is caught
+by `maxTouchPoints`.
+
+**An effect, not a `generateViewport` reading the user agent**: a request
+header read in the root layout opts the whole app out of static prerendering,
+the cost `theme.ts` refuses a cookie for. The effect runs after hydration, so
+the edited attribute is never a mismatch, and nothing focusable does anything
+before hydration. The floor stays — it still keeps a focused field legible.
+
+The drawer's own focus-on-open took the `touch:` query in the same change,
+where it read `(pointer: fine)`: an iPad with a keyboard case reports a fine
+pointer, so opening the drawer focused the field and raised the keyboard.
+
+**The iPad arm reads `Macintosh` in the user agent, not `navigator.platform`**,
+and a render is what said so: the Browser pane's phone preset spoofs an Android
+user agent while Chrome leaves the platform at `MacIntel`, so on the platform
+test an emulated Android phone read as an iPad and took `maximum-scale=1`.
+Keyed on the user agent it stays untouched — checked in that pane, the meta
+reading `width=device-width, initial-scale=1, interactive-widget=resizes-content`
+under a Pixel user agent, with an iPhone one detected.
+
+**Not verified on a device**: whether Safari's zoom actually stops is the one
+thing no emulator here can answer.
 
 ### The toggle
 
@@ -17568,3 +17773,117 @@ narrowing **behind a tray key** at all, which is the one behaviour this pass
 changed and the one no measurement closes; and whether nineteen columns with
 six of them pinned is comfortable on a real 1280 laptop, where the fixture's
 short names give the flexible track more slack than a real board would.
+
+### The countdown to the next kickoff is the page's hero
+
+With games still to come and none running, the page said so in one pill beside
+the week stepper — `Waiting · 14 games to come` — and nothing on it was worth
+looking at. **A countdown to the next kickoff is the hero now**: a panel of its
+own under the stepper row (`KickoffCountdown`), ticking every second, and
+`Kicking off` once the clock runs out before the scoreboard has flipped the game
+to live. It is drawn only on that reading, so the moment a game is running it
+goes and the cards are the hero again. **Nothing on the wire moved** — no route,
+no query, no contract field, no migration.
+
+It went through a pass as the pill's own text (`Kickoff in 21:21:08 · 14 to
+come`) first. The pill keeps its words now, because it is the page's status and
+its live region; the countdown needed to be an instrument rather than a caption.
+
+**It is the console's own vocabulary at hero scale.** A metal housing
+(`CONSOLE_CARD_SHELL` + `CONSOLE_METAL`) tilted back 8° under a 1600px
+perspective and flattened on hover, three or four lit glass bays set into it on
+their own plane (`translateZ(14px)`), and each figure struck in the accent the
+way the lineup checker strikes its alerts: `--countdown-face` clipped to the
+glyphs over `--countdown-depth`, four stepped `drop-shadow`s deep (never
+`text-shadow`, for `--alert-depth`'s reason) under the accent's bloom. Both
+tokens have a derived light half — a dark teal ramp on pale glass, and a lit
+lip over a slate cast. The finish is the league card's: grain, specular, a
+graticule floor fading up from the foot, an accent bloom behind the bays, an
+edge light and a slow sheen, all in one clipping wrapper, because a clip on the
+housing itself would flatten every plane under it.
+
+**A changed digit rolls in and nothing else does.** Each digit is its own
+clipped glyph keyed by its value, so only the digits that moved play `cd-tick`;
+the extrusion is on the pair, so it follows a digit mid-roll. The separators
+beat once a second (`cd-beat`), restarted by a key on the second rather than
+run on a timer of their own, so the beat cannot drift from the figures. The
+tilt rides `pointer-fine:` on the card's rule (it exists to be flattened by a
+hover); the extrusion does not, since there is one of these on the page rather
+than one per card. `lab-card-3d` clears the tilt and `lab-anim` stops the roll,
+the beat and the sheen under reduced motion.
+
+**The days bay is drawn only where there is a day to count** (`countdownBays`):
+a Saturday-night wait is hours, minutes and seconds, and a fourth bay reading
+`00` is a quarter of the instrument saying nothing. Hours, minutes and seconds
+are always drawn, so the shape does not change inside the last day. One grid
+row lays out the bays and the separators, with two literal column templates
+because Tailwind cannot see a template built from a count.
+
+**It is sized as a strip, not a billboard.** The first cut was 253px tall at
+1280 and 158 at 375 — a quarter of a laptop screen before a single league card
+— and it is **117 and 79** now. What bought it is the unit label (`Hrs`, `Min`,
+`Sec`) moving *into* its bay on the figure's baseline, which took a whole row
+out, and the kickoff time going from a lit window to lit ink on the header
+line; the digits are `clamp(1.375rem, 6.5vw, 2.875rem)` against the first cut's
+`5.75rem`, and still the largest type on the page.
+
+**The kickoff is read off the board the payload already carries**, through
+`nextKickoff` in `shared/gametime/live-rules` — the function the room's own
+cadence was already using (as a private `nextKickoffOf` in `feeds.ts`), lifted
+and made generic over anything with a phase and a kickoff so the server's clock
+map and the wire's board are both its input. One spelling is the point: a pill
+counting to one game while the room slept until another would reach zero and
+sit there with nothing polling for the snap. That is also why **a kickoff
+already past still counts while its game reads `pre`** — the room reads it as
+imminent and polls at the live cadence, so the countdown says `Kicking off`
+rather than skipping ahead to the next window's clock. `gametime-home.tsx`
+reaches the module directly, on `@/shared/projections/weeks`' terms, because
+the barrel in front of it is server-only.
+
+**Only the healthy waiting reading counts down** (`GametimeReadout.countdownTo`
+is set on that arm alone). A degraded stream may be holding the last scoreboard
+rather than the current one (the line `pricingClocks` draws for the solve), and
+a snapshot or dropped stream has nothing polling for the kickoff a clock would
+promise — both keep their words and draw no panel.
+
+**The panel is not a live region, and the pill keeps its words for that
+reason.** The pill is `role="status"`, and a live region whose text changed
+every second would be read aloud every second — so the pill says `Waiting · 14
+games to come` and announces it once, and the panel's figures are `aria-hidden`
+under an `sr-only` sentence (`Next kickoff Sun 1:00 PM`) that changes only when
+the kickoff does.
+
+**The tick is `useSecondClock`, a module-level `useSyncExternalStore`**, read in
+the panel so a second re-renders it and not a page of a hundred memo'd cards.
+One timer however many readers, none while nothing counts,
+a `null` of its own for the server and hydration passes, and aligned to the next
+second boundary rather than `setInterval(1000)`, which drifts and skips a digit.
+A hidden tab throttling it to once a minute is fine here — the reverse of
+`LeagueSyncKey`'s call about a cooldown countdown, because this reads an
+absolute instant the scoreboard published rather than re-enabling a key the
+server may still refuse. What it does trust is the reader's own clock; a skewed
+device reads a skewed countdown, and `read_at` is there if that ever matters.
+
+**Seconds are rounded *up*** (`countdownParts`), so the last one reads `00:01`
+rather than showing zero before the snap, and at or past zero the parts are
+null — `Kicking off` — rather than negative. Every bay is two digits, so the
+instrument keeps its width while it counts.
+
+#### Verified
+
+Against the running dev server and the live database on Saturday 12 September,
+with week 1's Sunday slate still to come: the panel drew three bays reading
+`21 : 10 : 35` under `Next kickoff` and a lit `Sun 1:00 PM`, ticking a second at
+a time, with the pill beside the stepper reading `Waiting · 14 games to come`
+and the housing visibly tilted back under a fine pointer. In light mode the face
+resolved to the `#0b7a6e` ramp under the lit-lip extrusion. At 375 the panel was
+347px inside the viewport with `scrollWidth` equal to it and no bay clipped, the
+digits still the largest thing on the screen. A fresh load logged no console
+errors. `nextKickoff`, `countdownParts`, `countdownBays` and the readout's arms
+are all under Node's runner; `lint`, `typecheck` and the full suite (2,503) are
+clean.
+
+**Not verified across a snap**: the panel has not yet been watched through
+`Kicking off` and away as `Live · N games in progress` takes the pill, which the
+first Sunday kickoff will show — nor the four-bay arm, which needs a wait of a
+day or more (step to next week to see it).

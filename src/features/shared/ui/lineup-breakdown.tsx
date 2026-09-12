@@ -23,7 +23,7 @@ import {
   DRAWER_BARS,
   PaneDrawer,
   PaneGlass,
-  PaneRow,
+  PaneWeekRow,
   type DrawerTray,
 } from "./pane";
 
@@ -218,7 +218,7 @@ export function LineupLensKeys({
 }
 
 /**
- * One seat, as a {@link PaneRow}.
+ * One seat, as a {@link PaneWeekRow}.
  *
  * **The figure's colour is the league's median at this slot**, not its own
  * magnitude and not a rank — see `slotPercentile`. A seat the lens says nothing
@@ -226,16 +226,18 @@ export function LineupLensKeys({
  * against a median, and painting it red would claim the worst answer in the
  * league for a player nobody has an answer about.
  *
- * **The lead cell says the seat and is filled by the position of whoever is in
- * it**, which is the one reading this row gained: a flex seat still reads `FLX`
- * and is now inked tight-end rose, so a reader scanning the column can see what
- * their flex is actually filled with. An empty seat takes no fill — there is no
- * position to state, and a coloured empty seat would claim there was.
+ * **The bay says the seat and is anodised by the position of whoever is in
+ * it**, which is the reading this row gained and keeps: a flex seat still reads
+ * `FLX` and is anodised tight-end copper, so a reader scanning the column can
+ * see what their flex is actually filled with. An empty seat takes no
+ * anodising — there is no position to state, and a coloured empty seat would
+ * claim there was.
  *
- * The face, the name's ink and the NFL team cell are all the part's now. What
- * was this row's own and is kept is the em-dash rule on that team: **an absent
- * team renders nothing at all**, because the cell sits between a name and a
- * figure and a dash there reads as a missing *number*.
+ * The face, the name's ink and the NFL team are all the part's now — and the
+ * team has left its own column for the second line, where it reads `WR · CIN`
+ * beside the position. That is what took the em-dash rule this row used to
+ * carry with it: a team cell between a name and a figure could not draw a dash,
+ * where a dash in a run of facts on its own line reads as the absence it is.
  */
 function SeatRow({
   player,
@@ -253,15 +255,20 @@ function SeatRow({
   const name = player ? (player.name ?? player.player_id) : "Empty";
 
   return (
-    <PaneRow
-      lead={{ label: slotLabel(slot), position: player?.positions[0] ?? null }}
+    <PaneWeekRow
+      seat={{ label: slotLabel(slot), position: player?.positions[0] ?? null }}
       // An empty seat draws the bare mount with no letter — there is no player
       // to take an initial from, and `Empty`'s `E` would be one.
       face={{ playerId: player?.player_id ?? null, name: player ? name : "" }}
       name={name}
       shortName={player?.name ? shortName(player.name) : name}
-      // Not on the wire — see `PaneRow`'s lamp.
+      // Not on the wire — see the lamp.
       status={null}
+      // `POS · TEAM`, and **nothing else on the line**: no groove, no opponent,
+      // no kickoff. This payload has no game data of any kind, so the week
+      // row's run of game facts would be a column of em dashes answering a
+      // question the manager card is not asking — which is what passing no
+      // `opponent` at all says, rather than passing null. See the prop.
       note={player?.team ?? null}
       figure={{
         text: figure(value, lens),
@@ -272,7 +279,7 @@ function SeatRow({
 }
 
 /**
- * A bench player: the same tile in the drawer, with his position leading it
+ * A bench player: the same tile in the drawer, with his own position in the bay
  * rather than a seat's name.
  *
  * **`ground="drawer"` is the whole of the difference** — one step less cast,
@@ -289,9 +296,9 @@ function BenchRow({ player, lens }: { player: LineupPlayer; lens: Lens }) {
   const name = player.name ?? player.player_id;
 
   return (
-    <PaneRow
+    <PaneWeekRow
       ground="drawer"
-      lead={{
+      seat={{
         label: player.positions[0] ?? "—",
         position: player.positions[0] ?? null,
       }}
@@ -299,6 +306,7 @@ function BenchRow({ player, lens }: { player: LineupPlayer; lens: Lens }) {
       name={name}
       shortName={player.name ? shortName(player.name) : name}
       status={null}
+      // As the seats above: `POS · TEAM` and no game run.
       note={player.team}
       figure={{ text: figure(lensValue(player, lens), lens), percentile: null }}
     />
