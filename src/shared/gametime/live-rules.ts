@@ -130,6 +130,38 @@ export function pollIntervalMs(input: {
 }
 
 /**
+ * The earliest kickoff among games that have not started, epoch ms, or null
+ * where none is known.
+ *
+ * **One spelling for the room and the page.** The room's cadence waits on it
+ * (`pollIntervalMs` above) and the gametime page's status pill counts down to
+ * it, so the two agree about which kickoff is next by construction. A pill
+ * counting to one game while the room slept until another would be a countdown
+ * that reached zero and then sat there, with nothing polling for the snap it
+ * had just promised.
+ *
+ * **A kickoff already past is still the next one while its game reads `pre`.**
+ * The scoreboard flips a game to live a tick or two after it starts, and a
+ * weather delay holds it there longer. Filtering to the future would have the
+ * pill count down to the four o'clock window while the one o'clock games were
+ * lining up — and have the room sleep through their snap. Past is imminent,
+ * which is exactly how `pollIntervalMs` already reads it.
+ *
+ * Generic over anything carrying a phase and a kickoff, so the server's clock
+ * map and the wire's board are both its input without either being converted.
+ */
+export function nextKickoff(
+  games: Iterable<{ phase: GamePhase; kickoff: number | null }>,
+): number | null {
+  let earliest: number | null = null;
+  for (const game of games) {
+    if (game.phase !== "pre" || game.kickoff === null) continue;
+    if (earliest === null || game.kickoff < earliest) earliest = game.kickoff;
+  }
+  return earliest;
+}
+
+/**
  * The cheapest honest signal that the week's feeds moved: the stats feed's own
  * stamp beside the scoreboard's. Two ticks that would price every lineup
  * identically compare equal, and nothing is sent.

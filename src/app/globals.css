@@ -728,6 +728,24 @@
     drop-shadow(0 1px 0 #320404) drop-shadow(0 0 10px rgba(255, 90, 90, 0.55))
     drop-shadow(0 0 24px rgba(255, 90, 90, 0.3)) drop-shadow(0 4px 6px rgba(0, 0, 0, 0.6));
 
+  /*
+   * Gametime's kickoff countdown — the page's hero figure while games are to
+   * come. The red figure's construction in the accent: a ramp clipped to the
+   * glyphs over an extrusion of stepped `drop-shadow`s (never `text-shadow`,
+   * for `--alert-depth`'s reason above), four steps deep rather than three
+   * because these numerals are four times the size, then the accent's own
+   * bloom and a cast onto the glass.
+   *
+   * The ramp's foot is `#0aa898`, which is 6.9:1 on this glass — the whole
+   * glyph clears 4.5:1, for a figure that only needs 3:1 at this size.
+   */
+  --countdown-face: linear-gradient(180deg, #f2fffd 0%, #b8fff5 28%, #5ff5e3 56%, #16d9c5 80%,
+    #0aa898 100%);
+  --countdown-depth: drop-shadow(0 1px 0 #06594f) drop-shadow(0 1px 0 #054840)
+    drop-shadow(0 1px 0 #043631) drop-shadow(0 1px 0 #022521)
+    drop-shadow(0 0 14px rgba(0, 255, 229, 0.5)) drop-shadow(0 0 36px rgba(0, 255, 229, 0.24))
+    drop-shadow(0 8px 10px rgba(0, 0, 0, 0.6));
+
   --card-bg: linear-gradient(158deg, rgba(255, 255, 255, 0.085), rgba(255, 255, 255, 0.018) 46%,
     rgba(255, 255, 255, 0.05));
   --card-bevel: inset 0 1px 0 rgba(255, 255, 255, 0.17), inset 0 -1px 0 rgba(0, 0, 0, 0.55);
@@ -1849,6 +1867,16 @@
     drop-shadow(0 0 10px rgba(185, 28, 28, 0.22))
     drop-shadow(0 2px 4px rgba(15, 23, 42, 0.22));
 
+  /* The countdown turned over the way the red figure is: a dark teal ramp on
+     pale glass whose top stop, `#0b7a6e`, is 4.4:1 on the window's darker end
+     (the floor for a figure this size is 3:1), and an extrusion that becomes
+     a lit lip over a slate cast rather than dark steps under a bloom. */
+  --countdown-face: linear-gradient(180deg, #0b7a6e 0%, #096b61 30%, #075a52 60%, #064b45 85%,
+    #053d38 100%);
+  --countdown-depth: drop-shadow(0 1px 0 rgba(255, 255, 255, 0.95))
+    drop-shadow(0 2px 0 rgba(255, 255, 255, 0.55)) drop-shadow(0 0 14px rgba(13, 148, 136, 0.28))
+    drop-shadow(0 4px 6px rgba(15, 23, 42, 0.25));
+
   /* The tool cards. */
   --card-bg: linear-gradient(158deg, rgba(15, 23, 42, 0.05), rgba(15, 23, 42, 0.012) 46%, rgba(15, 23, 42, 0.035));
   --card-bevel: inset 0 1px 0 rgba(255, 255, 255, 0.9), inset 0 -1px 0 rgba(15, 23, 42, 0.1);
@@ -2464,6 +2492,54 @@ html {
   }
   100% {
     stroke-dashoffset: -46;
+    opacity: 0;
+  }
+}
+
+/*
+ * Gametime's kickoff countdown, all three on `.lab-anim`.
+ *
+ * `cd-tick` rolls a changed digit in from above — each digit is keyed by its
+ * value, so only the digits that moved play it. `cd-beat` is the separators'
+ * once-a-second pulse, restarted by a key on the second rather than run on a
+ * timer of its own, so it cannot drift from the figures beside it. `cd-sheen`
+ * is a slow rake of light across the housing, idle for most of its cycle so
+ * it reads as a glint rather than as a loading bar.
+ */
+@keyframes cd-tick {
+  from {
+    transform: translateY(-0.32em) scaleY(0.82);
+    opacity: 0;
+  }
+  to {
+    transform: none;
+    opacity: 1;
+  }
+}
+
+@keyframes cd-beat {
+  0% {
+    opacity: 1;
+    filter: brightness(1.4);
+  }
+  60%,
+  100% {
+    opacity: 0.35;
+    filter: none;
+  }
+}
+
+@keyframes cd-sheen {
+  0%,
+  55% {
+    transform: translateX(0);
+    opacity: 0;
+  }
+  62% {
+    opacity: 0.7;
+  }
+  100% {
+    transform: translateX(450%);
     opacity: 0;
   }
 }

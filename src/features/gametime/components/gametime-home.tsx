@@ -40,6 +40,10 @@ import {
   writeQueryParam,
 } from "@/features/shared";
 
+// The one pure module behind a server-only barrel, reached directly on
+// `@/shared/projections/weeks`' terms — it is the rule the room's own cadence
+// waits on, so the countdown and the poller agree about which kickoff is next.
+import { nextKickoff } from "@/shared/gametime/live-rules";
 import { isPlausibleWeek } from "@/shared/projections/weeks";
 import type { GametimePlayer, GametimeSide } from "@/shared/contract";
 
@@ -54,6 +58,7 @@ import {
   liveSummary,
 } from "../helpers/live-record";
 import { GametimeCard } from "./gametime-card";
+import { KickoffCountdown } from "./kickoff-countdown";
 import { StatBoard, STAT_BAR_H } from "./stat-board";
 
 /** Stable empty answer, so a render before the read lands hands the memos the same object. */
@@ -203,6 +208,10 @@ function Live({
     connection,
     leagues: leagueList,
     games: payload?.games ?? null,
+    // Off the board the payload already carries, both sides of every game
+    // filed — so a duplicate is the same instant, and no field rides the wire
+    // for it. Thirty-two entries, re-read per frame.
+    nextKickoff: nextKickoff(Object.values(board)),
     stale,
     degraded:
       payload !== null &&
@@ -458,6 +467,14 @@ function Live({
         />
       </div>
 
+      {/* **The hero while the week's games are still to come**: a countdown to
+          the next kickoff. It stands down with the rest of the page's chrome
+          when a card is parked, and goes the moment a game is running — the
+          cards are the hero then. See `KickoffCountdown`. */}
+      {readout.countdownTo !== null && (
+        <KickoffCountdown at={readout.countdownTo} className={card.chromeClass} />
+      )}
+
       {/* The drawers hide their own state once closed, so the narrowing they
           left behind needs a home on the page — the manager console's own
           argument, and the same strip. `contents` at rest so the layout is what
@@ -631,8 +648,17 @@ function Live({
  * **It takes the reading rather than the four inputs to it**, because the
  * cards' own in-play lamps pulse on the same `pulse` and a rule folded in two
  * places is two places for it to drift.
+ *
+ * **It does not tick.** While games are still to come the countdown to the next
+ * kickoff is the page's hero, a panel of its own under this row
+ * (`KickoffCountdown`); the pill keeps `Waiting · 14 games to come`, because it
+ * is a live region and one whose text changed every second would be read aloud
+ * every second.
  */
 function LiveReadout({ readout }: { readout: GametimeReadout }) {
+  const text = `relative whitespace-nowrap font-mono text-[length:var(--fs-11)] uppercase tracking-[0.14em] ${
+    readout.lit ? "text-readout [text-shadow:var(--readout-text-glow)]" : "text-readout-muted"
+  }`;
   return (
     <span
       role="status"
@@ -652,15 +678,7 @@ function LiveReadout({ readout }: { readout: GametimeReadout }) {
               : "bg-foreground/30"
         }`}
       />
-      <span
-        className={`relative whitespace-nowrap font-mono text-[length:var(--fs-11)] uppercase tracking-[0.14em] ${
-          readout.lit
-            ? "text-readout [text-shadow:var(--readout-text-glow)]"
-            : "text-readout-muted"
-        }`}
-      >
-        {readout.text}
-      </span>
+      <span className={text}>{readout.text}</span>
     </span>
   );
 }

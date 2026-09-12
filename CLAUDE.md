@@ -17395,3 +17395,109 @@ narrowing **behind a tray key** at all, which is the one behaviour this pass
 changed and the one no measurement closes; and whether nineteen columns with
 six of them pinned is comfortable on a real 1280 laptop, where the fixture's
 short names give the flexible track more slack than a real board would.
+
+### The countdown to the next kickoff is the page's hero
+
+With games still to come and none running, the page said so in one pill beside
+the week stepper — `Waiting · 14 games to come` — and nothing on it was worth
+looking at. **A countdown to the next kickoff is the hero now**: a panel of its
+own under the stepper row (`KickoffCountdown`), ticking every second, and
+`Kicking off` once the clock runs out before the scoreboard has flipped the game
+to live. It is drawn only on that reading, so the moment a game is running it
+goes and the cards are the hero again. **Nothing on the wire moved** — no route,
+no query, no contract field, no migration.
+
+It went through a pass as the pill's own text (`Kickoff in 21:21:08 · 14 to
+come`) first. The pill keeps its words now, because it is the page's status and
+its live region; the countdown needed to be an instrument rather than a caption.
+
+**It is the console's own vocabulary at hero scale.** A metal housing
+(`CONSOLE_CARD_SHELL` + `CONSOLE_METAL`) tilted back 9° under a 1600px
+perspective and flattened on hover, three or four lit glass bays set into it on
+their own plane (`translateZ(26px)`), and each figure struck in the accent the
+way the lineup checker strikes its alerts: `--countdown-face` clipped to the
+glyphs over `--countdown-depth`, four stepped `drop-shadow`s deep (never
+`text-shadow`, for `--alert-depth`'s reason) under the accent's bloom. Both
+tokens have a derived light half — a dark teal ramp on pale glass, and a lit
+lip over a slate cast. The finish is the league card's: grain, specular, a
+graticule floor fading up from the foot, an accent bloom behind the bays, an
+edge light and a slow sheen, all in one clipping wrapper, because a clip on the
+housing itself would flatten every plane under it.
+
+**A changed digit rolls in and nothing else does.** Each digit is its own
+clipped glyph keyed by its value, so only the digits that moved play `cd-tick`;
+the extrusion is on the pair, so it follows a digit mid-roll. The separators
+beat once a second (`cd-beat`), restarted by a key on the second rather than
+run on a timer of their own, so the beat cannot drift from the figures. The
+tilt rides `pointer-fine:` on the card's rule (it exists to be flattened by a
+hover); the extrusion does not, since there is one of these on the page rather
+than one per card. `lab-card-3d` clears the tilt and `lab-anim` stops the roll,
+the beat and the sheen under reduced motion.
+
+**The days bay is drawn only where there is a day to count** (`countdownBays`):
+a Saturday-night wait is hours, minutes and seconds, and a fourth bay reading
+`00` is a quarter of the instrument saying nothing. Hours, minutes and seconds
+are always drawn, so the shape does not change inside the last day. One grid
+lays out the bays, the separators and the labels under them, with two literal
+column templates because Tailwind cannot see a template built from a count.
+
+**The kickoff is read off the board the payload already carries**, through
+`nextKickoff` in `shared/gametime/live-rules` — the function the room's own
+cadence was already using (as a private `nextKickoffOf` in `feeds.ts`), lifted
+and made generic over anything with a phase and a kickoff so the server's clock
+map and the wire's board are both its input. One spelling is the point: a pill
+counting to one game while the room slept until another would reach zero and
+sit there with nothing polling for the snap. That is also why **a kickoff
+already past still counts while its game reads `pre`** — the room reads it as
+imminent and polls at the live cadence, so the countdown says `Kicking off`
+rather than skipping ahead to the next window's clock. `gametime-home.tsx`
+reaches the module directly, on `@/shared/projections/weeks`' terms, because
+the barrel in front of it is server-only.
+
+**Only the healthy waiting reading counts down** (`GametimeReadout.countdownTo`
+is set on that arm alone). A degraded stream may be holding the last scoreboard
+rather than the current one (the line `pricingClocks` draws for the solve), and
+a snapshot or dropped stream has nothing polling for the kickoff a clock would
+promise — both keep their words and draw no panel.
+
+**The panel is not a live region, and the pill keeps its words for that
+reason.** The pill is `role="status"`, and a live region whose text changed
+every second would be read aloud every second — so the pill says `Waiting · 14
+games to come` and announces it once, and the panel's figures are `aria-hidden`
+under an `sr-only` sentence (`Next kickoff Sun 1:00 PM`) that changes only when
+the kickoff does.
+
+**The tick is `useSecondClock`, a module-level `useSyncExternalStore`**, read in
+the panel so a second re-renders it and not a page of a hundred memo'd cards.
+One timer however many readers, none while nothing counts,
+a `null` of its own for the server and hydration passes, and aligned to the next
+second boundary rather than `setInterval(1000)`, which drifts and skips a digit.
+A hidden tab throttling it to once a minute is fine here — the reverse of
+`LeagueSyncKey`'s call about a cooldown countdown, because this reads an
+absolute instant the scoreboard published rather than re-enabling a key the
+server may still refuse. What it does trust is the reader's own clock; a skewed
+device reads a skewed countdown, and `read_at` is there if that ever matters.
+
+**Seconds are rounded *up*** (`countdownParts`), so the last one reads `00:01`
+rather than showing zero before the snap, and at or past zero the parts are
+null — `Kicking off` — rather than negative. Every bay is two digits, so the
+instrument keeps its width while it counts.
+
+#### Verified
+
+Against the running dev server and the live database on Saturday 12 September,
+with week 1's Sunday slate still to come: the panel drew three bays reading
+`21 : 10 : 35` under `Next kickoff` and a lit `Sun 1:00 PM`, ticking a second at
+a time, with the pill beside the stepper reading `Waiting · 14 games to come`
+and the housing visibly tilted back under a fine pointer. In light mode the face
+resolved to the `#0b7a6e` ramp under the lit-lip extrusion. At 375 the panel was
+347px inside the viewport with `scrollWidth` equal to it and no bay clipped, the
+digits still the largest thing on the screen. A fresh load logged no console
+errors. `nextKickoff`, `countdownParts`, `countdownBays` and the readout's arms
+are all under Node's runner; `lint`, `typecheck` and the full suite (2,503) are
+clean.
+
+**Not verified across a snap**: the panel has not yet been watched through
+`Kicking off` and away as `Live · N games in progress` takes the pill, which the
+first Sunday kickoff will show — nor the four-bay arm, which needs a wait of a
+day or more (step to next week to see it).
