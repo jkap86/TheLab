@@ -4,7 +4,13 @@ import { useEffect, useRef, useState } from "react";
 
 import { CONSOLE_KEY_PILL_BARE, type RackDrawerKey } from "@/features/shared";
 
-import { DOCK_AT_REST, dockScroll, type DockScroll } from "../helpers/dock-scroll";
+import {
+  DOCK_AT_REST,
+  DOCK_SETTLE_MS,
+  dockRested,
+  dockScroll,
+  type DockScroll,
+} from "../helpers/dock-scroll";
 
 /**
  * The page's two Browse keys, as hardware floating over it.
@@ -185,6 +191,13 @@ export function BrowseDock({
  * effects runs first, the jump is spent on the baseline rather than read as a
  * direction. See {@link DockScroll.from}.
  *
+ * **The settle is a timer here rather than a rule there**, because the rule has
+ * no clock: `dockRested` says what standing up at rest *is* and this is what
+ * notices that the page has stopped. It is cleared and rearmed on each scroll
+ * while the dock is away, so what fires it is silence rather than an elapsed
+ * total, and it is cleared on teardown — a park unsubscribes, and a timer that
+ * outlived one would stand the dock up behind a card that has the screen.
+ *
  * **A dock with focus inside it does not leave.** Arrow keys scroll the page
  * while a button is focused, so without this a keyboard reader on a cap would
  * watch it go `inert` under them and be dropped to `<body>`.
@@ -220,19 +233,43 @@ function useDocked(
     state.current = DOCK_AT_REST;
     if (parked) return;
 
-    const onScroll = () => {
-      const next = dockScroll(state.current, window.scrollY);
+    let settle: ReturnType<typeof setTimeout> | undefined;
+
+    const rest = () => {
+      settle = undefined;
+      const next = dockRested(state.current);
       if (next === state.current) return;
       state.current = next;
+      setDocked(true);
+    };
 
-      const stay =
-        ref.current?.contains(document.activeElement) === true ||
-        window.matchMedia?.("(prefers-reduced-motion: reduce)").matches === true;
-      setDocked(stay ? true : next.docked);
+    const onScroll = () => {
+      const next = dockScroll(state.current, window.scrollY);
+      if (next !== state.current) {
+        state.current = next;
+
+        const stay =
+          ref.current?.contains(document.activeElement) === true ||
+          window.matchMedia?.("(prefers-reduced-motion: reduce)").matches ===
+            true;
+        setDocked(stay ? true : next.docked);
+      }
+
+      // Armed **only while the dock is away**, and after the decision above
+      // rather than before it, so the event that hides it is the event that
+      // starts the clock. Rearming on every scroll of a dock that is standing
+      // would be a timer per frame that exists to do nothing, and a reader
+      // scrolling *up* is the ordinary way this page is read.
+      if (state.current.docked) return;
+      clearTimeout(settle);
+      settle = setTimeout(rest, DOCK_SETTLE_MS);
     };
 
     window.addEventListener("scroll", onScroll, { passive: true });
-    return () => window.removeEventListener("scroll", onScroll);
+    return () => {
+      window.removeEventListener("scroll", onScroll);
+      clearTimeout(settle);
+    };
   }, [parked, ref]);
 
   return docked;

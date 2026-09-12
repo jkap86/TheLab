@@ -9311,6 +9311,46 @@ watch it go `inert` under them and be dropped to `<body>`.
 is not, so without it Tab lands on a control translated off the bottom of a
 viewport that cannot be scrolled to reach it.
 
+#### The dock comes back when the page stops
+
+The direction rule alone took the dock away on the way down and returned it only
+on the way up, which is the shape most pinned controls have and is the wrong one
+for these two: they are the page's **exits** rather than a shortcut, so a reader
+who had scrolled to the card they wanted and stopped had to scroll *back* — away
+from the thing they were reading — to reach them. It is worst at the foot of the
+list, where there is nothing left to scroll up for and the dock is away precisely
+because the reader arrived, and that is the concern this section's own
+not-verified note named a pass early; a reader reported it as the keys not coming
+back when the scrolling stopped.
+
+**So a reader who has stopped is a reader who wants the keys back.** Seven
+hundred milliseconds of silence and the dock returns. `DOCK_SETTLE_MS` carries
+why that is silence rather than a pause — momentum keeps the events coming for
+the length of a flick, so what has to elapse is a gap between *gestures* — and
+what it costs is a reader who genuinely rests longer than that between two
+flicks of one long scroll, who sees the dock come back and go away again. That
+is one flicker and the accepted cost. What the direction rule still does is take
+the keys out from under a finger moving down the page, which is what makes the
+hiding a property of **scrolling** rather than of where the reader ended up.
+
+**`dockRested` is the pure half and the timer is the wiring**, because the rule
+has no clock: that function says what standing up at rest *is*, and the hook is
+what notices the page has stopped. It **keeps the baseline** rather than clearing
+it — the silence began at the last event's position, which is exactly where the
+next delta should be measured from, and nulling it would spend the reader's next
+genuine scroll on a baseline the rule already has (the null is for the page's own
+jumps and nothing else). And it returns `prev` by identity where the dock already
+stands, so a settle that fires on one that never left is a no-op rather than a
+re-render of a hundred league cards.
+
+**The timer is armed only while the dock is away, and after the decision rather
+than before it**, so the event that hides the dock is the event that starts the
+clock. Rearmed on every scroll of a dock that is standing it would be a timer per
+frame that exists to do nothing, and a reader scrolling *up* is the ordinary way
+this page is read. It is cleared on teardown, because a park unsubscribes and a
+timer that outlived one would stand the dock up behind a card that has the
+screen.
+
 #### Two things are silent when wrong, and one of them shipped wrong first
 
 `dock-scroll.ts` is the rule, pure and under Node's own runner, for
@@ -9409,6 +9449,19 @@ cap, a scroll to 900 leaves it at opacity 1 and still focused. Under
 `prefers-reduced-motion: reduce` its `transition-property` computes to `none` and
 a scroll down leaves it at opacity 1, transform identity and not inert.
 
+**The settle was driven as the thing it fixes**, at 1280 and 390 in a single
+pass. A scroll that hides the dock leaves it hidden at **+420ms** and standing at
+**+1020ms** — `inert` false, opacity 1, identity transform — with the page not
+moving in between; it hides again on the next scroll down and settles again; a
+scroll up still returns it **at once** rather than waiting the 700ms out; and at
+the **foot of the page**, where there is nothing left to scroll up for, it comes
+back on its own. Two flicks broken by a 500ms pause leave it away, which is the
+case the threshold is set against. Its two buttons go **0 reachable hidden → 2
+after the settle**, so the `inert` tracks what is on screen rather than what the
+rule last decided. Under reduced motion it never hides and the settle changes
+nothing; parked, the listener and the timer are both gone and the dock stands
+back up on the way out.
+
 The parked arm was driven against the real stylesheet rule by writing
 `data-card-stage="parked"` onto the `<main>` the way `useActiveCard` does:
 `display` goes **flex → none → flex**. Sent away, parked and brought back, the
@@ -9430,20 +9483,24 @@ Browse channel having gone. At 1280 and 390 in both schemes:
 elements painted past it that an ancestor does not clip, exactly one `<h1>`, the
 dock clear of the rack, and **no console output of any kind**.
 
-2,391 unit tests pass (ten more, all `dockScroll`'s — the two jitter arms, the
-drift that accumulates through them, the floor in both directions, the eaten
-first event, and the identity return that lets the caller skip a render of a
-hundred cards); `lint`, `typecheck` and `build` are clean.
+2,397 unit tests pass — ten `dockScroll`'s (the two jitter arms, the drift that
+accumulates through them, the floor in both directions, the eaten first event,
+and the identity return that lets the caller skip a render of a hundred cards)
+and six `dockRested`'s (the stand-up, the kept baseline and the direction read
+from it, the identity return, a rest with no baseline yet, the hide that still
+follows a settle, and the constant's own bounds); `lint`, `typecheck` and `build`
+are clean.
 
 **Not verified against real data**, which is the gap to close first: no database
 was reachable from here, so every page the dock was driven over was an error
 card or a fixture grid. Four things a render cannot check — whether the blur is
 short enough that a real league card stays legible through it, which is the one
 claim the whole material rests on and the one no empty page can show; whether
-the dock sitting over the bottom-right of the last card is felt, since
-hide-on-scroll means it is away exactly when a reader is at the foot of the
-list; whether a hundred cards' worth of scroll on a real account keeps the 6px
-floor from reading as lag; and whether readers find two keys at the bottom-right
+**700ms** is the right silence against a real reader's scrolling, which is the
+one number here only a real page can settle — shorter and a long scroll broken by
+a pause flickers the dock back, longer and the return stops reading as a
+consequence of stopping; whether a hundred cards' worth of scroll on a real
+account keeps the 6px floor from reading as lag; and whether readers find two keys at the bottom-right
 as readily as they found them in the rack, which is the one question only the
 first real page answers.
 

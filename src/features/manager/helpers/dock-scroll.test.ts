@@ -5,6 +5,8 @@ import {
   DOCK_AT_REST,
   DOCK_FLOOR_PX,
   DOCK_JITTER_PX,
+  DOCK_SETTLE_MS,
+  dockRested,
   dockScroll,
   type DockScroll,
 } from "./dock-scroll.ts";
@@ -78,5 +80,47 @@ describe("dockScroll", () => {
     assert.equal(first.docked, false);
     assert.equal(first.from, 1000);
     assert.equal(dockScroll(first, 1000 - DOCK_JITTER_PX).docked, true);
+  });
+});
+
+describe("dockRested", () => {
+  test("stands a hidden dock up", () => {
+    assert.equal(dockRested(at(900, false)).docked, true);
+  });
+
+  test("keeps the baseline, so the next scroll is read as a direction", () => {
+    // The silence began at the last event's position, which is where the next
+    // delta should be measured from — nulling it would spend the reader's next
+    // genuine scroll on a baseline the rule already has.
+    const rested = dockRested(at(900, false));
+    assert.equal(rested.from, 900);
+    assert.equal(dockScroll(rested, 900 + DOCK_JITTER_PX).docked, false);
+  });
+
+  test("returns a standing dock by identity", () => {
+    // What makes a settle on a dock that never left a no-op rather than a
+    // re-render of a hundred league cards.
+    const prev = at(900);
+    assert.equal(dockRested(prev), prev);
+  });
+
+  test("a dock that has never read a baseline rests with none", () => {
+    assert.equal(dockRested({ from: null, docked: false }).from, null);
+    assert.equal(DOCK_AT_REST.docked, true);
+  });
+
+  test("a rested dock hides again on the next scroll down", () => {
+    // The direction rule is unchanged: what the settle undoes is where the
+    // reader ended up, not the fact that scrolling down hides it.
+    const rested = dockRested(dockScroll(at(0), 900));
+    assert.equal(rested.docked, true);
+    assert.equal(dockScroll(rested, 1800).docked, false);
+  });
+
+  test("the settle is a real wait, shorter than a second", () => {
+    // Long enough to be silence between gestures rather than a pause inside
+    // one, short enough that the return reads as a consequence of stopping.
+    assert.ok(DOCK_SETTLE_MS >= 300);
+    assert.ok(DOCK_SETTLE_MS <= 1000);
   });
 });

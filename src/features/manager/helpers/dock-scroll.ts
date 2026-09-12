@@ -1,10 +1,13 @@
 /**
  * Whether the floating Browse dock stands, read off the page's scroll.
  *
- * The dock leaves on the way down and comes back on the way up, which is the
- * ordinary bargain for a control pinned over a page's own content: it is in
- * thumb reach at any depth, and it is not sitting on the card a reader is
- * scrolling toward.
+ * The dock leaves on the way down, and comes back on the way up **or when the
+ * page comes to rest** — so what sends it away is scrolling rather than having
+ * scrolled. That is the whole bargain for a control pinned over a page's own
+ * content: it is in thumb reach at any depth, it is not sitting on the card a
+ * reader is scrolling toward, and it is there again by the time they have
+ * stopped to read one. See {@link DOCK_SETTLE_MS} for why the second half is
+ * not optional here.
  *
  * **It is a pure function rather than four lines inside the listener** for the
  * reason `seat-compare.ts` and `player-filters.ts` are: every one of the rules
@@ -60,6 +63,33 @@ export const DOCK_JITTER_PX = 6;
  */
 export const DOCK_FLOOR_PX = 24;
 
+/**
+ * How long the page has to be still before the dock comes back on its own.
+ *
+ * **The direction rule alone is the wrong shape for these two keys.** It takes
+ * the dock away on the way down and returns it only on the way up, which is
+ * the ordinary bargain for a control that is a shortcut — and these are the
+ * page's two exits. A reader who has scrolled to the card they wanted and
+ * stopped would have to scroll *back*, away from the thing they are reading,
+ * to reach them; and that is worst at the foot of the list, where there is
+ * nothing left to scroll up for and the dock is away precisely because the
+ * reader arrived.
+ *
+ * So a reader who has stopped is a reader who wants the keys back. What the
+ * direction rule still does is take them out from under a finger that is
+ * moving down the page; this is what makes the hiding a property of
+ * *scrolling* rather than of where the reader ended up.
+ *
+ * 700ms is silence rather than a pause: momentum keeps the events coming for
+ * the length of a flick, so what has to elapse is a gap between gestures. It
+ * is short enough that the return reads as a consequence of stopping. A reader
+ * who genuinely rests longer than this between two flicks of one long scroll
+ * sees the dock come back and go away again, which is one flicker and the
+ * accepted cost — and the number is the one thing here only a real page can
+ * settle.
+ */
+export const DOCK_SETTLE_MS = 700;
+
 /** The resting state: standing, with no baseline read yet. */
 export const DOCK_AT_REST: DockScroll = { from: null, docked: true };
 
@@ -79,4 +109,22 @@ export function dockScroll(prev: DockScroll, y: number): DockScroll {
   const docked = dy < 0 || y < DOCK_FLOOR_PX;
   if (docked === prev.docked && y === prev.from) return prev;
   return { from: y, docked };
+}
+
+/**
+ * Stand the dock up where the page has come to rest.
+ *
+ * Returns `prev` **by identity** where it already stands, so a settle that
+ * fires on a dock that never left is a no-op rather than a re-render of a
+ * hundred league cards.
+ *
+ * The baseline is deliberately **kept** rather than cleared. It is already the
+ * position of the last event before the silence, which is exactly where the
+ * next delta should be measured from — so keeping it means the reader's next
+ * scroll is read as a direction rather than spent on a baseline the rule
+ * already has. The null is for the page's *own* jumps and nothing else; see
+ * {@link DockScroll.from}.
+ */
+export function dockRested(prev: DockScroll): DockScroll {
+  return prev.docked ? prev : { from: prev.from, docked: true };
 }
