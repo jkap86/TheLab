@@ -73,6 +73,22 @@ import type {
  * from 1 on every narrowing. A stored place would have a board narrowed to
  * tight ends open at rank 41.
  */
+/**
+ * The closed bar's own height, as the classes that declare it.
+ *
+ * **One spelling, because a second part has to clear it.** The board is
+ * `fixed` to the foot of the viewport and so is the page's Browse dock, and
+ * the dock lifts by exactly this — see `gametime-home.tsx`, which puts this on
+ * the page root so both read the same number. A height written twice is a dock
+ * that sits on the bar the first time either moves, and the symptom is a press
+ * that misfires rather than anything that looks wrong.
+ *
+ * Whole class strings rather than a value interpolated into one: Tailwind finds
+ * classes by scanning source text, so `[--stat-bar-h:${n}]` would generate
+ * nothing at all. It is `DRAWER_BAR_HEIGHT`'s rule, one part over.
+ */
+export const STAT_BAR_H = "[--stat-bar-h:3rem] sm:[--stat-bar-h:3.25rem]";
+
 export function StatBoard({
   week,
   lines,
@@ -155,7 +171,7 @@ export function StatBoard({
       style={{ height: open ? "calc(100dvh - var(--rack-clear))" : "var(--stat-bar-h)" }}
     >
       <div
-        className="pointer-events-auto relative flex w-full max-w-6xl flex-col overflow-hidden rounded-t-[1.125rem] bg-[image:var(--panel-case-bg)] shadow-[var(--panel-case-shadow)] [--stat-bar-h:3rem] sm:[--stat-bar-h:3.25rem]"
+        className={`pointer-events-auto relative flex w-full max-w-6xl flex-col overflow-hidden rounded-t-[1.125rem] bg-[image:var(--panel-case-bg)] shadow-[var(--panel-case-shadow)] ${STAT_BAR_H}`}
       >
         <Bar
           open={open}

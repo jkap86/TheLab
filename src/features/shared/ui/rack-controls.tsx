@@ -30,6 +30,23 @@ import { useVisualViewportHeight } from "../use-visual-viewport";
  * nothing renders no controls at all. It is the same rule `app-rack.tsx`
  * already applies to the tools page's menu.
  *
+ * **No page publishes today**, and the seam is kept rather than deleted. All
+ * three pages that did have taken their Browse keys down into `BrowseDock`, a
+ * housing pinned to the foot of the viewport — the argument being the one the
+ * rack itself makes about this pair, that they are the only things up there
+ * acting on the page underneath. So `usePublishRackControls` and
+ * `useRackControls` have no caller between them and `RackControlsKeys` never
+ * renders; each is noted dead where it is declared, on `peekActiveSeason`'s
+ * terms.
+ *
+ * Two things in here are emphatically *not* dead. {@link RackDrawerKey} is the
+ * shape all three pages still type their keys as, and the dock takes the
+ * identical array — which is what let the keys move at all without a `switch`
+ * on the route appearing somewhere, and is why the vocabulary stays one. And
+ * {@link RackControlsProvider} is mounted from `layout.tsx` for a second job
+ * that has nothing to do with the rack: it hosts `useVisualViewportHeight`,
+ * which publishes `--vvh` for the modal panels to cap themselves against.
+ *
  * **It carried six more fields until the View track came off the rack** — the
  * filter state and its setter, the unfiltered league list, the column
  * selection, the KTC market and its scrape stamp. Those controls are on the
@@ -124,7 +141,14 @@ export function RackControlsProvider({ children }: { children: ReactNode }) {
   );
 }
 
-/** What the rack should be carrying, or null on a page that publishes nothing. */
+/**
+ * What the rack should be carrying, or null on a page that publishes nothing.
+ *
+ * **It answers null on every route today** — see the module note. `app-rack.tsx`
+ * is its one reader and is written for both answers, so nothing up there is
+ * wrong; what is unreachable is the branch that draws the keys, and the
+ * wordmark's own gate, which is measured against a row width no page asks for.
+ */
 export function useRackControls(): RackControls | null {
   return useContext(ReadContext);
 }
@@ -149,6 +173,8 @@ export function useRackControls(): RackControls | null {
  * page to `/trades` would leave the previous page's keys in the rack, wired to
  * a component that has unmounted.
  */
+/* No caller today — see the module note for what took the keys down onto the
+   pages, and why the hook is kept rather than deleted. */
 export function usePublishRackControls(controls: RackControls): void {
   const publish = useContext(WriteContext);
   const { keys, drawer, onOpenDrawer } = controls;

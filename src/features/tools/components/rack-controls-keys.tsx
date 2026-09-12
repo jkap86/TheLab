@@ -11,6 +11,17 @@ import {
 /**
  * The page's own controls, in the rack: the Browse track.
  *
+ * **Nothing reaches it today, and that is recorded rather than deleted.** The
+ * manager page's Browse pair came down into a dock pinned to the foot of the
+ * viewport, and the two week tools have since followed with their own key — so
+ * `useRackControls` answers null on every route and this never renders. What
+ * kept it is `peekActiveSeason`'s rule: the argument below is the one a reader
+ * would otherwise have to reconstruct if a page ever publishes again, and the
+ * seam it is half of is still live in one respect — `RackDrawerKey` is the
+ * shape all three pages type their keys as, which is precisely what let them
+ * move without a `switch` on the route. See `browse-dock.tsx`, which is where
+ * these caps are drawn now and is the rack's vocabulary taken with them.
+ *
  * It was two tracks and four keys — Players and Leaguemates, then Filters and
  * Columns — which is what the manager page's two header housings became when
  * the rack was pinned. **The View track has since gone back down onto the
@@ -27,8 +38,8 @@ import {
  * a page's state, so `RackControls` is published upward and this component only
  * mounts it; a page that publishes nothing renders none of this, the rule the
  * tools menu already lives by. The two legends used to be written here, which
- * held while `/manager` was the only page publishing a pair; the lineup checker
- * publishes `Starters` and `Opponents`, and a rack naming both pages' keys
+ * held while `/manager` was the only page publishing a pair; the week tools
+ * published a key of their own, and a rack naming both pages' vocabularies
  * would need a `switch` on the route to choose between them. So the keys are
  * data and this maps over them — and when the phone cap became a picture rather
  * than a word, the picture joined them for exactly the same reason.

@@ -1,33 +1,40 @@
 import type { RackDrawerKey } from "./rack-controls";
 
 /**
- * The Browse key a **week** tool puts in the rack: its legend, and the glyph
- * the rack draws it as below `md`.
+ * The Browse key a **week** tool carries: its glyph, and the legend each tool
+ * gives it.
  *
- * **Both week tools publish this one array**, which is where it parts company
- * with the manager page's own `browse-marks.tsx`. That file's rule — a page owns
- * its glyph as it owns its legend, because the rack cannot `switch` on the route
- * — is about what the *rack* can see, and it is unchanged: the keys are still
- * data a page publishes. What changed is that there are two publishers of the
- * same key. The lineup checker and gametime answer the same question over the
- * same leagues with the same subject kind, so a legend or a drawing that
- * differed between them would be one fact drawn two ways on two pages a reader
- * walks between — the drift the `week` vocabulary exists to prevent. It is the
- * "second reader" line `CONSOLE_KEY`, `ManagerPlate` and `SharesDrawer` itself
- * all moved here on.
+ * **The glyph is one drawing and the legend is two**, which is where this
+ * parts company with what it used to be. It was a single `WEEK_BROWSE_KEYS`
+ * array both tools published, on the argument that the lineup checker and
+ * gametime ask the same question over the same leagues with the same subject
+ * kind, so a legend that differed between them would be one fact drawn two
+ * ways on two pages a reader walks between.
+ *
+ * That is right about the *drawing* and was wrong about the word, and what
+ * shows it is a parameter the panel behind this key has taken since gametime
+ * became its second reader: `figureLabel` is `Proj` on the checker and `Live`
+ * on gametime, because the figure beside every player is a projection on one
+ * page and what he has scored and is on course for on the other. The panel
+ * really does answer two questions, so `Start/Sit` and `Player Scores` are two
+ * honest names for it rather than drift — and the shared mark is what still
+ * says it is one panel. A reader who walks between the tools meets the same
+ * object under the name the page they are on would give it.
+ *
+ * **They are two module-level constants rather than one factory**, and the
+ * reason survives the move off the rack. `usePublishRackControls` required a
+ * stable array — a literal rebuilt each render published each render, set an
+ * ancestor's state and re-rendered, which is a loop rather than a stale value.
+ * `BrowseDock` is one component rather than an ancestor, so what a fresh array
+ * costs there is a re-render of it rather than a loop; the requirement is
+ * softer and the answer is the same, because a constant is free. The `icon`
+ * element is built once here on the same terms, and being an element rather
+ * than a component is what makes that possible at all.
  *
  * **It used to be two keys**, `Starters` docking left and `Opponents` docking
  * right, over two panels that each read one side of the week. One panel lists
  * every player once with four readings beside him, so a second cap would open
- * a drawer that is already open — see `WeekSharesDrawer`. The ~44px of rack
- * width that frees is what the wordmark's own conditional can have back at 390.
- *
- * **Module scope, not a literal in a render**, which is the requirement
- * `usePublishRackControls` states rather than a habit: the publish effect
- * depends on this array, so one rebuilt each render would publish each render,
- * set an ancestor's state and re-render — a loop rather than a stale value. The
- * `icon` element is built once here for the same reason, and being an element
- * rather than a component is what makes that possible at all.
+ * a drawer that is already open — see `WeekSharesDrawer`.
  */
 
 /**
@@ -41,8 +48,12 @@ import type { RackDrawerKey } from "./rack-controls";
  *
  * The rules on the panel are drawn at a lighter stroke than its own frame, so
  * at 17px they read as ruled lines rather than as a filled block.
+ *
+ * **It is named for what it draws rather than for what it says**, which is the
+ * whole of why one mark can carry two legends: it was `BothSidesMark`, after a
+ * legend neither tool uses now.
  */
-export function BothSidesMark() {
+export function WeekPlayersMark() {
   return (
     <svg
       viewBox="0 0 24 24"
@@ -67,9 +78,19 @@ export function BothSidesMark() {
 }
 
 /**
- * The key, as the rack takes it — see the module note for why one array serves
- * both week tools and why it must stay at module scope.
+ * The lineup checker's key. What its panel answers is which of a week's
+ * lineups a player is on and what the seat opposite him did — a start/sit
+ * call, made before the games.
  */
-export const WEEK_BROWSE_KEYS: readonly RackDrawerKey[] = [
-  { kind: "week", label: "Both sides", icon: <BothSidesMark /> },
+export const START_SIT_BROWSE_KEYS: readonly RackDrawerKey[] = [
+  { kind: "week", label: "Start/Sit", icon: <WeekPlayersMark /> },
+];
+
+/**
+ * Gametime's. The same panel over the same leagues, with the week in progress:
+ * the figure beside each player is what he has scored and is on course for, so
+ * what the key opens is a board of scores rather than a decision.
+ */
+export const PLAYER_SCORES_BROWSE_KEYS: readonly RackDrawerKey[] = [
+  { kind: "week", label: "Player Scores", icon: <WeekPlayersMark /> },
 ];

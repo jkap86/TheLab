@@ -9682,6 +9682,149 @@ first real page answers — now asked of two glyphs rather than two legends, whi
 is the same question one step harder and the trade the rack's phone arm already
 makes.
 
+### The week tools took the dock too, and the rack fell silent
+
+`/manager` put its Browse pair in a dock at the foot of the viewport and the two
+week tools kept publishing theirs upward into the app rack — so one control
+answering the same question over the same leagues sat in two different corners
+depending on which tool a reader had walked into. Both took the dock. Applied
+from a design handoff. **Nothing on the wire moved** — no route, no query, no
+contract type, no payload field, no migration — and `BrowseDock` itself needed
+no change to serve them.
+
+**The move is the line the component was written against.** Its own note said
+it lived in `features/manager` because the rule every other piece in `shared/`
+moved on — a second feature reads it — had not been met, and that the day a week
+tool wanted a dock this would be a move rather than a rewrite. It was: the
+component is `features/shared/ui/browse-dock.tsx` and `dock-scroll.ts` travelled
+with it, which it had to, since a module in `shared/` may not reach into a
+sibling feature for its own rule. What made the move free is that the keys
+arrive as **data** — the page names its own legend and its own glyph, exactly as
+the rack took them — so three pages' vocabularies meet no `switch` in there.
+
+**The glyph is one drawing and the legend is two**, which reverses what
+`week-browse-keys.tsx` used to say. It held a single array both tools published,
+on the argument that a legend differing between them would be one fact drawn two
+ways. That is right about the drawing and was wrong about the word, and what
+shows it is a parameter the panel behind the key has taken since gametime became
+its second reader: `figureLabel` is `Proj` on the checker and `Live` on
+gametime, because the figure beside every player is a projection on one page and
+what he has scored and is on course for on the other. So the key reads
+**`Start/Sit`** and **`Player Scores`**, and the shared mark is what still says
+it is one panel. `BothSidesMark` was renamed `WeekPlayersMark` with them — it was
+named after a legend neither tool uses now, and naming it for what it *draws* is
+the whole of why one mark can carry two words.
+
+**First in the tree, which is deliberately not the last child the handoff asks
+for.** Where a `fixed` part is drawn and where it sits in the tab order are two
+questions, and that is the one thing in the bundle not taken: this key is the
+page's exit, in the rack a keyboard reader reached it immediately, and rendered
+where it is drawn it would sit behind a hundred league cards and a modal drawer
+— a reach this change would be *introducing*. It is `LeaguesHome`'s own decision,
+on the page the handoff itself names as the pattern to follow.
+
+**No page publishes into the rack now, and the seam is kept rather than
+deleted.** `usePublishRackControls` and `useRackControls` have no caller between
+them, `RackControlsKeys` never renders, and the wordmark's own conditional — the
+one gated on a page *having* controls — can no longer fire, so the legend draws
+at every width on every route. Each is noted dead where it is declared, on
+`peekActiveSeason`'s terms, because two things in there are emphatically not:
+`RackDrawerKey` is still the shape all three pages type their keys as, which is
+precisely what let them move without a `switch` appearing anywhere, and
+`RackControlsProvider` is mounted from `layout.tsx` for a second job that has
+nothing to do with the rack — it hosts `useVisualViewportHeight`, which
+publishes `--vvh` for the modal panels to cap themselves against.
+
+#### The handoff's reference draws gametime's foot empty, and it is not
+
+The one finding, and it is a press rather than a look. The stat board's bar is
+`fixed` to the bottom edge of that page and the dock at the specified
+`bottom: 1.5rem` lands on it. Measured against the real page at 1280 the two
+overlap across **x 1040–1209 and the bar's upper 28px** — and because the bar is
+one full-width `<button>`, `elementFromPoint` at the `Expand` caption's own
+centre answered the **dock**: the caption was a press that opened the drawer.
+The bundle's own reference draws that screen with nothing at its foot, so this
+is a case it did not model rather than a call it took.
+
+**So the dock clears the bar by the bar's own height and nothing else.** The
+1.5rem the handoff asks for is still there, measured from the top of the bar
+rather than from the fold — 76px at 1280 and 68 at 390, against 24 and 20 on the
+two pages whose foot is empty. `BrowseDock` gained one optional `lift`, a CSS
+length carried through a custom property that the resting offset **and the
+hidden transform** both read: the transform has to carry it too, or a lifted
+dock parks with its own lift still on screen. It is an inline property rather
+than a class for the emit-order reason this file records at four other grains —
+a caller appending its own `bottom-[…]` would be two base utilities of the same
+specificity, settled by the order Tailwind happened to emit them. Absent, the
+default is `0px` and `/manager` and the checker are byte-identical.
+
+`STAT_BAR_H` is the bar's height as the classes that declare it, exported from
+`stat-board.tsx` and put on the gametime page root so both parts read one
+number; a height written twice is a dock that sits on the bar the first time
+either moves, and the symptom is a press that misfires rather than anything that
+looks wrong. Whole class strings rather than a value interpolated into one, on
+`DRAWER_BAR_HEIGHT`'s rule.
+
+**Two other answers were available and both are a designer's**, which is why
+neither was taken: put this page's dock at the bottom *left*, or stand it down
+while the board is open. Both move where a part lives, where this only changes
+how far it sits off an edge.
+
+#### Verified
+
+Driven over CDP against `next dev` with no `DATABASE_URL` — the boot hook skips
+migrations and the four loops log their refusals, which is the server coming up
+healthy against nothing — over the **real** `/manager/slimjim`,
+`/lineupchecker/slimjim` and `/gametime/slimjim` rather than a preview route,
+since the dock is rendered unconditionally and does not wait on a payload. The
+mechanics are the ones this file records: `--no-proxy-server`, `localhost`
+rather than `127.0.0.1`, a phone viewport from
+`Emulation.setDeviceMetricsOverride` with `mobile: true`,
+`--disable-features=OverlayScrollbar`, the
+`--blink-settings=availablePointerTypes=4,…` flags built as a **template
+literal**, and a CDP client over Node's own `WebSocket` since Playwright is not
+in this project's `node_modules`.
+
+Every arm landed. The dock draws on both week tools at 1280, 430, 390, 375 and
+360, `position: fixed`, `z-50`, its cap **44px** in both axes with the legend at
+`--fs-11` IBM Plex Mono, uppercase, `0.16em`, on `--cap-accent-ink` — a 142px
+pill reading `START/SIT` and a 181px one reading `PLAYER SCORES` at 1280, both
+44×44 and icon-only below `sm`. **The rack carries no Browse key on any width on
+either route** (`button[aria-haspopup="dialog"]` count 0 inside the pinned
+housing), and **the wordmark draws at 360 and 375**, which is the gate no longer
+firing. Pressing the cap moved `aria-expanded` false → true, opened exactly one
+`dialog[open]`, `:modal` true, named `Week shares`, with focus inside it. The
+dock carries `lab-card-chrome`, and writing `data-card-stage="parked"` on the
+`<main>` the way `useActiveCard` does takes it `flex → none → flex` on both
+pages — the stand-down wired.
+
+The collision was measured before and after in the same harness, which is the
+check that the lift is doing something: before, `elementFromPoint` at the
+`Expand` caption answered `DOCK` at 1280 and the bar's upper-right corner
+answered `DOCK` at both widths; after, **every point tested answers `BAR`** —
+the caption, the bar's upper and lower right, and its middle — with the dock's
+foot 76px and 68px off the fold and the bar's full height clear beneath it.
+`/manager` is unmoved at 24px and 20px with `--dock-lift` unset, still drawing
+`PLAYERS` and `LEAGUEMATES`.
+
+At every width: `document.documentElement.scrollWidth` within the viewport,
+**zero** unclipped elements past it, exactly one `<h1>` per route, and **no
+console output of any kind**. 2,421 unit tests pass; `lint`, `typecheck` and
+`build` are clean.
+
+**Not verified against real data**, which is the gap to close first: no database
+was reachable from here, so every page was driven over its `Failed to reach
+Sleeper` state rather than a grid of cards. Four things a render here cannot
+check — whether the blur reads with a real league card behind it, which is the
+one claim the dock's material rests on and which no empty page can show; whether
+a reader who knew the key in the rack finds it at the foot of the viewport,
+which is the question the handoff is making on their behalf; whether the lifted
+dock reads as *related* to the bar under it or merely as floating above it,
+which is the half of the collision fix a measurement cannot settle; and whether
+the dock over an **open** stat board is comfortable, since it clears the bar and
+still floats over the table — no control collides there, before or after, but
+nothing has looked at it with rows in it.
+
 ### The rank is the reading, and the denominator is the config window's
 
 `formatRank` prints `2nd`, not `2nd of 12`. A tile takes an equal quarter of a

@@ -7,6 +7,7 @@ import {
   DEFAULT_LEAGUE_FILTERS,
   filterSummary,
   BILLET_KEY_CHROME,
+  BrowseDock,
   BubblingFlask,
   CONSOLE_KEY,
   CONSOLE_METAL_TRACK_SM,
@@ -33,9 +34,8 @@ import {
   useManagerLeagues,
   useActiveCard,
   useLeagueFilters,
-  usePublishRackControls,
   useUrlParam,
-  WEEK_BROWSE_KEYS,
+  PLAYER_SCORES_BROWSE_KEYS,
   weekSubjectRolls,
   WeekGauge,
   WeekStepper,
@@ -56,7 +56,7 @@ import {
   liveSummary,
 } from "../helpers/live-record";
 import { GametimeCard } from "./gametime-card";
-import { StatBoard } from "./stat-board";
+import { StatBoard, STAT_BAR_H } from "./stat-board";
 
 /** Stable empty answer, so a render before the read lands hands the memos the same object. */
 const NO_LEAGUES: Record<string, never> = {};
@@ -315,8 +315,12 @@ function Live({
   const { close: closeCard } = card;
 
   // Latch and open in one handler — never during render. It is a `useCallback`
-  // because it crosses the rack seam below, where a new identity every render
-  // would re-publish on every render and set an ancestor's state in a loop.
+  // because it is `BrowseDock`'s `onOpen`, and this page re-renders once per
+  // line of the leagues stream: a fresh identity each time would re-render the
+  // dock on every one of them. It used to be the rack seam that required it,
+  // where a new identity re-published and set an ancestor's state in a loop —
+  // the same rule at a much lower price, which is what moving the keys down
+  // into the page bought.
   //
   // **It closes the open card first**, on `LeaguesHome`'s argument: a picked
   // subject narrows the league grid, and a parked card *is* the screen — the
@@ -331,12 +335,6 @@ function Live({
     },
     [closeCard],
   );
-
-  usePublishRackControls({
-    keys: WEEK_BROWSE_KEYS,
-    drawer,
-    onOpenDrawer: openDrawer,
-  });
 
   const { summary, inPlay, answered } = useMemo(
     () => ({
@@ -366,7 +364,48 @@ function Live({
   const name = user ? user.display_name || user.username : username;
 
   return (
-    <div className="relative">
+    /* `STAT_BAR_H` on the root rather than on the board alone: the dock at the
+       foot of this page lifts by exactly the bar's height, and both read the
+       one declaration. See the constant, and the dock's `lift` below. */
+    <div className={`relative ${STAT_BAR_H}`}>
+      {/*
+        **The page's Browse key, pinned to the bottom-right of the viewport.**
+        It was published up into the app rack; the lineup checker's own note
+        carries the argument in full, and it is that page's word for word —
+        these two tools list the same leagues and open the same panel, so the
+        one thing that may differ between them is the legend, which is the
+        page's own. See `PLAYER_SCORES_BROWSE_KEYS`.
+
+        First in the tree for the tab order and drawn at the foot of the
+        viewport by the stylesheet, which is `LeaguesHome`'s decision and not
+        the handoff's letter — again, see the checker.
+      */}
+      <BrowseDock
+        keys={PLAYER_SCORES_BROWSE_KEYS}
+        drawer={drawer}
+        onOpen={openDrawer}
+        parked={card.parked}
+        chromeClass={card.chromeClass}
+        /*
+          **This page's foot is not empty, and the handoff's reference draws it
+          as though it were** — the stat board's bar is `fixed` to the bottom
+          edge and the dock at the specified `bottom: 1.5rem` lands on it.
+          Measured at 1280 against the real page: the two overlap across
+          x 1040–1209 and the bar's upper 28px, and because the bar is one
+          full-width `<button>`, `elementFromPoint` at the `Expand` caption's
+          own centre answers the *dock*. The caption is a press that opens the
+          drawer.
+
+          So the dock clears the bar by the bar's own height and nothing else:
+          the 1.5rem the handoff asks for is still there, measured from the top
+          of the bar rather than from the fold. The two other answers are a
+          designer's to take — put this page's dock at the bottom *left*, or
+          stand it down while the board is open — and both are changes to where
+          a part lives rather than to how far it sits off an edge, which is why
+          neither was taken here.
+        */
+        lift="var(--stat-bar-h)"
+      />
       <FlaskDefs />
       <header className={`relative ${card.chromeClass}`}>
         <ManagerBillet

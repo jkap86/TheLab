@@ -1,19 +1,19 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type CSSProperties } from "react";
 
-import { CONSOLE_KEY_PILL_BARE, type RackDrawerKey } from "@/features/shared";
-
+import { CONSOLE_KEY_PILL_BARE } from "../console-chrome";
 import {
   DOCK_AT_REST,
   DOCK_SETTLE_MS,
   dockRested,
   dockScroll,
   type DockScroll,
-} from "../helpers/dock-scroll";
+} from "../dock-scroll";
+import type { RackDrawerKey } from "./rack-controls";
 
 /**
- * The page's two Browse keys, as hardware floating over it.
+ * A page's Browse keys, as hardware floating over it.
  *
  * They were in the app rack, published up there by this page through the
  * rack-controls context, and what moves them is the argument the rack itself
@@ -24,8 +24,8 @@ import {
  * which is what the rack's own pinning was for, one corner over — and the rack
  * goes back to being the app's furniture alone.
  *
- * **The vocabulary is the rack's: a housing, a channel cut into it, and two
- * filled accent caps travelling in that channel.** The one thing that differs
+ * **The vocabulary is the rack's: a housing, a channel cut into it, and the
+ * page's filled accent caps travelling in that channel.** The one thing that differs
  * is the housing's material, and it is the whole of what makes this read as a
  * separate object rather than as a billet that has come loose: it is
  * *translucent*, over a short blur, so the card behind it stays legible and the
@@ -33,14 +33,18 @@ import {
  * stock. The fill alphas are low and the blur is short for exactly that reason
  * — see `--dock-bg`, where the pass that was an opaque panel is recorded.
  *
- * **Where it lives is this folder rather than `features/shared/ui`**, which is
- * the handoff's own suggestion and the one thing in it not taken. The rule that
- * decides it is the one every other piece in `shared/` moved on — a second
- * feature reads it — and today one does not: the two week tools still publish
- * their pair into the rack. Nothing here is manager-specific (the keys arrive
- * as data, exactly as the rack takes them), so the day one of them wants a dock
- * this is a move rather than a rewrite; until then it would be a module in the
- * barrel every page imports, for one page's chrome.
+ * **It lives here now, and the move is the line it was written against.** It
+ * was `features/manager`'s own, on the rule every other piece in `shared/`
+ * moved on — a second feature reads it — and the note here said in as many
+ * words that the day a week tool wanted a dock this would be a move rather
+ * than a rewrite. Both of them did, so it was: the lineup checker and gametime
+ * took their own key out of the rack and put it here, and nothing about the
+ * component changed to let them. That is what the keys arriving as *data*
+ * bought — the page names its own legend and its own glyph, exactly as the
+ * rack took them, so three pages' vocabularies meet no `switch` in here.
+ *
+ * `dock-scroll.ts` travelled with it and had to: a module in `features/shared`
+ * may not reach into a sibling feature for its own rule.
  */
 export function BrowseDock({
   keys,
@@ -48,8 +52,12 @@ export function BrowseDock({
   onOpen,
   parked,
   chromeClass,
+  lift,
 }: {
-  /** The same array the rack took — see the page's `BROWSE_KEYS`. */
+  /**
+   * The same array the rack took — `/manager`'s `BROWSE_KEYS`, or the week
+   * tools' own key. One or two; the channel is a flex row either way.
+   */
   keys: readonly RackDrawerKey[];
   /** Which drawer is open, so the cap that opened it can say so. */
   drawer: string | null;
@@ -75,6 +83,36 @@ export function BrowseDock({
    * is a press that misfires rather than one more press.
    */
   chromeClass: string;
+  /**
+   * How far to lift the dock off the foot of the viewport, as a CSS length —
+   * for a page that already has something parked down there.
+   *
+   * **Gametime is the page that has one**, and the handoff that brought the
+   * dock to the week tools did not model it: its reference draws that screen
+   * with an empty foot. Measured against the real page at 1280, the dock as
+   * specified lands on the stat board's bar — and the bar is one full-width
+   * `<button>`, so what that costs is not only the `Expand` caption's
+   * legibility but the press: `elementFromPoint` at the caption's own centre
+   * answers the dock. A control hidden under another control is a press that
+   * misfires, which is the failure `chromeClass` above is spent avoiding one
+   * case over, so the dock clears it rather than sitting on it.
+   *
+   * The amount is the height of the thing being cleared and nothing else, so
+   * this is not a second opinion about where the dock belongs: `bottom` is
+   * still the handoff's 1.5rem, measured from the top of the bar rather than
+   * from the fold. Where the two parts should sit relative to each other on a
+   * page that has both is a designer's question, and the alternatives are
+   * written down at the call site.
+   *
+   * **An inline custom property rather than a class**, and that is the
+   * emit-order trap rather than a preference: a caller appending its own
+   * `bottom-[…]` to the one below would be two base utilities of the same
+   * specificity, decided by the order Tailwind happened to emit them. One
+   * length, read by the resting offset *and* by the hidden transform — which
+   * has to carry it too, or a lifted dock parks with its own lift still on
+   * screen.
+   */
+  lift?: string;
 }) {
   const ref = useRef<HTMLDivElement | null>(null);
   const docked = useDocked(ref, parked);
@@ -84,9 +122,9 @@ export function BrowseDock({
     // `sm`, on a measurement that was right and has stopped being true: two
     // *legended* pills side by side run ~300px of a 390px screen, which is a
     // bottom bar pretending to be a floating dock. The caps below `sm` are
-    // icon-only now — see the cap — so the pair is two 44px circles in a ~103px
-    // housing, and a stack there would be two rows of chrome to spend a width
-    // nothing is short of.
+    // icon-only now — see the cap — so `/manager`'s pair is two 44px circles
+    // in a ~103px housing and a week tool's single key is one, and a stack
+    // there would be rows of chrome to spend a width nothing is short of.
     //
     // `inert` while hidden rather than `pointer-events-none` alone, which is
     // `CollapseTray`'s finding: the mouse is stopped by the one and a keyboard
@@ -113,10 +151,11 @@ export function BrowseDock({
       role="group"
       aria-label="Browse"
       inert={!docked}
-      className={`lab-anim fixed bottom-5 right-2 z-50 flex items-center rounded-full border border-[var(--dock-rim)] bg-[image:var(--dock-bg)] p-[0.3125rem] shadow-[var(--dock-shadow)] backdrop-blur-[5px] backdrop-saturate-[1.4] [transition:transform_220ms_cubic-bezier(0.32,0.72,0,1),opacity_160ms_linear] sm:bottom-6 sm:right-6 ${
+      style={lift ? ({ "--dock-lift": lift } as CSSProperties) : undefined}
+      className={`lab-anim fixed bottom-[calc(1.25rem+var(--dock-lift,0px))] right-2 z-50 flex items-center rounded-full border border-[var(--dock-rim)] bg-[image:var(--dock-bg)] p-[0.3125rem] shadow-[var(--dock-shadow)] backdrop-blur-[5px] backdrop-saturate-[1.4] [transition:transform_220ms_cubic-bezier(0.32,0.72,0,1),opacity_160ms_linear] sm:bottom-[calc(1.5rem+var(--dock-lift,0px))] sm:right-6 ${
         docked
           ? "[transform:translateY(0)] opacity-100"
-          : "[transform:translateY(calc(100%_+_1.25rem))] opacity-0 sm:[transform:translateY(calc(100%_+_1.5rem))]"
+          : "[transform:translateY(calc(100%_+_1.25rem_+_var(--dock-lift,0px)))] opacity-0 sm:[transform:translateY(calc(100%_+_1.5rem_+_var(--dock-lift,0px)))]"
       } ${chromeClass}`}
     >
       {/*
@@ -141,8 +180,8 @@ export function BrowseDock({
             // names no size and no padding, which is exactly what it is for.
             //
             // **44px in both axes, and that is spelled rather than left to a
-            // legend's line box** — these are the page's two exits and the
-            // app's own touch-target floor applies to them at every width. So
+            // legend's line box** — these are the page's exits and the app's
+            // own touch-target floor applies to them at every width. So
             // `size-11` below `sm`, and `sm:w-auto sm:px-3.5` hands the width
             // back to the cap's own gutter once there is a word in it; the
             // height is `size-11`'s throughout, which is why there is no
@@ -155,10 +194,9 @@ export function BrowseDock({
             // for both and that the two person marks — one figure against two
             // — are close enough at 17px that the word is what tells them
             // apart. On a phone that is a legend on the one control a reader
-            // does not have to go looking for, and it left the dock as the only
-            // place in the app where this pair reads differently from the
-            // rack's own, which has drawn a picture below `md` since it came
-            // out of its fold.
+            // does not have to go looking for, and it left the dock reading
+            // differently there from the rack's own key, which had drawn a
+            // picture below `md` since it came out of its fold.
             //
             // Above `sm` the glyph stays *beside* the word, where the rack
             // drops it, and that is the one thing here that is not the rack's
@@ -242,7 +280,7 @@ function useDocked(
   const state = useRef<DockScroll>(DOCK_AT_REST);
 
   // Standing it up on either edge of a park, **during render**: a card closing
-  // is a deliberate return to the grid these two keys narrow, and a dock that
+  // is a deliberate return to the grid these keys narrow, and a dock that
   // came back from one still hidden would be an exit the reader has to scroll
   // for. Adjusting state for a changed input during render is the pattern React
   // documents and the one `useManagerLineups` already resets its subject by;
