@@ -12,6 +12,7 @@ import type { ManagerLineupsPayload } from "@/shared/contract";
 
 import {
   activeFilterCount,
+  BrowseDock,
   DEFAULT_LEAGUE_FILTERS,
   filterSummary,
   BILLET_KEY_CHROME,
@@ -60,7 +61,6 @@ import {
   modeRolls,
   leaguematePlayerRolls,
 } from "../helpers/leaguemate-rosters";
-import { BrowseDock } from "./browse-dock";
 import { LeaguematesMark, PlayersMark } from "./browse-marks";
 import { LeagueCard } from "./league-card";
 import { LeaguemateSharesDrawer } from "./leaguemate-shares-drawer";
@@ -511,9 +511,12 @@ export function LeaguesHome({
   const { close: closeCard } = card;
 
   // Latch and open in one handler — never during render. It is a `useCallback`
-  // because it crosses the rack seam below, where a new identity every render
-  // would re-publish on every render and set an ancestor's state in a loop; see
-  // `usePublishRackControls`.
+  // because it is `BrowseDock`'s `onOpen`, and this page re-renders once per
+  // line of the leagues stream: a fresh identity each time would re-render the
+  // dock on every one of them. It used to be the rack seam that required it,
+  // where a new identity re-published and set an ancestor's state in a loop —
+  // the same rule at a much lower price, which is what moving the keys down
+  // into the page bought.
   //
   // **It closes the open card first, and that is the point of the press rather
   // than tidiness.** These two drawers exist to *narrow the grid* — a player
@@ -564,11 +567,16 @@ export function LeaguesHome({
   // Browse pair does not describe the page at all, so it is not header
   // furniture, and the scroll-depth argument that kept it in the rack is
   // answered better by a control pinned to the viewport than by one pinned to
-  // the top of it. `usePublishRackControls` is untouched and still live — the
-  // two week tools publish their own pair — so what this page's silence changes
-  // up there is only that the rack's wordmark no longer yields its legend to
-  // controls that are not there. See `app-rack.tsx`, where that gate is
-  // measured and is deliberately left alone.
+  // the top of it.
+  //
+  // **The two week tools have since followed**, so no page publishes into the
+  // rack at all and `BrowseDock` is `features/shared`'s. What that costs up
+  // there is the wordmark's own conditional, which is gated on a page having
+  // controls and so can no longer fire: the legend draws at every width on
+  // every route. The seam itself is kept and noted dead where it is declared —
+  // see `rack-controls.tsx` — because `RackDrawerKey` is still the shape all
+  // three pages type their keys as, which is exactly what let the dock take
+  // them without a `switch` on the route.
 
   /**
    * What to say, and what to offer, when the grid narrows to nothing.

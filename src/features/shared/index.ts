@@ -212,7 +212,20 @@ export type {
   WeekTwoSidedShares,
 } from "./week-shares";
 export { WeekSharesDrawer } from "./ui/week-shares-drawer";
-export { WEEK_BROWSE_KEYS } from "./ui/week-browse-keys";
+// The Browse key each week tool carries, and the one mark both draw it with.
+// Two legends over one glyph — see the module for why the word is the page's
+// and the drawing is not.
+export {
+  PLAYER_SCORES_BROWSE_KEYS,
+  START_SIT_BROWSE_KEYS,
+} from "./ui/week-browse-keys";
+// The floating housing those keys sit in, at the foot of the viewport. It came
+// here from `features/manager` when the two week tools took their own key out
+// of the rack — the line `CONSOLE_KEY` and `ManagerPlate` moved on, and the
+// one the component's own note named in advance. `dock-scroll.ts` travelled
+// with it and is deliberately not re-exported: it is the rule this one part
+// reads, on `local-store.ts`'s terms.
+export { BrowseDock } from "./ui/browse-dock";
 export {
   RackControlsProvider,
   usePublishRackControls,

@@ -13,6 +13,7 @@ import {
   DEFAULT_LEAGUE_FILTERS,
   filterSummary,
   BILLET_KEY_CHROME,
+  BrowseDock,
   CONSOLE_KEY,
   CONSOLE_METAL_TRACK_SM,
   FlaskDefs,
@@ -39,10 +40,9 @@ import {
   useManagerLeagues,
   useActiveCard,
   useLeagueFilters,
-  usePublishRackControls,
   useSummaryReadings,
   useUrlParam,
-  WEEK_BROWSE_KEYS,
+  START_SIT_BROWSE_KEYS,
   weekSubjectRolls,
   WeekStepper,
   writeQueryParam,
@@ -385,8 +385,12 @@ function Checker({
   const { close: closeCard } = card;
 
   // Latch and open in one handler — never during render. It is a `useCallback`
-  // because it crosses the rack seam below, where a new identity every render
-  // would re-publish on every render and set an ancestor's state in a loop.
+  // because it is `BrowseDock`'s `onOpen`, and this page re-renders once per
+  // line of the leagues stream: a fresh identity each time would re-render the
+  // dock on every one of them. It used to be the rack seam that required it,
+  // where a new identity re-published and set an ancestor's state in a loop —
+  // the same rule at a much lower price, which is what moving the keys down
+  // into the page bought.
   //
   // **It closes the open card first**, on `LeaguesHome`'s argument and for the
   // same drawers one grain over: Starters and Opponents pick a subject, a
@@ -402,11 +406,6 @@ function Checker({
     [closeCard],
   );
 
-  usePublishRackControls({
-    keys: WEEK_BROWSE_KEYS,
-    drawer,
-    onOpenDrawer: openDrawer,
-  });
   // **Both are taken over the narrowed list**, the same argument
   // `seasonSummary` reverses itself on: a reader who has filtered to dynasty is
   // asking about their dynasty week, and the plate is the page's one set of
@@ -451,6 +450,36 @@ function Checker({
 
   return (
     <div className="relative">
+      {/*
+        **The page's Browse key, pinned to the bottom-right of the viewport.**
+
+        It was published up into the app rack, and what moves it down here is
+        the argument the rack itself already makes about this kind of key: it
+        is the only thing up there that acts on the page *underneath* it, where
+        the brand link and the tool tray navigate and the tool-name readout
+        only reports. Pinned to the viewport it is in thumb reach at any scroll
+        depth, which is what the rack's own pinning was for, one corner over —
+        and `/manager` has drawn its own pair this way since the dock was
+        built. Two pages listing the same leagues should not answer the same
+        question from two different corners.
+
+        **First in the tree, and that is deliberately not the last child the
+        handoff asks for.** Where it is drawn and where it sits in the tab
+        order are two questions, and a `fixed` part is what lets them be
+        answered separately. This key is the page's exit, and in the rack a
+        keyboard reader reached it immediately; rendered where it is drawn it
+        would sit behind a hundred league cards and a modal drawer, which is a
+        reach this change would be *introducing*. So the DOM says what the rack
+        said and the stylesheet puts it where the design does — `LeaguesHome`'s
+        own decision, on the page the handoff names as the pattern to follow.
+      */}
+      <BrowseDock
+        keys={START_SIT_BROWSE_KEYS}
+        drawer={drawer}
+        onOpen={openDrawer}
+        parked={card.parked}
+        chromeClass={card.chromeClass}
+      />
       {/* The flask's gradients and its clip, once for the whole page — see
           `FlaskDefs`, and `LineupMarkDefs` a few lines down, which is the same
           arrangement for the cleared mark.

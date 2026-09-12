@@ -156,6 +156,13 @@ export function AppRack() {
   // Tightening the row instead is measured and recorded on the wordmark itself,
   // below: it buys four pixels, which is not a margin on a row whose width the
   // next entry in `tools.ts` changes.
+  //
+  // **No page publishes controls today, so this cannot fire** — all three that
+  // did have taken their Browse keys down into `BrowseDock` at the foot of the
+  // viewport, and the legend therefore draws at every width on every route.
+  // The gate stays with the seam it reads rather than being collapsed to a
+  // constant: it is the measurement, and a page that publishes again wants it
+  // back rather than rediscovered. See `rack-controls.tsx`.
   const wordmarkFace = controls
     ? "hidden min-[24.375rem]:inline-block"
     : "inline-block";
@@ -421,12 +428,20 @@ export function AppRack() {
           </div>
 
           {/* This page's own controls, published upward by whatever is under
-              the rack — see `RackControlsKeys`. **The pair is on the rack at
-              every width now**: it was one folded key opening a popover below
-              `md`, which put the two keys the pinning exists to keep in reach
-              two presses away on the one device where scrolling back up the
-              page is hardest. What paid for it is the readout leaving this
-              cluster, above, and the legends becoming glyphs. */}
+              the rack — see `RackControlsKeys`. **Nothing publishes today**, so
+              this slot is simply absent on every route and the rack's remaining
+              items keep their order; the keys are drawn in `BrowseDock` at the
+              foot of the viewport instead, which is where the scroll-depth
+              argument that brought them up here lands better. The branch is
+              kept with the seam — see `rack-controls.tsx`.
+
+              The note it carried is worth keeping with it: the pair was on the
+              rack at every width by the end, where it had been one folded key
+              opening a popover below `md` — which put the keys the pinning
+              exists to keep in reach two presses away on the one device where
+              scrolling back up the page is hardest. What paid for that is the
+              readout leaving this cluster, above, and the legends becoming
+              glyphs. */}
           {controls && <RackControlsKeys controls={controls} />}
 
           {/* The tool tray's key, at the right end of the row, and **the one
