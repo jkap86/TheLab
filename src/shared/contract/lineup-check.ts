@@ -40,6 +40,27 @@ export type LineupCheckPlayer = {
    */
   kickoff: number | null;
   /**
+   * Who his NFL team plays this week, as a team code, and which end of it he
+   * is on. Null is "not known" — a bye, a free agent, or a week the schedule
+   * has not published — and `home` means nothing when it is null.
+   *
+   * **The pair, not a formatted string**, which is what everything else on
+   * this wire is: a payload carries facts and the client spells them. Two
+   * clients spell this one — the checker's rows off these fields and
+   * gametime's off `GametimeGame`, whose `opponent`/`home` pair this is
+   * deliberately identical to — so `opponentLabel` in `features/shared/format`
+   * takes the same argument from either and the two tools cannot come to write
+   * `@ NYJ` two ways.
+   *
+   * Derived on the read rather than in the client, which is the half that
+   * matters: it comes off `getWeekGames`, the same fetch the kickoff beside it
+   * does, so the two panes and the bench drawer cannot disagree about which
+   * listing of a team won.
+   */
+  opponent: string | null;
+  /** Whether he is the home side. Meaningless where {@link opponent} is null. */
+  home: boolean;
+  /**
    * His game has kicked off. He is still in the lineup and still scoring, but
    * he is no longer a *choice*: the seat he holds is held as it stands and he
    * is out of the pool for every other seat.

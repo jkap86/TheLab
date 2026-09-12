@@ -5660,6 +5660,254 @@ enough for the right pane to be worth its half of the card; whether the 88px
 the polished figure reads as *the same* green as the rank ramp's own on a page
 of a hundred cards, which is the one question no single-card render can answer.
 
+### The seat became a bay, and the row four zones
+
+A desktop seat row was seven cells on a 34px line — slot, face, name, badges,
+team, kickoff, points, gap — and it mis-ranked what it was about: the largest
+thing on it was a grey number and the row's *subject* had about 101px of the
+width. It is four zones on a 48px line now: a **bay** milled the full height of
+the left edge with an anodised insert seated in it, the face beside it at 40px,
+two lines of name and game, and the figure at `--fs-21`. The name column goes
+**101px → 231px**. Applied from a design handoff, its adopted `1b` with `2c`'s
+state treatment. **One field on the wire and no migration.**
+
+**It is scoped to the two week tools, and that is a decision rather than the
+handoff's.** `PaneRow` has five callers — the checker's panes, gametime's, the
+manager card's standings and roster, and the pick portfolio — and the handoff's
+files table says "the row itself" changes, which would take all five. The
+manager card and the trades card were neither drawn nor measured in it, and a
+standings ordinal and a pick's season have no position to anodise and no game
+to name, so a bay milled for a position is a bare hole on those rows and a
+second line is empty. So `PaneWeekRow` is a **sibling** of `PaneRow` in the same
+file, the checker and gametime take it, and the other three lists are
+byte-identical — the only edit `PaneRow` took is `PaneRowFaceMount` gaining a
+`className`, whose class *set* at the old call site is identical, checked.
+
+That is the drift `PaneRow` exists to remove, in miniature, so the line it is
+drawn on has to be one somebody can state: **the two week tools are one object**
+— the same seats of the same week one press apart — and the manager card's
+browser is a season reading. Two components rather than one with a variant,
+because the two bodies are two layouts rather than one with an override, and a
+shared body is a shared way to break three lists this pass does not touch. Every
+primitive is still one spelling: the face mount, the injury lamp, the surfaces
+and the hover halo.
+
+### The insert is a part, and only the hole it sits in turns over
+
+The app's own `--slot-*` set is a light candy fill drawn for a flat chip lying
+on glass. An insert **seated in a milled bay** is read off its own gradient, so
+the palette drops to metal: mid-dark bands at about half the chroma — anodised
+aluminium rather than paint — under a near-white tinted engraving, at the same
+six hues pulled a few degrees toward the console's cooler axis.
+
+**The bright band is compressed into the top 8% where the handoff draws it
+running to 26%, and that is a measurement.** Against the handoff's own ramp a
+*centred* label clears 4.5:1 (4.92 at worst) and the `move_to` label does not —
+it rides up to make room for the chevron and the target slot beneath it, and at
+10% of the insert it measured **3.56:1**, under the floor the handoff itself
+sets for this label when it moves the locked ink to 0.68. Compressed, the worst
+band a label can sit on is **4.63:1** (`move_to`) and **5.48:1** (centred), and
+the top lip is 3.30:1 — a graphical element, which owes 3:1 and has no glyph on
+it. Every figure is band against band across all six hues.
+
+**Only the hole moves in light mode.** The insert is a *part seated in a hole*
+rather than a surface catching the light, so it reads the same on both sides —
+which is also the call this file already made one object smaller, where the
+light slot chip is a mid-dark fill under near-white ink because the near-white
+well it lies on leaves a light fill nothing to separate from. So the face, the
+ink, the graphite, the brush and the engraving are all inherited, and every
+contrast figure carries over intact because each was measured against the insert
+rather than against the page. What cannot carry is `--slot-bay-shadow`, milled
+into near-white stock here, and `--slot-insert-shadow`'s **cast**, which falls on
+a pale floor rather than a near-black one.
+
+**A token cannot reference a variable set downstream, and a render is what said
+so.** `--slot-metal-face` was first written as a whole gradient naming
+`var(--slot-hue)`; a custom property's `var()`s are substituted where it is
+*declared*, so on `:root` — where no hue is set — it computed to the
+guaranteed-invalid value and the insert rendered `background-image: none`. The
+bands are eight numbers now and the composition is at the use site, which is
+exactly the shape `--slot-fill-l` and `oklch(var(--slot-fill-l) …)` were already
+in.
+
+### The bay carries the seat's facts and the walls carry the view's
+
+Three states, and the split is what lets two of them hold at once.
+
+- **Re-seat** — the insert splits: the slot, a 7×4 accent chevron in CSS
+  borders, then the target slot in `--billet-accent`. Off `move_to`, which the
+  server already derived with the same `kickoffMoves` the card's count came
+  from.
+- **Locked** — graphite face, a hatch over it, a 13px amber padlock under the
+  label, and the word at the end of line two. Three cues, so the state is never
+  a hue alone. The ink is `rgba(237,237,237,0.68)` rather than 0.55, which
+  measures **5.64–7.37:1** across the band the label sits on once the padlock is
+  under it.
+- **Highlighted** — lit four ways at once, because one alone is what a reader
+  misses: the tile's face, a full rim and a halo (`--tile-lit-shadow`), the name
+  turned accent, a 3px rail down the row's **right** edge pointing at the pane
+  that is answering it, and the bay's **walls** lit (`--slot-bay-lit-shadow`).
+
+**The walls rather than the insert, and that is the whole reason the state lives
+there.** The insert carries facts about the *seat* — its position, the slot it
+should move to, whether its game has gone — and the walls carry the *view's*.
+Split that way a locked seat can also be the one the far pane is solving, which
+one layer spelling both would have to pick between.
+
+### What the row gave up, and where each thing went
+
+The 98px two-track gap meter, the 28px team cell and the 88px kickoff cell. The
+last two are line two; the first is the figure's own ink, which is not two
+verdicts on one row but the one verdict moved onto the number it was about —
+`rankColor`'s two ends, so both invert for light mode together. **Only the sign
+is read**: a level seat and an unmeasured one both take the neutral figure ink,
+which is the three-way grammar the cell already kept.
+
+`seatGap` is a bare `number | null` for it, where it was the meter's three
+numbers; the scaling that drew a bar against a fraction of the seat's own span
+went with the bar, and that argument is not lost — `features/shared/seat-compare`
+carries the identical one for the manager card's rows, which still draw meters.
+
+**Only the left pane's figures are inked**, which is the meter's own rule with
+the column gone: the opponent's gap *is* the reader's with the sign flipped, so
+colouring it would be the same fact twice. The two panes are the same object
+now, where they used to differ by three readings of one measurement.
+
+**Two badges went into the bay** — `locked` and `→ SF` were marks on the name's
+line competing with `sit` and the IR chips for width the name wanted, and they
+are facts about the *seat* rather than about the player. The rest stay as chips
+at both widths, which is one treatment where the handoff draws `start` as a word
+on the phone and `sit` as a pill on the same line.
+
+**A seat and an option both carry a kickoff now.** An option carried none, on
+the measurement that the time was 88px of column spent on a question an options
+list is not asking. Line two has no column to spend, so the cost is gone and the
+reading is worth having — a candidate whose game starts on Monday night is a
+different choice from one who starts at one o'clock.
+
+### The options list lost its first row and kept its locked ones
+
+**The man in the seat is not on it.** He was its first row, selected and chipped
+`in seat` — a row that answers nothing, since pressing his seat is what opened
+the pane and the lineup opposite is still showing him. Every delta here is
+measured against his figure, which stays on screen throughout.
+
+**A locked candidate stays**, where he was filtered out on the grounds that
+Sleeper would refuse the move: the padlock in his bay says exactly that, where an
+absence reads as a player the app has lost. What is unchanged is the seat end of
+the same rule — **a locked seat has no options at all**, because there the list
+itself would be the lie — and the *solver's* pool, where a locked player is out
+for every seat, which is `compareLineup`'s business rather than this list's.
+
+The rows are the bench drawer's, ground and all (`--tile-drawer-shadow`, one step
+less cast), because that is what they are: the same players, one press away.
+Their bay prints the player's own position rather than the seat's; the seat is
+named once, on the ledge above them.
+
+### The opponent is two fields, not a formatted string
+
+`LineupCheckPlayer` gained `opponent` and `home`, and the pair is deliberately
+identical to `GametimeGame`'s — so `opponentLabel` in `features/shared/format`
+takes the same argument from either tool and the two cannot come to write
+`@ NYJ` two ways. The handoff asks for the string formatted on the read; a
+payload carries facts and the client spells them, which is what everything else
+on this wire does, and gametime's board already carried the pair.
+
+It needed no migration and no new fetch: `getWeekGames` has carried
+`{ opponent, home, kickoff }` per team since the schedule cache landed, and its
+own note predicted this reader — "a caller naming a player's opponent and a
+caller ordering his seat read the same fetch". `solveWeekLineup` takes the games
+rather than the instants for that reason, and one rule came with the widening:
+**a week with games but no *dated* game still has no ordering**, or `kickoffMoves`
+would answer "already in order" where the honest answer is null.
+
+### Verified
+
+Driven over CDP against `next dev` with no `DATABASE_URL` — the boot hook skips
+migrations and the four loops log their refusals, which is the server coming up
+healthy against nothing — through a temporary `/preview` route mounting the
+**real** `WeekPanes` and `LivePanes` against fixtures, then deleted. The
+mechanics are the ones this file records: `--no-proxy-server`, `localhost`
+rather than `127.0.0.1`, a phone viewport from
+`Emulation.setDeviceMetricsOverride` with `mobile: true`, `data-theme` **and**
+`localStorage`, `--disable-features=OverlayScrollbar`, the
+`--blink-settings=availablePointerTypes=4,…` flags built as a **template
+literal**, a client-component harness, a CDP client over Node's own `WebSocket`,
+and a fresh `--remote-debugging-port` per run. One is this pass's own and it
+cost a run: **the harness must carry the real card's geometry**, which is
+`PageShell`'s `px-3.5 sm:px-4` and the panel's `px-3.5 sm:px-[1.125rem]` — at a
+`p-6` page gutter the panes came out 20px narrow and every phone name truncated,
+which reads exactly like a layout fault and is the harness.
+
+Every value is the handoff's. Rows **48px at `lg` and 52 below**, padding
+`0 10px 0 0` / `0 7px 0 0`, radius 7. The bay is **48×48 / 28×52**, insert inset
+4px / 3px at radius 5 / 4, under the four-layer `--slot-bay-shadow`; the slot
+label is 13.92px / 10.26px in `oklch(0.965 0.022 310)` over `--slot-engrave`;
+the insert resolves `linear-gradient(oklch(0.615 0.05 310) 0%, …)` per position.
+The face is **40×40 / 17×17** with one copy shown of two (`display: none` takes
+the other out of the accessibility tree — this file's own `name`/`shortName`
+idiom one grain up, and `WeekStepper`'s rule for when it is safe). The figure is
+**24.36px in a 70px column** at `lg` and 14.82px on line one below it, under a
+`Pts` head measured at 70px.
+
+Every state landed. The `move_to` bay draws `FLX`, a 4px chevron in
+`--billet-accent` and `SF` at 12.76px; the locked bay draws graphite, the hatch,
+an **11/13px** padlock and `rgba(237,237,237,0.68)`, with the clock kept at `lg`
+and dropped below it. Pressing a seat lit the row four ways — the name at
+`rgb(159,255,242)`, the tile's rim `rgba(0,255,229,0.55)` and halo `28px -4px`,
+the bay's walls `rgba(0,255,229,0.5)` and `16px -3px`, and a 3px rail on the
+right edge — and put `YOUR OPTIONS · WR` in the pane opposite with **Ja'Marr
+Chase absent**, the locked Khalil Shakir present with his padlock, a `start`
+chip on the promoted row, and the unprojected player last on a neutral figure
+over `WR · — —`. Option and bench rows carry `0 1px 2px rgba(0,0,0,0.4)` against
+the lineup rows' `0 2px 4px rgba(0,0,0,0.55)` — the drawer ground, measured.
+
+**Both schemes turn over from the tokens alone**: the figure's ramp
+`oklch(0.84 0.18 150)` → `oklch(0.52 0.16 150)`, the chevron `rgb(159,255,242)`
+→ `rgb(8,85,77)`, the bay's hole inverting while the insert does not.
+
+Gametime took the same row with its own readings: the hero is **`live`**, which
+is what that page exists for and what its own card plate already leads with,
+accent-inked while the game runs; the scored total rides line two's right end;
+the clock takes the kickoff's place, which is the same cell one tense later; and
+its head reads `Live` where the checker's reads `Pts`. Its rows measure the same
+two heights, which is what keeps the two tools one object.
+
+At every width and in both schemes: `document.documentElement.scrollWidth` equal
+to the viewport, **zero** unclipped elements past it, exactly one `<h1>`, and
+**no console output** beyond the dev server's own React-DevTools and HMR lines
+and the sandbox's cert refusals for the headshot CDN. 2,472 unit tests pass;
+`lint`, `typecheck` and `build` are clean, and `check:full` is clean from a
+cleared `.next`.
+
+**One finding, reported rather than patched, and it is the design's own trade.**
+At 390 the phone row's short name gets **54px — about seven characters** — so
+`J. Allen` fits and `B. Robinson` (74px) does not; thirteen of twenty-two
+fixture rows truncate. It is the figure being on line one that costs it: the
+handoff puts it there deliberately, so that line two gets the column's whole
+width, and line two does fit (117/117 on every row). Today's row, with the
+figure on line two, gives the name about 90px. The two levers are a designer's
+call rather than a silent edit here — move the figure back to line two on the
+phone, or drop the 17px face from the name's line, and each takes back the other
+half of the trade. At `lg` nothing truncates at all: every name and every second
+line fits, including a deliberately 20-character fixture at 272px.
+
+**Two things measured and left alone.** Blink rounds a border width to whole
+device pixels, so the chevron's `3.5px` sides render at 3 and it is 6×4 rather
+than the drawn 7×4 at DPR 1 — the prototype has the same constraint. And the
+`sr-only` "Locked — his game has kicked off" sits on line two ahead of the
+visible `· locked`, so a reader hears the sentence and sees the word.
+
+**Not verified against real data**, which is the gap to close first: every number
+above is a fixture and no database was reachable from here. Four things a render
+cannot check — whether a real account's short names sit in 54px often enough for
+the phone trade to be the right one, which is the finding above and only a real
+page settles; whether `opponent` is populated as widely as `kickoff` already is,
+since line two now leads with it; how the anodised bays read down a real
+twelve-seat pane rather than an invented one, which is the whole of what the
+palette is for; and whether the graphite insert reads as "the colour has gone out
+of it" in **light** mode, where it is the one dark object on a near-white row.
+
 ### Starters and Opponents
 
 **Superseded — the two panels are one.** See The two panels became one, under

@@ -40,6 +40,7 @@ export {
   CONSOLE_ROW_WELL,
   CONSOLE_TILE,
   CONSOLE_TILE_DRAWER,
+  CONSOLE_TILE_LIT,
   CONSOLE_TILE_SELECTED,
   CONSOLE_TRACK,
   CONSOLE_TRACK_SM,
@@ -86,6 +87,7 @@ export {
   formatInstantDate,
   formatInstantTime,
   kickoffTime,
+  opponentLabel,
   ordinal,
   ordinalParts,
   shortName,
@@ -356,6 +358,7 @@ export {
   PaneLedgeTrack,
   PaneRow,
   PaneTotal,
+  PaneWeekRow,
 } from "./ui/pane";
 // Two glass scrollers mirrored — the checker's week view and the gametime
 // panes both read their two lineups across each other.
@@ -366,6 +369,8 @@ export type {
   PaneRowFigure,
   PaneRowLead,
   PaneRowStatus,
+  PaneWeekFigure,
+  PaneWeekSeat,
 } from "./ui/pane";
 // The capped inner housing an open card's expanded half is drawn in. It came
 // here from `features/manager` when the trade card became a second reader — the

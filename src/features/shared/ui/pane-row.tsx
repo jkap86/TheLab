@@ -1,6 +1,11 @@
 import type { CSSProperties, ReactNode } from "react";
 
-import { CONSOLE_TILE, CONSOLE_TILE_DRAWER, CONSOLE_TILE_SELECTED } from "../console-chrome";
+import {
+  CONSOLE_TILE,
+  CONSOLE_TILE_DRAWER,
+  CONSOLE_TILE_LIT,
+  CONSOLE_TILE_SELECTED,
+} from "../console-chrome";
 import { rankColor } from "../rank-ramp";
 import { BilletFinish } from "./card-plate";
 
@@ -293,7 +298,12 @@ export function PaneRow({
 
       {/* Line 1 below `lg`; three of the row's cells above it. */}
       <span className="relative flex w-full min-w-0 items-center gap-1.5 lg:contents">
-        {face && <PaneRowFaceMount face={face} />}
+        {face && (
+          <PaneRowFaceMount
+            face={face}
+            className="flex size-5 text-[length:var(--fs-9)] lg:order-2 lg:size-[22px] lg:text-[length:var(--fs-9-6)]"
+          />
+        )}
         <span
           className={`relative min-w-0 flex-1 truncate font-display text-[length:var(--fs-12-5)] font-medium text-[color:var(--billet-name)] [text-shadow:var(--billet-name-shadow)] lg:order-3 lg:text-[length:var(--fs-13)]`}
         >
@@ -440,13 +450,29 @@ export function PaneRow({
  * part exists to remove. A team row passes `{ playerId: null, name }` and gets
  * this mount with the team's initial in it.
  */
-function PaneRowFaceMount({ face }: { face: PaneRowFace }) {
+function PaneRowFaceMount({
+  face,
+  className,
+}: {
+  face: PaneRowFace;
+  /**
+   * The mount's **display, size and text size**, which the caller owns because
+   * two rows want three of them: 20/22px here, 40px as a week row's own cell
+   * and 17px on that row's first line below `lg`. They are the caller's rather
+   * than a `size` prop for the trap `DRAWER_BAR_HEIGHT` records — Tailwind
+   * scans source text, so a class assembled from a value generates no CSS —
+   * and they are kept *out* of the base string for the other one: `size-5` and
+   * `size-10` are two base utilities of the same specificity, so which wins
+   * would be Tailwind's emit order rather than the caller's.
+   */
+  className: string;
+}) {
   const initial = face.name.trim().charAt(0).toUpperCase();
 
   return (
     <span
       aria-hidden
-      className="relative flex size-5 shrink-0 items-center justify-center overflow-hidden rounded-full bg-[image:var(--billet-well-bg)] font-display text-[length:var(--fs-9)] font-semibold text-[color:var(--tile-face-ink)] shadow-[var(--standing-well-shadow)] lg:order-2 lg:size-[22px] lg:text-[length:var(--fs-9-6)]"
+      className={`relative shrink-0 items-center justify-center overflow-hidden rounded-full bg-[image:var(--billet-well-bg)] font-display font-semibold text-[color:var(--tile-face-ink)] shadow-[var(--standing-well-shadow)] ${className}`}
     >
       {initial}
       {face.playerId && (
@@ -549,6 +575,514 @@ function StatusLamp({ status }: { status: PaneRowStatus }) {
       >
         {status}
       </span>
+    </span>
+  );
+}
+
+/**
+ * The six positions the **seated insert** is anodised for, as hues.
+ *
+ * A second table beside {@link SLOT_HUE} rather than a second reading of it,
+ * and the palettes are genuinely different objects: that one is a light candy
+ * fill measured for a flat chip lying on glass, where an insert seated in a
+ * milled bay is read off its own gradient and drops to metal. The angles are
+ * the same six pulled a few degrees toward the console's cooler axis — brass
+ * for WR, copper for TE, teal-green for K — so a position is still the colour a
+ * reader knows it by. See `--slot-metal-face` for the measurement.
+ *
+ * Anything not named here takes no anodising: the insert is billet stock and
+ * the label keeps `--billet-label`, which is the same "no position is the
+ * absence of a colour rather than a seventh one" rule the chip lives by.
+ */
+/**
+ * The insert's anodised face and its engraving, composed **at the use site**.
+ *
+ * A custom property's `var()`s are substituted where it is declared, so a token
+ * carrying this whole gradient and naming `var(--slot-hue)` computes to the
+ * guaranteed-invalid value on `:root`, where no hue is set — measured, the
+ * insert rendered `background-image: none`. So `globals.css` carries the four
+ * bands and the ink as numbers, the same shape `--slot-fill-l` is in and for
+ * the same reason, and the shape of the gradient is here.
+ */
+const METAL_FACE =
+  "linear-gradient(180deg," +
+  " oklch(var(--slot-metal-l1) var(--slot-metal-c1) var(--slot-hue)) 0%," +
+  " oklch(var(--slot-metal-l2) var(--slot-metal-c2) var(--slot-hue)) 8%," +
+  " oklch(var(--slot-metal-l3) var(--slot-metal-c3) var(--slot-hue)) 62%," +
+  " oklch(var(--slot-metal-l4) var(--slot-metal-c4) var(--slot-hue)) 100%)";
+
+const METAL_INK =
+  "oklch(var(--slot-metal-ink-l) var(--slot-metal-ink-c) var(--slot-hue))";
+
+const SLOT_METAL: Record<string, string> = {
+  QB: "var(--slot-metal-qb)",
+  RB: "var(--slot-metal-rb)",
+  WR: "var(--slot-metal-wr)",
+  TE: "var(--slot-metal-te)",
+  K: "var(--slot-metal-k)",
+  DEF: "var(--slot-metal-def)",
+  DST: "var(--slot-metal-def)",
+};
+
+/** The seat a week row is about, and the two facts its bay draws. */
+export type PaneWeekSeat = {
+  /** What is printed — the *seat* (`FLX`), or a bench player's own position. */
+  label: string;
+  /**
+   * What the insert is *anodised by*, which is a different thing from what it
+   * says: the position of whoever is sitting in the seat. So a flex seat reads
+   * `FLX` in tight-end copper, which is the reading the colour exists for and
+   * something a seat name alone cannot make.
+   */
+  position?: string | null;
+  /**
+   * The slot kickoff order would seat him in instead. Drawn *inside* the bay,
+   * under a chevron, because it is a fact about the seat rather than about the
+   * player — which is what took it off the name's line, where it was a badge
+   * competing with three others.
+   */
+  moveTo?: string | null;
+  /**
+   * His game has kicked off. The insert goes graphite under a hatch with a
+   * padlock below the label, and the row's second line says the word — three
+   * cues, so the state is never a hue alone.
+   */
+  locked?: boolean;
+};
+
+/** The row's hero figure: what the page is read for. */
+export type PaneWeekFigure = {
+  /** Already formatted by the caller. */
+  text: string;
+  /**
+   * 0–100, or null for no colour at all.
+   *
+   * With no gap column beside it the figure is the only place the comparison
+   * can live, so it takes the rank ramp's two ends — which is not two verdicts
+   * on one row but the one verdict, moved. Null is a row with nothing to
+   * compare against: the opponent's whole pane, whose gap is the reader's with
+   * the sign flipped and would be the same fact drawn twice, and a bench row,
+   * which is not in a seat to have a gap from.
+   */
+  percentile?: number | null;
+  /**
+   * Ink it accent rather than by the ramp — gametime's live projection while
+   * the game is running, which is the one thing a reader scanning that column
+   * is looking for and is not a standing against anything.
+   */
+  live?: boolean;
+};
+
+/**
+ * One seat of a week, as the two week tools draw it: a **bay** milled the full
+ * height of the row's left edge with an anodised insert seated in it, the
+ * subject's face beside it, and two lines — who he is and what he projects,
+ * then where and when his game is.
+ *
+ * ## Why this is a second row rather than a widened {@link PaneRow}
+ *
+ * It is a deliberate, scoped drift and worth naming as one. `PaneRow` exists
+ * because the same player was four objects one tool apart, and a second row
+ * shape is that drift in miniature — so the line it is drawn on has to be one
+ * somebody can state. It is this: **the two week tools are one object**, and
+ * the manager card's browser is a different reading. The checker and gametime
+ * list the same seats of the same week one press apart, so they move together
+ * or they are the drift; the standings' ordinal and the pick portfolio's season
+ * have no position to anodise and no game to name, so a bay milled for a
+ * position is a bare hole on those rows and a second line is empty.
+ *
+ * Two components rather than one with a variant, for the same reason the
+ * constants above are spelled whole: the two bodies are two layouts rather than
+ * one with an override, and a shared body is a shared way to break the three
+ * lists this pass does not touch. What they *do* share is every primitive —
+ * the face mount, the injury lamp, the surfaces and the hover halo — so the
+ * things that would actually drift are still one spelling.
+ *
+ * ## Geometry
+ *
+ * **48px at `lg`, 52px below it**, `mb-1`, radius 7, `overflow-hidden`, and
+ * `padding: 0 10px 0 0` — no *left* padding, because the bay runs to the tile's
+ * own edge and is clipped by its radius.
+ *
+ * Four zones at `lg` where the row it replaces had seven cells: the bay (48px),
+ * the face (40px), the name column, and the figure (70px at `--fs-21`). What
+ * went is the 98px two-track gap meter, the 28px team cell and the 88px kickoff
+ * cell — the last two folded onto the second line, the first into the figure's
+ * own ink. The subject's column goes from about 101px to about 231px at a
+ * 1180px card, which is the whole point of the pass: the largest thing on the
+ * row was a grey number and the row's subject had a third of its width.
+ *
+ * Below `lg` the two panes are ~150px apiece, so the face drops to 17px and
+ * moves onto the name's own line — which is what hands the second line the
+ * column's full width — and the figure goes with it.
+ *
+ * **Three cells are rendered at both widths and shown at one**, which is this
+ * file's own idiom one grain up (`name`/`shortName` inside one span) and
+ * `WeekStepper`'s rule for when it is safe: neither the face nor a formatted
+ * figure holds state, and both gates are `display: none`, which takes the
+ * hidden copy out of the accessibility tree as well as off the screen. So
+ * exactly one of each is ever read. They are rendered twice because they
+ * *reparent* — the face and the figure are row cells at `lg` and line-one cells
+ * below it — and `display: contents` moves a box's children up, never a child
+ * across.
+ */
+export function PaneWeekRow({
+  seat,
+  face,
+  name,
+  shortName,
+  status = null,
+  marks,
+  note = null,
+  opponent = null,
+  meta = null,
+  figure,
+  second = null,
+  selected = false,
+  onPress,
+  ground = "glass",
+}: {
+  seat: PaneWeekSeat;
+  /** The face mount, or `null` for a row whose subject is not a person. */
+  face: PaneRowFace | null;
+  /** Printed whole from `lg` up. */
+  name: ReactNode;
+  /** Printed below `lg`. Callers pass `shortName(name)` from `features/shared/format`. */
+  shortName: ReactNode;
+  /** The injury lamp. `null` renders nothing. */
+  status?: PaneRowStatus | null;
+  /**
+   * The caller's own badges, on the name's line at both widths — `sit`, `start`
+   * and the IR marks.
+   *
+   * **Chips at both widths, where the handoff draws `start` as a word on the
+   * phone's second line and `sit` as a pill on its first.** One treatment
+   * rather than two: a badge is a badge, and a reader who has learnt `sit` as a
+   * pill should not have to learn `start` twice. The second line is left to the
+   * game, which is what it is about.
+   */
+  marks?: ReactNode;
+  /** His NFL team. Drawn beside the position on the second line, at `lg` only. */
+  note?: string | null;
+  /**
+   * Who his team plays, already spelled — `opponentLabel(opponent, home)`.
+   *
+   * Null draws the app's em dash rather than nothing, which is the opposite of
+   * {@link PaneRow.note}'s rule and right for the opposite reason: this sits in
+   * a run of game facts rather than beside a name, so an absence reads as an
+   * absence rather than as a missing number.
+   */
+  opponent?: string | null;
+  /** The kickoff, or gametime's game clock — the same cell one tense later. */
+  meta?: string | null;
+  figure: PaneWeekFigure;
+  /**
+   * A second figure at the second line's right end — gametime's scored total,
+   * beside the live projection its hero cell carries.
+   *
+   * It rides the *second* line rather than a column of its own because there is
+   * no column left to give it: the row's four zones are the design's, and a
+   * fifth would come out of the name. On the second line it sits among the
+   * facts it is about — what he has done, beside where the game is.
+   */
+  second?: string | null;
+  /** The seat the pane opposite is solving: lit four ways. */
+  selected?: boolean;
+  /** Absent renders an `<li>`; present renders an `<li><button>`. */
+  onPress?: () => void;
+  /** Where the row stands — `drawer` is the bench and the options list. */
+  ground?: "glass" | "drawer";
+}) {
+  const hue = (seat.position && SLOT_METAL[seat.position]) ?? null;
+  const locked = seat.locked === true;
+
+  const surface = selected
+    ? CONSOLE_TILE_LIT
+    : ground === "drawer"
+      ? CONSOLE_TILE_DRAWER
+      : CONSOLE_TILE;
+
+  // Two whole strings rather than a base plus an override, on this file's own
+  // rule: the pressable arm adds a cursor, a focus ring and a transition, none
+  // of which is a property the shape names, so there is nothing here for an
+  // emit-order coin flip to decide.
+  const shape =
+    `${surface} relative mb-1 flex h-[52px] w-full items-center gap-1.5 rounded-[7px] ` +
+    "pl-0 pr-[7px] lg:h-12 lg:gap-2.5 lg:pr-2.5";
+
+  const figureNode = <PaneWeekValue figure={figure} />;
+
+  const body = (
+    <>
+      <BilletFinish />
+
+      {/* ── The bay ───────────────────────────────────────────────────────
+          A hole milled the full height of the row's left edge, with a part
+          seated in it. `self-stretch` is what makes it full height and
+          `overflow-hidden` on the tile is what clips it to the radius, which is
+          why the tile has no left padding for it to sit inside. */}
+      <span
+        style={hue ? ({ "--slot-hue": hue } as CSSProperties) : undefined}
+        className={`relative flex w-7 shrink-0 flex-col items-center justify-center self-stretch overflow-hidden bg-[image:var(--billet-well-bg)] lg:w-12 ${
+          selected
+            ? "shadow-[var(--slot-bay-lit-shadow)]"
+            : "shadow-[var(--slot-bay-shadow)]"
+        }`}
+      >
+        {/* The insert, and the two finishes over it. The 1px dark ring is what
+            makes it read as a part dropped into a hole rather than a panel
+            painted on the floor, and it is at the call site rather than in
+            `--slot-insert-shadow` because it is geometry the bay owns — the
+            token is the part's own chamfer and cast. */}
+        <span
+          aria-hidden
+          className="pointer-events-none absolute inset-[3px] rounded-[4px] shadow-[var(--slot-insert-shadow),inset_0_0_0_1px_rgba(0,0,0,0.3)] lg:inset-[4px] lg:rounded-[5px]"
+          style={{
+            backgroundImage: locked
+              ? "var(--slot-locked-face)"
+              : hue
+                ? METAL_FACE
+                : "var(--billet-bg)",
+          }}
+        />
+        <span
+          aria-hidden
+          className="pointer-events-none absolute inset-[3px] rounded-[4px] bg-[image:var(--slot-brush)] lg:inset-[4px] lg:rounded-[5px]"
+        />
+        <span
+          aria-hidden
+          className="pointer-events-none absolute inset-[3px] rounded-[4px] bg-[image:linear-gradient(104deg,transparent_14%,rgba(255,255,255,0.17)_42%,transparent_62%)] lg:inset-[4px] lg:rounded-[5px]"
+        />
+        {locked && (
+          <span
+            aria-hidden
+            className="pointer-events-none absolute inset-[3px] rounded-[4px] bg-[image:repeating-linear-gradient(135deg,rgba(0,0,0,0.3)_0_2px,transparent_2px_5px)] lg:inset-[4px] lg:rounded-[5px]"
+          />
+        )}
+
+        <span
+          className="relative font-mono text-[length:var(--fs-9)] font-medium lg:text-[length:var(--fs-12)] lg:tracking-[0.04em]"
+          style={{
+            color: locked
+              ? "var(--slot-locked-ink)"
+              : hue
+                ? METAL_INK
+                : "var(--billet-label)",
+            textShadow: "var(--slot-engrave)",
+          }}
+        >
+          {seat.label}
+        </span>
+
+        {seat.moveTo && (
+          <>
+            {/* CSS borders rather than a glyph: a 7×4 triangle at this size is
+                a drawing, and `▾` is a font's idea of one. */}
+            <span
+              aria-hidden
+              className="relative mt-px block size-0 border-x-[3px] border-t-[3.5px] border-x-transparent border-t-[color:var(--billet-accent)] lg:mt-0.5 lg:border-x-[3.5px] lg:border-t-4"
+              style={{ filter: "drop-shadow(0 1px 0 rgba(0,0,0,0.55))" }}
+            />
+            <span className="relative font-mono text-[length:var(--fs-9)] font-medium text-[color:var(--billet-accent)] [text-shadow:0_1px_0_rgba(0,0,0,0.6),0_0_9px_var(--accent-glow)] lg:mt-px lg:text-[length:var(--fs-11)] lg:tracking-[0.04em]">
+              {seat.moveTo}
+            </span>
+          </>
+        )}
+
+        {locked && <Padlock />}
+      </span>
+
+      {/* The face as a row cell, from `lg` up. */}
+      {face && (
+        <PaneRowFaceMount face={face} className="hidden size-10 text-[length:var(--fs-15)] lg:flex" />
+      )}
+
+      <span className="relative flex min-w-0 flex-1 flex-col gap-[2px]">
+        {/* ── Line one: who he is, and — below `lg` — what he projects ──── */}
+        <span className="flex min-w-0 items-center gap-[5px] lg:gap-[7px]">
+          {face && (
+            <PaneRowFaceMount
+              face={face}
+              className="flex size-[17px] text-[length:var(--fs-8)] lg:hidden"
+            />
+          )}
+          <span
+            className={`min-w-0 flex-1 truncate font-display text-[length:var(--fs-12)] font-medium [text-shadow:var(--billet-name-shadow)] lg:flex-initial lg:text-[length:var(--fs-15)] lg:tracking-[-0.005em] ${
+              selected
+                ? "text-[color:var(--billet-accent)]"
+                : "text-[color:var(--billet-name)]"
+            }`}
+          >
+            <span className="lg:hidden">{shortName}</span>
+            <span className="hidden lg:inline">{name}</span>
+          </span>
+          {marks}
+          {status && <StatusLamp status={status} />}
+          <span className="shrink-0 lg:hidden">{figureNode}</span>
+        </span>
+
+        {/* ── Line two: where and when the game is ────────────────────────
+            One row of parts, each gated at the width it belongs to, rather
+            than two lines one of which is hidden: what differs between the
+            widths is which *facts* fit, not how they are drawn, and a second
+            copy would be a second place for the wording to drift. */}
+        <span
+          className={`flex min-w-0 items-baseline gap-1 font-mono text-[length:var(--fs-9)] uppercase tracking-[0.02em] lg:items-center lg:gap-[7px] lg:text-[length:var(--fs-10)] lg:tracking-[0.08em] ${
+            locked
+              ? "text-[color:var(--billet-scope)] lg:text-[color:var(--billet-label)]"
+              : "text-[color:var(--billet-label)]"
+          }`}
+        >
+          {/* The position and the team. **Dropped below `lg`**, and the bay is
+              why: it is already printing the seat, and on a ~150px line the
+              game is the reading the row does not otherwise carry. */}
+          <span className="hidden shrink-0 lg:inline">
+            {`${seat.position ?? "—"} · ${note ?? "—"}`}
+          </span>
+          <span
+            aria-hidden
+            className="hidden h-[11px] w-px shrink-0 bg-[image:var(--groove)] lg:block"
+          />
+          <span className="shrink-0 lg:text-[color:var(--billet-unit)]">
+            {opponent ?? "—"}
+          </span>
+          {/* A locked row drops its clock below `lg`: the padlock in the bay
+              and the word at the end of this line are already saying the clock
+              has run out, and the ~150px line has better uses for it. */}
+          {meta && (
+            <span className={locked ? "hidden min-w-0 truncate lg:block" : "min-w-0 flex-1 truncate lg:flex-initial"}>
+              <span aria-hidden className="lg:hidden">
+                {"· "}
+              </span>
+              {meta}
+            </span>
+          )}
+          {locked && (
+            <span className="ml-auto shrink-0 whitespace-nowrap text-[color:var(--billet-scope)] lg:ml-0">
+              <span className="sr-only">Locked — his game has kicked off</span>
+              <span aria-hidden>
+                <span className="hidden lg:inline">{"· "}</span>locked
+              </span>
+            </span>
+          )}
+          {second !== null && (
+            <span className="ml-auto shrink-0 whitespace-nowrap tabular-nums text-[color:var(--billet-unit)]">
+              {second}
+            </span>
+          )}
+        </span>
+      </span>
+
+      {/* The figure as a row cell, from `lg` up. */}
+      <span className="relative hidden w-[70px] shrink-0 justify-end lg:flex">
+        {figureNode}
+      </span>
+
+      {selected && (
+        // A rail down the row's **right** edge, pointing at the pane that is
+        // answering this seat — which is the one of the four lit cues that says
+        // *which way to look*. `--lit-bar-bg` rather than a second mint, so it
+        // is the same stock the history rail and the drawer's own lit bar are
+        // drawn from.
+        <span
+          aria-hidden
+          className="pointer-events-none absolute inset-y-1 right-0 w-[3px] rounded-l-[2px] bg-[image:var(--lit-bar-bg)] shadow-[0_0_11px_var(--accent-glow)] lg:inset-y-[5px]"
+        />
+      )}
+    </>
+  );
+
+  // The hover halo is spelled whole, per ground — a shadow list is atomic, so a
+  // `hover:shadow-[…]` naming only the glow would replace the tile's chamfer
+  // rather than add to it.
+  const hover = selected
+    ? ""
+    : ground === "drawer"
+      ? "hover:shadow-[var(--tile-drawer-shadow),0_0_14px_-6px_var(--accent-glow)]"
+      : "hover:shadow-[var(--tile-shadow),0_0_14px_-6px_var(--accent-glow)]";
+
+  if (!onPress) return <li className={shape}>{body}</li>;
+
+  return (
+    <li>
+      <button
+        type="button"
+        onClick={onPress}
+        aria-pressed={selected}
+        className={`${shape} cursor-pointer text-left transition-[box-shadow,background-image] duration-150 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-active/60 ${hover}`}
+      >
+        {body}
+      </button>
+    </li>
+  );
+}
+
+/**
+ * The padlock under a locked seat's label — the third of that state's three
+ * cues, after the graphite insert and the hatch over it.
+ *
+ * Two elements at a 16 viewBox, drawn in `--slot-lock-ink` over a hard dark
+ * step, which is the same engraving the label above it takes. It is
+ * `aria-hidden`: the row's second line already carries an `sr-only` sentence,
+ * and a padlock announced as nothing is not a reading.
+ */
+function Padlock() {
+  return (
+    <svg
+      aria-hidden
+      focusable="false"
+      viewBox="0 0 16 16"
+      className="relative mt-px size-[11px] lg:mt-0.5 lg:size-[13px]"
+      style={{ filter: "drop-shadow(0 1px 0 rgba(0,0,0,0.6))" }}
+    >
+      <path
+        d="M5.6 7.4V5.3a2.4 2.4 0 0 1 4.8 0v2.1"
+        fill="none"
+        stroke="var(--slot-lock-ink)"
+        strokeWidth="1.6"
+        strokeLinecap="round"
+      />
+      <rect x="3.6" y="7.1" width="8.8" height="6.3" rx="1.5" fill="var(--slot-lock-ink)" />
+    </svg>
+  );
+}
+
+/**
+ * The week row's hero figure, struck into the part's face at `--fs-21`.
+ *
+ * **It is the only place the comparison lives**, now that the two-track gap
+ * meter is gone: the ramp's two ends ink it, which is not two verdicts on one
+ * row but the one verdict moved off a 98px column and onto the number it was
+ * about. `--standing-engrave` is the strip's own stack, so the figure gains
+ * weight without gaining a second hue.
+ *
+ * `live` is gametime's own reading and deliberately not on the ramp: a live
+ * projection has nothing on that card to be a standing *against*, so what the
+ * accent says is that the game is **running**.
+ */
+function PaneWeekValue({ figure }: { figure: PaneWeekFigure }) {
+  const tone =
+    figure.live || figure.percentile == null ? null : rankColor(figure.percentile);
+
+  return (
+    <span
+      className={`relative text-right font-mono text-[length:var(--fs-13)] font-medium leading-none tabular-nums lg:text-[length:var(--fs-21)] ${
+        figure.live
+          ? "text-[color:var(--readout-text)] [text-shadow:var(--readout-text-glow)]"
+          : tone
+            ? ""
+            : "text-[color:var(--billet-figure)] [text-shadow:var(--standing-engrave)]"
+      }`}
+      style={
+        tone
+          ? {
+              color: tone,
+              textShadow: `var(--standing-engrave), 0 0 16px ${rankColor(figure.percentile ?? null, 0.5)}`,
+            }
+          : undefined
+      }
+    >
+      {figure.text}
     </span>
   );
 }

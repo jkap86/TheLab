@@ -1264,6 +1264,24 @@
   --tile-face-ink: rgba(237, 237, 237, 0.45);
 
   /*
+   * **Lit four ways at once**, which is the week tools' row and is a stronger
+   * reading than {@link --tile-selected-shadow} alone: that one says "picked",
+   * and this says "the pane opposite is solving this seat" — a claim about the
+   * *view* rather than about the row, and one a reader scanning nine seats
+   * misses if it is spelled once. The lit face and the accent name are two of
+   * the four; this is the rim at full strength and a halo thrown onto the glass
+   * around the tile, and the fourth is the rail the row draws down its own
+   * right edge, pointing at the pane that is answering it.
+   *
+   * A token rather than a `shadow-[…]` composed at the call site because a
+   * shadow list is atomic: appending would replace the chamfer rather than add
+   * to it, and because the rim names a colour, which cannot be an `rgba()` in a
+   * class string and still invert.
+   */
+  --tile-lit-shadow: var(--tile-selected-shadow),
+    inset 0 0 0 1px rgba(0, 255, 229, 0.55), 0 0 28px -4px var(--accent-glow);
+
+  /*
    * ── The position palette ─────────────────────────────────────────────────
    *
    * A pane row's lead cell prints the **seat** and is filled by the
@@ -1304,6 +1322,129 @@
   --slot-fill-c: 0.105;
   --slot-ink-l: 0.28;
   --slot-ink-c: 0.07;
+
+  /*
+   * ── The seated slot insert ───────────────────────────────────────────────
+   *
+   * The week tools' row prints its seat in a **bay**: a hole milled the full
+   * height of the row's left edge with an anodised insert seated in it, rather
+   * than the flat 34px chip the palette above is drawn for. Three surfaces,
+   * and the reason there are three is that they are three different objects —
+   * the hole, the part in it, and the type cut into that part.
+   *
+   * **`--slot-metal-face` is a different palette from `--slot-fill-*` above,
+   * not a shade of it.** That set is a light candy fill measured for a flat
+   * chip lying on glass; an insert seated in a milled bay is read off its own
+   * *gradient*, so it drops to metal — mid-dark bands at about half the chroma,
+   * which is anodised aluminium rather than paint, under a near-white tinted
+   * engraving. The hue angles are the palette's own pulled a few degrees toward
+   * the console's cooler axis (brass for WR, copper for TE, teal-green for K),
+   * so a position is still the colour a reader knows it by.
+   *
+   * **The bright band is compressed into the top 8%, where the handoff draws it
+   * running to 26%**, and that is a measurement rather than a preference. The
+   * near-white ink clears 4.5:1 against every band from 8% down; against the
+   * 0–26% ramp the handoff spells, a *centred* label clears (4.92:1 at worst)
+   * and the `move_to` label does not — it rides up to make room for the chevron
+   * and the target slot beneath it, and at 10% of the insert it measured
+   * **3.56:1**, under the floor the handoff itself sets for this label when it
+   * moves the locked ink to 0.68. Compressed, the worst band a label can sit on
+   * is **4.63:1** (`move_to`) and **5.48:1** (centred), and the top lip is
+   * 3.30:1 — a graphical element, which owes 3:1 and has no glyph on it. The
+   * lip reads as a lip regardless, because the insert's own chamfer and the
+   * raking specular over it are two more sources of the same highlight.
+   *
+   * Every figure is measured band against band across all six hues.
+   */
+  --slot-metal-qb: 310;
+  --slot-metal-rb: 275;
+  --slot-metal-wr: 80;
+  --slot-metal-te: 350;
+  --slot-metal-k: 155;
+  --slot-metal-def: 235;
+  /*
+   * **Numbers rather than a whole gradient**, which is the palette above's own
+   * shape and is forced rather than chosen: a custom property's `var()`s are
+   * substituted where it is *declared*, so a `--slot-metal-face` naming
+   * `var(--slot-hue)` here computes to the guaranteed-invalid value — `--slot-hue`
+   * is set on the bay, four levels down, and by then the token is already
+   * empty. Measured: the insert rendered `background-image: none`. So the four
+   * bands and the ink are eight numbers and the composition is at the use site,
+   * exactly as `--slot-fill-l` and `oklch(var(--slot-fill-l) …)` already are.
+   */
+  --slot-metal-l1: 0.615;
+  --slot-metal-c1: 0.05;
+  --slot-metal-l2: 0.535;
+  --slot-metal-c2: 0.06;
+  --slot-metal-l3: 0.45;
+  --slot-metal-c3: 0.055;
+  --slot-metal-l4: 0.37;
+  --slot-metal-c4: 0.05;
+  --slot-metal-ink-l: 0.965;
+  --slot-metal-ink-c: 0.022;
+
+  /*
+   * A seat whose game has kicked off: the colour goes out of the insert.
+   *
+   * Graphite rather than a dimmed hue, because "his game has gone" is not a
+   * quieter version of "he is a wide receiver" — it is a different fact, and a
+   * position drawn at half strength would read as one the app was unsure of.
+   * The ink is `rgba(237,237,237,0.68)` rather than the 0.55 a first pass drew:
+   * measured against the band the label actually sits on once the padlock is
+   * under it (19–44% of the insert), 0.68 is **5.64–7.37:1** where 0.55 sits at
+   * the 4.4 the handoff records — quiet without being under the floor.
+   *
+   * `--slot-lock-ink` is the padlock's amber, and it is the third cue rather
+   * than the only one: the graphite, the hatch over it and this lamp all say
+   * the same thing, so the state is never a hue alone.
+   */
+  --slot-locked-face: linear-gradient(180deg, #4a5459 0%, #3c4549 26%, #303738 62%,
+    #262b2d 100%);
+  --slot-locked-ink: rgba(237, 237, 237, 0.68);
+  --slot-lock-ink: oklch(0.82 0.13 85);
+
+  /*
+   * The hole, the part, and the cut — three bevels, which is why they are
+   * three stacks rather than three alphas.
+   *
+   * `--slot-bay-shadow` is a hole milled clean through the tile's left edge:
+   * dark from the top and from the right wall, a hard dark lip at the top and a
+   * lit one at the bottom, which is the pair that says "cut" rather than
+   * "painted". It is cut deeper than `--standing-well-shadow` because what sits
+   * in it is a *part* rather than a reading.
+   *
+   * `--slot-insert-shadow` is that part: chamfered on all four edges — lit top
+   * and left, dark bottom and right — over a short cast onto the floor of the
+   * hole. The caller adds `inset 0 0 0 1px rgba(0,0,0,0.3)` at the call site,
+   * which is what makes it read as dropped in rather than as a panel painted on
+   * the floor.
+   *
+   * `--slot-brush` is the fine vertical brush across the insert's face, and it
+   * runs at 3px where `--billet-grain` runs at 3px horizontally: the insert is
+   * milled across the row where the stock around it is milled down it, which is
+   * what stops the two reading as one surface.
+   */
+  --slot-brush: repeating-linear-gradient(90deg, rgba(255, 255, 255, 0.075) 0 1px,
+    transparent 1px 3px);
+  --slot-bay-shadow: inset 0 3px 7px rgba(0, 0, 0, 0.82),
+    inset -2px 0 4px rgba(0, 0, 0, 0.55), inset 0 1px 0 rgba(0, 0, 0, 0.8),
+    inset 0 -1px 0 rgba(255, 255, 255, 0.14);
+  --slot-insert-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.42),
+    inset 0 -2px 3px rgba(0, 0, 0, 0.5), inset 1px 0 0 rgba(255, 255, 255, 0.13),
+    inset -1px 0 0 rgba(0, 0, 0, 0.42), 0 1px 2px rgba(0, 0, 0, 0.65);
+  --slot-engrave: 0 1px 0 rgba(0, 0, 0, 0.6), 0 -1px 0 rgba(255, 255, 255, 0.14);
+
+  /*
+   * The bay's **walls** light where the far pane is solving that seat, and the
+   * insert in it does not — which is the whole reason the state lives here
+   * rather than on the insert's face. The insert carries facts about the
+   * *seat*: its position, the slot it should move to, whether its game has
+   * gone. The walls carry the *view's*. Split that way the two hold at once — a
+   * locked seat can also be the one being solved — where one layer spelling
+   * both would have to pick.
+   */
+  --slot-bay-lit-shadow: var(--slot-bay-shadow),
+    inset 0 0 0 1px rgba(0, 255, 229, 0.5), inset 0 0 16px -3px var(--accent-glow);
 
   /*
    * ── The injury lamp ──────────────────────────────────────────────────────
@@ -1958,6 +2099,16 @@
   --tile-face-ink: rgba(21, 36, 40, 0.45);
 
   /*
+   * The lit tile, turned over. The rim takes the light scheme's own teal at a
+   * higher opacity for `--tile-selected-shadow`'s own reason one line up — on a
+   * face that can no longer be brighter than the stock around it, the rim is
+   * the whole of what says "lit" — and the halo rides `--accent-glow`, which
+   * has already inverted.
+   */
+  --tile-lit-shadow: var(--tile-selected-shadow),
+    inset 0 0 0 1px rgba(13, 148, 136, 0.7), 0 0 28px -4px var(--accent-glow);
+
+  /*
    * The position palette, **measured rather than dimmed** — and both halves of
    * it moved, which is what the handoff's own note said would happen.
    *
@@ -1984,6 +2135,41 @@
   --slot-fill-c: 0.104;
   --slot-ink-l: 0.97;
   --slot-ink-c: 0.02;
+
+  /*
+   * ── The seated slot insert, turned over ──────────────────────────────────
+   *
+   * **Only the hole moves, and that is the whole of it.** The insert is a
+   * *part seated in a hole*, not a surface catching the light, so it reads the
+   * same on both sides — which is also the call this file already made one
+   * object smaller: the light slot chip above is a mid-dark fill under a
+   * near-white ink, measured, because the near-white well it lies on leaves a
+   * light fill nothing to separate from. An anodised insert is that argument
+   * with a gradient on it, so `--slot-metal-face`, `--slot-metal-ink`,
+   * `--slot-locked-face`, `--slot-locked-ink`, `--slot-lock-ink`,
+   * `--slot-brush` and `--slot-engrave` are all inherited unchanged: a dark
+   * part's chamfer, its brush and the type cut into it are the same physics
+   * whichever way the page around it is lit, and every contrast figure measured
+   * for the dark scheme is measured against the insert rather than against the
+   * page, so it carries over intact.
+   *
+   * What cannot carry over is the **hole**. `--slot-bay-shadow` is milled into
+   * near-white stock here, so its walls are the slate every bevel in this file
+   * is cut with on this side rather than black, and the lip pair swaps ends:
+   * the hard dark line moves to the top where the light no longer reaches, and
+   * the lit one under it becomes white rather than a 14% wash. And
+   * `--slot-insert-shadow` keeps its chamfer — the part is unchanged — while
+   * its **cast** goes slate, because what it falls on is the pale floor of the
+   * hole rather than a near-black one.
+   */
+  --slot-bay-shadow: inset 0 3px 7px rgba(15, 23, 42, 0.3),
+    inset -2px 0 4px rgba(15, 23, 42, 0.2), inset 0 1px 0 rgba(15, 23, 42, 0.34),
+    inset 0 -1px 0 rgba(255, 255, 255, 0.95);
+  --slot-insert-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.42),
+    inset 0 -2px 3px rgba(0, 0, 0, 0.5), inset 1px 0 0 rgba(255, 255, 255, 0.13),
+    inset -1px 0 0 rgba(0, 0, 0, 0.42), 0 1px 2px rgba(15, 23, 42, 0.3);
+  --slot-bay-lit-shadow: var(--slot-bay-shadow),
+    inset 0 0 0 1px rgba(13, 148, 136, 0.65), inset 0 0 16px -3px var(--accent-glow);
 
   /*
    * The injury lamp, **inverted wholesale rather than dimmed** — a light face

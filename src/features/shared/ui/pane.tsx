@@ -51,6 +51,9 @@ export {
   type PaneRowFigure,
   type PaneRowLead,
   type PaneRowStatus,
+  PaneWeekRow,
+  type PaneWeekFigure,
+  type PaneWeekSeat,
 } from "./pane-row";
 
 /**

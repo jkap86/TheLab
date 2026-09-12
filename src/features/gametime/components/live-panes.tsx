@@ -14,9 +14,10 @@ import {
   PaneHead,
   PaneLedge,
   PaneLedgeTrack,
-  PaneRow,
   PaneTotal,
+  PaneWeekRow,
   PANEL_BLEED,
+  opponentLabel,
   shortName,
   slotLabel,
   useLinkedScroll,
@@ -34,7 +35,7 @@ import { gameClockLabel, gameScoreLabel } from "../helpers/live-record";
  * reader can still set is what it is about; this is a scoreboard over a
  * lineup that is being played, so the seats are plain rows and the panes are
  * two lists read across — the same parts (`Pane`, `PaneLedge`, `PaneGlass`,
- * `PaneRow`, a bench behind a pinned drawer bar), the same two row
+ * `PaneWeekRow`, a bench behind a pinned drawer bar), the same two row
  * heights, and the same linked scroll, so a reader walking from the checker to
  * here sees one card over one league.
  *
@@ -199,33 +200,29 @@ function LineupPane({
  * `lg`, where the seat row is two lines and its cells sit under the name.
  */
 function ColumnHeads({ name, vs }: { name: string; vs: boolean }) {
-  const head =
-    "hidden shrink-0 font-mono text-[length:var(--fs-10)] uppercase tracking-[0.1em] text-[color:var(--billet-label)] lg:block";
-
   return (
     <div className="mt-1.5 flex items-baseline gap-[9px] px-[3px] lg:mt-0 lg:px-1 lg:pb-px lg:pt-[7px]">
-      <span aria-hidden className={`w-[34px] text-center tracking-[0.14em] ${head}`}>
-        Slot
-      </span>
-      {/* The face and the team code hold columns and have no head — there is
-          nothing to call a picture of somebody, and three letters are their own
-          label — but the heads need their widths, or each one sits left of the
-          cell it names. */}
-      <span aria-hidden className={`w-[22px] ${head}`} />
       <PaneHead className="min-w-0 flex-1">
         {vs && (
           <span className="tracking-[0.14em] text-[color:var(--billet-label)]">vs </span>
         )}
         {name}
       </PaneHead>
-      <span aria-hidden className={`w-7 ${head}`} />
-      <span aria-hidden className={`w-[88px] text-right ${head}`}>
-        Game
-      </span>
-      <span aria-hidden className={`w-[70px] text-right ${head}`}>
-        Pts
-      </span>
-      <span aria-hidden className={`w-14 text-right ${head}`}>
+      {/* **One head where there were five**, and the row is why: it has four
+          zones now and one of them is a column a head can name. The bay prints
+          the seat and is its own label, the face is a picture of somebody, and
+          the clock and the scored total are on a run of game facts rather than
+          in columns.
+
+          It names `Live` rather than `Pts`, which is the one thing this pane's
+          heads say differently from the checker's: the hero cell carries what a
+          starter is **on course for**, which is the reading this page exists
+          for, and what he has scored so far rides the second line beside the
+          clock it is a fact about. */}
+      <span
+        aria-hidden
+        className="hidden w-[70px] shrink-0 text-right font-mono text-[length:var(--fs-10)] uppercase tracking-[0.1em] text-[color:var(--billet-label)] lg:block"
+      >
         Live
       </span>
     </div>
@@ -233,33 +230,29 @@ function ColumnHeads({ name, vs }: { name: string; vs: boolean }) {
 }
 
 /**
- * One seat, as a {@link PaneRow} — the checker's row with its cells re-read.
+ * One seat, as a {@link PaneWeekRow} — the checker's row with its cells re-read.
  *
- * **The row is the shared part now**, so the two heights, the two-line phone
- * arm, the cell order, the face this list did not draw and the sans name it did
- * not set are all that part's. What is this row's own is the clock and the
- * second figure.
+ * **The hero figure is `live` and the scored total rides the second line**,
+ * which reverses the two columns this row used to draw and is the page's own
+ * hierarchy: what a starter is *on course for* is the reading gametime exists
+ * for, and what he has scored so far is how far along he is. The card's own
+ * plate already says it that way — its hero is the live projection and the
+ * score sits beside it.
  *
- * **`figure` is what he has scored and `second` is what he is on course for.**
- * They read left to right in the heads' own order, and neither is on the rank
- * ramp: a live figure has nothing on this card to be a standing *against* — the
- * pane opposite is a different roster, not a distribution — so a colour there
- * would be a verdict nobody computed. What the accent says instead is that the
- * game is **running**, which is the one thing a reader scanning the column is
- * looking for.
+ * **Neither figure is on the rank ramp**, which is the one thing this row does
+ * not take from the checker's. A live figure has nothing on this card to be a
+ * standing *against* — the pane opposite is a different roster, not a
+ * distribution — so a colour there would be a verdict nobody computed. What the
+ * accent says instead is that the game is **running**.
  *
- * **The clock column is 88px and untracked at `lg`**, the checker's own
- * measurement of the widest string the kickoff formatter can produce;
- * `Q3 05:32` and `Final` are shorter, so a column sized for the kickoff holds
- * every other reading for free. Below `lg` it takes the line's own slack and
- * truncates, which is where it already sat.
+ * **The clock takes the kickoff's place on the second line**, which is the same
+ * cell one tense later: before kickoff `gameClockLabel` prints the kickoff, and
+ * after it the quarter and the clock. So a reader walking from the checker to
+ * here finds the same fact in the same place, saying what it now knows.
  *
  * **The scored figure is null before kickoff and prints an em dash**, on the
  * contract's grammar: nothing has happened yet, which is a different answer
- * from a game he has played and scored nothing in. It is drawn at both widths
- * now, where the phone arm used to drop it — the part gives the second line a
- * fixed shape, and a cell that came and went between rows is what made two
- * lineups stop reading across.
+ * from a game he has played and scored nothing in.
  */
 function SeatRow({ seat, game }: { seat: GametimeSeat; game: GametimeGame | null }) {
   const player = seat.player;
@@ -268,27 +261,25 @@ function SeatRow({ seat, game }: { seat: GametimeSeat; game: GametimeGame | null
   const name = player ? (player.name ?? player.player_id) : "Empty";
 
   return (
-    <PaneRow
-      lead={{ label: slotLabel(seat.slot), position: player?.positions[0] ?? null }}
+    <PaneWeekRow
+      seat={{ label: slotLabel(seat.slot), position: player?.positions[0] ?? null }}
       face={{ playerId: player?.player_id ?? null, name: player ? name : "" }}
       name={name}
       shortName={player?.name ? shortName(player.name) : name}
       // Not on the wire — see `PaneRow`'s lamp.
       status={null}
       note={player?.team ?? null}
+      opponent={opponentLabel(game?.opponent ?? null, game?.home ?? false)}
       meta={clock.text || null}
       figure={{
-        text: player?.scored == null ? "—" : player.scored.toFixed(1),
-        percentile: null,
-      }}
-      second={{
         text: player?.live == null ? "—" : player.live.toFixed(1),
         live: clock.live,
       }}
+      second={player?.scored == null ? "—" : player.scored.toFixed(1)}
       marks={
-        // The score sits on the row's `title` rather than on screen: it is
-        // context for the clock, and a second reading beside four figures is
-        // the column this pane cannot spare.
+        // The score sits on an `sr-only` sentence rather than on screen: it is
+        // context for the clock, and a third reading on the second line is the
+        // width this pane cannot spare.
         score ? (
           <span className="sr-only">
             {clock.text} · {score}
@@ -300,23 +291,21 @@ function SeatRow({ seat, game }: { seat: GametimeSeat; game: GametimeGame | null
 }
 
 /**
- * A bench player, in the drawer behind the bar — the shared bench row, with the
- * live figure in the figure cell and the game clock where the checker's puts
- * the NFL team.
+ * A bench player, in the drawer behind the bar — the shared bench row with the
+ * live figure in the hero cell and the scored total beside the clock, which is
+ * the seat rows' own arrangement one list down.
  *
- * The clock wins the note slot where there is one, because on a live page where
- * a bench player's game *is* is the reading, and his NFL team is one press from
- * the seat rows above. The scored figure rides `second`, which is the same cell
- * the seats put `Live` in — one column down the pane, whichever list is on it.
+ * His NFL team is one press away on the seats above, so the second line spends
+ * its width on the game: where it is, and where he stands in it.
  */
 function BenchRow({ player, game }: { player: GametimePlayer; game: GametimeGame | null }) {
   const clock = gameClockLabel(game);
   const name = player.name ?? player.player_id;
 
   return (
-    <PaneRow
+    <PaneWeekRow
       ground="drawer"
-      lead={{
+      seat={{
         label: player.positions[0] ?? "—",
         position: player.positions[0] ?? null,
       }}
@@ -324,15 +313,14 @@ function BenchRow({ player, game }: { player: GametimePlayer; game: GametimeGame
       name={name}
       shortName={player.name ? shortName(player.name) : name}
       status={null}
-      note={clock.text || player.team}
+      note={player.team}
+      opponent={opponentLabel(game?.opponent ?? null, game?.home ?? false)}
+      meta={clock.text || null}
       figure={{
-        text: player.scored == null ? "—" : player.scored.toFixed(1),
-        percentile: null,
-      }}
-      second={{
         text: player.live == null ? "—" : player.live.toFixed(1),
         live: clock.live,
       }}
+      second={player.scored == null ? "—" : player.scored.toFixed(1)}
     />
   );
 }

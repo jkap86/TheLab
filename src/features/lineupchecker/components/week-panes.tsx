@@ -14,10 +14,10 @@ import {
   PaneHead,
   PaneLedge,
   PaneLedgeTrack,
-  PaneRow,
   PaneTotal,
+  PaneWeekRow,
   PANEL_BLEED,
-  rankColor,
+  opponentLabel,
   shortName,
   slotLabel,
   useLinkedScroll,
@@ -33,7 +33,6 @@ import {
 import {
   seatGap,
   seatOptions,
-  type SeatGap,
   type SeatOption,
   type SeatPick,
   type Side,
@@ -49,7 +48,7 @@ import {
  * card's is two *parts* — a billet carrying a ledge and a sheet of glass — with
  * its rows cut as channels into that glass. The two pages list the same leagues
  * and draw the same card, so the open half is the same object too: `Pane`,
- * `PaneLedge`, `PaneGlass`, `PaneRow` and a bench behind a pinned
+ * `PaneLedge`, `PaneGlass`, `PaneWeekRow` and a bench behind a pinned
  * drawer bar, all of them the shared parts rather than a second spelling.
  *
  * **The state lives here rather than on the card**, which is what keeps
@@ -67,11 +66,17 @@ import {
  * options they are rather than leaving it to be read off position.
  *
  * **The panes sit side by side at every width**, phones included, because the
- * comparison is the whole point of the view. What turns at `lg` is the seat
- * row: one line of columns with a two-track gap meter, two lines with the same
- * gap as a signed figure below. `LeagueTeams` measured that breakpoint for the
- * same reason one tool over — a name column squeezed to one character is the
- * layout at its most confident and least true.
+ * comparison is the whole point of the view. The seat row is two lines at both
+ * widths now — the phone's shape taken up to the desktop rather than the other
+ * way about — and what turns at `lg` is how much of the game fits on the second
+ * of them, plus whether the face and the figure are cells of the row or of the
+ * name's own line. See {@link PaneWeekRow}, which owns all of it.
+
+ * **The two-track gap meter is gone**, and with it the 28px team cell and the
+ * 88px kickoff cell: the first is the figure's own ink and the other two are on
+ * the second line. What that buys is the row's subject — the name goes from
+ * about 101px to about 231px at a 1180px card, which is the whole of the pass
+ * that replaced the row.
  *
  * **Equal-width panes, where the two used to split 1 / 0.78.** That split
  * existed because the right pane drew no gap column; with the totals moved onto
@@ -87,7 +92,8 @@ import {
  * Every figure is stated once and derived in one place: the seat gaps come off
  * the two lineups through `seatGap`, an option's delta off the seat it would
  * replace through `seatOptions`, and the four totals off the payload the card
- * above already reads.
+ * above already reads. Both gaps are read for their **sign** alone — the figure
+ * they ink is where the comparison lives now.
  *
  * **The IR marks read the same `irMoves` the roster tile does**, so a tile
  * saying `1 to IR` and a bench wearing two `→ IR` chips cannot be two readings
@@ -197,6 +203,9 @@ export function WeekPanes({
             side="theirs"
             seat={opponent.lineup[pick.index]}
             bench={opponent.bench}
+            // The optimal lineup's moves are answers about a lineup the reader
+            // can set — `PaneLineup.promoted`'s own argument, one pane over.
+            promoted={[]}
             ir={null}
             onBack={clear}
             scrollRef={left}
@@ -218,6 +227,7 @@ export function WeekPanes({
             side="mine"
             seat={entry.lineup[pick.index]}
             bench={entry.bench}
+            promoted={entry.start}
             ir={moves}
             onBack={clear}
             scrollRef={right}
@@ -262,23 +272,19 @@ type PaneLineup = {
 /**
  * A roster's lineup, seat by seat, as a part.
  *
- * **Only the left pane draws the two-track meter, and only from `lg` up.** A
- * gap drawn on both sides is the same fact twice with the second copy
- * mirrored, and the two tracks are 98px the right pane does not have to spend
- * to say something already said opposite. The **phone draws the signed figure
- * in both panes**, which is not an inconsistency but the same rule in a room
- * with no tracks to mirror: there, a pane whose rows carried no comparison at
- * all would be half a comparison.
+ * **Only the left pane's figures are inked, and that is the two-track meter's
+ * own rule with the column gone.** A gap drawn on both sides is the same fact
+ * twice with the second copy mirrored — the opponent's gap *is* the reader's
+ * with the sign flipped — so the pane being played against keeps the neutral
+ * figure ink at every width. What the reader loses by it is nothing: the same
+ * comparison is on the row opposite, which is the row they are reading it
+ * against.
  *
- * **The right pane's third column collapses rather than being reserved**, and
- * that reverses what this file said first. Reserving it lines the two panes'
- * `Pts` columns up at the same distance from their own right edges, which
- * sounded worth 98px until a render at 1024 priced it: the right pane is
- * 404px, its seat row spends 38 on the slot, 56 on the points, 64 on the
- * kickoff and 98 on a column drawing nothing, and the name — the row's whole
- * subject — is left eight characters, on every opponent. That is the failure
- * this app has recorded at three other grains, and a numeric column's
- * alignment does not buy it.
+ * That replaces a column and two of its arguments. The meter was 98px of tracks
+ * at `lg` and a signed figure below it, reserved-but-blank on the right pane
+ * above `lg` and drawn on it below — three readings of one measurement, and the
+ * reason the two panes could not simply be the same. They are now, and the
+ * figure they both end with is the one place the comparison lives.
  */
 function LineupPane({
   side,
@@ -293,7 +299,7 @@ function LineupPane({
   side: Side;
   pane: PaneLineup;
   opposite: LineupCheckSeat[] | undefined;
-  /** Draw the meters. The left pane only — see the note above. */
+  /** Ink the figures by their gap. The left pane only — see the note above. */
   gaps?: boolean;
   /** The pane is the one being played *against*, and says so before the name. */
   vs?: boolean;
@@ -304,9 +310,9 @@ function LineupPane({
   const drawerId = useId();
   const [benchOpen, setBenchOpen] = useState(false);
 
-  // **The head names a column only where there is one.** A pane with no lineup
-  // opposite it — a future week, an unpaired one — has nothing to compare, and
-  // a `Gap` head over an empty column claims a measurement nobody made.
+  // **A figure is inked only where there is something to compare it to.** A
+  // pane with no lineup opposite it — a future week, an unpaired one — has no
+  // gap, and a green figure over a comparison nobody made is a claim.
   const compares = opposite !== undefined;
   const starts = pane.bench.filter((p) => pane.promoted.includes(p.player_id)).length;
 
@@ -333,11 +339,7 @@ function LineupPane({
           <PaneTotal label="Opt" value={pane.optimal} tone="error" />
         </PaneLedgeTrack>
 
-        <ColumnHeads
-          name={pane.title ?? pane.fallback}
-          vs={vs}
-          gap={gaps && compares}
-        />
+        <ColumnHeads name={pane.title ?? pane.fallback} vs={vs} />
       </PaneLedge>
 
       {/* A frame rather than a scroller: the seats scroll inside it, the bench
@@ -361,10 +363,7 @@ function LineupPane({
                 slot={seat.slot}
                 player={seat.player}
                 moveTo={seat.move_to}
-                gap={compares ? seatGap(seat, opposite[i]) : null}
-                // The left pane draws tracks from `lg` up; the right draws the
-                // same figure on a phone and nothing above it.
-                gapMode={gaps ? "meters" : "mirror"}
+                gap={gaps && compares ? seatGap(seat, opposite[i]) : null}
                 demoted={
                   seat.player ? pane.demoted.includes(seat.player.player_id) : false
                 }
@@ -449,6 +448,16 @@ function LineupPane({
  * a claim the reader would act on. `seatOptions` returns nothing for one, so
  * the two halves cannot come apart.
  *
+ * **The man in the seat is not on the list.** He was its first row, selected
+ * and chipped `in seat` — a row that answers nothing, since pressing his seat
+ * is what opened the pane and the lineup opposite is still showing him. Every
+ * delta here is measured against his figure, which is on screen throughout.
+ *
+ * **The rows are the bench drawer's**, ground and all, because that is what
+ * they are: the same players, one press away. A **locked** candidate stays on
+ * the list with the padlock in his bay saying why, where an absence reads as a
+ * player the app has lost — the other half of `seatOptions`' own rule.
+ *
  * There are no `Set`/`Opt` totals here: an option list is not a lineup and has
  * nothing to total. The ledge's track carries the `Back` key in their place,
  * which is the row a reader's eye is already on.
@@ -457,6 +466,7 @@ function OptionsPane({
   side,
   seat,
   bench,
+  promoted,
   ir,
   onBack,
   scrollRef,
@@ -465,6 +475,8 @@ function OptionsPane({
   /** Undefined only if a payload shortened under an open pick — treated as none. */
   seat: LineupCheckSeat | undefined;
   bench: readonly LineupCheckPlayer[];
+  /** Who the optimal lineup would seat — the same chip the bench drawer draws. */
+  promoted: readonly string[];
   /** The reader's IR moves — an option on IR is one Sleeper will not seat. */
   ir: IrMoves | null;
   onBack: () => void;
@@ -502,8 +514,6 @@ function OptionsPane({
               ? `Locked — ${held?.name ?? held?.player_id} has kicked off`
               : `${side === "mine" ? "Your" : "Their"} options · ${seat ? slotLabel(seat.slot) : "—"}`
           }
-          gap={!locked}
-          gapLabel="Vs seat"
         />
       </PaneLedge>
 
@@ -516,12 +526,15 @@ function OptionsPane({
             {options.map((option) => (
               <SeatRow
                 key={option.player.player_id}
-                slot={option.inSeat && seat ? seat.slot : (option.player.positions[0] ?? "—")}
+                ground="drawer"
+                // His own position, not the seat's: these are the bench's rows,
+                // and what a reader is choosing between is players rather than
+                // seats. The seat is named once, on the ledge above them.
+                slot={option.player.positions[0] ?? "—"}
                 player={option.player}
                 option={option}
-                gapMode="delta"
+                promoted={promoted.includes(option.player.player_id)}
                 irMark={irMarkFor(option.player.player_id, ir)}
-                selected={option.inSeat}
               />
             ))}
           </ul>
@@ -544,133 +557,108 @@ function OptionsPane({
 /**
  * The pane's column heads, in the rows' own widths.
  *
+ * **Two of them, where there were six.** The row has four zones now and only
+ * one of them is a column a head can name: the bay prints the seat and is its
+ * own label, the face is a picture of somebody, and the second line is a run of
+ * game facts rather than a column. What is left is the pane's name and the
+ * figure, which is the design's own head row.
+ *
  * The inks are the **billet family**, not the readout's mint: a label stamped
- * into machined metal is not type on lit glass. The name takes
- * {@link PaneHead}, which is that rule for the one head that names something.
+ * into machined metal is not type on lit glass. The name takes {@link PaneHead},
+ * which is that rule for the one head that names something.
  *
- * `aria-hidden` on everything but the name, and the name is the one that
- * carries a *sentence* in the options state (`Locked — … has kicked off`),
- * which is why it is the only one a reader hears: `Kick`, `Pts` and `Gap`
- * restate what each cell already says, where the locked note is the pane's
- * whole answer.
+ * `aria-hidden` on the figure's head and not on the name's, because the name is
+ * the one that carries a *sentence* in the options state (`Locked — … has
+ * kicked off`): `Pts` restates what the cell under it already says, where the
+ * locked note is the pane's whole answer.
  *
- * Hidden below `lg`, where the seat row is two lines and its cells sit under
- * the name rather than in columns — a head over a column that is not there
- * names nothing.
+ * Hidden below `lg`, where the row's figure sits on the name's own line rather
+ * than in a column — a head over a column that is not there names nothing.
  */
-function ColumnHeads({
-  name,
-  vs = false,
-  gap,
-  gapLabel = "Gap",
-}: {
-  name: string;
-  vs?: boolean;
-  /** Only where there is a column under it — see {@link LineupPane}. */
-  gap: boolean;
-  gapLabel?: string;
-}) {
-  const head =
-    "hidden shrink-0 font-mono text-[length:var(--fs-10)] uppercase tracking-[0.1em] text-[color:var(--billet-label)] lg:block";
-
+function ColumnHeads({ name, vs = false }: { name: string; vs?: boolean }) {
   return (
     <div className="mt-1.5 flex items-baseline gap-[9px] px-[3px] lg:mt-0 lg:px-1 lg:pb-px lg:pt-[7px]">
-      <span aria-hidden className={`w-[34px] text-center tracking-[0.14em] ${head}`}>
-        Slot
-      </span>
-      {/* The face has no head — there is nothing to call a picture of somebody
-          — but it holds a column, so the heads need its width or every one of
-          them sits 31px left of the cell it names. */}
-      <span aria-hidden className={`w-[22px] ${head}`} />
       <PaneHead className="min-w-0 flex-1">
         {vs && (
           <span className="tracking-[0.14em] text-[color:var(--billet-label)]">vs </span>
         )}
         {name}
       </PaneHead>
-      {/* The team code the rows now carry between the name and the readings.
-          Unheaded for the face's reason: three letters are their own label. */}
-      <span aria-hidden className={`w-7 ${head}`} />
-      <span aria-hidden className={`w-[88px] text-right ${head}`}>
-        Kick
-      </span>
-      <span aria-hidden className={`w-[70px] text-right ${head}`}>
+      <span
+        aria-hidden
+        className="hidden w-[70px] shrink-0 text-right font-mono text-[length:var(--fs-10)] uppercase tracking-[0.1em] text-[color:var(--billet-label)] lg:block"
+      >
         Pts
       </span>
-      {gap && (
-        <span aria-hidden className={`w-[98px] text-center ${head}`}>
-          {gapLabel}
-        </span>
-      )}
     </div>
   );
 }
 
-
 /**
- * One seat, as a {@link PaneRow}.
+ * One seat, as a {@link PaneWeekRow}.
  *
- * **The row is the shared part now**, so every measurement it used to carry is
- * that part's: the two heights, the two-line phone arm, the cell order, the
- * name's ink and the face this list did not draw at all. What is still this
- * row's own is what only a checker seat has — the badges, the kickoff, and the
- * gap column at the end of it.
+ * **Four zones where the row had seven cells**, and what went is what this
+ * caller used to hand over: the 98px two-track gap meter, the 28px team cell
+ * and the 88px kickoff cell. The first is the figure's own ink now — with no
+ * column beside it, the figure is where the comparison lives — and the other
+ * two moved onto the row's second line, which is what takes the subject's
+ * column from about 101px to about 231px at a 1180px card.
  *
- * Four things about it changed with the move, each closing a drift this list
- * was on the wrong side of. **The name is sans**, where it was mono: mono stays
- * on labels, figures and clocks, and a name is none of those. **It shortens to
- * `J. Chase` below `lg`**, which only the manager card did — this pane is
- * ~165px at 390 and printed the whole name into it. **The figure is 70px**,
- * where it was 56 and the manager card's was 70, so nothing lined up across the
- * two panes a reader compares. And **the 1px border is gone**: it is why two
- * lists declared at 38px were not the same height, and the selected state no
- * longer needs it — a lit tile says it on its own face.
+ * **Two of the badges went into the bay**, which is the other half of the same
+ * move: `locked` and `→ SF` were marks on the name's line, competing with `sit`
+ * and the IR chips for a width the name wanted. They are facts about the
+ * *seat* rather than about the player, so the bay draws them — a padlock under
+ * a graphite insert, and the target slot under a chevron — and the name's line
+ * keeps only the badges that are about the man in it.
  *
- * **The badges share the name's line at both widths**, which is the one thing
- * the shared part gained for this caller and which a render forced: left loose
- * in the wrap they went to the *second* line, where a `sit` badge beside a
- * slot, a figure and a gap overflows and takes the row to three lines — and a
- * three-line row in one pane against a two-line row in the other is two lineups
- * that no longer read across, which is the whole purpose of the view.
- *
- * **A seat carries its kickoff and an option does not.** When a game starts is
- * a fact about the lineup as it stands — it is what locks, and what the
- * seat-order check is about. An options list is a comparison of projections, so
- * the time is 88px spent on a question nobody is asking there.
+ * **A seat and an option both carry a kickoff now**, where an option used to
+ * carry none. That was a measurement rather than a principle: the time was 88px
+ * of column spent on a question an options list is not asking. The second line
+ * has no column to spend, so the cost is gone and the reading is worth having —
+ * a candidate whose game starts on Monday night is a different choice from one
+ * who starts at one o'clock.
  */
 function SeatRow({
   slot,
   player,
   moveTo,
   gap,
-  gapMode = "delta",
   demoted = false,
   irMark = null,
   option,
+  promoted = false,
   selected = false,
   onPress,
+  ground = "glass",
 }: {
   slot: string;
   player: LineupCheckPlayer | null;
   moveTo?: string | null;
-  gap?: SeatGap | null;
-  /** Which of {@link GapCell}'s three readings this row's last cell is. */
-  gapMode?: GapMode;
+  /** This seat less the one opposite, or an option's delta. Only its sign is read. */
+  gap?: number | null;
   demoted?: boolean;
   /** What the IR reading says of him — see {@link IrChip}. */
   irMark?: IrMark | null;
-  /** Set in the options pane: the row is a choice, and its delta is the last cell. */
+  /** Set in the options pane: the row is a choice, and its delta inks its figure. */
   option?: SeatOption;
+  /** The optimal lineup would seat him — the bench drawer's and the options list's chip. */
+  promoted?: boolean;
   selected?: boolean;
   onPress?: () => void;
+  ground?: "glass" | "drawer";
 }) {
-  const kickoff = player ? kickoffTime(player.kickoff) : null;
-  const delta = option ? option.delta : (gap?.delta ?? null);
   const name = player ? (player.name ?? player.player_id) : "Empty";
+  const delta = option ? option.delta : (gap ?? null);
 
   return (
-    <PaneRow
-      lead={{ label: slotLabel(slot), position: player?.positions[0] ?? null }}
+    <PaneWeekRow
+      ground={ground}
+      seat={{
+        label: slotLabel(slot),
+        position: player?.positions[0] ?? null,
+        moveTo: moveTo ? slotLabel(moveTo) : null,
+        locked: player?.locked === true,
+      }}
       face={{ playerId: player?.player_id ?? null, name: player ? name : "" }}
       name={name}
       shortName={player?.name ? shortName(player.name) : name}
@@ -678,43 +666,27 @@ function SeatRow({
       status={null}
       marks={
         <>
-          {/* A played game is not a move anybody can make, so it is marked
-              rather than left to look like an oversight. */}
-          {player?.locked && (
-            <span className="relative shrink-0 font-mono text-[length:var(--fs-9)] uppercase tracking-[0.1em] text-[color:var(--billet-label)] lg:order-4 lg:text-[length:var(--fs-10)] lg:tracking-[0.12em]">
-              <span className="sr-only">Locked — </span>
-              <span aria-hidden>locked</span>
-            </span>
-          )}
-          {option?.inSeat && <Chip>in seat</Chip>}
+          {promoted && <Chip>start</Chip>}
           {demoted && <Chip tone="error">sit</Chip>}
           <IrChip mark={irMark} />
-          {/* Read off `move_to`, which the server derived with the same
-              `kickoffMoves` the window's count came from — so the badge and the
-              count cannot disagree. */}
-          {moveTo && (
-            <Chip>
-              <span className="sr-only">Re-seat at </span>
-              <span aria-hidden>{"→ "}</span>
-              {slotLabel(moveTo)}
-            </Chip>
-          )}
         </>
       }
       note={player?.team ?? null}
-      meta={option ? null : kickoff}
+      opponent={opponentLabel(player?.opponent ?? null, player?.home ?? false)}
+      meta={player ? kickoffTime(player.kickoff) : null}
       figure={{
         // Null is "the feed has no row for him"; a real projected zero is
-        // `0.0`. The contract's own grammar, and the reason the gap beside it
+        // `0.0`. The contract's own grammar, and the reason the ink beside it
         // can be absent while the row still reads.
         text: player?.points == null ? "—" : player.points.toFixed(1),
-        // A seat's points are not ranked against anything on this card — the
-        // gap column beside it is where a seat's standing is stated, and a
-        // second colour saying the same thing on a different scale would be
-        // two verdicts on one row.
-        percentile: null,
+        // **The sign, and only the sign.** The ramp's two ends, through
+        // `rankColor`, so a good result is the same colour everywhere and both
+        // ends invert for light mode together. A level seat and an unmeasured
+        // one both take the neutral figure ink — the first because there is
+        // nothing to say and the second because there is nothing to say it
+        // about, which is the three-way grammar the cell above already keeps.
+        percentile: delta == null || delta === 0 ? null : delta > 0 ? 100 : 0,
       }}
-      tail={<GapCell delta={delta} mode={gapMode} fill={gap} />}
       selected={selected}
       onPress={onPress}
     />
@@ -724,10 +696,16 @@ function SeatRow({
 /**
  * A bench player, in the drawer behind the bar.
  *
- * The manager card's own bench row, cell for cell, because the two drawers are
- * the same part over two lists. What is this one's alone is the `start` chip:
- * the optimal lineup would seat him, which is the whole reason a reader opens
- * this drawer.
+ * The same row the seats are drawn with, one ground down — a drawer's rows
+ * stand on a *part* rather than on the lit glass, which is the one step of cast
+ * between them. Its bay prints his own position rather than a seat's, because
+ * there is no seat: he is a candidate for one, which is what the drawer is
+ * opened to see.
+ *
+ * **It carries no gap**, and that is the honest reading rather than an
+ * omission: a gap is this seat against the same seat opposite, and a bench
+ * player is in no seat to have one. The `start` chip is what this list is read
+ * for, and it is the optimal lineup's own answer.
  */
 function BenchRow({
   player,
@@ -739,158 +717,13 @@ function BenchRow({
   /** What the IR reading says of him — see {@link IrChip}. */
   irMark?: IrMark | null;
 }) {
-  const name = player.name ?? player.player_id;
-
   return (
-    <PaneRow
+    <SeatRow
       ground="drawer"
-      lead={{
-        label: player.positions[0] ?? "—",
-        position: player.positions[0] ?? null,
-      }}
-      face={{ playerId: player.player_id, name }}
-      name={name}
-      shortName={player.name ? shortName(player.name) : name}
-      status={null}
-      marks={
-        <>
-          {promoted && <Chip>start</Chip>}
-          <IrChip mark={irMark} />
-          {player.locked && (
-            <span className="relative shrink-0 font-mono text-[length:var(--fs-9)] uppercase tracking-[0.1em] text-[color:var(--billet-label)] lg:order-4 lg:text-[length:var(--fs-10)]">
-              <span className="sr-only">Locked — </span>
-              <span aria-hidden>locked</span>
-            </span>
-          )}
-        </>
-      }
-      note={player.team}
-      figure={{
-        text: player.points == null ? "—" : player.points.toFixed(1),
-        percentile: null,
-      }}
-    />
-  );
-}
-
-/**
- * Which of three readings a row's last cell is.
- *
- * `meters` is the left lineup pane: two tracks from `lg` up, the signed figure
- * below it. `mirror` is the right lineup pane, whose gap is the left pane's
- * with the sign flipped — the same fact, so it is drawn on a phone (where
- * there are no tracks opposite to read it off) and reserved but blank above
- * `lg`. `delta` is an options pane's `Vs seat` column, which has no mirror
- * anywhere and prints at every width.
- */
-type GapMode = "meters" | "mirror" | "delta";
-
-/**
- * The last cell: the gap to the same seat opposite, or an option's delta.
- *
- * **Two 44px tracks meeting at the centre, and only ever one of them fills** —
- * left where this seat leads, right where the one opposite does. A bar drawn
- * from a centre line is the one shape that says "against" rather than "out
- * of", which is what the column is for.
- *
- * Below `lg` there is no room for two tracks and the same number is a signed
- * figure instead. It is the same measurement in less space rather than a
- * different reading, which is why both come off one `SeatGap`.
- *
- * **A null delta draws nothing at all** — no bar, no dash, no zero. Scoring an
- * unpriced player as zero would hand the other side a maximal, full-length
- * lead on a row whose own figures say there is nothing to compare. The cell
- * keeps its width regardless, so a pane's columns do not shift row to row.
- *
- * **It carries its own `lg:order-10`**, which is the contract `PaneRow.tail`
- * states: the part renders it last and knows nothing about how wide it is, so
- * the order is the caller's to name — and above `lg` the wrapping span is
- * `contents`, so this really is a direct flex child of the row.
- */
-function GapCell({
-  delta,
-  mode,
-  fill,
-}: {
-  delta: number | null;
-  mode: GapMode;
-  fill: SeatGap | null | undefined;
-}) {
-  // `mirror` draws on a phone and nothing above it, so above `lg` it must not
-  // hold width either — see the note on `LineupPane`.
-  const width = mode === "mirror" ? "" : "lg:w-[98px]";
-
-  if (delta === null) {
-    return <span aria-hidden className={`shrink-0 lg:order-10 ${width}`} />;
-  }
-
-  // The rank ramp's own two ends rather than a second green and a second red:
-  // one ramp, so a good result is the same colour everywhere and both ends
-  // invert for light mode together. `rankColor` is the only spelling of it.
-  const tone = delta > 0 ? rankColor(100) : delta < 0 ? rankColor(0) : null;
-  const glow = delta > 0 ? rankColor(100, 0.5) : rankColor(0, 0.5);
-  const sign = delta > 0 ? "+" : delta < 0 ? "−" : "";
-  const figure = (
-    <span
-      className={`font-mono text-[length:var(--fs-12)] tabular-nums ${
-        tone ? "" : "text-readout-muted"
-      } ${mode === "delta" ? "lg:text-[length:var(--fs-13)]" : "lg:hidden"}`}
-      style={{ color: tone ?? undefined }}
-    >
-      {sign}
-      {Math.abs(delta).toFixed(1)}
-    </span>
-  );
-
-  return (
-    <span
-      className={`relative flex shrink-0 items-center justify-center gap-2.5 lg:order-10 ${width}`}
-    >
-      {mode === "meters" && fill && (
-        <>
-          <span
-            aria-hidden
-            className="hidden h-1 w-11 shrink-0 justify-end rounded-l-full bg-[var(--meter-track)] shadow-[inset_0_1px_3px_rgba(0,0,0,0.95)] lg:flex"
-          >
-            {fill.lead === "mine" && (
-              <Bar fill={fill.fill} tone={tone} glow={glow} side="left" />
-            )}
-          </span>
-          <span
-            aria-hidden
-            className="hidden h-1 w-11 shrink-0 rounded-r-full bg-[var(--meter-track)] shadow-[inset_0_1px_3px_rgba(0,0,0,0.95)] lg:block"
-          >
-            {fill.lead === "theirs" && (
-              <Bar fill={fill.fill} tone={tone} glow={glow} side="right" />
-            )}
-          </span>
-        </>
-      )}
-      {figure}
-    </span>
-  );
-}
-
-/** One filled half of a gap meter. A computed colour, so it goes through `style`. */
-function Bar({
-  fill,
-  tone,
-  glow,
-  side,
-}: {
-  fill: number;
-  tone: string | null;
-  glow: string;
-  side: "left" | "right";
-}) {
-  return (
-    <span
-      className={`block h-1 ${side === "left" ? "rounded-l-full" : "rounded-r-full"}`}
-      style={{
-        width: `${fill}%`,
-        background: tone ?? undefined,
-        boxShadow: `0 0 8px ${glow}`,
-      }}
+      slot={player.positions[0] ?? "—"}
+      player={player}
+      promoted={promoted}
+      irMark={irMark}
     />
   );
 }

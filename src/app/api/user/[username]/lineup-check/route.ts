@@ -16,7 +16,8 @@ import {
   parseRequestedWeek,
 } from "@/shared/projections";
 import type { WeekProjections } from "@/shared/projections";
-import { getWeekKickoffs } from "@/shared/schedule";
+import { getWeekGames } from "@/shared/schedule";
+import type { TeamGame } from "@/shared/schedule";
 import { getActiveSeason, parseRequestedSeason } from "@/shared/season";
 import { getNflState, withInteractiveSleeper } from "@/shared/sleeper";
 import { resolveManagerUser } from "@/shared/user";
@@ -165,12 +166,15 @@ async function readLineupCheck(
     // hiccup on the second database read would be reported as the projections
     // failing and empty the page for it.
     let board: WeekProjections;
-    let kickoffs: Map<string, number>;
+    let games: Map<string, TeamGame>;
     let statuses: PlayerStatusMap | null;
     try {
-      [board, kickoffs, statuses] = await Promise.all([
+      [board, games, statuses] = await Promise.all([
         getWeekProjections(season, week),
-        getWeekKickoffs(season, week),
+        // The games rather than the instants, so a player's opponent and his
+        // kickoff come off one fetch and one cache entry — `getWeekGames`' own
+        // note, and now its second reader.
+        getWeekGames(season, week),
         getPlayerInjuryStatuses(liveIds).catch((error: unknown) => {
           console.warn(
             `[lineup-check] injury statuses unavailable for ${username}:`,
@@ -205,17 +209,25 @@ async function readLineupCheck(
       playerIds.map((id) => [id, board[id]?.team ?? null]),
     );
     const dayLocked = dayLockedPlayers(board, easternDate());
+    // Derived here rather than fetched, so the lock refinement and the seat
+    // ordering read the same listing the rows name an opponent from. Undated
+    // games drop out: an absent team is "not known", which the lock answers by
+    // falling back to the day rule rather than by guessing.
+    const kickoffs = new Map<string, number>();
+    for (const [team, game] of games) {
+      if (game.kickoff !== null) kickoffs.set(team, game.kickoff);
+    }
     // The fold only ever locks *earlier*, so no schedule at all degrades to
     // exactly the day rule rather than to nothing.
     const locked =
       kickoffs.size > 0
         ? lockedPlayers({ playerIds, dayLocked, teams, kickoffs, now: Date.now() })
         : dayLocked;
-    const instants = kickoffs.size > 0 ? kickoffs : null;
+    const schedule = games.size > 0 ? games : null;
 
     const solved: Record<string, LineupCheckLeague> = {};
     for (const league of leagues) {
-      const entry = solveWeekLineup(league, board, locked, instants, statuses);
+      const entry = solveWeekLineup(league, board, locked, schedule, statuses);
       // Null means the league has no slots on file — nothing to compare a
       // lineup against — so it drops out rather than reporting a zero gap.
       if (entry) solved[league.league_id] = entry;

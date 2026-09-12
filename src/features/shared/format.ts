@@ -113,6 +113,31 @@ export function kickoffTime(at: number | null): string | null {
   }).format(at);
 }
 
+/**
+ * Who a player's NFL team plays this week, as a row prints it: `@ NYJ` away,
+ * `vs CAR` home, and **null where the schedule does not say** — a bye, a free
+ * agent, a week nobody has published — which the row draws as the app's em
+ * dash rather than as a guess.
+ *
+ * **One spelling for both week tools**, which is the whole reason it is here
+ * rather than on either side of the wire. The checker reads
+ * `LineupCheckPlayer`'s `opponent`/`home` pair and gametime reads
+ * `GametimeGame`'s, which is deliberately the same pair — so a reader walking
+ * between the two tools cannot find one writing `@ NYJ` and the other `at NYJ`.
+ * Formatting it on the *read* instead would have put the string on one wire and
+ * a second spelling of it in the other client.
+ *
+ * `home` is only ever consulted where there is an opponent to be home against,
+ * so a caller with nothing to say passes `null` and whatever it has.
+ */
+export function opponentLabel(
+  opponent: string | null,
+  home: boolean,
+): string | null {
+  if (!opponent) return null;
+  return `${home ? "vs" : "@"} ${opponent}`;
+}
+
 /** Sleeper's slot names, shortened to fit a 38px column. Unmapped render as-is. */
 const SLOT_LABELS: Record<string, string> = {
   SUPER_FLEX: "SF",
