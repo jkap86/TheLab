@@ -17412,9 +17412,9 @@ come`) first. The pill keeps its words now, because it is the page's status and
 its live region; the countdown needed to be an instrument rather than a caption.
 
 **It is the console's own vocabulary at hero scale.** A metal housing
-(`CONSOLE_CARD_SHELL` + `CONSOLE_METAL`) tilted back 9° under a 1600px
+(`CONSOLE_CARD_SHELL` + `CONSOLE_METAL`) tilted back 8° under a 1600px
 perspective and flattened on hover, three or four lit glass bays set into it on
-their own plane (`translateZ(26px)`), and each figure struck in the accent the
+their own plane (`translateZ(14px)`), and each figure struck in the accent the
 way the lineup checker strikes its alerts: `--countdown-face` clipped to the
 glyphs over `--countdown-depth`, four stepped `drop-shadow`s deep (never
 `text-shadow`, for `--alert-depth`'s reason) under the accent's bloom. Both
@@ -17438,8 +17438,16 @@ the beat and the sheen under reduced motion.
 a Saturday-night wait is hours, minutes and seconds, and a fourth bay reading
 `00` is a quarter of the instrument saying nothing. Hours, minutes and seconds
 are always drawn, so the shape does not change inside the last day. One grid
-lays out the bays, the separators and the labels under them, with two literal
-column templates because Tailwind cannot see a template built from a count.
+row lays out the bays and the separators, with two literal column templates
+because Tailwind cannot see a template built from a count.
+
+**It is sized as a strip, not a billboard.** The first cut was 253px tall at
+1280 and 158 at 375 — a quarter of a laptop screen before a single league card
+— and it is **117 and 79** now. What bought it is the unit label (`Hrs`, `Min`,
+`Sec`) moving *into* its bay on the figure's baseline, which took a whole row
+out, and the kickoff time going from a lit window to lit ink on the header
+line; the digits are `clamp(1.375rem, 6.5vw, 2.875rem)` against the first cut's
+`5.75rem`, and still the largest type on the page.
 
 **The kickoff is read off the board the payload already carries**, through
 `nextKickoff` in `shared/gametime/live-rules` — the function the room's own

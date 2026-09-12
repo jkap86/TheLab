@@ -32,6 +32,13 @@ const PLACEHOLDER: CountdownBay[] = [
  * the digits that moved animate; the separators beat once a second, keyed by
  * the second so the beat is the tick rather than a timer beside it.
  *
+ * **It is sized as a strip, not a billboard.** The first cut was 253px tall at
+ * a desktop and 158 on a phone — a quarter of a laptop's screen spent before a
+ * single league card — and it is about half that now. What bought it is the
+ * unit label moving *into* the bay beside its figure, which took a whole row
+ * out, and the time of the kickoff going from a lit window to lit ink on the
+ * header line; the figures are still the largest type on the page.
+ *
  * **The depth rides `pointer-fine:`**, on the league card's own rule: the tilt
  * exists to be flattened by a hover, so on a coarse pointer it is a composited
  * plane with nothing to spend it on. The extrusion does not, because there is
@@ -57,25 +64,22 @@ export function KickoffCountdown({ at, className = "" }: { at: number; className
   return (
     <section
       aria-label="Countdown to the next kickoff"
-      className={`relative mb-8 [perspective:1600px] sm:mb-10 ${className}`}
+      className={`relative mb-6 [perspective:1600px] sm:mb-8 ${className}`}
     >
       <p className="sr-only">Next kickoff {when}</p>
       <div
         aria-hidden
-        className={`${CONSOLE_CARD_SHELL} ${CONSOLE_METAL} lab-anim lab-card-3d rounded-[1.375rem] px-3.5 pb-4 pt-3.5 transition-transform duration-500 ease-out sm:px-7 sm:pb-6 sm:pt-5 pointer-fine:[transform-style:preserve-3d] pointer-fine:[transform:rotateX(9deg)] pointer-fine:hover:[transform:rotateX(0deg)_translateZ(12px)]`}
+        className={`${CONSOLE_CARD_SHELL} ${CONSOLE_METAL} lab-anim lab-card-3d rounded-[1.125rem] px-3 pb-2.5 pt-2 transition-transform duration-500 ease-out sm:px-5 sm:pb-3.5 sm:pt-3 pointer-fine:[transform-style:preserve-3d] pointer-fine:[transform:rotateX(8deg)] pointer-fine:hover:[transform:rotateX(0deg)_translateZ(8px)]`}
       >
         <Finish />
 
-        <div className="relative mb-3 flex items-center justify-between gap-3 sm:mb-5 pointer-fine:[transform:translateZ(16px)]">
-          <span className="flex items-center gap-2.5 font-mono text-[length:var(--fs-10)] uppercase tracking-[0.2em] text-[color:var(--billet-label)] [text-shadow:var(--standing-label-shadow)] sm:text-[length:var(--fs-11)]">
-            <span className="size-2 shrink-0 rounded-full bg-readout shadow-[0_0_10px_var(--accent-glow)]" />
+        <div className="relative mb-1.5 flex items-center justify-between gap-3 sm:mb-2.5 pointer-fine:[transform:translateZ(10px)]">
+          <span className="flex items-center gap-2 font-mono text-[length:var(--fs-9)] uppercase tracking-[0.2em] text-[color:var(--billet-label)] [text-shadow:var(--standing-label-shadow)] sm:text-[length:var(--fs-10)]">
+            <span className="size-1.5 shrink-0 rounded-full bg-readout shadow-[0_0_8px_var(--accent-glow)]" />
             {parts === null ? "Kickoff" : "Next kickoff"}
           </span>
-          <span
-            className={`${CONSOLE_WINDOW} rounded-full px-3 py-1 font-mono text-[length:var(--fs-11)] uppercase tracking-[0.14em] tabular-nums text-readout [text-shadow:var(--readout-text-glow)] sm:px-3.5 sm:py-1.5`}
-          >
-            <Scanlines />
-            <span className="relative whitespace-nowrap">{when}</span>
+          <span className="whitespace-nowrap font-mono text-[length:var(--fs-10)] uppercase tracking-[0.14em] tabular-nums text-readout [text-shadow:var(--readout-text-glow)] sm:text-[length:var(--fs-11)]">
+            {when}
           </span>
         </div>
 
@@ -90,15 +94,17 @@ export function KickoffCountdown({ at, className = "" }: { at: number; className
 }
 
 /**
- * The bays and the separators between them, over a row of labels.
+ * The bays and the separators between them, in one row.
  *
- * One grid, so a label sits under its own window and a separator lines up on
- * the windows' middle without either being measured. Two literal templates
- * rather than one built from the count, because Tailwind finds classes by
- * scanning source text and a template assembled from a number generates none.
- * The grid carries `preserve-3d` so the windows' `translateZ` reaches the
- * housing's projection — a plain wrapper is a flat context, and every plane
- * under it collapses with no error to say so.
+ * Two literal templates rather than one built from the count, because Tailwind
+ * finds classes by scanning source text and a template assembled from a number
+ * generates none. The grid carries `preserve-3d` so the windows' `translateZ`
+ * reaches the housing's projection — a plain wrapper is a flat context, and
+ * every plane under it collapses with no error to say so.
+ *
+ * **The unit sits in the bay, on the figure's baseline**, where it was a row of
+ * its own under the windows: that row was a sixth of the panel's height to say
+ * three words, and beside the figure it reads as the unit it is.
  */
 function Bays({ bays, beat }: { bays: CountdownBay[]; beat: number | null }) {
   const cols =
@@ -107,26 +113,21 @@ function Bays({ bays, beat }: { bays: CountdownBay[]; beat: number | null }) {
       : "grid-cols-[1fr_auto_1fr_auto_1fr]";
   return (
     <div
-      className={`relative grid ${cols} items-center gap-x-1.5 gap-y-2 sm:gap-x-3 sm:gap-y-2.5 pointer-fine:[transform-style:preserve-3d]`}
+      className={`relative grid ${cols} items-center gap-x-1.5 sm:gap-x-2.5 pointer-fine:[transform-style:preserve-3d]`}
     >
       {bays.map((bay, i) => (
         <Fragment key={bay.key}>
           {i > 0 && <Separator key={`beat-${beat ?? 0}`} />}
           <span
-            className={`${CONSOLE_WINDOW} flex min-w-0 items-center justify-center rounded-xl py-2.5 sm:rounded-2xl sm:py-4 pointer-fine:[transform:translateZ(26px)]`}
+            className={`${CONSOLE_WINDOW} flex min-w-0 items-center justify-center rounded-lg py-1 sm:rounded-xl sm:py-1.5 pointer-fine:[transform:translateZ(14px)]`}
           >
             <Scanlines />
-            <span className="relative">
+            <span className="relative flex items-baseline gap-1 sm:gap-1.5">
               <Digits value={bay.value} />
+              <span className="font-mono text-[length:var(--fs-8)] uppercase tracking-[0.16em] text-[color:var(--readout-label)] sm:text-[length:var(--fs-10)]">
+                {bay.label}
+              </span>
             </span>
-          </span>
-        </Fragment>
-      ))}
-      {bays.map((bay, i) => (
-        <Fragment key={bay.key}>
-          {i > 0 && <span />}
-          <span className="text-center font-mono text-[length:var(--fs-9)] uppercase tracking-[0.22em] text-[color:var(--billet-label)] [text-shadow:var(--standing-label-shadow)] sm:text-[length:var(--fs-10)] pointer-fine:[transform:translateZ(16px)]">
-            {bay.label}
           </span>
         </Fragment>
       ))}
@@ -148,7 +149,7 @@ function Bays({ bays, beat }: { bays: CountdownBay[]; beat: number | null }) {
  */
 function Digits({ value }: { value: string }) {
   return (
-    <span className="inline-flex font-display text-[length:clamp(2.125rem,10.5vw,5.75rem)] font-semibold leading-none tracking-[-0.03em] tabular-nums [filter:var(--countdown-depth)]">
+    <span className="inline-flex font-display text-[length:clamp(1.375rem,6.5vw,2.875rem)] font-semibold leading-none tracking-[-0.03em] tabular-nums [filter:var(--countdown-depth)]">
       {[...value].map((ch, i) => (
         <span
           key={`${i}:${ch}`}
@@ -164,9 +165,9 @@ function Digits({ value }: { value: string }) {
 /** Two lit dots that beat once a second — remounted by the parent's key on every tick. */
 function Separator() {
   return (
-    <span className="lab-anim flex flex-col items-center gap-2 animate-[cd-beat_1s_ease-out_forwards] sm:gap-3 pointer-fine:[transform:translateZ(20px)]">
-      <span className="size-1.5 rounded-full bg-readout shadow-[0_0_10px_var(--accent-glow)] sm:size-2" />
-      <span className="size-1.5 rounded-full bg-readout shadow-[0_0_10px_var(--accent-glow)] sm:size-2" />
+    <span className="lab-anim flex flex-col items-center gap-1 animate-[cd-beat_1s_ease-out_forwards] sm:gap-1.5 pointer-fine:[transform:translateZ(10px)]">
+      <span className="size-1 rounded-full bg-readout shadow-[0_0_8px_var(--accent-glow)] sm:size-1.5" />
+      <span className="size-1 rounded-full bg-readout shadow-[0_0_8px_var(--accent-glow)] sm:size-1.5" />
     </span>
   );
 }
@@ -177,10 +178,10 @@ function Separator() {
  */
 function KickingOff() {
   return (
-    <div className="relative pointer-fine:[transform:translateZ(26px)]">
-      <span className={`${CONSOLE_WINDOW} flex items-center justify-center rounded-2xl py-5 sm:py-7`}>
+    <div className="relative pointer-fine:[transform:translateZ(14px)]">
+      <span className={`${CONSOLE_WINDOW} flex items-center justify-center rounded-lg py-1.5 sm:rounded-xl sm:py-2`}>
         <Scanlines />
-        <span className="lab-anim relative inline-block animate-pulse bg-[image:var(--countdown-face)] bg-clip-text font-display text-[length:clamp(1.75rem,8vw,4.25rem)] font-semibold uppercase leading-none tracking-[0.04em] text-transparent [-webkit-text-fill-color:transparent] [filter:var(--countdown-depth)]">
+        <span className="lab-anim relative inline-block animate-pulse bg-[image:var(--countdown-face)] bg-clip-text font-display text-[length:clamp(1.25rem,5vw,2.375rem)] font-semibold uppercase leading-none tracking-[0.04em] text-transparent [-webkit-text-fill-color:transparent] [filter:var(--countdown-depth)]">
           Kicking off
         </span>
       </span>
