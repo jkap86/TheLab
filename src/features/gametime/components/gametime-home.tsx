@@ -19,6 +19,7 @@ import {
   NO_SUBJECTS,
   PLATE_KEY,
   removeSubject,
+  storeLeagueFilters,
   subjectCount,
   WeekSharesDrawer,
   SubjectTokens,
@@ -31,6 +32,7 @@ import {
   type WeekShareSide,
   useManagerLeagues,
   useActiveCard,
+  useLeagueFilters,
   usePublishRackControls,
   useUrlParam,
   WEEK_BROWSE_KEYS,
@@ -157,7 +159,11 @@ function Live({
   const { user, leagues, progress, refreshing, error } = state;
   const cold = leagues.length === 0 && refreshing;
 
-  const [filters, setFilters] = useState(DEFAULT_LEAGUE_FILTERS);
+  // **The selection is the device's, shared with `/manager` and
+  // `/lineupchecker`** and outliving the visit — see
+  // `features/shared/league-filters-store`.
+  const filters = useLeagueFilters();
+  const setFilters = storeLeagueFilters;
   // The drawers' half of the narrowing, on the checker's terms. `opened` is a
   // latch rather than the open flag: a picked subject keeps narrowing the grid
   // after its drawer closes, and both panels keep their own search and scroll

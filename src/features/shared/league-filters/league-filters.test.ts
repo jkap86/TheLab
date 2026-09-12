@@ -3,8 +3,15 @@ import { test } from "node:test";
 
 import type { ManagerLeague } from "@/shared/contract";
 
-import { DEFAULT_LEAGUE_FILTERS, NO_TRADE_DEADLINE } from "./defaults.ts";
+import {
+  BEST_BALL_OPTIONS,
+  DEFAULT_LEAGUE_FILTERS,
+  NO_TRADE_DEADLINE,
+  TEAMS_KEY,
+  TYPE_OPTIONS,
+} from "./defaults.ts";
 import { leagueBreakdown } from "./breakdown.ts";
+import { normalizeLeagueFilters } from "./normalize.ts";
 import { scoringKeyOptions, settingKeyOptions } from "./options.ts";
 import {
   isBestBall,
@@ -102,7 +109,10 @@ test("an unsynced lineup fails a slot rule rather than counting as zero", () => 
   );
 
   // A league that genuinely starts no kicker does match.
-  assert.equal(matchesSlotRule(league(), { key: "K", op: "eq", value: 0 }), true);
+  assert.equal(
+    matchesSlotRule(league(), { key: "K", op: "eq", value: 0 }),
+    true,
+  );
 });
 
 test("QB+SF counts every QB-eligible starting slot, IDP excludes DEF", () => {
@@ -126,11 +136,22 @@ test("QB+SF counts every QB-eligible starting slot, IDP excludes DEF", () => {
 
 test("FLEX groups the offensive flexes, STARTERS is everything but the bench", () => {
   const wide = league({
-    roster_positions: ["QB", "FLEX", "WRRB_FLEX", "REC_FLEX", "BN", "IR", "TAXI"],
+    roster_positions: [
+      "QB",
+      "FLEX",
+      "WRRB_FLEX",
+      "REC_FLEX",
+      "BN",
+      "IR",
+      "TAXI",
+    ],
   });
   assert.equal(slotCount(wide, "FLEX"), 3);
   // SUPER_FLEX takes a QB, so it is not an offensive flex for this purpose.
-  assert.equal(slotCount(league({ roster_positions: ["SUPER_FLEX"] }), "FLEX"), 0);
+  assert.equal(
+    slotCount(league({ roster_positions: ["SUPER_FLEX"] }), "FLEX"),
+    0,
+  );
   assert.equal(slotCount(wide, "STARTERS"), 4);
 });
 
@@ -189,10 +210,7 @@ test("the no-deadline sentinel is unreachable by comparison and reachable by nam
   } as const;
   assert.equal(matchesSettingRule(never, isNever), true);
   assert.equal(matchesSettingRule(week12, isNever), false);
-  assert.equal(
-    matchesSettingRule(week12, { ...isNever, op: "ne" }),
-    true,
-  );
+  assert.equal(matchesSettingRule(week12, { ...isNever, op: "ne" }), true);
 
   // An unknown is not evidence either way, on the terms every other rule fails.
   assert.equal(matchesSettingRule(league({ settings: null }), isNever), false);
@@ -235,10 +253,7 @@ test("every rule narrows — the lists are an AND", () => {
   assert.equal(matchesFilters(target, both), true);
 
   // Failing either half fails the whole.
-  assert.equal(
-    matchesFilters(league({ settings: { type: 2 } }), both),
-    false,
-  );
+  assert.equal(matchesFilters(league({ settings: { type: 2 } }), both), false);
   assert.equal(
     matchesFilters(
       league({ roster_positions: ["QB", "SUPER_FLEX", "BN"] }),
@@ -369,4 +384,116 @@ test("the breakdown counts each row as the filter that would produce it", () => 
   // The unsynced lineup is not evidence of an IDP league, so it fails the row
   // the same way it fails the rule.
   assert.equal(count("idp"), 0);
+});
+
+/**
+ * What a *stored* selection is allowed to be, pinned at the decisions that are
+ * silent when wrong: a selection lost on an upgrade, a grid emptied for the life
+ * of a stored value by a rule nothing on screen can explain, a fixed filter
+ * sitting on a value no rail has a state for.
+ */
+
+test("a selection survives a round trip through the store's own normalizer", () => {
+  const stored = filters({
+    type: "2",
+    bestBall: "no",
+    settings: [{ key: "taxi_slots", op: "gt", value: 0 }],
+    slots: [{ key: "QB+SF", op: "gte", value: 2 }],
+    scoring: [{ key: "bonus_rec_te", op: "gt", value: 0 }],
+  });
+  assert.deepEqual(
+    normalizeLeagueFilters(JSON.parse(JSON.stringify(stored))),
+    stored,
+  );
+});
+
+test("a stored value that is not a selection at all reads as the neutral one", () => {
+  for (const value of [null, undefined, 7, "dynasty", [], true]) {
+    assert.deepEqual(normalizeLeagueFilters(value), DEFAULT_LEAGUE_FILTERS);
+  }
+});
+
+test("an unreadable field costs that field and nothing beside it", () => {
+  // A type the rail has no state for, a format likewise, and a `slots` that is
+  // not a list — each recovers on its own, where throwing the selection away
+  // would lose the two rules the reader built beside them.
+  assert.deepEqual(
+    normalizeLeagueFilters({
+      type: "9",
+      bestBall: "maybe",
+      slots: "QB+SF >= 2",
+      settings: [{ key: TEAMS_KEY, op: "gte", value: 12 }],
+      scoring: [{ key: "rec", op: "eq", value: 0.5 }],
+    }),
+    filters({
+      settings: [{ key: TEAMS_KEY, op: "gte", value: 12 }],
+      scoring: [{ key: "rec", op: "eq", value: 0.5 }],
+    }),
+  );
+});
+
+test("a rule this build cannot evaluate is dropped rather than kept", () => {
+  // Every predicate fails *closed*, so each of these kept would match no league
+  // at all — a grid emptied under a chip only `Clear` could undo. The rules
+  // beside them stand.
+  const kept = { key: "QB+SF", op: "gte", value: 2 } as const;
+  const normalized = normalizeLeagueFilters({
+    slots: [
+      kept,
+      // A group `slotCount` cannot count.
+      { key: "REC_FLEX_PREMIUM", op: "gte", value: 1 },
+      // An op `compare` falls through its switch on.
+      { key: "QB", op: "within", value: 1 },
+      // Values `compare` is false against on every op.
+      { key: "RB", op: "gte", value: Number.NaN },
+      { key: "WR", op: "gte", value: Number.POSITIVE_INFINITY },
+      // Shapes a hand edit or an older build can leave behind.
+      { key: "TE", op: "gte", value: "2" },
+      { key: "", op: "gte", value: 1 },
+      null,
+      "QB+SF >= 2",
+    ],
+  });
+  assert.deepEqual(normalized.slots, [kept]);
+});
+
+test("an unranked settings or scoring key is kept where an unknown slot group is not", () => {
+  // The asymmetry is the point: both menus are built from the keys the leagues
+  // in hand actually carry, so a house rule this build has never heard of is a
+  // question somebody deliberately asked — and `storedSetting` and
+  // `scoringValue` read one perfectly well. A slot group is a closed
+  // vocabulary, and `slotCount` answers null for anything outside it.
+  const normalized = normalizeLeagueFilters({
+    settings: [{ key: "house_rule_xyz", op: "eq", value: 1 }],
+    scoring: [{ key: "idp_tkl_solo", op: "gt", value: 0 }],
+    slots: [{ key: "house_slot_xyz", op: "gt", value: 0 }],
+  });
+  assert.equal(normalized.settings.length, 1);
+  assert.equal(normalized.scoring.length, 1);
+  assert.deepEqual(normalized.slots, []);
+});
+
+test("a rule is rebuilt, so a stored entry carries only what the engine reads", () => {
+  const [rule] = normalizeLeagueFilters({
+    settings: [
+      { key: "trade_deadline", op: "eq", value: NO_TRADE_DEADLINE, label: "x" },
+    ],
+  }).settings;
+  assert.deepEqual(rule, {
+    key: "trade_deadline",
+    op: "eq",
+    value: NO_TRADE_DEADLINE,
+  });
+});
+
+test("every option the two fixed rails offer is storable", () => {
+  // The validation walks `FIXED_FILTERS` rather than restating the two unions,
+  // so an option added to a rail is accepted with no second edit here — this is
+  // what would fail if that walk were replaced by a spelled-out list.
+  for (const { value } of TYPE_OPTIONS) {
+    assert.equal(normalizeLeagueFilters({ type: value }).type, value);
+  }
+  for (const { value } of BEST_BALL_OPTIONS) {
+    assert.equal(normalizeLeagueFilters({ bestBall: value }).bestBall, value);
+  }
 });

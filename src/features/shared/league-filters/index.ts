@@ -43,6 +43,7 @@ export {
   slotGroupLabel,
 } from "./defaults.ts";
 export { leagueBreakdown } from "./breakdown.ts";
+export { normalizeLeagueFilters } from "./normalize.ts";
 export {
   rankKeys,
   scoringKeyLabel,

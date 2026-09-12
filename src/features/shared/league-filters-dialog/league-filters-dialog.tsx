@@ -53,8 +53,9 @@ import { RuleBay } from "./rule-bay";
  * walk, the rails' cross-tab and every rule's count — derives from `leagues`
  * and the draft, neither of which moves on a progress line; without the memo
  * each of those lines re-ran the cross-tab behind a panel nobody could see.
- * Every caller's props are identity-stable (state, a state setter, a memo,
- * two constants), which is what makes the default comparison enough.
+ * Every caller's props are identity-stable (a store read memoized on its raw
+ * string, a module-level write, a memo, two constants), which is what makes the
+ * default comparison enough.
  */
 export const LeagueFiltersDialog = memo(function LeagueFiltersDialog({
   filters,
@@ -98,6 +99,15 @@ export const LeagueFiltersDialog = memo(function LeagueFiltersDialog({
   // Seeded on open rather than synced: a draft that tracked `filters` would
   // discard an edit the moment anything upstream re-rendered the page, and the
   // leagues stream re-renders it twice on a refresh.
+  //
+  // **It is also what makes the selection safe to persist**, which is worth
+  // knowing before anyone reverses the line above. `filters` now comes from
+  // `league-filters-store`, which reads the neutral selection for the hydration
+  // render and the stored one after it — so the `useState` above seeds a draft
+  // nobody can reach, and by the time a reader presses the key the value is the
+  // real one. A draft seeded once and never re-seeded would commit that first
+  // render's defaults over whatever the device had stored, and nothing on screen
+  // would say so.
   const open = () => {
     setDraft(filters);
     ref.current?.showModal();
