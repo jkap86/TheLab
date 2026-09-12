@@ -6,6 +6,12 @@ const LEGACY_AVATAR_ASSETS =
   "/_next/static/media/:name(league_avatar|user_avatar|player_avatar).:hash.:ext(png|jpeg)";
 
 const nextConfig: NextConfig = {
+  // Dev-only: lets a phone on the same network open the dev server at the
+  // machine's LAN address (http://10.0.0.205:3000) — without it the page
+  // serves but its /_next chunks are refused cross-origin and it never
+  // hydrates. Ignored in production builds.
+  allowedDevOrigins: ["10.0.0.205"],
+
   // node-pg-migrate loads migration files via a runtime `import(file://...)`,
   // which the bundler cannot statically resolve. Keep it (and pg) as native
   // Node modules so the on-boot migration runner in src/instrumentation.ts

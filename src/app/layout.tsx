@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import { IBM_Plex_Mono, IBM_Plex_Sans } from "next/font/google";
 import {
+  IosFocusZoomGuard,
   RackControlsProvider,
   THEME_BOOT_SCRIPT,
   VisitBeacon,
@@ -72,9 +73,10 @@ if (site.warning) console.warn(`[metadata] ${site.warning}`);
  * this export at all replaces them.
  *
  * Deliberately **not** here: `maximumScale` or `userScalable`. Either would
- * mask a focus zoom by taking pinch-zoom from every reader, which is a WCAG
- * 1.4.4 regression — the same argument the `touch:` font floor in
- * `globals.css` is written under.
+ * mask a focus zoom by taking pinch-zoom from every reader — Chrome on Android
+ * honours both against the reader's own gestures — which is a WCAG 1.4.4
+ * regression. iOS Safari does not, and it is the only browser that zooms a
+ * focused field, so `IosFocusZoomGuard` adds `maximum-scale=1` there alone.
  */
 export const viewport: Viewport = {
   width: "device-width",
@@ -114,6 +116,9 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
             it identically — so the half of the visit log that only the browser
             can tell apart is reported from here. */}
         <VisitBeacon />
+        {/* Renders nothing. iOS alone: stops a tapped text field zooming the
+            page, without taking pinch-zoom from anybody. */}
+        <IosFocusZoomGuard />
         <RackControlsProvider>
           <AppRack />
           {children}

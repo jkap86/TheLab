@@ -4,7 +4,7 @@ import { clockSignature, getWeekGameClocks, phaseCounts } from "@/shared/schedul
 import type { GameClock, GamePhase } from "@/shared/schedule";
 import type { GametimeFeedStatus } from "@/shared/contract";
 
-import { feedSignature } from "./live-rules";
+import { feedSignature, nextKickoff } from "./live-rules";
 
 /**
  * The three feeds a week's live solve reads, read together and each allowed
@@ -107,21 +107,11 @@ export async function readWeekFeeds(season: string, week: number): Promise<WeekF
       scores: read?.ok ? "ok" : "error",
     },
     games,
-    nextKickoff: clockMap ? nextKickoffOf(clockMap) : null,
+    nextKickoff: clockMap ? nextKickoff(clockMap.values()) : null,
     signature: feedSignature({
       stats: lines?.stamp ?? "error",
       clocks: clockMap ? clockSignature(clockMap) : "error",
     }),
     readAt: Date.now(),
   };
-}
-
-/** The earliest kickoff among games that have not started, or null. */
-function nextKickoffOf(clocks: ReadonlyMap<string, GameClock>): number | null {
-  let earliest: number | null = null;
-  for (const game of clocks.values()) {
-    if (game.phase !== "pre" || game.kickoff === null) continue;
-    if (earliest === null || game.kickoff < earliest) earliest = game.kickoff;
-  }
-  return earliest;
 }
