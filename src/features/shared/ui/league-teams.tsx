@@ -572,7 +572,7 @@ function LensControl({
           <select
             value={lens}
             onChange={(e) => onChange(e.target.value as Lens)}
-            className="min-w-0 flex-1 cursor-pointer appearance-none truncate rounded-full bg-[image:var(--key-bg)] py-[5px] pl-[9px] pr-5 font-mono text-[length:var(--fs-10)] uppercase tracking-[0.12em] text-readout shadow-[var(--key-shadow)] [text-shadow:var(--readout-text-glow)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-active/60 touch:pr-[18px] touch:tracking-normal"
+            className="h-[29px] min-w-0 flex-1 cursor-pointer appearance-none truncate rounded-full bg-[image:var(--key-bg)] py-0 pl-[9px] pr-5 font-mono text-[length:var(--fs-10)] uppercase tracking-[0.12em] text-readout shadow-[var(--key-shadow)] [text-shadow:var(--readout-text-glow)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-active/60 touch:pr-[18px] touch:tracking-normal"
           >
             {LENSES.map((option) => (
               <option key={option} value={option}>
@@ -695,6 +695,11 @@ function StandingRow({
       // Not on the wire — see the lamp.
       status={null}
       line2={false}
+      // Two lines below `lg`: the name on top with the column's whole width,
+      // the total under it right-aligned, and the mark a row cell beside both.
+      // On one ~150px line a six-figure KTC total left a team name two
+      // characters and an ellipsis.
+      stacked
       figure={{
         // Two absences, one em dash: no roster has scored on this column, or
         // this payload carries no answer for it at all.
