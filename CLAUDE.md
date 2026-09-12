@@ -16933,3 +16933,217 @@ the projections one**, since the opponent and the clock join through it. And
 whether the phone's stat line truncates often enough to matter — a dual-threat
 quarterback's `287 PA/3TD/1INT · 44 RU/1TD` already does at 390, which is the
 design's own accepted trade rather than a defect.
+
+### The board and the panel became one
+
+`/gametime/[username]` carried two account-wide readings and they answered two
+halves of one question. The **stat board** was a bar at the console's foot
+opening onto every skill player with a scoring line — what he did, and nothing
+about the reader's leagues. The **Player Scores** panel was a drawer docked
+left holding four counts per player — how many of the reader's lineups started
+him, sat him, and faced him — and nothing about what he did. So the question a
+Sunday actually raises, *he had thirty-one points, and which of my lineups was
+he in*, was one panel's answer held in the head while the other was opened.
+They are one panel now: one row carrying the stats and the four counts, in the
+board's shell. Applied from a design handoff. **Nothing on the wire moved** —
+no route, no query, no contract type, no payload field, no migration — and no
+token was added but one, which is two existing shadows refactored rather than a
+new colour.
+
+**The board's shell won because the table needed it.** Nineteen columns do not
+fit a 34rem drawer and four counts fit a full-width table with room to spare,
+so the drawer's rows came here rather than the table going there. What the bar
+took with them is the drawer's own legend: it reads `Player Scores`.
+
+**A join, not a second list, and that is the shape of the merge.** The board is
+every NFL player with a line; the fold is every player the reader's leagues
+fielded; the two overlap on rather less than half of either. So `statRows`
+takes the fold indexed by player id and every unmatched row keeps **four
+nulls** — four dashes on screen — while a player the reader holds who did
+nothing this week is not on the board at all, having no line to be a row of.
+`held` is the boolean beside them, and **a held zero stays `0`**: a player
+started nowhere is a real reading where an absence is not one, which is the
+null-is-not-zero rule at this grain and the thing the `Mine` scope is counted
+by.
+
+**The four columns are the four readings, derived rather than written again.**
+`ShareColumnKey` *is* `WeekReading`, imported relatively with `.ts` from
+`league-subjects.ts` — the module with no imports of its own, which is what
+lets a narrowing resolve under Node's runner — so a reading renamed on either
+side stops compiling rather than quietly lighting the wrong cell. It is the tie
+`WEEK_READING_COLUMN` already draws one grain out, and `SHARE_COLUMNS` is
+filtered out of the one column list rather than being a second one.
+
+**`3.25rem`, not `SHARES_COLUMN_WIDTHS`' `4.75rem`**, and the difference is the
+trailing percentage. That width is sized for `7/12` *plus* a `58%` beside it;
+the percentage comes off here — the bar states the denominator once, and four
+percentages on every row of a nineteen-column table is the column the board
+cannot spare. The four move together on `shares-columns.ts`' own rule: they are
+one reading split four ways, and a cell a quarter-rem narrower than the one
+beside it reads as a different kind of number.
+
+**A row press opens the decisions view alone, and the narrowing moved behind
+the row's tray key.** In the drawer one press did both. Here they are two
+gestures because they are two questions and this table is mostly *read* rather
+than pressed: a reader scanning four hundred rows for a name should not narrow
+their whole page by touching one. `pressReading` is where a subject is now born
+and where it dies — it creates the subject if there is none, toggles the
+reading, and **removes the subject when the last reading goes off**, since
+there is no row press left to clear one.
+
+**The scope is a filter, not a state beside them.** The board is account-wide
+and only a minority of its rows are in the reader's leagues at all, so `Mine`
+needs a control rather than a reading — without one it is a question answerable
+only by scanning a column of dashes. `StatScope` lives on `StatBoardFilters`,
+which is the reverse of what the handoff's state table draws and the same fact
+either way: it is a narrowing, it is undone by the same `Reset` key, and
+`narrowStatRows`, `statFiltersActive` and that key each take one object instead
+of two. `all` is the default, because the board's subject is the NFL's week and
+the reader's leagues are the lens.
+
+**Absence sorts last in either direction, and a zero sorts as a zero.** The
+numeric comparison had to learn null for the four new columns, and the rule is
+the sort's own one grain in: a player nobody rosters is not the least-started
+player of the week, and flipping the arrow must not make him the most-started
+one either.
+
+### Six pinned cells, and the offsets are summed rather than written
+
+The pinned tail went from one cell to six — the four counts, `Pts`, and the
+tray key's own track — and **a grid demands an offset each**, since six cells
+all saying `right: 0` pile up at the same edge. `STAT_PINNED_RIGHT` sums them
+from the column list in reverse, so inserting a column into the tail moves
+every offset before it with no edit. A hand-kept table is six numbers that are
+all wrong the first time a width moves, and what a wrong one looks like is two
+cells stacked with the figure underneath showing through.
+
+**The alternative is what the prototype draws and it costs the semantics.** One
+cell spanning the six tracks with a flex row inside is simpler and takes the
+four new columns' own `role="cell"` with it, which is the one thing this
+table's accessibility note says it will not give up.
+
+**The tray is a track rather than something tucked inside the `Pts` cell**, so
+the header reserves its width and the two stay in step; laid out by the row
+alone it would drift the moment either changed.
+
+**The grid's floor is `83.5rem`, and the handoff's `81.5rem` omits that track.**
+It is generated (`STAT_GRID_MIN`) rather than written down, for the reason
+every other number here is.
+
+**A right-pinned group span ends on its rightmost column's offset**, which is
+the one arithmetic bug the render found: `right` positions the right edge, so a
+`My leagues` label taking its *first* column's offset sat 156px too far left,
+overlapping `RECEIVING` and leaving a gap beside `Total`. `statGroupSpans` cuts
+a run on a group **or** a pin change and keeps updating the offset as the run
+extends. The driver asserts the gap is zero, both labels opaque, and `Total`
+flush to the edge.
+
+### What moved to `features/shared`, and what did not
+
+`ReadingKeys`, `NarrowingChip`, `SideDot` and `leaguesLeft` went to
+`features/shared/ui/week-readings.tsx` — the line `CONSOLE_KEY`,
+`ManagerPlate` and `SharesDrawer` all moved on: a second reader. The lineup
+checker's drawer still draws the same four keys, and two spellings would be two
+trays that stopped agreeing about which dot is filled. `ReadingKeys` took a
+`layout` of `"line"` or `"grid"` with it, because a drawer row's tray is a line
+and a table row's is two columns under a name.
+
+**`NarrowingChip` took a `chrome` prop rather than reading its own surface.**
+It is drawn on the drawer's glass in one panel and on the bar's billet in the
+other, and those are two ink families — the constant carries the shape and the
+caller carries the surface, which is `CONSOLE_KEY_PILL`'s own split.
+
+**Gametime stopped drawing `BrowseDock`, and that is the one departure from the
+handoff's letter.** Its README says the dock "keeps `lift="var(--stat-bar-h)"`",
+which reads as an instruction to leave it standing; its own prototype draws the
+dock only in the *before* artboard, the one captioned as today's state and not
+to be built. One panel reached two ways — a cap at the bottom-right and a bar
+across the foot — is two controls opening the same drawer, which is exactly the
+argument that took the second Browse key off these tools a pass ago. So the
+cap, `PLAYER_SCORES_BROWSE_KEYS`' one reader and the page's `drawer` / `opened`
+state all went. **`BrowseDock` and `WeekSharesDrawer` are untouched** and still
+drawn by `/lineupchecker` and `/manager`; only gametime stopped reaching for
+them, and the constant is noted dead where it is declared.
+
+**The fold's gate widened rather than moving.** It was `opened.has(...)`, a
+latch on the drawer that no longer exists; it is `boardOpen || subjectCount >
+0` now. The first half is the same bargain — a reader who never opens the board
+pays nothing for a walk over every player of every roster on the account, which
+on a live page runs on **every frame the room pushes** — and the second is what
+keeps a narrowing alive after the bar comes down, since the grid is still
+narrowed by whatever was picked and the maps that answer it have to keep being
+built.
+
+### Three defects the render found, each silent
+
+- **The lit share cell's halo never applied.** `CONSOLE_FIGURE_WELL` already
+  spells `shadow-[var(--figure-well-shadow)]`, so appending
+  `shadow-[…,0_0_20px_-8px_var(--accent-glow)]` was two base shadow utilities
+  of the same specificity and Tailwind's emit order decided — a rim that lit
+  over a halo that did not, with nothing on screen to say which. It is the trap
+  this file records at four other grains, and the fix is the same split:
+  `CONSOLE_FIGURE_WELL_SHELL` carries the shape and both arms compose their own
+  shadow at the call site.
+- **The `My leagues` group label sat 156px left**, per the offset rule above.
+- **At 390 the scope caps overflowed the ledge** and were clipped by the case's
+  own `overflow-hidden`, silently — nothing past the viewport to catch it. Five
+  position caps are ~234px of a 358px ledge and these two are ~132. They ride
+  the Team/Reset row below `lg`, which is the handoff's own phone arrangement,
+  and the driver gained an assertion that nothing in the ledge is clipped by
+  the case.
+
+**`--stat-pin-lip` is the one new token and it is a refactor.** The pinned tail
+is six cells now, so the leading one casts and **all six** carry the lip; the
+two existing pin shadows are composed from it rather than repeating it.
+
+### Verified
+
+Driven over CDP against `next dev` with no `DATABASE_URL` — the boot hook skips
+migrations and the four loops log their refusals, which is the server coming up
+healthy against nothing — through a temporary `/preview` route mounting the
+**real** `StatBoard` against fixtures, then deleted. The mechanics are the ones
+this file records: `--no-proxy-server`, `localhost` rather than `127.0.0.1`, a
+phone viewport from `Emulation.setDeviceMetricsOverride` with `mobile: true`,
+`data-theme` **and** `localStorage` rather than `prefers-color-scheme`,
+`--disable-features=OverlayScrollbar`, the
+`--blink-settings=availablePointerTypes=4,…` flags, a **client-component**
+harness, a CDP client over Node's own `WebSocket` since Playwright is not in
+this project's `node_modules`, and a fresh `--remote-debugging-port` per run.
+The fixtures are nine stat lines over five held players and five leagues, with
+`starter_league_count` 12 against `opponent_league_count` 11 — two denominators,
+so a cell scaled by the wrong one shows.
+
+**143 of 143 assertions pass** at 1280×900 and 390×844 in both schemes. Every
+arm landed: the four columns in reading order under a `My leagues` span flush
+to `Total`'s left edge with **zero gap**; six pinned cells at their computed
+offsets with only the leading one casting; four dashes on every unheld row and
+`0` on a held zero; the `Mine` cap taking the board to the held rows and
+lighting `Reset`; a tray key opening two columns of reading keys; a reading
+press lighting its own cell's rim **and halo** and raising the chip; the last
+reading off removing the subject; a name press opening the decisions view with
+`Back` returning to the table; and the phone arm's three lines with its own
+four-cell strip. At every width and in both schemes:
+`document.documentElement.scrollWidth` within the viewport, **zero** unclipped
+elements past it, nothing in the ledge clipped by the case, exactly one `<h1>`,
+and no console output but the dev server's own.
+
+2,487 unit tests pass — 15 more, the merge's arithmetic: that the four columns
+are the four readings in order, the join, a held zero, four nulls, no fold at
+all, the `Yours` well, the `Mine` cap, the scope lighting `Reset`, a zero
+sorting as a zero and an absence last in either direction, both pinned offsets
+as literals and as a property, `STAT_GRID_MIN`, only the tray being unsortable,
+every track being a plain rem or the one `minmax`, the phone sorts and
+`SHARE_READING`. `lint`, `typecheck` and `build` are clean.
+
+**Not verified against real data**, which is the gap to close first: every
+number above is a fixture and no database was reachable from here. Four things
+a render cannot check — **what a real week's overlap actually is**, which is
+the whole shape of the merge and decides whether a board of four hundred rows
+reads as mostly dashes with a scattering of counts or as something a reader
+scans; what the widened fold gate costs on a 116-league account now that
+opening the *board* pays for it, since the board is the thing a reader opens to
+look at the NFL rather than at their leagues; whether readers find the
+narrowing **behind a tray key** at all, which is the one behaviour this pass
+changed and the one no measurement closes; and whether nineteen columns with
+six of them pinned is comfortable on a real 1280 laptop, where the fixture's
+short names give the flexible track more slack than a real board would.

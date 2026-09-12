@@ -1,27 +1,22 @@
 "use client";
 
-import { Fragment, useCallback, useMemo, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 
-import { CONSOLE_CHANNEL_METAL, CONSOLE_CHIP } from "../console-chrome";
 import {
   canonicalReadings,
   clearSubjectReadings,
   subjectSlot,
   toggleSubjectReading,
-  WEEK_READINGS,
   type LeagueSubjects,
   type Subject,
   type WeekReading,
 } from "../league-subjects";
 import { WEEK_READING_COLUMN } from "../shares-columns";
 import { decisionsFor } from "../start-sit-decisions";
-import {
-  weekTwoSidedShares,
-  type WeekLineupEntry,
-  type WeekTwoSidedShare,
-} from "../week-shares";
+import { weekTwoSidedShares, type WeekLineupEntry } from "../week-shares";
 import { SharesDrawer, type SharesDrawerRow } from "./shares-drawer";
 import { DecisionsDeck, DecisionsList } from "./start-sit-decisions";
+import { leaguesLeft, NarrowingChip, ReadingKeys } from "./week-readings";
 
 /**
  * A week's shares: every player either side of the week's games fielded, once,
@@ -273,7 +268,7 @@ export function WeekSharesDrawer({
       shares.players.flatMap((player) => {
         const picked = readings.get(player.player_id);
         if (!picked || picked.length === 0) return [];
-        return [{ player, picked, left: leaguesLeft(player, picked) }];
+        return [{ player, picked, left: leaguesLeft(player.leagues, picked) }];
       }),
     [shares, readings],
   );
@@ -332,11 +327,15 @@ export function WeekSharesDrawer({
           );
           if (!player) return null;
           return (
-            <ReadingKeys
-              player={player}
-              picked={readings.get(row.id) ?? NO_READINGS}
-              onPress={(reading) => pressReading(row.id, reading)}
-            />
+            // Left-aligned to the name column, so the keys sit under the row
+            // they narrow rather than under its badge.
+            <div className="relative flex items-center pb-[0.5625rem] pl-[3.0625rem] pr-[0.6875rem]">
+              <ReadingKeys
+                counts={player}
+                picked={readings.get(row.id) ?? NO_READINGS}
+                onPress={(reading) => pressReading(row.id, reading)}
+              />
+            </div>
           );
         },
       }}
@@ -397,199 +396,4 @@ function populationNote(opponents: number, week: number | null): string | null {
   const parts: string[] = [`${opponents} with an opponent`];
   if (week !== null) parts.push(`week ${week}`);
   return parts.join(" · ");
-}
-
-/** How many leagues a row's picked readings leave — the union, deduped. */
-function leaguesLeft(
-  player: WeekTwoSidedShare,
-  picked: readonly WeekReading[],
-): number {
-  // Deduped by league id, because two readings *can* name one league: a player
-  // on the manager's bench in a league whose opponent also… cannot happen, but
-  // a union counted by summing would be a number nothing else on screen agrees
-  // with the day the data says otherwise.
-  const ids = new Set<string>();
-  for (const reading of picked) {
-    for (const league of player.leagues[reading]) ids.add(league.league_id);
-  }
-  return ids.size;
-}
-
-/** What each of the four keys says on its face — the side is the dot's job. */
-const READING_LABEL: Record<WeekReading, string> = {
-  start: "Start",
-  bench: "Bench",
-  "opp-start": "Start",
-  "opp-bench": "Bench",
-};
-
-/**
- * And what each says on the deck's chip, where there is no dot to carry the
- * side and the four have to tell themselves apart in words.
- *
- * Short rather than the column's own label, because the chip states a row's
- * whole narrowing on one line beside two other controls: `start+opp start` is
- * the pair, where `Started + Opp start` is most of the deck.
- */
-const READING_CHIP: Record<WeekReading, string> = {
-  start: "start",
-  bench: "bench",
-  "opp-start": "opp start",
-  "opp-bench": "opp bench",
-};
-
-/** And what it says to a reader who cannot see the dot. */
-const READING_NAME: Record<WeekReading, string> = {
-  start: "Narrow on my starters",
-  bench: "Narrow on my bench",
-  "opp-start": "Narrow on opposing starters",
-  "opp-bench": "Narrow on opposing bench",
-};
-
-const READING_COUNT: Record<
-  WeekReading,
-  (player: WeekTwoSidedShare) => number
-> = {
-  start: (p) => p.started,
-  bench: (p) => p.benched,
-  "opp-start": (p) => p.oppStarted,
-  "opp-bench": (p) => p.oppBenched,
-};
-
-/**
- * The row's tray: four keys in one channel, on one line.
- *
- * **The legends are `Start` and `Bench` twice, and that is what makes them
- * fit.** A filled dot is the manager's own side and a hollow one is the
- * opposing side — the fill semantics `OpponentsMark` already uses on the rack
- * key — and the groove between the pairs is the side boundary. Spelled out as
- * `My starters` / `Opp starters` the four are wider than the tray at the
- * panel's own width; with the dot and the groove saying the side, they are one
- * line. What a reader who cannot see either gets is the whole sentence, on the
- * key's own accessible name.
- *
- * **Multi-select, so pressing a lit key clears it** — which is why there is no
- * Clear key in here. The deck's chip carries one, for the row.
- *
- * The count on each key is that reading's own league count for this player,
- * which is the same figure its cell above prints.
- */
-function ReadingKeys({
-  player,
-  picked,
-  onPress,
-}: {
-  player: WeekTwoSidedShare;
-  picked: readonly WeekReading[];
-  onPress: (reading: WeekReading) => void;
-}) {
-  return (
-    // Left-aligned to the name column, so the keys sit under the row they
-    // narrow rather than under its badge.
-    <div className="relative flex items-center pb-[0.5625rem] pl-[3.0625rem] pr-[0.6875rem]">
-      <span
-        className={`${CONSOLE_CHANNEL_METAL} inline-flex flex-wrap items-center gap-1 p-1`}
-      >
-        {WEEK_READINGS.map((reading, i) => {
-          const on = picked.includes(reading);
-          const mine = reading === "start" || reading === "bench";
-          return (
-            <Fragment key={reading}>
-              {/* The side boundary, cut once, between the pairs. */}
-              {i === 2 && (
-                <span
-                  aria-hidden
-                  className="mx-[0.1875rem] w-px shrink-0 self-stretch bg-[image:var(--groove)] shadow-[var(--groove-highlight)]"
-                />
-              )}
-              <button
-                type="button"
-                aria-pressed={on}
-                aria-label={READING_NAME[reading]}
-                onClick={() => onPress(reading)}
-                className={
-                  "inline-flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-full border px-2.5 py-[0.3125rem] font-mono text-[length:var(--fs-10)] uppercase tracking-[0.14em] transition-colors duration-150 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-active/60 " +
-                  (on
-                    ? "border-active/55 bg-[image:var(--key-bg)] text-readout [text-shadow:var(--readout-text-glow)] shadow-[var(--key-shadow),inset_0_0_14px_color-mix(in_srgb,var(--accent)_16%,transparent)]"
-                    : "border-transparent text-foreground/62 hover:text-readout")
-                }
-              >
-                <SideDot mine={mine} on={on} />
-                {READING_LABEL[reading]} · {READING_COUNT[reading](player)}
-              </button>
-            </Fragment>
-          );
-        })}
-      </span>
-    </div>
-  );
-}
-
-/** Filled for the manager's own side, hollow for the side facing them. */
-function SideDot({ mine, on }: { mine: boolean; on: boolean }) {
-  const ink = on ? "var(--accent)" : "currentColor";
-  return (
-    <svg viewBox="0 0 12 12" className="size-2 shrink-0" aria-hidden>
-      {mine ? (
-        <circle cx="6" cy="6" r="5" fill={ink} />
-      ) : (
-        <circle cx="6" cy="6" r="4.4" fill="none" stroke={ink} strokeWidth="1.6" />
-      )}
-    </svg>
-  );
-}
-
-/**
- * One row's narrowing, named in the deck.
- *
- * **A closed tray says nothing**, and the readings are picked inside one: a row
- * scrolled out of sight is still narrowing the grid behind the panel, and
- * without this the only thing saying so is a pip on a row nobody can see. It is
- * the argument `SubjectTokens` is written by, one grain in — that tray names
- * the *rows*, and this names what was picked inside them.
- *
- * It rides the deck's own second band rather than the population readout, which
- * is a measurement rather than a preference: appended there it pushes `week 3`
- * off the end of a line that is already two denominators long. And not in the
- * row's name column, which is 179px and holds a name.
- */
-function NarrowingChip({
-  name,
-  readings,
-  left,
-  onClear,
-}: {
-  name: string;
-  readings: readonly WeekReading[];
-  left: number;
-  onClear: () => void;
-}) {
-  const tail = `${readings.map((r) => READING_CHIP[r]).join("+")} · ${left}`;
-  return (
-    <span
-      className={`${CONSOLE_CHIP} inline-flex min-w-0 max-w-full items-center gap-[0.4375rem] rounded-full border border-active/45 py-1 pl-2.5 pr-[0.3125rem] shadow-[var(--chip-shadow),0_0_18px_-8px_var(--accent-glow)]`}
-    >
-      <span
-        aria-hidden
-        className="size-[0.4375rem] shrink-0 rounded-full bg-active shadow-[0_0_9px_var(--accent-glow)]"
-      />
-      {/* **The name truncates and the tail does not**, which is the right way
-          round: the readings and the league count are the whole of what this
-          chip adds, and the name is already on the row it came from. Left to
-          truncate as one string it is the count that goes — the chip is wider
-          than a 354px panel at a phone's width, and the panel clips. */}
-      <span className="flex min-w-0 items-baseline gap-1 font-mono text-[length:var(--fs-10)] uppercase tracking-[0.14em] text-readout [text-shadow:var(--readout-text-glow)]">
-        <span className="truncate">{name}</span>
-        <span className="shrink-0 whitespace-nowrap">· {tail}</span>
-      </span>
-      <button
-        type="button"
-        onClick={onClear}
-        aria-label={`Clear the readings narrowing ${name}`}
-        className="inline-flex size-[1.125rem] shrink-0 items-center justify-center rounded-full border border-foreground/12 bg-[image:var(--key-bg)] font-mono text-[length:var(--fs-9)] leading-none text-foreground/80 shadow-[var(--key-shadow)] transition-colors duration-150 hover:text-readout focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-active/60"
-      >
-        <span aria-hidden>✕</span>
-      </button>
-    </span>
-  );
 }

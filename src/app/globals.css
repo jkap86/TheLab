@@ -1074,11 +1074,19 @@
    * inverted) and the cast goes slate rather than black — `--rack-cast`'s
    * rule, since a 75%-black cast on pale glass is a bruise rather than a
    * shadow.
+   *
+   * **The lip is its own token because the right edge is a block of six.**
+   * Since the four league columns joined the Pts figure and the tray key, the
+   * pinned tail is six cells rather than one — and a cast on each would paint
+   * a seam onto the cell beside it, since these are positioned and so paint in
+   * DOM order. So the leading cell carries the cast and every one of the six
+   * carries the lip, or the row's lower edge breaks for the width of the
+   * block. Composed into the two below rather than added beside them, so the
+   * value is spelled once a scheme instead of twice.
    */
-  --stat-pin-left-shadow: inset 0 -1px 0 rgba(159, 255, 242, 0.1),
-    4px 0 8px -2px rgba(0, 0, 0, 0.75);
-  --stat-pin-right-shadow: inset 0 -1px 0 rgba(159, 255, 242, 0.1),
-    -4px 0 8px -2px rgba(0, 0, 0, 0.75);
+  --stat-pin-lip: inset 0 -1px 0 rgba(159, 255, 242, 0.1);
+  --stat-pin-left-shadow: var(--stat-pin-lip), 4px 0 8px -2px rgba(0, 0, 0, 0.75);
+  --stat-pin-right-shadow: var(--stat-pin-lip), -4px 0 8px -2px rgba(0, 0, 0, 0.75);
   /*
    * What a zero prints as — an em dash, in the quietest ink on this glass.
    *
@@ -1862,10 +1870,9 @@
   --row-well-bg: rgba(15, 23, 42, 0.08);
   --row-well-shadow: inset 0 2px 5px rgba(15, 23, 42, 0.2),
     inset 0 -1px 0 rgba(255, 255, 255, 0.85);
-  --stat-pin-left-shadow: inset 0 -1px 0 rgba(255, 255, 255, 0.85),
-    4px 0 8px -2px rgba(15, 23, 42, 0.26);
-  --stat-pin-right-shadow: inset 0 -1px 0 rgba(255, 255, 255, 0.85),
-    -4px 0 8px -2px rgba(15, 23, 42, 0.26);
+  --stat-pin-lip: inset 0 -1px 0 rgba(255, 255, 255, 0.85);
+  --stat-pin-left-shadow: var(--stat-pin-lip), 4px 0 8px -2px rgba(15, 23, 42, 0.26);
+  --stat-pin-right-shadow: var(--stat-pin-lip), -4px 0 8px -2px rgba(15, 23, 42, 0.26);
   --stat-zero-ink: #537b76;
   --row-well-selected-bg: rgba(13, 148, 136, 0.1);
   --row-well-selected-shadow: inset 0 2px 6px rgba(15, 23, 42, 0.24),

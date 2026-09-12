@@ -503,9 +503,25 @@ export const CONSOLE_TILE_SELECTED =
  * the channel's own edge rather than spilling across the row, which is what
  * keeps a six-figure KeepTradeCut total from running under the team name.
  */
-export const CONSOLE_FIGURE_WELL =
-  "overflow-hidden rounded-[5px] bg-[color:var(--figure-well-bg)] " +
-  "shadow-[var(--figure-well-shadow)]";
+export const CONSOLE_FIGURE_WELL_SHELL =
+  "overflow-hidden rounded-[5px] bg-[color:var(--figure-well-bg)]";
+
+/**
+ * That channel with its resting shadow, which is what a figure well normally
+ * wears.
+ *
+ * **Split from it for {@link CONSOLE_KEY_PILL}'s reason**, one property over: a
+ * well that lights when the reading inside it is the one a reader picked cannot
+ * get there by appending `shadow-[var(--figure-well-shadow),0_0_20px_-8px_…]`
+ * to a string that already says `shadow-[var(--figure-well-shadow)]`. Both are
+ * base box-shadow utilities of the same specificity, so which one wins is
+ * Tailwind's emit order rather than the class attribute's — and what that looks
+ * like is a cell whose rim lights and whose halo silently never does, which is
+ * exactly how the merged board's four league cells first shipped. A well that
+ * has two states composes the shell with both of them; everything else takes
+ * this and is unchanged.
+ */
+export const CONSOLE_FIGURE_WELL = `${CONSOLE_FIGURE_WELL_SHELL} shadow-[var(--figure-well-shadow)]`;
 
 /**
  * The control track on a pane's own ledge.

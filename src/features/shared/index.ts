@@ -20,6 +20,7 @@ export {
   CONSOLE_CHIP_RAISED,
   CONSOLE_CHIP_TRAY,
   CONSOLE_FIGURE_WELL,
+  CONSOLE_FIGURE_WELL_SHELL,
   CONSOLE_GLASS,
   CONSOLE_HOUSING,
   CONSOLE_HOUSING_INSET,
@@ -159,6 +160,7 @@ export type { SharesColumnId } from "./shares-columns";
 // drawers of its own — the line `CONSOLE_KEY` and `ManagerPlate` moved on.
 export {
   NO_SUBJECTS,
+  canonicalReadings,
   leaguematePlayerId,
   matchesSubjects,
   parseLeaguematePlayerId,
@@ -169,6 +171,8 @@ export {
   subjectKey,
   subjectSlot,
   toggleSubject,
+  toggleSubjectReading,
+  WEEK_READINGS,
 } from "./league-subjects";
 export type {
   LeagueSubjects,
@@ -177,6 +181,7 @@ export type {
   SubjectMatch,
   SubjectMode,
   SubjectRolls,
+  WeekReading,
 } from "./league-subjects";
 export { CollapseTray } from "./ui/collapse-tray";
 export { SharesDrawer } from "./ui/shares-drawer";
@@ -191,9 +196,15 @@ export { SubjectTokens } from "./ui/subject-tokens";
 // `ManagerPlate` and `SharesDrawer` itself all moved on, and the folder rule
 // that `features/gametime` may not read a sibling feature.
 //
-// Only the panel, the folds and the entry shape leave this folder. The
-// decisions view under the drawer is its own part, on the barrel rule the
-// manager and tools folders keep.
+// **The decisions view leaves this folder too, since the merge.** It was the
+// drawer's own part, on the barrel rule the manager and tools folders keep —
+// and gametime's stat board opens the identical view off the identical walk
+// now that the panel merged into it, which is the one line that moves a part
+// out: a second reader. Two drawings of "which of my lineups started him"
+// would be two answers to one question.
+export { decisionsFor } from "./start-sit-decisions";
+export type { DecisionGroup } from "./start-sit-decisions";
+export { DecisionsDeck, DecisionsList } from "./ui/start-sit-decisions";
 // What an emptied league grid says, and which of its two narrowings it points
 // at. Three pages read it — see the module for why it is not three copies.
 export { narrowedEmptyState } from "./narrowed-empty-state";
@@ -212,6 +223,17 @@ export type {
   WeekTwoSidedShares,
 } from "./week-shares";
 export { WeekSharesDrawer } from "./ui/week-shares-drawer";
+// The four readings as controls — the tray a row's narrowing is picked in and
+// the chip that says a shut one left one behind. They came out of the drawer
+// when gametime's stat board merged that panel into itself: two panels draw
+// the same four keys, and a second spelling is two trays that stop agreeing
+// about which dot is filled.
+export {
+  leaguesLeft,
+  NarrowingChip,
+  ReadingKeys,
+  type WeekReadingCounts,
+} from "./ui/week-readings";
 // The Browse key each week tool carries, and the one mark both draw it with.
 // Two legends over one glyph — see the module for why the word is the page's
 // and the drawing is not.

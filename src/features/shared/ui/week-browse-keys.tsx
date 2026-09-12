@@ -87,9 +87,19 @@ export const START_SIT_BROWSE_KEYS: readonly RackDrawerKey[] = [
 ];
 
 /**
- * Gametime's. The same panel over the same leagues, with the week in progress:
- * the figure beside each player is what he has scored and is on course for, so
- * what the key opens is a board of scores rather than a decision.
+ * Gametime's, and it has **no reader** — kept on `peekActiveSeason`'s terms.
+ *
+ * That page's panel is not reached from a Browse key any more: it is the stat
+ * board's own bar at the foot of the console, which is where the two merged.
+ * The legend survives there — the bar reads `Player Scores` — so what this
+ * carries is the argument above about *why* one drawing takes two words, which
+ * is still true of the two panels and is the thing a later reader would
+ * otherwise reconstruct from two files that no longer sit beside each other.
+ * It comes straight back the day gametime wants a key as well as a bar.
+ *
+ * The same panel over the same leagues, with the week in progress: the figure
+ * beside each player is what he has scored and is on course for, so what it
+ * opens is a board of scores rather than a decision.
  */
 export const PLAYER_SCORES_BROWSE_KEYS: readonly RackDrawerKey[] = [
   { kind: "week", label: "Player Scores", icon: <WeekPlayersMark /> },

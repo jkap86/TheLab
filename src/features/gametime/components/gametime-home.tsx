@@ -7,7 +7,6 @@ import {
   DEFAULT_LEAGUE_FILTERS,
   filterSummary,
   BILLET_KEY_CHROME,
-  BrowseDock,
   BubblingFlask,
   CONSOLE_KEY,
   CONSOLE_METAL_TRACK_SM,
@@ -22,9 +21,7 @@ import {
   removeSubject,
   storeLeagueFilters,
   subjectCount,
-  WeekSharesDrawer,
   SubjectTokens,
-  toggleSubject,
   type LeagueSubjects,
   type Subject,
   type SubjectRolls,
@@ -34,9 +31,10 @@ import {
   useManagerLeagues,
   useActiveCard,
   useLeagueFilters,
+  useStatBoardOpen,
   useUrlParam,
-  PLAYER_SCORES_BROWSE_KEYS,
   weekSubjectRolls,
+  weekTwoSidedShares,
   WeekGauge,
   WeekStepper,
   writeQueryParam,
@@ -164,13 +162,27 @@ function Live({
   // `features/shared/league-filters-store`.
   const filters = useLeagueFilters();
   const setFilters = storeLeagueFilters;
-  // The drawers' half of the narrowing, on the checker's terms. `opened` is a
-  // latch rather than the open flag: a picked subject keeps narrowing the grid
-  // after its drawer closes, and both panels keep their own search and scroll
-  // once they have been opened.
+  /**
+   * The board's half of the narrowing, which the page owns rather than the
+   * panel.
+   *
+   * **It has to be the page's**, and that is what has kept it here across two
+   * arrangements of the panel: the board is `fixed` chrome a reader shuts, and
+   * a selection held inside it would be a grid that unnarrowed itself the
+   * moment the bar came down.
+   */
   const [subjects, setSubjects] = useState<LeagueSubjects>(NO_SUBJECTS);
-  const [drawer, setDrawer] = useState<Subject["kind"] | null>(null);
-  const [opened, setOpened] = useState<ReadonlySet<Subject["kind"]>>(new Set());
+  /**
+   * Whether the merged panel is up — the gate on the expensive fold below.
+   *
+   * A read of the same store the board's bar writes rather than a latch of its
+   * own, which is what the drawer's Browse key used to be: the panel is the
+   * board now, so "has a reader asked for this" and "is the board open" are one
+   * fact. Nothing latches, deliberately — a reader who opens and shuts it with
+   * nothing picked stops paying, where a latch would keep the walk alive for
+   * the life of the page.
+   */
+  const boardOpen = useStatBoardOpen();
 
   const { payload, pending, connection, stale } = useGametime(
     username,
@@ -208,16 +220,18 @@ function Live({
   );
 
   /**
-   * **Neither the entries nor the roll maps are built until a drawer has been
-   * opened**, which is the latch's second job and `/api/trades/facets`' own
-   * bargain: a reader who never presses a Browse key pays nothing for the
-   * panels. Both are a walk over every player of every roster on the account,
-   * and `matchesSubjects` returns true without asking the resolver while the
-   * selection is empty — so before the first press there is nothing to answer
-   * for. The latch never goes back, so a picked subject that outlives its
-   * drawer still narrows.
+   * **Nothing is folded until the board is up or something is picked**, which
+   * is `/api/trades/facets`' own bargain: a reader who never opens the panel
+   * pays nothing for it. The walk below is over every player of every roster
+   * on the account, and `matchesSubjects` returns true without asking the
+   * resolver while the selection is empty — so before either is true there is
+   * nothing to answer for.
+   *
+   * The second half is what keeps a narrowing alive after the bar comes down:
+   * the grid is still narrowed by whatever the reader picked, and the maps that
+   * answer it have to keep being built.
    */
-  const browsed = opened.size > 0;
+  const browsed = boardOpen || subjectCount(subjects) > 0;
 
   /**
    * One league's contribution to a week fold, adapted to the shared side shape
@@ -268,6 +282,25 @@ function Live({
   // and a different state from the map not having arrived at all.
   const rolls = useMemo(() => weekSubjectRolls(entries), [entries]);
 
+  /**
+   * The four counts per player, folded once per entry list.
+   *
+   * **Here rather than in the board**, on the rule the drawer's own note
+   * states: it is the expensive half of the merge — a walk over every player
+   * of every roster on a 113-league account — and it is folded over the
+   * *league-filtered, subject-unnarrowed* list, which is the one population
+   * that answers the question the columns ask. Folded over the selection every
+   * row would collapse to the row just picked and could not be widened again
+   * without clearing first.
+   *
+   * Null until the gate above opens, which the board draws as four dashes a
+   * column: the honest reading of a question nobody has asked yet.
+   */
+  const shares = useMemo(
+    () => (browsed ? weekTwoSidedShares(entries) : null),
+    [browsed, entries],
+  );
+
   // Null until the first frame lands, which `matchesSubjects` reads as "nothing
   // here can say" and ignores — the only reading that matches what is on
   // screen, since failing it closed would empty the grid while a read is in
@@ -310,31 +343,6 @@ function Live({
   const listRef = useRef<HTMLUListElement | null>(null);
   const ids = useMemo(() => visible.map((l) => l.league_id), [visible]);
   const card = useActiveCard({ param: "league", ids, listRef });
-  // Read out so the handler below can depend on it by name — the checker's own
-  // pair, in the same place and for the same reason.
-  const { close: closeCard } = card;
-
-  // Latch and open in one handler — never during render. It is a `useCallback`
-  // because it is `BrowseDock`'s `onOpen`, and this page re-renders once per
-  // line of the leagues stream: a fresh identity each time would re-render the
-  // dock on every one of them. It used to be the rack seam that required it,
-  // where a new identity re-published and set an ancestor's state in a loop —
-  // the same rule at a much lower price, which is what moving the keys down
-  // into the page bought.
-  //
-  // **It closes the open card first**, on `LeaguesHome`'s argument: a picked
-  // subject narrows the league grid, and a parked card *is* the screen — the
-  // page is locked and every league but the open one is `display: none`, so
-  // there is no grid on screen to be narrowed. A press with no card open is a
-  // no-op on that half.
-  const openDrawer = useCallback(
-    (kind: Subject["kind"]) => {
-      closeCard();
-      setOpened((prev) => (prev.has(kind) ? prev : new Set(prev).add(kind)));
-      setDrawer(kind);
-    },
-    [closeCard],
-  );
 
   const { summary, inPlay, answered } = useMemo(
     () => ({
@@ -364,48 +372,16 @@ function Live({
   const name = user ? user.display_name || user.username : username;
 
   return (
-    /* `STAT_BAR_H` on the root rather than on the board alone: the dock at the
-       foot of this page lifts by exactly the bar's height, and both read the
-       one declaration. See the constant, and the dock's `lift` below. */
+    /* `STAT_BAR_H` on the root rather than on the board alone: the league
+       list's own bottom margin has to clear the bar, and both read the one
+       declaration. See the constant.
+
+       **There is no Browse dock on this page any more.** It existed to open
+       the Player Scores drawer, and that panel is the board at the foot of the
+       console now — a key promising a drawer nothing opens is worse than no
+       key, and the bar is the whole control. It went with the drawer; the
+       lineup checker keeps both. */
     <div className={`relative ${STAT_BAR_H}`}>
-      {/*
-        **The page's Browse key, pinned to the bottom-right of the viewport.**
-        It was published up into the app rack; the lineup checker's own note
-        carries the argument in full, and it is that page's word for word —
-        these two tools list the same leagues and open the same panel, so the
-        one thing that may differ between them is the legend, which is the
-        page's own. See `PLAYER_SCORES_BROWSE_KEYS`.
-
-        First in the tree for the tab order and drawn at the foot of the
-        viewport by the stylesheet, which is `LeaguesHome`'s decision and not
-        the handoff's letter — again, see the checker.
-      */}
-      <BrowseDock
-        keys={PLAYER_SCORES_BROWSE_KEYS}
-        drawer={drawer}
-        onOpen={openDrawer}
-        parked={card.parked}
-        chromeClass={card.chromeClass}
-        /*
-          **This page's foot is not empty, and the handoff's reference draws it
-          as though it were** — the stat board's bar is `fixed` to the bottom
-          edge and the dock at the specified `bottom: 1.5rem` lands on it.
-          Measured at 1280 against the real page: the two overlap across
-          x 1040–1209 and the bar's upper 28px, and because the bar is one
-          full-width `<button>`, `elementFromPoint` at the `Expand` caption's
-          own centre answers the *dock*. The caption is a press that opens the
-          drawer.
-
-          So the dock clears the bar by the bar's own height and nothing else:
-          the 1.5rem the handoff asks for is still there, measured from the top
-          of the bar rather than from the fold. The two other answers are a
-          designer's to take — put this page's dock at the bottom *left*, or
-          stand it down while the board is open — and both are changes to where
-          a part lives rather than to how far it sits off an edge, which is why
-          neither was taken here.
-        */
-        lift="var(--stat-bar-h)"
-      />
       <FlaskDefs />
       <header className={`relative ${card.chromeClass}`}>
         <ManagerBillet
@@ -608,45 +584,37 @@ function Live({
         </>
       )}
 
-      {/* Mounted once each kind has been opened, and kept: a closed drawer is
-          `open={false}`, not unmounted, so its search, its scroll and the
-          decisions view a reader was inside survive being shut. Both count over
-          `entries` — the league-filtered, subject-unnarrowed list — and the
-          readout's denominator is `leagues.length`, the account's own total.
+      {/* **The one panel, behind a bar pinned to the foot of the console**:
+          every skill player with a scoring line, and beside him how many of
+          this account's lineups started him, sat him and faced him. It used to
+          be two — a board about the NFL's week and a drawer about the reader's
+          leagues — and a reader asking the question a Sunday actually raises
+          had to hold one panel's answer in their head while they opened the
+          other. See the component.
 
-          `pending` is the hook's own answer rather than `payload === null`,
-          which is also true after a stream that will never answer. */}
-      {opened.has("week") && (
-        <WeekSharesDrawer
-          open={drawer === "week"}
-          onClose={() => setDrawer(null)}
-          entries={entries}
-          week={payload?.week ?? null}
-          leagueTotal={leagues.length}
-          filterSummary={narrowing ? filterSummary(filters) : null}
-          /* The live projection: this page's own figure, and the one every
-             total on it is a sum of. See `figured`. */
-          figureLabel="Live"
-          pending={pending}
-          subjects={subjects}
-          onToggle={(s) => setSubjects((prev) => toggleSubject(prev, s))}
-          onSubjects={setSubjects}
-        />
-      )}
+          It is `fixed`, so it takes no part in the parked-card layout — but it
+          takes `chromeClass` all the same, because a parked card is sized to
+          the fold less a few pixels and a 52px bar would cover the drawer bars
+          at the bottom of its panes. The page's chrome steps back for a parked
+          card; the rack stays, because the rack is the app's rather than this
+          page's.
 
-      {/* The week's own reading, which is about the NFL rather than about this
-          account: every skill player with a scoring line, behind a bar pinned
-          to the foot of the console. It is `fixed`, so it takes no part in the
-          parked-card layout — but it takes `chromeClass` all the same, because
-          a parked card is sized to the fold less a few pixels and a 52px bar
-          would cover the drawer bars at the bottom of its panes. The page's
-          chrome steps back for a parked card; the rack stays, because the rack
-          is the app's rather than this page's. */}
+          `entries` is the league-filtered, subject-unnarrowed list on both
+          seams — the fold's population above and the decisions walk's here —
+          which is `weekTwoSidedShares`' own rule and the reason a row's
+          `7 of 12` and the list a press opens are counting the same leagues. */}
       <StatBoard
         week={payload?.week ?? null}
         lines={payload?.players ?? NO_LINES}
         board={board}
         chromeClass={card.chromeClass}
+        shares={shares}
+        entries={entries}
+        subjects={subjects}
+        onSubjects={setSubjects}
+        /* The live projection: this page's own figure, and the one every total
+           on it is a sum of. See `figured`. */
+        figureLabel="Live"
       />
     </div>
   );

@@ -2,6 +2,8 @@ import assert from "node:assert/strict";
 import { describe, test } from "node:test";
 
 import {
+  heldStatRows,
+  isShareColumn,
   narrowStatRows,
   rankStatRows,
   statFiltersActive,
@@ -10,14 +12,20 @@ import {
   statPoints,
   statRows,
   statTeams,
+  NO_STAT_FILTERS,
+  SHARE_COLUMNS,
+  SHARE_READING,
   STAT_COLUMNS,
+  STAT_GRID_MIN,
   STAT_GRID_TEMPLATE,
+  STAT_PINNED_RIGHT,
   PHONE_SORTS,
   parseStatBasis,
   sortLabel,
   topStatRow,
 } from "./stat-board.ts";
 import type { StatRow } from "./stat-board.ts";
+import { WEEK_READINGS } from "../../shared/league-subjects.ts";
 import type { GametimeGame, GametimeStatLine, StatBoardPosition } from "@/shared/contract";
 
 /**
@@ -68,6 +76,13 @@ function row(over: Partial<StatRow> = {}): StatRow {
     opponent: "@PIT",
     clock: { text: "Final", live: false },
     points: 0,
+    // Nobody in the reader's leagues, which is what a row is until the fold
+    // has something to join onto it.
+    held: false,
+    start: null,
+    bench: null,
+    "opp-start": null,
+    "opp-bench": null,
     ...over,
   };
 }
@@ -153,35 +168,35 @@ describe("narrowStatRows", () => {
   ];
 
   test("nothing asked leaves everything", () => {
-    assert.equal(narrowStatRows(rows, { query: "", position: "ALL", team: "ALL" }).length, 3);
+    assert.equal(narrowStatRows(rows, { query: "", position: "ALL", team: "ALL", scope: "all" }).length, 3);
   });
 
   test("the three narrowings are one AND", () => {
-    const left = narrowStatRows(rows, { query: "o", position: "RB", team: "BUF" });
+    const left = narrowStatRows(rows, { query: "o", position: "RB", team: "BUF", scope: "all" });
     assert.deepEqual(left.map((r) => r.player_id), ["3"]);
   });
 
   test("the search is a case-insensitive part of the name", () => {
-    const left = narrowStatRows(rows, { query: "  CHASE ", position: "ALL", team: "ALL" });
+    const left = narrowStatRows(rows, { query: "  CHASE ", position: "ALL", team: "ALL", scope: "all" });
     assert.deepEqual(left.map((r) => r.player_id), ["1"]);
   });
 
   test("a row with no name is narrowed away by a query and by nothing else", () => {
     const nameless = [row({ player_id: "x", name: null, team: "CIN", position: "WR" })];
-    assert.equal(narrowStatRows(nameless, { query: "", position: "WR", team: "CIN" }).length, 1);
-    assert.equal(narrowStatRows(nameless, { query: "a", position: "ALL", team: "ALL" }).length, 0);
+    assert.equal(narrowStatRows(nameless, { query: "", position: "WR", team: "CIN", scope: "all" }).length, 1);
+    assert.equal(narrowStatRows(nameless, { query: "a", position: "ALL", team: "ALL", scope: "all" }).length, 0);
   });
 });
 
 describe("statFiltersActive", () => {
   test("blank space is not a narrowing", () => {
-    assert.equal(statFiltersActive({ query: "   ", position: "ALL", team: "ALL" }), false);
+    assert.equal(statFiltersActive({ query: "   ", position: "ALL", team: "ALL", scope: "all" }), false);
   });
 
   test("any one of the three is", () => {
-    assert.equal(statFiltersActive({ query: "a", position: "ALL", team: "ALL" }), true);
-    assert.equal(statFiltersActive({ query: "", position: "QB", team: "ALL" }), true);
-    assert.equal(statFiltersActive({ query: "", position: "ALL", team: "BUF" }), true);
+    assert.equal(statFiltersActive({ query: "a", position: "ALL", team: "ALL", scope: "all" }), true);
+    assert.equal(statFiltersActive({ query: "", position: "QB", team: "ALL", scope: "all" }), true);
+    assert.equal(statFiltersActive({ query: "", position: "ALL", team: "BUF", scope: "all" }), true);
   });
 });
 
@@ -306,14 +321,20 @@ describe("the column table", () => {
     assert.deepEqual(spans, [
       // The pinned first column is cut out of its run — a sticky cell keeps
       // its own width, so one spanning the four beside it would slide across
-      // `Passing` and `Rushing` as the table scrolled.
-      { group: null, span: 1 },
-      { group: null, span: 4 },
-      { group: "Passing", span: 3 },
-      { group: "Rushing", span: 2 },
-      { group: "Receiving", span: 3 },
-      { group: null, span: 1 },
-      { group: "Total", span: 1 },
+      // `Passing` and `Rushing` as the table scrolled. It is the pin rather
+      // than the position that cuts it, which is what also gives `My leagues`
+      // and `Total` their own sticky blocks.
+      { group: null, span: 1, pinned: "left", offset: "0rem" },
+      { group: null, span: 4, pinned: null, offset: null },
+      { group: "Passing", span: 3, pinned: null, offset: null },
+      { group: "Rushing", span: 2, pinned: null, offset: null },
+      { group: "Receiving", span: 3, pinned: null, offset: null },
+      { group: null, span: 1, pinned: null, offset: null },
+      // **A right-pinned span sits at its rightmost column's offset**, since
+      // that is the edge `right` positions — `My leagues` reaches leftward
+      // from `Opp bn`'s 7.25rem and `Total` from the tray key's own 0.
+      { group: "My leagues", span: 4, pinned: "right", offset: "7.25rem" },
+      { group: "Total", span: 2, pinned: "right", offset: "0rem" },
     ]);
     assert.equal(
       spans.reduce((sum, s) => sum + s.span, 0),
@@ -339,5 +360,182 @@ describe("the column table", () => {
     const positions: StatBoardPosition[] = ["QB", "RB", "WR", "TE"];
     assert.equal(positions.length, 4);
     assert.equal(STAT_COLUMNS.some((c) => c.key === "position"), true);
+  });
+});
+
+/**
+ * The merge: the reader's own four readings, joined onto the NFL's week.
+ *
+ * Every rule here is one a wrong answer draws a perfectly ordinary table for —
+ * a dash where a zero belongs is a player you are told nobody has, a pinned
+ * offset a rem out is two cells stacked with the figure underneath showing
+ * through, and a sort that treats a null as a nought puts the players your
+ * leagues have never heard of at the top of the column that is about them.
+ */
+describe("the league columns", () => {
+  const shares = {
+    "1": { started: 7, benched: 2, oppStarted: 3, oppBenched: 0 },
+  };
+
+  test("the four columns are the four readings, in the readings' own order", () => {
+    assert.deepEqual(
+      SHARE_COLUMNS.map((c) => c.key),
+      [...WEEK_READINGS],
+    );
+  });
+
+  test("a joined row carries the four counts under the columns' own names", () => {
+    const [row] = statRows({ "1": line() }, {}, "ppr", shares);
+    assert.equal(row.held, true);
+    assert.equal(row.start, 7);
+    assert.equal(row.bench, 2);
+    assert.equal(row["opp-start"], 3);
+    // **A held zero is a zero.** It is the one figure on these four columns
+    // that a dash would misreport: nobody's opponent benched him, which is an
+    // answer, where a dash says his leagues were never asked.
+    assert.equal(row["opp-bench"], 0);
+  });
+
+  test("a player nobody in the reader's leagues has carries four nulls", () => {
+    const [row] = statRows({ "9": line({ player_id: "9" }) }, {}, "ppr", shares);
+    assert.equal(row.held, false);
+    assert.deepEqual(
+      [row.start, row.bench, row["opp-start"], row["opp-bench"]],
+      [null, null, null, null],
+    );
+  });
+
+  test("with no fold at all the board is the NFL's week and nothing else", () => {
+    const [row] = statRows({ "1": line() }, {}, "ppr");
+    assert.equal(row.held, false);
+    assert.equal(row.start, null);
+  });
+
+  test("`Yours` counts the rows anybody in those leagues holds", () => {
+    const rows = statRows(
+      { "1": line(), "9": line({ player_id: "9" }) },
+      {},
+      "ppr",
+      shares,
+    );
+    assert.equal(heldStatRows(rows), 1);
+  });
+
+  test("the Mine cap keeps the held rows and nothing else", () => {
+    const rows = statRows(
+      { "1": line(), "9": line({ player_id: "9", name: "Nobody" }) },
+      {},
+      "ppr",
+      shares,
+    );
+    const mine = narrowStatRows(rows, { ...NO_STAT_FILTERS, scope: "mine" });
+    assert.deepEqual(mine.map((r) => r.player_id), ["1"]);
+    assert.equal(narrowStatRows(rows, NO_STAT_FILTERS).length, 2);
+  });
+
+  test("the scope is a narrowing, so it lights the Reset key", () => {
+    assert.equal(statFiltersActive({ ...NO_STAT_FILTERS, scope: "mine" }), true);
+    assert.equal(statFiltersActive(NO_STAT_FILTERS), false);
+  });
+
+  test("a held zero sorts as a zero and an absence sorts last either way", () => {
+    const rows = statRows(
+      {
+        "1": line({ player_id: "1", name: "Held three" }),
+        "2": line({ player_id: "2", name: "Held none" }),
+        "3": line({ player_id: "3", name: "Unheld" }),
+      },
+      {},
+      "ppr",
+      {
+        "1": { started: 3, benched: 0, oppStarted: 0, oppBenched: 0 },
+        "2": { started: 0, benched: 0, oppStarted: 0, oppBenched: 0 },
+      },
+    );
+    assert.deepEqual(
+      rankStatRows(rows, "start", -1).map((r) => r.name),
+      ["Held three", "Held none", "Unheld"],
+    );
+    // Flipped, the zero leads and the absence is still last: a player your
+    // leagues have never heard of is not the one who started him least.
+    assert.deepEqual(
+      rankStatRows(rows, "start", 1).map((r) => r.name),
+      ["Held none", "Held three", "Unheld"],
+    );
+  });
+
+  test("the pinned tail's offsets are summed from the tracks after each", () => {
+    // Read right to left: the tray sits on the edge, and every column before
+    // it clears what it covers.
+    assert.deepEqual(
+      [...STAT_PINNED_RIGHT.entries()],
+      [
+        ["tray", "0rem"],
+        ["points", "2rem"],
+        ["opp-bench", "7.25rem"],
+        ["opp-start", "10.5rem"],
+        ["bench", "13.75rem"],
+        ["start", "17rem"],
+      ],
+    );
+  });
+
+  test("every pinned-right offset clears the columns it covers", () => {
+    // The property behind the literals above, so a width that moves is caught
+    // by arithmetic rather than by somebody re-adding the table.
+    const tail = STAT_COLUMNS.filter((c) => c.pinned === "right");
+    for (const [i, column] of tail.entries()) {
+      const after = tail
+        .slice(i + 1)
+        .reduce((sum, c) => sum + Number.parseFloat(c.width), 0);
+      assert.equal(STAT_PINNED_RIGHT.get(column.key), `${after}rem`, column.key);
+    }
+  });
+
+  test("the grid's floor is every track, the tray key included", () => {
+    // 68.5rem of stats, 13 of the four readings, 2 of the tray key. The
+    // design's own 81.5 leaves the last out, and the name column's 14rem floor
+    // cannot give it back.
+    assert.equal(STAT_GRID_MIN, "83.5rem");
+  });
+
+  test("only the tray key is unsortable, and it is the one with no name", () => {
+    const unsortable = STAT_COLUMNS.filter((c) => !c.sortable);
+    assert.deepEqual(unsortable.map((c) => c.key), ["tray"]);
+    for (const column of STAT_COLUMNS) {
+      assert.equal(column.sortable, column.label !== "", column.key);
+    }
+  });
+
+  test("every track is a plain rem, or the one name column that is not", () => {
+    // What the two sums above lean on: a width the parse cannot read comes
+    // back `NaN` and poisons every offset after it in silence.
+    for (const column of STAT_COLUMNS) {
+      const plain = /^\d+(\.\d+)?rem$/.test(column.width);
+      const flexible = column.width === "minmax(14rem,1fr)";
+      assert.equal(plain || flexible, true, column.width);
+    }
+  });
+
+  test("the phone's Sort menu offers the four, and spells out what a head cannot", () => {
+    for (const reading of WEEK_READINGS) {
+      assert.equal(PHONE_SORTS.includes(reading), true, reading);
+    }
+    assert.equal(sortLabel("start"), "Started");
+    assert.equal(sortLabel("opp-start"), "Opp started");
+    assert.equal(sortLabel("opp-bench"), "Opp benched");
+  });
+
+  test("each reading knows its side and which half of the pair is the quiet one", () => {
+    assert.deepEqual(
+      WEEK_READINGS.map((r) => SHARE_READING[r].mine),
+      [true, true, false, false],
+    );
+    assert.deepEqual(
+      WEEK_READINGS.map((r) => SHARE_READING[r].quiet),
+      [false, true, false, true],
+    );
+    assert.equal(isShareColumn("start"), true);
+    assert.equal(isShareColumn("points"), false);
   });
 });
