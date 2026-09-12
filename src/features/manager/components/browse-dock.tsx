@@ -80,11 +80,13 @@ export function BrowseDock({
   const docked = useDocked(ref, parked);
 
   return (
-    // **The housing.** Stacked below `sm` and a row above it, which is a width
-    // rather than a preference: two legended pills side by side run ~300px of a
-    // 390px screen, which is a bottom bar pretending to be a floating dock.
-    // Stacked they are `items-stretch`, so both caps take the wider one's width
-    // and their glyphs line up in a column.
+    // **The housing, and it is one row at every width.** It was stacked below
+    // `sm`, on a measurement that was right and has stopped being true: two
+    // *legended* pills side by side run ~300px of a 390px screen, which is a
+    // bottom bar pretending to be a floating dock. The caps below `sm` are
+    // icon-only now — see the cap — so the pair is two 44px circles in a ~103px
+    // housing, and a stack there would be two rows of chrome to spend a width
+    // nothing is short of.
     //
     // `inert` while hidden rather than `pointer-events-none` alone, which is
     // `CollapseTray`'s finding: the mouse is stopped by the one and a keyboard
@@ -111,7 +113,7 @@ export function BrowseDock({
       role="group"
       aria-label="Browse"
       inert={!docked}
-      className={`lab-anim fixed bottom-5 right-2 z-50 flex flex-col items-stretch rounded-[1.625rem] border border-[var(--dock-rim)] bg-[image:var(--dock-bg)] p-[0.3125rem] shadow-[var(--dock-shadow)] backdrop-blur-[5px] backdrop-saturate-[1.4] [transition:transform_220ms_cubic-bezier(0.32,0.72,0,1),opacity_160ms_linear] sm:bottom-6 sm:right-6 sm:flex-row sm:items-center sm:rounded-full ${
+      className={`lab-anim fixed bottom-5 right-2 z-50 flex items-center rounded-full border border-[var(--dock-rim)] bg-[image:var(--dock-bg)] p-[0.3125rem] shadow-[var(--dock-shadow)] backdrop-blur-[5px] backdrop-saturate-[1.4] [transition:transform_220ms_cubic-bezier(0.32,0.72,0,1),opacity_160ms_linear] sm:bottom-6 sm:right-6 ${
         docked
           ? "[transform:translateY(0)] opacity-100"
           : "[transform:translateY(calc(100%_+_1.25rem))] opacity-0 sm:[transform:translateY(calc(100%_+_1.5rem))]"
@@ -123,7 +125,7 @@ export function BrowseDock({
         inset stacks with a translucent housing and kills the blur the housing
         is for. See `--dock-channel-bg`.
       */}
-      <div className="flex flex-col items-stretch gap-[0.3125rem] rounded-[1.375rem] bg-[var(--dock-channel-bg)] p-1 shadow-[var(--dock-channel-shadow)] sm:flex-row sm:items-center sm:gap-[0.4375rem] sm:rounded-full">
+      <div className="flex items-center gap-[0.3125rem] rounded-full bg-[var(--dock-channel-bg)] p-1 shadow-[var(--dock-channel-shadow)] sm:gap-[0.4375rem]">
         {keys.map(({ kind, label, icon }) => (
           <button
             key={kind}
@@ -138,16 +140,39 @@ export function BrowseDock({
             // by the order Tailwind happened to emit the two. The bare shape
             // names no size and no padding, which is exactly what it is for.
             //
-            // `h-11` is the app's touch-target floor and is spelled at every
-            // width, legends and all — these are the page's two exits, not a
-            // shortcut learned by position.
+            // **44px in both axes, and that is spelled rather than left to a
+            // legend's line box** — these are the page's two exits and the
+            // app's own touch-target floor applies to them at every width. So
+            // `size-11` below `sm`, and `sm:w-auto sm:px-3.5` hands the width
+            // back to the cap's own gutter once there is a word in it; the
+            // height is `size-11`'s throughout, which is why there is no
+            // `sm:h-11` beside it. The tracking is one value for the same kind
+            // of reason: the 0.14em arm was width bought for a legend that no
+            // longer renders below `sm`.
             //
-            // The glyph and the legend both ship. The rack's cap draws one or
-            // the other, because there its face is 32px and a picture beside
-            // the word is the same fact twice; here the caps are 44px and the
-            // two person marks — one figure against two — are close enough at
-            // 17px that the word is what tells them apart.
-            className={`${CONSOLE_KEY_PILL_BARE} inline-flex h-11 items-center justify-start gap-2 border-[var(--cap-accent-border)] bg-[image:var(--cap-accent-bg)] px-3.5 text-[length:var(--fs-11)] tracking-[0.14em] text-[var(--cap-accent-ink)] shadow-[var(--cap-accent-shadow),var(--dock-cap-glow)] [text-shadow:var(--cap-ink-emboss)] sm:justify-center sm:tracking-[0.16em]`}
+            // **Below `sm` the cap's face is the glyph alone**, which reverses
+            // what this note used to say. It argued that a 44px cap has room
+            // for both and that the two person marks — one figure against two
+            // — are close enough at 17px that the word is what tells them
+            // apart. On a phone that is a legend on the one control a reader
+            // does not have to go looking for, and it left the dock as the only
+            // place in the app where this pair reads differently from the
+            // rack's own, which has drawn a picture below `md` since it came
+            // out of its fold.
+            //
+            // Above `sm` the glyph stays *beside* the word, where the rack
+            // drops it, and that is the one thing here that is not the rack's
+            // arrangement: its cap is 32px and a picture next to a legend on
+            // one is the same fact twice, where this cap is 44px in a housing
+            // with a whole viewport's width to itself.
+            //
+            // The legend stays as the button's `sr-only` name rather than
+            // becoming an `aria-label`, which is the rack's rule and for its
+            // reason: one spelling of the word, on one element, at both widths.
+            // `sr-only` is `position: absolute`, so it leaves the flex flow
+            // entirely and the `gap-2` does not count it — which is what lets
+            // one gap serve both arms.
+            className={`${CONSOLE_KEY_PILL_BARE} inline-flex size-11 items-center justify-center gap-2 border-[var(--cap-accent-border)] bg-[image:var(--cap-accent-bg)] text-[length:var(--fs-11)] tracking-[0.16em] text-[var(--cap-accent-ink)] shadow-[var(--cap-accent-shadow),var(--dock-cap-glow)] [text-shadow:var(--cap-ink-emboss)] sm:w-auto sm:px-3.5`}
           >
             {/*
               The glyph is cut into the cap rather than drawn on it, so its
@@ -162,7 +187,7 @@ export function BrowseDock({
             >
               {icon}
             </span>
-            {label}
+            <span className="sr-only sm:not-sr-only">{label}</span>
           </button>
         ))}
       </div>

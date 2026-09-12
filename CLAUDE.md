@@ -9351,6 +9351,48 @@ this page is read. It is cleared on teardown, because a park unsubscribes and a
 timer that outlived one would stand the dock up behind a card that has the
 screen.
 
+#### The cap is a picture on a phone
+
+The caps shipped carrying the glyph **and** the legend at every width, on a note
+in this file that said a 44px face has room for both and that the two person
+marks — one figure against two — are close enough at 17px that the word is what
+tells them apart. Reported as the label showing on mobile, which is what it is:
+a legend on the one control a reader does not have to go looking for, and the
+only place in the app where this pair read differently from **the rack's own**,
+which has drawn a picture below `md` since it came out of its fold. Below `sm`
+the cap is a 44px circle with the glyph alone, and `sm:w-auto sm:px-3.5` hands
+the width back to its own gutter above it. Nothing on the wire moved — no route,
+no query, no contract type, no payload field, no migration — and no token was
+added.
+
+**The legend stays as the button's `sr-only` name**, which is the rack's rule
+and for its reason: one spelling of the word, on one element, at both widths,
+where an `aria-label` beside a visible span at `sm` is two places for it to
+drift. It is also what makes one `gap-2` serve both arms — `sr-only` is
+`position: absolute`, so the word leaves the flex flow entirely and the gap does
+not count it.
+
+**The housing came out of its stack with them, and that is finishing the change
+rather than widening it.** It was a column below `sm` on one measurement, and the
+measurement was right: two *legended* pills side by side run ~300px of a 390px
+screen, which is a bottom bar pretending to be a floating dock. Two 44px circles
+are a **113px** housing, so the constraint the stack existed for is gone — and
+left stacked the dock would be two rows of chrome to spend a width nothing is
+short of, in the one place the rack draws its own pair in a row. It is one row,
+one radius and one `items-center` at every width now, which is four `sm:` flips
+fewer.
+
+**What it costs the travel is nothing**, because the transform was already
+spelled against the housing rather than against a number: `translateY(calc(100%
++ 1.25rem))` is its own height plus its own offset, so a housing 49px shorter
+parks 49px sooner and still lands its top edge exactly on the fold. That is the
+half of the arbitrary-transform note that earns its place a second time.
+
+**Above `sm` the glyph stays beside the word**, where the rack drops it, and that
+is the one thing here that is deliberately *not* the rack's arrangement: its cap
+is 32px and a picture next to a legend on one is the same fact twice, where this
+cap is 44px in a housing with a whole viewport's width to itself.
+
 #### Two things are silent when wrong, and one of them shipped wrong first
 
 `dock-scroll.ts` is the rule, pure and under Node's own runner, for
@@ -9414,22 +9456,20 @@ generated `.next/dev/types/validator.ts` outlives a deleted route, so `typecheck
 fails on a file nobody wrote until `.next` is cleared.
 
 Every value is the handoff's. The housing is `fixed`, `z-50`, **bottom 24 /
-right 24** at `sm` and up and **20 / 8** below, a row at `items-center` and a
-column at `items-stretch`, radius full and **26px** (1.625rem), padding **5px**,
+right 24** at `sm` and up and **20 / 8** below, **one row at `items-center` at
+every width**, radius full, padding **5px**,
 a 1px rim, `linear-gradient(rgba(150,200,205,0.14), rgba(10,20,22,0.16))`,
 `blur(5px) saturate(1.4)`, and the three shadow layers to the digit
 (`0 0 0 1px rgba(0,0,0,0.55)`, `0 14px 28px -8px rgba(0,0,0,0.8)`,
-`0 0 34px -6px` the accent glow). The channel is radius full / **22px**
-(1.375rem), padding **4px**, gap **7px** (0.4375rem) and **5px** (0.3125rem),
-over its own two insets. Both caps are **exactly 44px tall at both widths**,
-radius full, padding `0 14px`, gap 8px, `--fs-11` (12.76px at the desktop type
-scale, 12.54 at the phone's) with **2.0416px of tracking at `sm` and 1.7556px
-below** — the handoff's 0.16em/0.14em split — in IBM Plex Mono, uppercase, with
+`0 0 34px -6px` the accent glow). The channel is radius full, padding
+**4px**, gap **7px** (0.4375rem) and **5px** (0.3125rem), over its own two
+insets. Both caps are **exactly 44px tall at both widths**, radius full,
+`justify-content: center`, gap 8px, `--fs-11` (12.76px at the desktop type
+scale) at **2.0416px of tracking**, in IBM Plex Mono, uppercase, with
 `--cap-ink-emboss` on the legend and `--cap-glyph-emboss` as a filter on the
 glyph. The cap's shadow is ten layers: `--cap-accent-shadow`'s five and
-`--dock-cap-glow` last. Stacked, **both caps measure 157.03px** — the
-`items-stretch` claim — and justify `flex-start` so their glyphs line up in a
-column, against `center` in the row.
+`--dock-cap-glow` last. Below `sm` they are **44×44 with no gutter at all**, and
+from it **122.8px and 161.6px** on `0 14px` — the width `sm:w-auto` hands back.
 
 **Both schemes turn over from the tokens alone**, with no light-mode block
 written in the component: the rim `rgba(0,255,229,0.2)` → `rgba(11,109,99,0.38)`,
@@ -9439,7 +9479,7 @@ casts slate, and the cap's ink `rgb(4,50,44)` → `rgb(244,255,253)`.
 
 The hide was driven as positions rather than as classes. It travels
 **translateY(88px)** at 1280 — 64px of housing plus the 24px offset, landing its
-top edge at exactly `innerHeight` — and **133px** at 390 (113 + 20), fully off
+top edge at exactly `innerHeight` — and **84px** at 390 (64 + 20), fully off
 screen in both, and returns to the identity matrix on the way up. Seven scroll
 arms land: a 5px push does nothing, 600 hides, a 3px bounce does nothing, 37 up
 returns it, down hides again, and a scroll into `scrollY < 24` stands it up
@@ -9483,7 +9523,23 @@ Browse channel having gone. At 1280 and 390 in both schemes:
 elements painted past it that an ancestor does not clip, exactly one `<h1>`, the
 dock clear of the rack, and **no console output of any kind**.
 
-2,397 unit tests pass — ten `dockScroll`'s (the two jitter arms, the drift that
+**The icon-only cap was driven in the same harness**, at 390 and 1280 in both
+schemes. At 390 the housing is **113×64** as a row, its channel 101×52 on a 5px
+gap, and each cap **44×44** with `padding: 0`, its glyph 17×17 centred and its
+legend `position: absolute` at 1px under `clip-path: inset(50%)` — while
+`Accessibility.getPartialAXTree` reads both buttons as `button` named
+**`PLAYERS`** and **`LEAGUEMATES`**, which is the `sr-only` name surviving the
+arm that hides the word. At 1280 the same two caps are 122.8 and 161.6 wide on
+`0 14px` with the legend `static` beside the glyph. The hide travels **84px at
+390** and **88px at 1280**, landing `top` exactly on `innerHeight` at both, with
+**0 of 2 buttons reachable** hidden and 2 standing; the settle still returns it
+and a 60px scroll up still returns it at once. Both schemes turn over from the
+tokens alone (ink `rgb(4,50,44)` → `rgb(244,255,253)`), a press still moves
+`aria-expanded` to `["true","false"]`, and at both widths
+`document.documentElement.scrollWidth` equals the client width with **zero**
+unclipped elements past it, exactly one `<h1>`, and no console output.
+
+2,404 unit tests pass, none of them new here — ten `dockScroll`'s (the two jitter arms, the drift that
 accumulates through them, the floor in both directions, the eaten first event,
 and the identity return that lets the caller skip a render of a hundred cards)
 and six `dockRested`'s (the stand-up, the kept baseline and the direction read
@@ -9502,7 +9558,9 @@ a pause flickers the dock back, longer and the return stops reading as a
 consequence of stopping; whether a hundred cards' worth of scroll on a real
 account keeps the 6px floor from reading as lag; and whether readers find two keys at the bottom-right
 as readily as they found them in the rack, which is the one question only the
-first real page answers.
+first real page answers — now asked of two glyphs rather than two legends, which
+is the same question one step harder and the trade the rack's phone arm already
+makes.
 
 ### The rank is the reading, and the denominator is the config window's
 
