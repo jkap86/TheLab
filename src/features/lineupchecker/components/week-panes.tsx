@@ -23,7 +23,13 @@ import {
   useLinkedScroll,
 } from "@/features/shared";
 
-import { kickoffTime } from "../helpers/lineup-check-metrics";
+import {
+  irMarkFor,
+  irMoves,
+  kickoffTime,
+  type IrMark,
+  type IrMoves,
+} from "../helpers/lineup-check-metrics";
 import {
   seatGap,
   seatOptions,
@@ -82,6 +88,16 @@ import {
  * the two lineups through `seatGap`, an option's delta off the seat it would
  * replace through `seatOptions`, and the four totals off the payload the card
  * above already reads.
+ *
+ * **The IR marks read the same `irMoves` the roster tile does**, so a tile
+ * saying `1 to IR` and a bench wearing two `→ IR` chips cannot be two readings
+ * of one league. They are drawn on the reader's rows alone: the opponent's
+ * reserve is not on the wire, and a move only the reader can make is not a
+ * mark to put on somebody else's roster — `move_to`'s own argument. One grain
+ * to know about: the reading is the **live** roster's and the rows are the
+ * **week's**, so on a stepped past week a listed player with no row draws
+ * nothing, and a starter can wear `IR` because he is on IR *today* — the same
+ * "as set now" caveat the card already prints for a lineup it read live.
  */
 export function WeekPanes({
   entry,
@@ -108,6 +124,8 @@ export function WeekPanes({
   // render as plain rows rather than as keys that would do something.
   const pressable = !entry.best_ball;
 
+  const moves = irMoves(entry);
+
   const mine: PaneLineup = {
     title: teamName,
     fallback: "Your lineup",
@@ -117,6 +135,7 @@ export function WeekPanes({
     bench: entry.bench,
     promoted: entry.start,
     demoted: entry.sit,
+    ir: moves,
   };
 
   const opponent: PaneLineup | null =
@@ -134,6 +153,7 @@ export function WeekPanes({
           // makes — the same argument that leaves `move_to` null on their seats.
           promoted: [],
           demoted: [],
+          ir: null,
         };
 
   // With no opponent there is one lineup and nothing to compare it to, so the
@@ -177,6 +197,7 @@ export function WeekPanes({
             side="theirs"
             seat={opponent.lineup[pick.index]}
             bench={opponent.bench}
+            ir={null}
             onBack={clear}
             scrollRef={left}
           />
@@ -197,6 +218,7 @@ export function WeekPanes({
             side="mine"
             seat={entry.lineup[pick.index]}
             bench={entry.bench}
+            ir={moves}
             onBack={clear}
             scrollRef={right}
           />
@@ -233,6 +255,8 @@ type PaneLineup = {
   bench: LineupCheckPlayer[];
   promoted: string[];
   demoted: string[];
+  /** The IR moves this roster wants, or null for a roster nobody here moves. */
+  ir: IrMoves | null;
 };
 
 /**
@@ -344,6 +368,7 @@ function LineupPane({
                 demoted={
                   seat.player ? pane.demoted.includes(seat.player.player_id) : false
                 }
+                irMark={seat.player ? irMarkFor(seat.player.player_id, pane.ir) : null}
                 selected={pick?.side === side && pick.index === i}
                 onPress={onPress ? () => onPress(side, i) : undefined}
               />
@@ -367,6 +392,7 @@ function LineupPane({
                       key={player.player_id}
                       player={player}
                       promoted={pane.promoted.includes(player.player_id)}
+                      irMark={irMarkFor(player.player_id, pane.ir)}
                     />
                   ))}
                 </ul>
@@ -431,6 +457,7 @@ function OptionsPane({
   side,
   seat,
   bench,
+  ir,
   onBack,
   scrollRef,
 }: {
@@ -438,6 +465,8 @@ function OptionsPane({
   /** Undefined only if a payload shortened under an open pick — treated as none. */
   seat: LineupCheckSeat | undefined;
   bench: readonly LineupCheckPlayer[];
+  /** The reader's IR moves — an option on IR is one Sleeper will not seat. */
+  ir: IrMoves | null;
   onBack: () => void;
   scrollRef: RefObject<HTMLDivElement | null>;
 }) {
@@ -491,6 +520,7 @@ function OptionsPane({
                 player={option.player}
                 option={option}
                 gapMode="delta"
+                irMark={irMarkFor(option.player.player_id, ir)}
                 selected={option.inSeat}
               />
             ))}
@@ -615,6 +645,7 @@ function SeatRow({
   gap,
   gapMode = "delta",
   demoted = false,
+  irMark = null,
   option,
   selected = false,
   onPress,
@@ -626,6 +657,8 @@ function SeatRow({
   /** Which of {@link GapCell}'s three readings this row's last cell is. */
   gapMode?: GapMode;
   demoted?: boolean;
+  /** What the IR reading says of him — see {@link IrChip}. */
+  irMark?: IrMark | null;
   /** Set in the options pane: the row is a choice, and its delta is the last cell. */
   option?: SeatOption;
   selected?: boolean;
@@ -655,6 +688,7 @@ function SeatRow({
           )}
           {option?.inSeat && <Chip>in seat</Chip>}
           {demoted && <Chip tone="error">sit</Chip>}
+          <IrChip mark={irMark} />
           {/* Read off `move_to`, which the server derived with the same
               `kickoffMoves` the window's count came from — so the badge and the
               count cannot disagree. */}
@@ -698,9 +732,12 @@ function SeatRow({
 function BenchRow({
   player,
   promoted,
+  irMark = null,
 }: {
   player: LineupCheckPlayer;
   promoted: boolean;
+  /** What the IR reading says of him — see {@link IrChip}. */
+  irMark?: IrMark | null;
 }) {
   const name = player.name ?? player.player_id;
 
@@ -718,6 +755,7 @@ function BenchRow({
       marks={
         <>
           {promoted && <Chip>start</Chip>}
+          <IrChip mark={irMark} />
           {player.locked && (
             <span className="relative shrink-0 font-mono text-[length:var(--fs-9)] uppercase tracking-[0.1em] text-[color:var(--billet-label)] lg:order-4 lg:text-[length:var(--fs-10)]">
               <span className="sr-only">Locked — </span>
@@ -855,6 +893,42 @@ function Bar({
       }}
     />
   );
+}
+
+/**
+ * The IR reading's mark on a row, off {@link irMarkFor}: the move Sleeper
+ * blocks on (`off IR`, in the error tone), the move that is open (`→ IR`), or
+ * the plain fact that he is parked (`IR`). Each letter is `aria-hidden` under
+ * a sentence, on `GameChip`'s rule that a bare `IR` announced as "IR" is not a
+ * reading. Nothing for a row the reading says nothing about.
+ */
+function IrChip({ mark }: { mark: IrMark | null }) {
+  if (mark === "off") {
+    return (
+      <Chip tone="error">
+        <span className="sr-only">Not IR-eligible — </span>
+        off IR
+      </Chip>
+    );
+  }
+  if (mark === "to") {
+    return (
+      <Chip>
+        <span className="sr-only">Eligible for </span>
+        <span aria-hidden>{"→ "}</span>
+        IR
+      </Chip>
+    );
+  }
+  if (mark === "on") {
+    return (
+      <Chip>
+        <span className="sr-only">On injured reserve</span>
+        <span aria-hidden>IR</span>
+      </Chip>
+    );
+  }
+  return null;
 }
 
 /** A seat's badge — a move, a verdict, or the holder's own marker. */

@@ -30,6 +30,8 @@ import { compareLineup } from "../projections/optimal.ts";
 import type { RosterPlayer } from "../projections/optimal.ts";
 import { scoreStatLine } from "../projections/score.ts";
 import type { WeekProjections } from "../projections/week.ts";
+import { irReading } from "./ir-eligibility.ts";
+import type { PlayerStatusMap, RosterIds } from "./ir-eligibility.ts";
 
 /** What one league contributes to the week's solve. */
 export type WeekLineupLeague = {
@@ -39,8 +41,11 @@ export type WeekLineupLeague = {
   best_ball: boolean;
   /**
    * The league's own settings blob. Read here for `reserve_slots` and
-   * `taxi_slots` alone — the census's two limits, which some leagues express
-   * only here and others only as `IR`/`TAXI` entries in `roster_positions`.
+   * `taxi_slots` — the census's two limits, which some leagues express only
+   * here and others only as `IR`/`TAXI` entries in `roster_positions` — and
+   * for the six `reserve_allow_*` toggles the IR reading judges designations
+   * against (see `./ir-eligibility`). Null is a league whose settings were
+   * never read, which the IR reading answers null for rather than guessing.
    */
   settings: Record<string, unknown> | null;
   roster_id: number;
@@ -129,17 +134,30 @@ export type WeekLineupOpponent = {
  * `kickoffs` is null where there is nothing honest to order against: a week the
  * schedule publishes no instants for, or a read that failed. It travels to
  * `kickoff_moves` as null — "no answer", never "already in order".
+ *
+ * `statuses` is the stored players map's injury designations for the live
+ * roster's ids, or null where that read failed — which travels to `ir: null`,
+ * "not checked", while the census beside it still answers. It defaults to null
+ * so a caller that has no map to offer (a test of the solve alone) gets the
+ * honest reading rather than an empty one, which would judge every player
+ * unknown.
  */
 export function solveWeekLineup(
   league: WeekLineupLeague,
   board: WeekProjections,
   locked: ReadonlySet<string>,
   kickoffs: ReadonlyMap<string, number> | null,
+  statuses: PlayerStatusMap | null = null,
 ): LineupCheckLeague | null {
   const positions = league.roster_positions;
   if (!positions || positions.length === 0) return null;
 
   const starters = league.starters ?? [];
+  // The live roster's three id sets, computed once and handed to both the
+  // census and the IR reading, so the two count the same players by
+  // construction — an `ir.reserve` one player longer than `ir_count` would be a
+  // tile whose figure and whose names disagree.
+  const live = liveRosterIds(league);
 
   const priced = priceRoster(
     league.players,
@@ -234,7 +252,8 @@ export function solveWeekLineup(
     kickoff_moves: moves === null ? null : moves.length,
     lineup,
     bench,
-    ...rosterCensus(league, positions),
+    ...rosterCensus(live, league.settings, positions),
+    ir: irReading(live, league.settings, statuses, board, locked),
     unknown_slots: comparison.unknown_slots,
   };
 }
@@ -323,30 +342,43 @@ function medianProjection(
  * - **Sleeper's padding is not a player.** `players`, `reserve` and `taxi` are
  *   stored verbatim, `""` and `"0"` entries included, so a raw `.length`
  *   overcounts. The active count is the roster less whatever is parked, since
- *   Sleeper lists a reserved or taxied player in `players` too.
+ *   Sleeper lists a reserved or taxied player in `players` too. The three id
+ *   sets arrive already cleaned — {@link liveRosterIds} — and are the same
+ *   three the IR reading judges, which is what keeps `ir_count` and the
+ *   reading's `reserve` list one population.
  */
 function rosterCensus(
-  league: WeekLineupLeague,
+  live: RosterIds,
+  settings: Record<string, unknown> | null,
   positions: readonly string[],
 ): Pick<
   LineupCheckLeague,
   "roster_count" | "roster_max" | "ir_count" | "ir_max" | "taxi_count" | "taxi_max"
 > {
-  const reserve = realIds(league.reserve);
-  const taxi = realIds(league.taxi);
-  const parked = new Set([...reserve, ...taxi]);
-  const held = realIds(league.roster_players);
+  const parked = new Set([...live.reserve, ...live.taxi]);
 
   const irSlots = positions.filter((slot) => slot === "IR").length;
   const taxiSlots = positions.filter((slot) => slot === "TAXI").length;
 
   return {
-    roster_count: held.filter((id) => !parked.has(id)).length,
+    roster_count: live.held.filter((id) => !parked.has(id)).length,
     roster_max: positions.length - irSlots - taxiSlots,
-    ir_count: reserve.length,
-    ir_max: settingCount(league.settings, "reserve_slots") ?? irSlots,
-    taxi_count: taxi.length,
-    taxi_max: settingCount(league.settings, "taxi_slots") ?? taxiSlots,
+    ir_count: live.reserve.length,
+    ir_max: settingCount(settings, "reserve_slots") ?? irSlots,
+    taxi_count: live.taxi.length,
+    taxi_max: settingCount(settings, "taxi_slots") ?? taxiSlots,
+  };
+}
+
+/**
+ * The live roster's three arrays, padding dropped and deduplicated — the one
+ * reading of them the census and the IR check both take.
+ */
+function liveRosterIds(league: WeekLineupLeague): RosterIds {
+  return {
+    held: realIds(league.roster_players),
+    reserve: realIds(league.reserve),
+    taxi: realIds(league.taxi),
   };
 }
 

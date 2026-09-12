@@ -4,10 +4,11 @@
 
 export {
   getMatchablePlayers,
+  getPlayerInjuryStatuses,
   getPlayerShareRows,
   getPlayersByIds,
 } from "./queries";
-export type { MatchablePlayer } from "./queries";
+export type { MatchablePlayer, PlayerInjuryRow } from "./queries";
 export { PLAYERS_SYNC_VAR, startPlayersScheduler } from "./scheduler";
 export { toPlayerShareSummary, toPlayerSummary } from "./summary";
 export type { PlayerNameRow, PlayerShareRow } from "./summary";

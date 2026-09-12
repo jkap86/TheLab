@@ -516,3 +516,129 @@ describe("solveWeekLineup and the league median", () => {
     assert.equal(solved.median_points, 5);
   });
 });
+
+describe("solveWeekLineup and IR eligibility", () => {
+  const STATUSES = {
+    qb: { name: "Quarter Back", injury_status: null },
+    rb: { name: "Running Back", injury_status: null },
+    wr: { name: "Wide Out", injury_status: null },
+    flexlow: { name: "Flex Low", injury_status: "Out" },
+    flexhigh: { name: "Flex High", injury_status: "IR" },
+    nobody: { name: "No Body", injury_status: null },
+  };
+  const IR_SLOTS = [...SLOTS, "IR", "TAXI"];
+
+  test("no settings is no IR reading, whatever the map says", () => {
+    const solved = solveWeekLineup(league(), board(), NO_LOCKS, null, STATUSES);
+    assert.ok(solved);
+    assert.equal(solved.ir, null);
+  });
+
+  test("the four-argument call still answers, and answers not-checked", () => {
+    // A caller with no map to offer — every existing test of the solve — gets
+    // "not checked" rather than a reading in which every player is unknown.
+    const solved = solveWeekLineup(
+      league({ roster_positions: IR_SLOTS, settings: {} }),
+      board(),
+      NO_LOCKS,
+      null,
+    );
+    assert.ok(solved);
+    assert.equal(solved.ir, null);
+  });
+
+  test("the census and the reading count the same IR players", () => {
+    // Padding and a repeated id are the census's own rule, and the reading is
+    // handed the census's own ids: `reserve` one longer than `ir_count` would
+    // be a tile whose figure and whose names disagree.
+    const solved = solveWeekLineup(
+      league({
+        roster_positions: IR_SLOTS,
+        settings: {},
+        reserve: ["0", "flexhigh", "flexhigh", ""],
+      }),
+      board(),
+      NO_LOCKS,
+      null,
+      STATUSES,
+    );
+    assert.ok(solved);
+    assert.equal(solved.ir_count, 1);
+    assert.equal(solved.ir?.reserve.length, 1);
+    assert.equal(solved.ir?.reserve[0].player_id, "flexhigh");
+    assert.equal(solved.ir?.reserve[0].eligible, true);
+  });
+
+  test("a bench player the league admits is stashable, a taxi player is not", () => {
+    const solved = solveWeekLineup(
+      league({
+        roster_positions: IR_SLOTS,
+        settings: { reserve_allow_out: 1 },
+        // `flexlow` is Out and active; `nobody` is healthy; `flexhigh` is on
+        // IR and stays there.
+        reserve: ["flexhigh"],
+        taxi: ["nobody"],
+      }),
+      board(),
+      NO_LOCKS,
+      null,
+      STATUSES,
+    );
+    assert.ok(solved);
+    assert.deepEqual(
+      solved.ir?.stashable.map((player) => player.player_id),
+      ["flexlow"],
+    );
+    // The same league with the toggle off has nobody the rules admit.
+    const strict = solveWeekLineup(
+      league({ roster_positions: IR_SLOTS, settings: {}, reserve: ["flexhigh"] }),
+      board(),
+      NO_LOCKS,
+      null,
+      STATUSES,
+    );
+    assert.deepEqual(strict?.ir?.stashable, []);
+  });
+
+  test("names come off the board first", () => {
+    const solved = solveWeekLineup(
+      league({ roster_positions: IR_SLOTS, settings: {}, reserve: ["flexhigh"] }),
+      board(),
+      NO_LOCKS,
+      null,
+      STATUSES,
+    );
+    // The board names him `FLEXHIGH`; the map's `Flex High` is the fallback.
+    assert.equal(solved?.ir?.reserve[0].name, "FLEXHIGH");
+  });
+
+  test("a locked candidate is still listed, and says he is locked", () => {
+    const solved = solveWeekLineup(
+      league({
+        roster_positions: IR_SLOTS,
+        settings: { reserve_allow_out: 1 },
+        reserve: ["flexhigh"],
+      }),
+      board(),
+      new Set(["flexlow"]),
+      null,
+      STATUSES,
+    );
+    assert.deepEqual(
+      solved?.ir?.stashable.map((player) => [player.player_id, player.locked]),
+      [["flexlow", true]],
+    );
+  });
+
+  test("a healthy player on IR is named ineligible", () => {
+    const solved = solveWeekLineup(
+      league({ roster_positions: IR_SLOTS, settings: {}, reserve: ["nobody"] }),
+      board(),
+      NO_LOCKS,
+      null,
+      STATUSES,
+    );
+    assert.equal(solved?.ir?.reserve[0].eligible, false);
+    assert.equal(solved?.ir?.reserve[0].status, null);
+  });
+});

@@ -173,6 +173,7 @@ export { getManagerWeekLineups } from "./queries";
 export type { ManagerWeekLineupRow } from "./queries";
 export { solveWeekLineup } from "./week-lineups";
 export type { WeekLineupLeague } from "./week-lineups";
+export type { PlayerStatusMap } from "./ir-eligibility";
 export { gameBoard, solveGametimeLeague } from "./gametime";
 export type { GametimeBoards } from "./gametime";
 

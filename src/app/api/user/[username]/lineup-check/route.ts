@@ -6,6 +6,8 @@ import type {
   ManagerLineupCheckPayload,
 } from "@/shared/contract";
 import { getManagerWeekLineups, solveWeekLineup } from "@/shared/manager";
+import type { PlayerStatusMap } from "@/shared/manager";
+import { getPlayerInjuryStatuses } from "@/shared/players";
 import {
   currentWeek,
   dayLockedPlayers,
@@ -46,7 +48,7 @@ export const dynamic = "force-dynamic";
  * to `getActiveSeason` — and the week always travels back on the payload, so
  * the client reads one answer rather than assuming its own.
  *
- * **Three failures, three different answers**, which is the whole shape of this
+ * **Four failures, four different answers**, which is the whole shape of this
  * handler:
  *
  * - the *database* read fails → 500. It is the list the page is made of.
@@ -56,6 +58,12 @@ export const dynamic = "force-dynamic";
  * - the *schedule* read fails → everything else answers. `getWeekKickoffs`
  *   never throws; an empty map means `kickoff_moves: null` per league and the
  *   locks fall back to the day rule, which is exactly what they degrade to.
+ * - the *injury statuses* read fails → `ir: null` per league. The roster
+ *   census still answers and the tile keeps it, saying only that IR
+ *   eligibility could not be checked. It is a second read of the same
+ *   database as the first, so a failure here is rare and is the pool rather
+ *   than the schema — and a page that lost its IR reading is a page, where
+ *   one that lost its leagues is not.
  */
 export async function GET(
   request: Request,
@@ -135,15 +143,41 @@ async function readLineupCheck(
       return NextResponse.json(empty);
     }
 
+    // The **live** roster union — today's `players`, `reserve` and `taxi`, the
+    // three arrays the census counts — for the IR reading. Deliberately not
+    // `playerIds` below, which is the *week's* roster for the locks: the
+    // contract keeps those two grains apart, and a status read keyed by a past
+    // week's roster would judge players the manager no longer holds.
+    const liveIds = [
+      ...new Set(
+        leagues.flatMap((l) => [
+          ...(l.roster_players ?? []),
+          ...(l.reserve ?? []),
+          ...(l.taxi ?? []),
+        ]),
+      ),
+    ].filter((id) => id && id !== "0");
+
     // The schedule read cannot fail the page — it never throws, and an empty
     // map is the honest "no instants published" its readers spell for
-    // themselves. The projections read can, and does.
+    // themselves. The projections read can, and does. The statuses read is
+    // caught on its own promise rather than by the `catch` below, or a pool
+    // hiccup on the second database read would be reported as the projections
+    // failing and empty the page for it.
     let board: WeekProjections;
     let kickoffs: Map<string, number>;
+    let statuses: PlayerStatusMap | null;
     try {
-      [board, kickoffs] = await Promise.all([
+      [board, kickoffs, statuses] = await Promise.all([
         getWeekProjections(season, week),
         getWeekKickoffs(season, week),
+        getPlayerInjuryStatuses(liveIds).catch((error: unknown) => {
+          console.warn(
+            `[lineup-check] injury statuses unavailable for ${username}:`,
+            error,
+          );
+          return null;
+        }),
       ]);
     } catch (error) {
       console.warn(
@@ -181,7 +215,7 @@ async function readLineupCheck(
 
     const solved: Record<string, LineupCheckLeague> = {};
     for (const league of leagues) {
-      const entry = solveWeekLineup(league, board, locked, instants);
+      const entry = solveWeekLineup(league, board, locked, instants, statuses);
       // Null means the league has no slots on file — nothing to compare a
       // lineup against — so it drops out rather than reporting a zero gap.
       if (entry) solved[league.league_id] = entry;

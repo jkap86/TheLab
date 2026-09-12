@@ -63,6 +63,54 @@ export type LineupCheckSeat = {
   move_to: string | null;
 };
 
+/** One player as the IR check judged him. */
+export type LineupCheckIrPlayer = {
+  player_id: string;
+  /** The board's name first, then the stored map's, then null — never the id. */
+  name: string | null;
+  /** Sleeper's `injury_status` as stored; null is healthy. */
+  status: string | null;
+  /**
+   * Whether the league's rules admit him on IR. Null is "could not say" — the
+   * map has no row for him, or his designation is one this build does not know
+   * — and is never read as either answer.
+   */
+  eligible: boolean | null;
+  /**
+   * His game has kicked off — the same lock {@link LineupCheckPlayer.locked}
+   * carries, for the week on screen. A locked player is not a move anybody
+   * can make, so he is never offered as a stash; the eligibility beside it is
+   * still a fact about his designation and is kept as one.
+   */
+  locked: boolean;
+};
+
+/**
+ * The IR reading for one league, computed on the live roster.
+ *
+ * The counts a card draws from it — how many must come off, how many could go
+ * on, and what the roster looks like after — are arithmetic against the census
+ * beside it and are done on the client (`irMoves`), so this carries the
+ * *judgements* and not the moves: a stash the league has no slot for is still a
+ * true fact about a designation.
+ */
+export type LineupCheckIr = {
+  /** Everyone on IR now, in Sleeper's order, with whether each may stay. */
+  reserve: LineupCheckIrPlayer[];
+  /**
+   * Active players — not on IR, not on taxi — whose designation the league
+   * admits on IR. Every one of them, whether or not there is a slot free and
+   * whether or not his game has kicked off: the list is what the rules say,
+   * and the client's `irMoves` is what leaves the locked ones out.
+   */
+  stashable: LineupCheckIrPlayer[];
+  /**
+   * Roster players whose eligibility could not be judged, on IR or active.
+   * Above zero, a tile that finds nothing wrong is not entitled to say so.
+   */
+  unknown: number;
+};
+
 /** One league's week. */
 export type LineupCheckLeague = {
   roster_id: number;
@@ -213,6 +261,24 @@ export type LineupCheckLeague = {
   ir_max: number | null;
   taxi_count: number;
   taxi_max: number | null;
+
+  /**
+   * Injured reserve on the league's own rules: who is on IR and whether each
+   * may stay, and who on the active roster the league would admit there.
+   *
+   * Read off the same live roster the census above counts — the same three
+   * arrays, so `reserve.length` is `ir_count` by construction — and against
+   * the league's `reserve_allow_*` toggles and each player's stored injury
+   * designation. See {@link LineupCheckIr}.
+   *
+   * **Three nulls, and none of them is a zero.** `ir: null` is "not checked":
+   * the league's settings were never read, or the status read failed. A
+   * player's `eligible: null` is "this one could not be judged" — no row in the
+   * map, or a designation this build does not know. A player's `status: null`
+   * is *healthy*, which is Sleeper's own spelling and, on IR, the fault the
+   * check exists to name.
+   */
+  ir: LineupCheckIr | null;
 
   /**
    * Starting slots this build doesn't recognise, left out of the comparison.
