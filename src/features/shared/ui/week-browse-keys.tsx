@@ -78,9 +78,15 @@ export function WeekPlayersMark() {
 }
 
 /**
- * The lineup checker's key. What its panel answers is which of a week's
- * lineups a player is on and what the seat opposite him did — a start/sit
- * call, made before the games.
+ * The lineup checker's key, and it has **no reader** — kept on
+ * `peekActiveSeason`'s terms, beside gametime's below and now for its reason.
+ *
+ * That page's panel is not reached from a Browse key any more either: it is a
+ * bar at the foot of the console, which reads `Start / sit`. So both legends
+ * survive where they always were — on the bar each page draws — and what these
+ * two constants carry is the argument above about *why* one drawing takes two
+ * words, which is still true of the two panels. They come straight back the
+ * day either page wants a key as well as a bar.
  */
 export const START_SIT_BROWSE_KEYS: readonly RackDrawerKey[] = [
   { kind: "week", label: "Start/Sit", icon: <WeekPlayersMark /> },

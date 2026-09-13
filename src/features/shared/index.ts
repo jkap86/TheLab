@@ -68,6 +68,15 @@ export {
   useSharesTab,
   type SharesTab,
 } from "./shares-console-open";
+// Whether the lineup checker's start/sit console is up — one boolean on the
+// device, on the stat board's own courtesy. A key of its own rather than a
+// share of the shares console's: they are two panels on two pages answering
+// two questions, and a reader who works with one raised has said nothing about
+// the other. See the module.
+export {
+  storeStartSitConsoleOpen,
+  useStartSitConsoleOpen,
+} from "./start-sit-console-open";
 // Whether an open card keeps its summary readings on screen — one boolean for
 // both league cards, and the fold and the key that read it. See the module.
 export {

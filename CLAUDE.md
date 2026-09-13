@@ -6292,6 +6292,12 @@ of it" in **light** mode, where it is the one dark object on a near-white row.
 
 ### Starters and Opponents
 
+**Superseded twice, and the second time takes the drawer with it.** The panel
+is now a *console* at the foot of this page rather than a modal side drawer —
+see The start/sit panel became a bottom console, below. What is kept in this
+section and the one it already cites is everything about the *rules*, all of
+which travelled unchanged.
+
 **Superseded — the two panels are one.** See The two panels became one, under
 Gametime, which merges them into a single drawer listing every player once with
 four readings beside him. What is kept here is everything about the *rules*: the
@@ -6481,6 +6487,185 @@ eight legal bench candidates each is a long page, and there is no cap), how
 often the mixed-scoring rule leaves the `Proj` window on an em dash across a
 real 113-league account, and whether `opponent_lineup` is populated as widely as
 `opponent_points` already is.
+
+### The start/sit panel became a bottom console
+
+The panel opened as a **modal side drawer**: a `BrowseDock` cap pinned
+bottom-right raised `WeekSharesDrawer`, a `<dialog>` docked left over the league
+grid. It is the bottom console `/manager` and `/gametime` already draw — a
+billet bar fixed to the foot of the page's own `max-w-6xl` shell, expanding
+upward into a list beside the start/sit decisions, with **no backdrop and no
+focus trap**. Applied from a design handoff. **Nothing on the wire moved** — no
+route, no query, no contract type, no payload field, no migration — and **no
+token was added**: every surface in it is a constant in `console-chrome.ts` or a
+token `globals.css` already carries with its light half.
+
+**What was wrong with the drawer was not its content but what a modal *is*.**
+The whole point of picking a row here is that it narrows the league grid, and a
+backdrop over that grid meant the reader pressed a subject and then dismissed
+the panel to see what it had done. Non-modal, the grid re-filters,
+`SubjectTokens` grows a chip and the header's projected record, its dial and its
+attention strip all recompute while the panel is still up. That is the entire
+argument for the part, and it is the argument `shares-console.tsx`'s module note
+already makes one page over.
+
+**The content travelled unchanged and that is most of the file.** The fold
+(`weekTwoSidedShares`), the four readings, `pressReading`'s two-edits-in-one
+press, the decisions wiring, the two denominators and the population rule are
+the drawer's own, lifted. What is new is the case, the bar and the list — which
+are `SharesConsole`'s, so a reader who has used one has used the other.
+
+**No cap channel on the bar**, which is the one thing this console does not
+inherit. The manager console's bar carries `Players` / `Leaguemates` caps in a
+channel; start/sit is one population over one week, so the channel has nothing
+to switch between and a channel holding one cap is a control that cannot be
+pressed. The bar carries the title, the readout, the `Held` count and the caret.
+
+**`Fielded` is the sixth sort cap and it is no column at all** — the sum of the
+four counts, and therefore exactly what a press on a row narrows to, which is
+what an unrefined `week` subject means. So the rail can order the list by the
+thing the row's own press is about. `Start` stays the default, because the
+panel's first question is the reader's own lineups and it is the order both the
+drawer (`defaultSort="start"`) and `weekTwoSidedShares` already return.
+
+**A pick is not a narrowing**, which is the one behaviour that differs from the
+drawer: there, pressing a row *was* the subject. Here it opens the decisions
+pane and the `Narrow grid` key inside it edits the grid — which keeps "what am I
+looking at" and "what is the grid filtered to" two states a reader can hold at
+once. It is `SharesConsole`'s own grammar.
+
+**The disclosure key is sized by container width rather than by pointer**, which
+is `SharesDrawer`'s geometry and is what answers the handoff's 44px floor
+without misaligning anything: 44px below `@md`, where a thumb is the input and
+the row has already wrapped to two lines, and 24px wide above it, where the head
+strip is on screen and its trailing spacer has to match. `ReadingKeys` is
+mounted unchanged on its `line` arm — the handoff names that file as
+unchanged, and that arm's own note records at length that it does not clear the
+floor and why there are two.
+
+**The latch survives the collapse and is the store's.** `entries` and
+`weekSubjectRolls` are a walk over every player of every roster, so the page
+builds neither until the console has been raised once — and never unbuilds them,
+because a picked subject keeps narrowing the grid after the bar comes down.
+`start-sit-console-open.ts` is the flag, on `shares-console-open`'s terms, and a
+**key of its own**: `thelab:shares-console` says whether a reader wants the
+*shares* panel up over a season's grid and this says whether they want a
+*week's* calls up over the checker's, which are two questions.
+
+**What the page lost**: `BrowseDock`, `START_SIT_BROWSE_KEYS` and
+`WeekSharesDrawer`. All three now have **no caller anywhere** — the handoff says
+the drawer "stays in the tree for gametime", which was true when it was written
+and is not now: that page merged the same panel into its stat board. All three
+are kept and noted dead where they are declared, on `peekActiveSeason`'s terms,
+and each note says what it carries that its replacement does not — the dock, why
+a key that acts on the page belongs over the page rather than in the rack; the
+drawer, the *drawer* arrangement of this panel and its `NarrowingChip` deck,
+which a page with nothing behind it to watch would want.
+
+#### Two edits to `LeagueRow`, and the second is the first's consequence
+
+The designer's own: **the seat label and the `Direct`/`Via FLEX` chip come off**,
+so a league call is the league, the `Started`/`Benched` tag and the delta. A
+counterpart card is read for which way the call went and what it cost, and the
+mechanism by which two players could have swapped is a fact about the league's
+lineup rather than about the decision.
+
+**`DecisionRow` keeps `seat`, `seat_index` and `route` regardless**, and they
+are not dead: `route` is what decides a row exists at all — a pairing with no
+seat that takes both players is not a start/sit call and `decisionsFor` never
+emits one — and all three are pinned by `start-sit-decisions.test.ts`. What
+changed is what is drawn, not what is known.
+
+**And the row's `@md` wrap went with them**, which the handoff does not ask for
+and which is forced twice over. Its premise was four readings crowding a 284px
+row into leaving the name 44px; the three left are ~130px and the name shares
+the line comfortably, which is what the prototype draws. And the arm could not
+have fired anyway: `@md` is 28rem and the pane that holds this is 26rem, so a
+`basis-full` kept below it would have put **every** league call on two lines at
+every width.
+
+#### Verified
+
+Driven over CDP against `next dev` with no `DATABASE_URL` — the boot hook skips
+migrations and the four loops log their refusals, which is the server coming up
+healthy against nothing — through a temporary `/preview` route mounting the
+**real** `StartSitConsole` over the **real** `weekSubjectRolls` /
+`matchesSubjects` chain and a live league grid, so the narrowing is what it
+claims; then deleted, and the real `/lineupchecker/[username]` driven after it.
+The mechanics are the ones this file records: `--no-proxy-server`, `localhost`
+rather than `127.0.0.1`, a phone viewport from
+`Emulation.setDeviceMetricsOverride` with `mobile: true`, `data-theme` **and**
+`localStorage` (cleared *before* hydration — navigate, clear, navigate again),
+`--disable-features=OverlayScrollbar`, the
+`--blink-settings=availablePointerTypes=4,…` flags as a template literal,
+`--no-sandbox`, a client-component harness, a CDP client over Node's own
+`WebSocket`, and a fresh `--remote-debugging-port` per run.
+
+**Three mechanics are this pass's own and each cost a run.** `innerText`
+reflects `text-transform`, so every text match against this console reads
+uppercase — four checks failed on the case of `Narrow grid` alone. A row below
+the scroller's fold has a rect outside the visible area, so a synthetic press at
+those coordinates lands on whatever is actually there: `scrollIntoView` before
+reading the box. And **a backslash inside a JS template literal is eaten before
+the browser sees it**, so a `\(` in an injected regex arrives unterminated and a
+`\s` arrives as a literal `s` — plain string matching instead.
+
+**77 of 77 checks pass on the preview and 9 of 9 on the real page**, at 1280,
+1024, 768 and 390 in both schemes. Shut, the section is `fixed` at the foot,
+**52px** (48 below `sm`), `pointer-events: none` with the gutter clickable
+through to the page, and **zero rows in the document**. Open, it is **558px of a
+900 viewport** — 62dvh to the pixel — and **768px of 844** on the phone, the
+fold less `--rack-clear`'s own 76, with the case at the shell's own 1152.
+**Zero `<dialog>`s anywhere**: the panel is non-modal end to end.
+
+Every arm landed. The readout reads `4 of 4 leagues · 3 with an opponent · week
+3` — the second denominator legitimately lower, one fixture league having no
+opponent. Heads read `Name · Start · Bench · Opp St · Opp Bn · Proj` and the
+cells measure **56/56/56/56/60px**. A row press opened the pane with the key
+reading `Narrow grid` and **left the grid at 4 of 4** — a pick is not a
+narrowing — and pressing the key took the grid to **3 of 4** (`L1, L2, L4`)
+**live, with the panel still up and no backdrop**, which is the whole of what the
+part is for. A tray key lit its own cell and no other, put `opp bench held` on
+the row's subline, and refined the narrowing to 0 leagues, correctly, that row
+having no opposing bench. Escape collapsed it and the selection outlived it with
+the bar's `Held` well still admitting to it; reopening cleared the query and the
+pick and kept the selection; the open flag survived a reload. At 390 the pane
+replaces the list, the bar grows `‹ List`, and the key returns to it. Under
+`prefers-reduced-motion: reduce` the height transition and the pip's pulse both
+compute to `none`. At every width and in both schemes:
+`document.documentElement.scrollWidth` inside the viewport, **zero** unclipped
+elements past it, **nothing clipped inside the console**, exactly one `<h1>`, and
+no console output of any kind.
+
+On the real page: the console at the foot at both widths, **zero** drawer
+triggers and zero `<dialog>`s — the dock is gone — and the page root and the
+case resolving the **same** `--startsit-bar-h` (3.25rem / 3rem) with the bar
+rendering at exactly it, which is the one-spelling claim end to end.
+
+2,645 unit tests pass (one more, the store's parser); `check:full` from a cleared
+`.next` — the production build, then lint, typecheck and the suite — is clean.
+
+**One real defect was found by the render and fixed.** The Sort rail took
+`lg:flex-none lg:rounded-full`, copied from `SharesConsole`'s — which offers at
+most four caps and fits its ledge on one line. Six caps and a legend are ~540px
+against the 531 a 1024-wide list column leaves, and at `flex-none` a rail cannot
+shrink below its own one-line max-content: measured, it ran 9px past the ledge
+and the case's `overflow-hidden` took `Fielded` off the screen with nothing
+saying so. It is shrinkable now and keeps its 20px lozenge at every width, since
+a wrapped rail is two lines tall and a pill drawn round one is wrong. It is the
+stat board's own finding about its Sort track, one panel over.
+
+**Not verified against real data**, which is the gap to close first: the fixtures
+are four invented leagues over eight players and no database was reachable from
+here. Four things a render cannot check — what the fold and the row list
+actually cost on a real account, where the list runs to ~1,500 rows against this
+harness's eight and the page re-renders per line of the leagues stream; whether
+readers find `Narrow grid` at all, which is the one behaviour the console adds a
+step to and the only thing a measurement cannot settle; whether the `line` arm's
+sub-44px reading keys are a real problem on a phone, which its own note has
+argued about since it was written and which this pass deliberately did not
+change; and how the six-cap Sort rail reads when it wraps to two lines on a real
+1024 laptop, which the fixtures' short ledge does not exercise.
 
 ### IR, on the league's own rules
 

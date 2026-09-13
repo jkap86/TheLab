@@ -1,7 +1,6 @@
 "use client";
 
 import type { DecisionGroup, DecisionRow } from "../start-sit-decisions";
-import { slotLabel } from "../format";
 import { CONSOLE_KEY_PILL, CONSOLE_WINDOW } from "../console-chrome";
 import { Scanlines } from "./card-plate";
 
@@ -32,16 +31,22 @@ import { Scanlines } from "./card-plate";
  * looking at. `decisionsFor` deliberately does not name it: a delta there is one
  * figure less another, and the word for it belongs where the figure was chosen.
  *
- * The slot labels are `slotLabel`'s, not a table of their own. This file kept a
- * byte-identical copy of that record until it moved here, which is one more
- * chance for `SUPER_FLEX` to read `SF` on a seat chip and `SUPER_FLEX` on the
- * route pill beside it.
+ * **A league row is the league, the call and what it was worth — and that is
+ * all of it.** It carried the seat (`RB2`) and a `Direct`/`Via FLEX` chip
+ * beside them until the designer took both off: a counterpart card is read for
+ * *which way the call went and what it cost*, and the mechanism by which the
+ * two players could have swapped is a fact about the league's lineup rather
+ * than about the decision. Four readings on a row inside a 26rem pane left the
+ * league name — the one thing that says *where* — competing with three chips
+ * for it.
+ *
+ * **`DecisionRow` keeps `seat`, `seat_index` and `route` regardless**, and they
+ * are not dead: `route` is what decides a row exists at all — a pairing with no
+ * seat that takes both players is not a start/sit call and `decisionsFor` never
+ * emits one — and all three are pinned by `start-sit-decisions.test.ts`. What
+ * changed is what is drawn, not what is known. `slotLabel` keeps its other
+ * callers; this file is no longer one of them.
  */
-
-/** `RB2` where the league starts two, `TE` where it starts one. */
-function seatLabel(row: DecisionRow): string {
-  return `${slotLabel(row.seat)}${row.seat_index ?? ""}`;
-}
 
 /**
  * The deck that replaces the search and sort bands while a player is open.
@@ -249,18 +254,25 @@ function CounterpartCard({
   );
 }
 
-/** One league's call: where, which way, through what, and what it was worth. */
+/** One league's call: where, which way it went, and what it was worth. */
 function LeagueRow({ row }: { row: DecisionRow }) {
   return (
-    // **Below `@md` the row wraps and the league name takes the line above**,
-    // which a render at 390 forced rather than the handoff asking for it: the
-    // chip, the seat, the route and the delta are ~240px of a 284px row, which
-    // leaves the name 44px against the 122px it wants — every league read as
-    // six characters and an ellipsis. It is the same answer `ShareRow` gives
-    // one panel up, and the height is a floor rather than a fixed 30px so a
-    // wrapped row can be two lines without its own contents overflowing it.
-    <li className="flex min-h-[30px] min-w-0 flex-wrap items-center gap-x-2 gap-y-0.5 border-t border-active/9 py-1 @md:flex-nowrap @md:py-0">
-      <span className="min-w-0 flex-1 basis-full truncate font-mono text-[length:var(--fs-10)] uppercase tracking-[0.12em] text-readout-line @md:basis-auto">
+    // **One line, with the wrap as a safety valve rather than as the layout.**
+    // The name took a line of its own below `@md` for as long as the row
+    // carried four readings: the chip, the seat, the route and the delta were
+    // ~240px of a 284px row, which left it 44px against the 122px it wants.
+    // Two of the four are gone, so the three left are ~130px and the name
+    // shares the line comfortably — which is what the design draws, and what
+    // the `@md` arm could not have delivered anyway: the pane that holds this
+    // is 26rem, under the 28rem that arm needs, so a `basis-full` kept here
+    // would put *every* league call on two lines at every width.
+    //
+    // `flex-wrap` stays, unqualified, for the case the widths do not cover —
+    // a long league name beside a `Benched` tag on a narrow pane wraps rather
+    // than crushing the tag. The height is a floor rather than a fixed 30px,
+    // so a wrapped row can be two lines without its own contents overflowing.
+    <li className="flex min-h-[30px] min-w-0 flex-wrap items-center gap-x-2 gap-y-0.5 border-t border-active/9 py-1">
+      <span className="min-w-0 flex-1 truncate font-mono text-[length:var(--fs-10)] uppercase tracking-[0.12em] text-readout-line">
         {row.league_name}
       </span>
 
@@ -275,20 +287,6 @@ function LeagueRow({ row }: { row: DecisionRow }) {
         }`}
       >
         {row.started ? "Started" : "Benched"}
-      </span>
-
-      <span className="w-8 shrink-0 text-right font-mono text-[length:var(--fs-9)] uppercase tracking-[0.12em] text-readout-label">
-        {seatLabel(row)}
-      </span>
-
-      <span
-        className={`shrink-0 rounded-full border px-[0.4375rem] py-0.5 font-mono text-[length:var(--fs-9)] uppercase tracking-[0.12em] ${
-          row.route.direct
-            ? "border-active/40 text-active"
-            : "border-foreground/16 text-foreground/55"
-        }`}
-      >
-        {row.route.direct ? "Direct" : `Via ${slotLabel(row.route.via)}`}
       </span>
 
       {/* **Lit only where the lineup left points behind.** A positive delta is

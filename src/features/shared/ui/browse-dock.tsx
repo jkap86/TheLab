@@ -45,6 +45,19 @@ import type { RackDrawerKey } from "./rack-controls";
  *
  * `dock-scroll.ts` travelled with it and had to: a module in `features/shared`
  * may not reach into a sibling feature for its own rule.
+ *
+ * **It has no caller, and is kept on `peekActiveSeason`'s terms.** All three
+ * pages that drew one have since taken their panel down to the foot of the
+ * shell as a bar: `/manager` and `/gametime` first, and the lineup checker
+ * with its start/sit console — and a bar that is always on screen makes a
+ * floating key a second door to the same panel, which is
+ * `shares-console.tsx`'s own note ("`BrowseDock` on this page … is what the
+ * bar replaces"). What is kept with it is the argument above, which is the
+ * thing a later reader would otherwise reconstruct: why a key that acts on the
+ * page belongs over the page rather than in the app's own furniture, and why a
+ * translucent housing is what separates the two. It comes back whole the day a
+ * page wants a key rather than a bar — a panel too small to earn a bar, or one
+ * a reader reaches for rather than works beside.
  */
 export function BrowseDock({
   keys,

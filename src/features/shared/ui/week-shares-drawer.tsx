@@ -52,6 +52,24 @@ import { leaguesLeft, NarrowingChip, ReadingKeys } from "./week-readings";
  * tray behind each row's disclosure key refines that to any union of started,
  * benched, opposing-started and opposing-benched. See {@link Subject.readings}
  * for why union is the only operator with anything to say here.
+ *
+ * ## No caller, and kept
+ *
+ * Both tools that mounted this have taken the same content down to the foot of
+ * their own console as a bar: gametime merged it into its stat board, and the
+ * lineup checker draws `StartSitConsole`. What replaced it is not its *content*
+ * — the fold, the four readings, `pressReading`, the decisions wiring and the
+ * two denominators all travelled into the console as they stood — but what a
+ * modal *is*: picking a row here exists to narrow the league grid, and a
+ * backdrop over that grid meant the reader pressed a subject and then dismissed
+ * the panel to see what it had done.
+ *
+ * It is kept on `peekActiveSeason`'s terms, and what it carries that the
+ * consoles do not is the *drawer* arrangement of this panel — `SharesDrawer`'s
+ * `detail` slot, its `deckControls` chips and `NarrowingChip`/`leaguesLeft`,
+ * which have no other reader. A page that wants these four readings over a list
+ * it does **not** narrow — where a modal costs nothing, because there is
+ * nothing behind it to watch — takes this rather than a third console.
  */
 export function WeekSharesDrawer({
   open,

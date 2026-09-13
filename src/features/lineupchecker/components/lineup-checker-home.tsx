@@ -13,7 +13,6 @@ import {
   DEFAULT_LEAGUE_FILTERS,
   filterSummary,
   BILLET_KEY_CHROME,
-  BrowseDock,
   CONSOLE_KEY,
   CONSOLE_METAL_TRACK_SM,
   FlaskDefs,
@@ -27,9 +26,7 @@ import {
   removeSubject,
   storeLeagueFilters,
   subjectCount,
-  WeekSharesDrawer,
   SubjectTokens,
-  toggleSubject,
   toggleSummaryReadings,
   type LeagueSubjects,
   type Subject,
@@ -41,8 +38,8 @@ import {
   useActiveCard,
   useLeagueFilters,
   useSummaryReadings,
+  useStartSitConsoleOpen,
   useUrlParam,
-  START_SIT_BROWSE_KEYS,
   weekSubjectRolls,
   WeekStepper,
   writeQueryParam,
@@ -62,6 +59,7 @@ import {
 import { weekSummary } from "../helpers/week-summary";
 import { AttentionStrip } from "./attention-strip";
 import { LineupCheckCard, LineupMarkDefs } from "./lineup-check-card";
+import { StartSitConsole, START_SIT_BAR_H } from "./start-sit-console";
 import { WeekSummary } from "./week-summary";
 
 /** Stable empty answer, so a render before the check lands hands the memos below
@@ -247,13 +245,28 @@ function Checker({
   // three. See `features/shared/league-filters-store`.
   const filters = useLeagueFilters();
   const setFilters = storeLeagueFilters;
-  // The drawers' half of the narrowing, on `LeaguesHome`'s terms. `opened` is a
-  // latch rather than the open flag: a picked subject keeps narrowing the grid
-  // after its drawer closes, and both panels keep their own search and scroll
-  // once they have been opened.
+  // The console's half of the narrowing, on `LeaguesHome`'s terms.
   const [subjects, setSubjects] = useState<LeagueSubjects>(NO_SUBJECTS);
-  const [drawer, setDrawer] = useState<Subject["kind"] | null>(null);
-  const [opened, setOpened] = useState<ReadonlySet<Subject["kind"]>>(new Set());
+  /**
+   * **Neither `entries` nor the roll maps are built until the console has been
+   * raised**, which is `/api/trades/facets`' own bargain: a reader who never
+   * presses the bar pays nothing for the panel. Both are a walk over every
+   * player of every roster on the account, and `matchesSubjects` returns true
+   * without asking the resolver while the selection is empty — so before the
+   * first press there is nothing to answer for.
+   *
+   * **A latch rather than the open flag**, and that distinction is the whole of
+   * why it is a second piece of state: a picked subject keeps narrowing the
+   * grid after the console comes down, and the predicate behind it still needs
+   * the maps. So this follows the stored flag up and never back.
+   *
+   * It is read here rather than left inside the console because the console
+   * does not own either fold — the page does, and the grid's own narrowing
+   * reads them. It is the manager page's own arrangement, one tool over.
+   */
+  const [browsed, setBrowsed] = useState(false);
+  const consoleOpen = useStartSitConsoleOpen();
+  if (consoleOpen && !browsed) setBrowsed(true);
 
   const { payload: check, pending: checkPending, reread } = useLineupCheck(
     username,
@@ -270,18 +283,6 @@ function Checker({
     () => leagues.filter((league) => matchesFilters(league, filters)),
     [leagues, filters],
   );
-
-  /**
-   * **Neither the entries nor the roll maps are built until a drawer has been
-   * opened**, which is the latch's second job and `/api/trades/facets`' own
-   * bargain: a reader who never presses a Browse key pays nothing for the
-   * panels. Both are a walk over every player of every roster on the account,
-   * and `matchesSubjects` returns true without asking the resolver while the
-   * selection is empty — so before the first press there is nothing to answer
-   * for. The latch never goes back, so a picked subject that outlives its
-   * drawer still narrows.
-   */
-  const browsed = opened.size > 0;
 
   /**
    * One league's contribution to a week fold: the league row the page draws and
@@ -398,27 +399,20 @@ function Checker({
   // where the same pair sits for the same reason.
   const { close: closeCard } = card;
 
-  // Latch and open in one handler — never during render. It is a `useCallback`
-  // because it is `BrowseDock`'s `onOpen`, and this page re-renders once per
-  // line of the leagues stream: a fresh identity each time would re-render the
-  // dock on every one of them. It used to be the rack seam that required it,
-  // where a new identity re-published and set an ancestor's state in a loop —
-  // the same rule at a much lower price, which is what moving the keys down
-  // into the page bought.
+  // **Expanding the console closes the open card**, on `LeaguesHome`'s argument
+  // and the drawer's before it: a row picked in there narrows the grid, and a
+  // parked card *is* the screen — the page is locked and every league but the
+  // open one is `display: none`, so there is no grid on screen to be narrowed.
+  // A press with no card open is a no-op on that half.
   //
-  // **It closes the open card first**, on `LeaguesHome`'s argument and for the
-  // same drawers one grain over: Starters and Opponents pick a subject, a
-  // subject narrows the grid, and a parked card *is* the screen — the page is
-  // locked and every league but the open one is `display: none`, so there is
-  // no grid on screen to be narrowed. A press with no card open is a no-op.
-  const openDrawer = useCallback(
-    (kind: Subject["kind"]) => {
-      closeCard();
-      setOpened((prev) => (prev.has(kind) ? prev : new Set(prev).add(kind)));
-      setDrawer(kind);
-    },
-    [closeCard],
-  );
+  // It is a `useCallback` because this page re-renders once per line of the
+  // leagues stream and the console is `memo`-sensitive all the way down; a
+  // fresh identity each time would reach every row of a thousand.
+  //
+  // The **latch** is deliberately not set here. It follows the stored flag
+  // during render above, which is the one place that also catches a console
+  // that came up from a stored `open` rather than from a press.
+  const expandConsole = useCallback(() => closeCard(), [closeCard]);
 
   // **Both are taken over the narrowed list**, the same argument
   // `seasonSummary` reverses itself on: a reader who has filtered to dynasty is
@@ -463,37 +457,10 @@ function Checker({
   const name = user ? user.display_name || user.username : username;
 
   return (
-    <div className="relative">
-      {/*
-        **The page's Browse key, pinned to the bottom-right of the viewport.**
-
-        It was published up into the app rack, and what moves it down here is
-        the argument the rack itself already makes about this kind of key: it
-        is the only thing up there that acts on the page *underneath* it, where
-        the brand link and the tool tray navigate and the tool-name readout
-        only reports. Pinned to the viewport it is in thumb reach at any scroll
-        depth, which is what the rack's own pinning was for, one corner over —
-        and `/manager` has drawn its own pair this way since the dock was
-        built. Two pages listing the same leagues should not answer the same
-        question from two different corners.
-
-        **First in the tree, and that is deliberately not the last child the
-        handoff asks for.** Where it is drawn and where it sits in the tab
-        order are two questions, and a `fixed` part is what lets them be
-        answered separately. This key is the page's exit, and in the rack a
-        keyboard reader reached it immediately; rendered where it is drawn it
-        would sit behind a hundred league cards and a modal drawer, which is a
-        reach this change would be *introducing*. So the DOM says what the rack
-        said and the stylesheet puts it where the design does — `LeaguesHome`'s
-        own decision, on the page the handoff names as the pattern to follow.
-      */}
-      <BrowseDock
-        keys={START_SIT_BROWSE_KEYS}
-        drawer={drawer}
-        onOpen={openDrawer}
-        parked={card.parked}
-        chromeClass={card.chromeClass}
-      />
+    /* `START_SIT_BAR_H` on the root rather than on the console alone: the
+       league grid's own bottom margin has to clear the bar, and both read the
+       one declaration. See the constant. */
+    <div className={`relative ${START_SIT_BAR_H}`}>
       {/* The flask's gradients and its clip, once for the whole page — see
           `FlaskDefs`, and `LineupMarkDefs` a few lines down, which is the same
           arrangement for the cleared mark.
@@ -726,7 +693,18 @@ function Checker({
               <ul
                 ref={listRef}
                 {...card.shellProps}
-                className="relative m-0 grid list-none grid-cols-1 gap-[1.125rem] p-0 [overflow-anchor:none]"
+                /* **A margin rather than padding**, and the difference is what
+                   the park does to each. The collapsed bar is ~52px of fixed
+                   chrome over the foot of the page, so the last card needs
+                   clearance below it — but while a card is parked
+                   `useActiveCard` writes this list's `height` from a
+                   measurement, and padding inside a border-box height comes out
+                   of the card's own room. The same write zeroes the margin,
+                   which is exactly right: a parked card is the screen, the
+                   console stands down with the rest of the page's chrome, and
+                   there is nothing left to clear. It is `leagues-home.tsx`'s
+                   own figure for its own bar. */
+                className="relative m-0 mb-[5.5rem] grid list-none grid-cols-1 gap-[1.125rem] p-0 [overflow-anchor:none]"
               >
                 {visible.map((league) => (
                   <LineupCheckCard
@@ -752,28 +730,40 @@ function Checker({
         </>
       )}
 
-      {/* Mounted once it has been opened, and kept: a closed drawer is
-          `open={false}`, not unmounted, so its search, its scroll and the
-          decisions view a reader was inside survive being shut. It counts over
-          `entries` — the league-filtered, subject-unnarrowed list — and the
-          readout's denominator is `leagues.length`, the account's own total. */}
-      {opened.has("week") && (
-        <WeekSharesDrawer
-          open={drawer === "week"}
-          onClose={() => setDrawer(null)}
-          entries={entries}
-          week={check?.week ?? null}
-          leagueTotal={leagues.length}
-          filterSummary={narrowing ? filterSummary(filters) : null}
-          /* The projection: this page's own figure, and the one every card on
-             it prints. See the `entries` adapter. */
-          figureLabel="Proj"
-          pending={check === null}
-          subjects={subjects}
-          onToggle={(s) => setSubjects((prev) => toggleSubject(prev, s))}
-          onSubjects={setSubjects}
-        />
-      )}
+      {/*
+        **The start/sit console, at the foot of the page's own shell.**
+
+        It replaces a `BrowseDock` key and the modal `WeekSharesDrawer` it
+        opened, and what was wrong with that pair was not its content but what a
+        modal *is*: picking a row here exists to narrow the league grid, and a
+        backdrop over that grid meant the reader pressed a subject and then
+        dismissed the panel to see what it had done. The console is non-modal,
+        so the grid re-filters, `SubjectTokens` grows a chip and the header's
+        projected record and attention strip recompute while the panel is still
+        up. See the component's own note, and `SharesConsole`'s before it.
+
+        **Mounted unconditionally** — there is no `browsed` gate around it,
+        because the bar *is* the control and a page that only drew one once it
+        had been pressed would have nothing to press. What the latch gates is
+        the two folds behind it, which is where the cost actually is.
+
+        `entries` is the population a selection is made *against*, never the one
+        it leaves — see the console's own note, and `weekTwoSidedShares`.
+      */}
+      <StartSitConsole
+        entries={entries}
+        week={check?.week ?? null}
+        leagueTotal={leagues.length}
+        filterSummary={narrowing ? filterSummary(filters) : null}
+        /* The projection: this page's own figure, and the one every card on it
+           prints. See the `entries` adapter. */
+        figureLabel="Proj"
+        pending={check === null}
+        subjects={subjects}
+        onSubjects={setSubjects}
+        onExpand={expandConsole}
+        chromeClass={card.chromeClass}
+      />
     </div>
   );
 }
