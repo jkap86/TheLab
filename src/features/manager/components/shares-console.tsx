@@ -1309,21 +1309,34 @@ function Ledge({
         ))}
       </CapRail>
 
-      {/* The facet tray rides as its own key, unchanged — see `PlayerFilters`.
-          It is `basis-full` inside this wrapping row, so it opens onto a line
-          of its own rather than squeezing the rails beside it. */}
+      {/* The facet tray rides as its own key — see `PlayerFilters`. Three rules
+          keep a shut tray from costing the list anything, and each was a bug:
+
+          - **`basis-full` only at `lg`.** It is what puts the tray on a line of
+            its own in the wrapping row; below `lg` the ledge is a *column*, so
+            the same basis is 100% of its height — indefinite, so read as the
+            tray's content height — and a shut tray stood at its full open
+            height (378px), invisible, pushing the list down under it.
+          - **The tray is always last** (`order-last`), so the one gap its
+            negative margin cancels is the one above it, at both widths.
+          - **The margin is each arm's own gap** — `gap-1.5` in the column,
+            `gap-2` in the row — so a shut tray leaves no stripe behind.
+
+          The orders are on the key and the tray themselves: a `contents`
+          wrapper is not a flex item, so an `order` on one applies to nothing. */}
       {isPlayers && (
-        <span className="contents lg:order-5">
-          <PlayerFilters
-            players={population}
-            filters={filters}
-            onChange={onFilters}
-            ageBounds={ageBounds}
-            classBounds={classBounds}
-            open={trayOpen}
-            onToggleOpen={onToggleTray}
-          />
-        </span>
+        <PlayerFilters
+          players={population}
+          filters={filters}
+          onChange={onFilters}
+          ageBounds={ageBounds}
+          classBounds={classBounds}
+          open={trayOpen}
+          onToggleOpen={onToggleTray}
+          keyClassName="lg:order-5"
+          trayClassName="order-last lg:basis-full"
+          trayClosedClassName="-mt-1.5 lg:-mt-2"
+        />
       )}
       {isPlayers && facetCount > 0 && (
         <button

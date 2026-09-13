@@ -50,6 +50,9 @@ export function PlayerFilters({
   classBounds,
   open,
   onToggleOpen,
+  keyClassName = "",
+  trayClassName = "",
+  trayClosedClassName = "",
 }: {
   /** The unfiltered population — every count on screen is folded over it. */
   players: readonly PlayerShare[];
@@ -59,6 +62,23 @@ export function PlayerFilters({
   classBounds: Span;
   open: boolean;
   onToggleOpen: () => void;
+  /**
+   * Where the key and the tray sit in the caller's row — an `order`, a basis.
+   *
+   * **The key and the tray are two flex items of the caller's container**, so
+   * their layout is the caller's to state and has to land on the items
+   * themselves. It used to ride a `display: contents` wrapper at the call site,
+   * which is exactly where it cannot work: a `contents` box is not a flex item,
+   * so its `order` applies to nothing and the key sorted to the front of the
+   * ledge, alone on a line above the search.
+   */
+  keyClassName?: string;
+  trayClassName?: string;
+  /**
+   * What the tray carries only while shut — the negative margin that cancels
+   * the caller's gap above it, which only the caller knows the size of.
+   */
+  trayClosedClassName?: string;
 }) {
   const trayId = useId();
   const active = activeFilterCount(filters, ageBounds, classBounds);
@@ -84,17 +104,22 @@ export function PlayerFilters({
 
   return (
     <>
-      <FiltersKey open={open} count={active} onPress={onToggleOpen} controls={trayId} />
+      <FiltersKey
+        open={open}
+        count={active}
+        onPress={onToggleOpen}
+        controls={trayId}
+        className={keyClassName}
+      />
       {/* The measured-height shell, now `features/shared`'s — the leaguemate
-          panel's expanded row is its second reader. The basis is what puts the
-          tray on a line of its own inside the deck's wrapping search row (see
-          the note there), and the negative margin it takes while shut is what
-          cancels that line's gap. */}
+          panel's expanded row is its second reader. Its basis, its place and
+          the negative margin it takes while shut are the caller's: they are
+          facts about the caller's row and its gap, not about the tray. */}
       <CollapseTray
         id={trayId}
         open={open}
-        className="basis-full"
-        closedClassName="-mt-[0.3125rem]"
+        className={trayClassName}
+        closedClassName={trayClosedClassName}
       >
         <div className={`${CONSOLE_WELL} flex flex-col gap-[0.4375rem] p-2`}>
           <FacetRow label="Pos">
@@ -225,11 +250,13 @@ function FiltersKey({
   count,
   onPress,
   controls,
+  className,
 }: {
   open: boolean;
   count: number;
   onPress: () => void;
   controls: string;
+  className: string;
 }) {
   return (
     <button
@@ -237,7 +264,7 @@ function FiltersKey({
       aria-expanded={open}
       aria-controls={controls}
       onClick={onPress}
-      className={`${CONSOLE_KEY_PILL} inline-flex items-center gap-1.5 bg-[image:var(--key-bg)] px-[0.5625rem] py-[0.4375rem] text-[length:var(--fs-10)] tracking-[0.14em] shadow-[var(--key-shadow)] ${
+      className={`${CONSOLE_KEY_PILL} ${className} inline-flex items-center gap-1.5 bg-[image:var(--key-bg)] px-[0.5625rem] py-[0.4375rem] text-[length:var(--fs-10)] tracking-[0.14em] shadow-[var(--key-shadow)] ${
         open || count > 0
           ? "border-active/45 text-readout"
           : "border-foreground/10 text-foreground/75 hover:text-readout"

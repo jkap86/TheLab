@@ -4153,6 +4153,30 @@ change adds a step to and the only thing a measurement cannot settle; and how th
 row badges read with pictures in them, since `sleepercdn.com` is unreachable from
 the sandbox and every face rendered as its letter mount.
 
+#### A shut filter tray stopped holding the list down
+
+Collapsing the players tab's `Filters` tray left the list where the open tray
+would have put it. Two faults, both in how the tray was laid into the ledge and
+neither in `CollapseTray`:
+
+- **`basis-full` in a column is a height.** The ledge is a row that wraps from
+  `lg` and a *column* below it, and `basis-full` was written for the row. In the
+  column it is 100% of an indefinite height, which Chrome reads as the content
+  size — so the shut shell, inline `height: 0px` and all, measured **378px**:
+  invisible, and the whole of the gap above the list. It is `lg:basis-full` now.
+- **An `order` on a `display: contents` box applies to nothing.** The tray's
+  `lg:order-5` sat on a `contents` span at the call site; that span is not a
+  flex item, so the key and the tray kept order 0 and the key sorted to the
+  front of the ledge, alone on a line above the search. `PlayerFilters` takes
+  `keyClassName` / `trayClassName` / `trayClosedClassName` and the orders land
+  on the two items.
+
+The tray is `order-last` so the one gap its shut margin cancels is the one above
+it, and that margin is each arm's own gap (`-mt-1.5` / `lg:-mt-2`) where it was a
+5px left over from the drawer. Measured on the live page: the ledge **390 → 175px**
+at 800 wide and **151 → 108** at 1280, the list starting directly under the last
+control, and the tray opening to 257px and shutting back to 0.
+
 ## KeepTradeCut values
 
 `shared/ktc` scrapes both of KTC's markets — dynasty (`/dynasty-rankings`) and
