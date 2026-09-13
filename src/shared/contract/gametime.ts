@@ -15,7 +15,10 @@
  * share of the player's game still to be played. Before kickoff that is the
  * projection whole; at the final whistle it is what he scored; in between it
  * is both. Every total on this wire is a sum of that per-player figure, so a
- * reader adding the seat rows up must arrive at the number on the plate.
+ * reader adding the seat rows up must arrive at the number on the plate —
+ * except one, stated where it lives: a **best-ball** side's
+ * {@link GametimeSide.scored}, which is a second lineup rather than a sum of
+ * the seats.
  */
 
 /** Where a game is — the pure module's own vocabulary, restated for the wire. */
@@ -95,7 +98,20 @@ export type GametimeSide = {
   roster_id: number;
   /** The team's name on `leagueTeamName`'s rule, or null where none is stored. */
   team_name: string | null;
-  /** Points scored so far, over the starters. A real zero before any kickoff. */
+  /**
+   * Points scored so far. A real zero before any kickoff.
+   *
+   * **Over {@link lineup} in a managed league, and over the roster's best
+   * lineup *by points already scored* in a best-ball one** — the one figure on
+   * this wire that is not a sum of the seat rows, and the same rule
+   * {@link lineup} is seated by rather than a second one. A best-ball team is
+   * seated by Sleeper after the games, so what it has banked is the best it
+   * could have done with what has been scored, which is the figure Sleeper's
+   * own standings show. Summed over the live-seated lineup instead it reports a
+   * player's points only where his projection happened to earn him a seat — on
+   * a Sunday morning, nought almost everywhere. See `manager/gametime`'s
+   * `solveSide` for what that costs and why it cannot be avoided.
+   */
   scored: number;
   /** The initial projection, over the starters — what the checker prints. */
   projected: number;
@@ -169,6 +185,12 @@ export type GametimeLeague = {
    * The league's median, priced the same three ways, or null where the league
    * runs no median matchup, is too small for one, or has no other rosters
    * stored — `LineupCheckLeague.median_points`' own grammar.
+   *
+   * Three independent medians rather than one roster's three figures: the
+   * middle team on `scored` need not be the middle team on `live`. Each
+   * follows {@link GametimeSide}'s own rule, so in a best-ball league the
+   * `scored` median is the middle of every roster's **banked** total and can
+   * be read against the plate's `Now` directly.
    */
   median: { scored: number; projected: number; live: number } | null;
   /** Starting slots this build doesn't recognise, left out of both lineups. */

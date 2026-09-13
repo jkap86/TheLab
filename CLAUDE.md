@@ -16565,9 +16565,11 @@ scored. Before kickoff every live figure is the projection whole, so it agrees
 with the projection-optimal lineup and diverges as games are played, which is
 what a live page is for. Seating each of the three totals by its own metric was
 the alternative and it breaks the contract's own invariant — three lineups
-cannot all add up to the three figures on one plate. The opponent and every
-roster of the median pool go through the same `solveSide`, so a best-ball
-league's median is best-ball too.
+cannot all add up to the three figures on one plate. **Half superseded for
+`scored` alone** — see A best-ball team banks what it has, below, which is that
+trade taken deliberately for the one figure it made meaningless. The opponent
+and every roster of the median pool go through the same `solveSide`, so a
+best-ball league's median is best-ball too.
 
 **A frame the socket refused was being treated as delivered.** The room advanced
 a reader's baseline as it built the frame, and the stream route drops payloads
@@ -18473,3 +18475,81 @@ clean.
 `Kicking off` and away as `Live · N games in progress` takes the pill, which the
 first Sunday kickoff will show — nor the four-bay arm, which needs a wait of a
 day or more (step to next week to see it).
+### A best-ball team banks what it has
+
+`live` is the right thing to seat a best-ball lineup by and the wrong thing to
+read `scored` off, and until this landed the card did both. The side's `scored`
+was the sum of `scored` over the **live**-seated lineup — a figure about
+nothing: it is what the players we *expect* Sleeper to seat happen to have
+banked, so a Thursday receiver's points were reported only where his projection
+had already earned him a seat, and on a Sunday morning, with almost nobody
+played, that is `Now 0.0` on every card and on the median beside them. A
+best-ball side's `scored` is now its best lineup **by points already scored**,
+which is the figure Sleeper's own standings show. **Nothing on the wire moved**
+— no route, no query, no contract type, no payload field, no migration — and
+the diff is `solveSide` plus its three doc comments.
+
+**The median needed no change of its own, which is what says the fix is in the
+right place.** The ask was the median's `Now`; `medianTotals` substitutes
+`mine` and solves the rest through `solveSide`, so a side that reports its
+banked total makes the median the middle of banked totals for free — and the
+"substituted rather than re-solved, one measurement" rule survives intact.
+
+**It could not be scoped to the median, and that is the one judgement here.**
+The card draws `mine.scored` as `Now` and `median.scored` as `Now` thirty
+pixels apart, so two seatings there would have a reader comparing 0.0 against a
+real figure and concluding they were behind when they were level — a new wrong
+reading, bought with the old one. One rule, applied to every best-ball side:
+mine, the opponent, and every roster of the median pool.
+
+**`projected` and `live` do not move**, and neither does the lineup. Those
+answer *who will be seated*, which is still a question about projections, and
+the live-seating argument above is unchanged for them. Only the figure that was
+looking backwards was looking at the wrong lineup. A **managed** league is
+untouched at every figure: there the lineup is the lineup.
+
+**The cost is stated rather than dodged.** In a best-ball league the seat rows'
+scored column no longer adds up to the plate's `Now`, nor to the `Pts` total on
+the pane's own ledge — the only place the contract's sum-the-seats invariant
+gives way, and it cannot be kept: "who will be seated" and "what is banked"
+have two different answers and there is one `lineup` field. Forcing them onto
+one lineup is exactly what produced the meaningless figure. What softens it is
+that a best-ball pane's rows were never a lineup anybody set — they are a
+solved estimate, and a reader adding them gets "what my *expected* lineup has
+banked", which is a real second reading rather than a contradiction of the
+first.
+
+**A null `scored` is a zero in the second pool**, and it is the same zero as
+`live`'s for a different reason: there, nothing could be priced from; here, his
+game has not started, so he has banked nothing yet. `optimalLineup` carries
+each seat's own points, so the banked total is the solver's own arithmetic
+rather than a second walk over the roster, and an empty seat is the zero it
+already answers.
+
+#### Verified
+
+Under Node's own runner, since the rule is pure: 2,636 tests pass (three more)
+and `check:full` — the production build, then lint, typecheck and the suite —
+is clean. The three are the arithmetic. A Thursday-night fixture — one receiver
+final at 8.0 against a roster nobody else has played, his projection too small
+to earn a seat — leaves the lineup, `live` and `projected` byte-identical
+(`qb_good, rb_good, wr_good, te_good, wr_flex`, 75 and 75), sums **0.0** over
+that lineup's own scored column, and answers `scored: 8`. The same roster read
+as **managed** answers a `scored` equal to its own seat rows, which is the
+invariant that must not move. And a median pool of three, one of whom cannot
+bank the receiver at all, answers `{ scored: 8, projected: 75, live: 75 }`
+where every live-seated lineup in it would have reported nought.
+
+**Both discriminating tests were run against the pre-fix code** and both fail
+there, which is the check that they are about the change rather than about the
+fixture; the managed-league one passes on both sides, which is the check that
+it is about the invariant.
+
+**Not verified against real data**, which is the gap to close first: no database
+was reachable from where this was built, so every figure above is a fixture.
+Three things a test cannot say — whether this corpus holds a best-ball league
+running a median at all, which is the arm the ask came from; how far the two
+lineups actually diverge across a real Sunday, which is what decides whether
+the seat-column discrepancy is ever large enough for a reader to notice; and
+whether the banked figure matches Sleeper's own displayed score for the same
+team, which is the claim it rests on and only a live page can settle.
