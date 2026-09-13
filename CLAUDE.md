@@ -14823,6 +14823,28 @@ string template would otherwise have stopped loading. Verified on the live
 account at 375: all twelve rows of an open card carry a
 `sleepercdn.com/avatars/thumbs/…` image.
 
+### A trade from somebody else's league opened onto nothing
+
+Every trade card on `/trades` from a league the reader holds no team in opened
+onto "No rosters read for this league yet", beside a 200 whose body was
+`entry: null`. The route resolved `?user=` to the reader's id and handed it to
+`solveLeagueEntry`, which answers null for a *named* manager with no roster — a
+deliberate rule for the manager route, whose query has already dropped such
+leagues, and the opposite of what this route's own note promised ("solves every
+roster and marks none"). Nothing about the timing mattered; what made it look
+like a loading race is that the newest trades on the board are mostly other
+people's.
+
+**The fix is a narrower variable, not a change to the solve.** The route keeps
+the resolved id for the ADP board — the reader's synced drafts price a league
+whether or not they are in it — and passes it to the solve as `holder` only
+where `league.rosters` carries a roster they own; otherwise null, which solves
+every roster and marks none. `solveLeagueEntry`'s null for a named-but-absent
+manager is untouched, since the manager route still relies on it. `route.test.ts`
+beside the route pins both halves textually. Verified on the live database: the
+failing league answers 12 teams, none marked, all 12 with avatars, and one of the
+reader's own leagues still marks their team and fills 10 of its ranks.
+
 **Not verified against real data**, which is the gap to close first: every
 number above is a fixture and no database was reachable from here. Four things a
 render cannot check — whether a real account's league names are readable at two
