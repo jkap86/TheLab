@@ -29,9 +29,12 @@ export const dynamic = "force-dynamic";
  *   same `clientIp` the proxy uses, with the same caveat its own note carries —
  *   an address here is what the request *claimed* — and there is no field a
  *   caller could put a different one in.
- * - **The route must be one of the seven this log keeps**, canonicalised by
- *   `loggedRoute`, so the column cannot hold a sentence, a URL or a page this
- *   app does not serve.
+ * - **The route must be a path a browser could be showing**, canonicalised by
+ *   `loggedRoute`, so the column cannot hold a sentence, a URL, a namespace
+ *   this app answers with something other than a page, or a request for a file.
+ *   It is the same rule the proxy applies, which is the whole of the
+ *   vocabulary; a path this app does not *serve* is kept deliberately, since
+ *   the link somebody was holding is the row worth having.
  * - **`Sec-Fetch-Site` must say `same-origin`.** The only legitimate caller is
  *   this app's own page in a browser; a header a page cannot forge is what says
  *   so. The cost is that a browser too old to send it goes uncounted, which is
@@ -43,9 +46,9 @@ export const dynamic = "force-dynamic";
  *   layout would otherwise need.
  *
  * **Every well-formed report is answered identically whether or not it wrote**,
- * so the vocabulary above cannot be learned by probing — and so the beacon has
- * nothing to handle: a navigation to `/logs`, which this log deliberately does
- * not keep, is a 204 rather than an error in a reader's console.
+ * so the rule above cannot be learned by probing — and so the beacon has
+ * nothing to handle: a report this log declines to keep is a 204 rather than an
+ * error in a reader's console.
  */
 export async function POST(request: Request) {
   if (request.headers.get("sec-fetch-site") !== "same-origin") {

@@ -2,9 +2,10 @@
  * What a stored route says about a visit.
  *
  * The table holds the pathname whole and nothing derived from it, so this is
- * where the route vocabulary lives — a seventh tool is a line here rather than
- * a migration. Pure, and tested, which is the other half of why it is a module
- * and not an inline `split` in the component.
+ * where the subject vocabulary lives — a seventh tool that names somebody is a
+ * line here rather than a migration. Which paths are *recorded* is no longer a
+ * list at all; see `shared/logs/routes.ts`. Pure, and tested, which is the
+ * other half of why it is a module and not an inline `split` in the component.
  *
  * **It is total.** The version this was ported from opens with
  * `route_array[1].toLowerCase()` on an unguarded index: any row whose route has
@@ -14,7 +15,14 @@
  */
 
 export type Visit = {
-  /** The tool the path names — `manager`, `trades`, … — or "" for `/`. */
+  /**
+   * The tool the path names — `manager`, `trades`, … — or "" for `/`.
+   *
+   * Not a closed set: the log records every page and every path that resolves
+   * to none, so this is whatever the first segment was. A row from a stale link
+   * or a scanner names its own first segment here, which is what makes the Tool
+   * facet able to say what people are asking for that this app does not serve.
+   */
   tool: string;
   /**
    * Who or what the page was *about*: a Sleeper username on `/manager`, a league
