@@ -3,8 +3,14 @@ import { describe, test } from "node:test";
 
 import {
   diffLeagues,
+  FAILURE_INTERVAL_MS,
   feedSignature,
+  feedsFailed,
+  feedsIncomplete,
   feedsMoved,
+  FINAL_SETTLE_INTERVAL_MS,
+  FINAL_SETTLE_WINDOW_MS,
+  finalizationIntervalMs,
   KICKOFF_LEAD_MS,
   LEAGUES_TTL_JITTER_MS,
   LEAGUES_TTL_MS,
@@ -13,9 +19,12 @@ import {
   nextKickoff,
   pollIntervalMs,
   rowsDueAt,
+  settledSince,
+  tickIntervalMs,
   WAITING_INTERVAL_MS,
+  weekFinal,
 } from "./live-rules.ts";
-import type { FeedState } from "./live-rules.ts";
+import type { FeedState, FeedStatuses } from "./live-rules.ts";
 
 const NOW = Date.UTC(2026, 8, 13, 12, 0, 0);
 
@@ -232,5 +241,119 @@ describe("rowsDueAt", () => {
     assert.equal(rowsDueAt(NOW, -1), NOW + LEAGUES_TTL_MS);
     assert.equal(rowsDueAt(NOW, 5), NOW + LEAGUES_TTL_MS + LEAGUES_TTL_JITTER_MS);
     assert.equal(rowsDueAt(NOW, Number.NaN), NOW + LEAGUES_TTL_MS);
+  });
+});
+
+describe("weekFinal", () => {
+  test("every game over, and at least one to have been", () => {
+    assert.equal(weekFinal({ pre: 0, live: 0, final: 16 }), true);
+    assert.equal(weekFinal({ pre: 0, live: 0, final: 0 }), false, "an empty board is unread, not over");
+    assert.equal(weekFinal({ pre: 1, live: 0, final: 15 }), false);
+    assert.equal(weekFinal({ pre: 0, live: 1, final: 15 }), false);
+  });
+});
+
+describe("the two feed predicates ask two questions", () => {
+  const ok: FeedStatuses = { projections: "ok", stats: "ok", scores: "ok" };
+  const statsDown: FeedStatuses = { ...ok, stats: "error" };
+  const scoresDown: FeedStatuses = { ...ok, scores: "error" };
+  const bothDown: FeedStatuses = { ...ok, stats: "error", scores: "error" };
+  const projectionsDown: FeedStatuses = { ...ok, projections: "error" };
+
+  test("`feedsFailed` is the stale note's: both live feeds, and only both", () => {
+    assert.equal(feedsFailed(ok), false);
+    assert.equal(feedsFailed(statsDown), false);
+    assert.equal(feedsFailed(scoresDown), false);
+    assert.equal(feedsFailed(bothDown), true);
+    assert.equal(feedsFailed(projectionsDown), false);
+  });
+
+  test("`feedsIncomplete` is the retry's: any feed the answer needs", () => {
+    assert.equal(feedsIncomplete(ok), false);
+    assert.equal(feedsIncomplete(statsDown), true);
+    assert.equal(feedsIncomplete(scoresDown), true);
+    assert.equal(feedsIncomplete(bothDown), true);
+    assert.equal(feedsIncomplete(projectionsDown), true);
+  });
+});
+
+describe("settledSince", () => {
+  const FINAL = { pre: 0, live: 0, final: 16 };
+
+  test("a healthy all-final read starts the run, and later ones hold it", () => {
+    const started = settledSince(null, { games: FINAL, incomplete: false, now: NOW });
+    assert.equal(started, NOW);
+    assert.equal(settledSince(started, { games: FINAL, incomplete: false, now: NOW + 60_000 }), NOW);
+  });
+
+  test("a read that cannot be trusted breaks it, wherever the board is", () => {
+    assert.equal(settledSince(NOW, { games: FINAL, incomplete: true, now: NOW + 60_000 }), null);
+    // The run does not start on an untrusted read either: the clock starts
+    // when the numbers become trustworthy, not when the games ended.
+    assert.equal(settledSince(null, { games: FINAL, incomplete: true, now: NOW }), null);
+  });
+
+  test("a game still to be played breaks it", () => {
+    assert.equal(settledSince(NOW, { games: { pre: 0, live: 1, final: 15 }, incomplete: false, now: NOW + 1 }), null);
+    assert.equal(settledSince(NOW, { games: { pre: 1, live: 0, final: 15 }, incomplete: false, now: NOW + 1 }), null);
+    assert.equal(settledSince(null, { games: { pre: 0, live: 0, final: 0 }, incomplete: false, now: NOW }), null);
+  });
+});
+
+describe("finalizationIntervalMs", () => {
+  test("an untrusted read keeps retrying at the failure cadence, however long the week has been over", () => {
+    assert.equal(finalizationIntervalMs({ incomplete: true, settledSince: null, now: NOW }), FAILURE_INTERVAL_MS);
+    assert.equal(
+      finalizationIntervalMs({ incomplete: true, settledSince: null, now: NOW + 24 * 60 * 60_000 }),
+      FAILURE_INTERVAL_MS,
+    );
+  });
+
+  test("the first healthy read settles at the settling cadence, never stops", () => {
+    assert.equal(finalizationIntervalMs({ incomplete: false, settledSince: NOW, now: NOW }), FINAL_SETTLE_INTERVAL_MS);
+    assert.equal(finalizationIntervalMs({ incomplete: false, settledSince: null, now: NOW }), FINAL_SETTLE_INTERVAL_MS);
+  });
+
+  test("a healthy run the length of the window is the last read", () => {
+    assert.equal(
+      finalizationIntervalMs({ incomplete: false, settledSince: NOW, now: NOW + FINAL_SETTLE_WINDOW_MS - 1 }),
+      FINAL_SETTLE_INTERVAL_MS,
+    );
+    assert.equal(finalizationIntervalMs({ incomplete: false, settledSince: NOW, now: NOW + FINAL_SETTLE_WINDOW_MS }), null);
+  });
+
+  test("the window is a run of trustworthy reads, not time since the games ended", () => {
+    // Failing through the whole window and recovering once: the run began on
+    // that read, and nothing of the window has elapsed.
+    const late = NOW + 3 * FINAL_SETTLE_WINDOW_MS;
+    assert.equal(finalizationIntervalMs({ incomplete: false, settledSince: late, now: late }), FINAL_SETTLE_INTERVAL_MS);
+  });
+});
+
+describe("tickIntervalMs", () => {
+  const FINAL = { pre: 0, live: 0, final: 16 };
+  const base = { games: FINAL, nextKickoff: null, now: NOW, incomplete: false, settledSince: null };
+
+  test("a run of wholly failed reads is the failure cadence, whatever the board", () => {
+    assert.equal(tickIntervalMs({ ...base, failures: 2, games: { pre: 3, live: 2, final: 1 } }), FAILURE_INTERVAL_MS);
+    assert.equal(tickIntervalMs({ ...base, failures: 1, incomplete: true }), FAILURE_INTERVAL_MS);
+  });
+
+  test("a week still being played is the board's own cadence, degraded feed or not", () => {
+    assert.equal(tickIntervalMs({ ...base, failures: 0, games: { pre: 3, live: 2, final: 1 } }), LIVE_INTERVAL_MS);
+    assert.equal(
+      tickIntervalMs({ ...base, failures: 0, games: { pre: 3, live: 2, final: 1 }, incomplete: true }),
+      LIVE_INTERVAL_MS,
+    );
+    assert.equal(tickIntervalMs({ ...base, failures: 0, games: { pre: 16, live: 0, final: 0 } }), WAITING_INTERVAL_MS);
+  });
+
+  test("an all-final board is the finalization policy's, and null only through it", () => {
+    assert.equal(tickIntervalMs({ ...base, failures: 0, incomplete: true }), FAILURE_INTERVAL_MS);
+    assert.equal(tickIntervalMs({ ...base, failures: 0, settledSince: NOW }), FINAL_SETTLE_INTERVAL_MS);
+    assert.equal(
+      tickIntervalMs({ ...base, failures: 0, settledSince: NOW, now: NOW + FINAL_SETTLE_WINDOW_MS }),
+      null,
+    );
   });
 });

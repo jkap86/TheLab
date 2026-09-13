@@ -177,14 +177,17 @@ note has argued that second half since the route landed, on the grounds that
 `sleeperGet` had no signal to honour — it has one now, and the argument is
 unchanged.
 
-**The two SSE rooms say it twice each, and the second time is the load-bearing
-one.** A reader's join is what opens a gametime week room or a picktracker draft
-room, and the read that opens it is also what arms the tick chain — so a room
-opened inside an interactive scope would carry that reader's budget and their
-signal for the life of the room. `openRoom` declares it and `tick` declares it
-again. `startBackgroundLoop` does the same for all four maintenance loops in one
-line, which is belt to that braces: a loop started from a request path would
-inherit the same way.
+**The two SSE rooms say it, and the tick is the load-bearing place.** A
+reader's join is what opens a gametime week room or a picktracker draft room,
+and the read that opens it is also what arms the tick chain — so a room opened
+inside an interactive scope would carry that reader's budget and their signal
+for the life of the room. The picktracker's `openRoom` declares it and its
+`tick` declares it again; the gametime room takes its feed reader as an
+argument (see The stream stopped trusting an open socket, under Gametime) and
+`gametime/live.ts` declares it once, in front of the only path that room has to
+Sleeper, which covers the open and every tick alike. `startBackgroundLoop` does
+the same for all four maintenance loops in one line, which is belt to that
+braces: a loop started from a request path would inherit the same way.
 
 **One route hands its reader's cancellation to Sleeper and it is the only one
 that can.** `GET /api/picktracker/[leagueId]` makes four uncached reads against
@@ -19248,3 +19251,141 @@ lineups actually diverge across a real Sunday, which is what decides whether
 the seat-column discrepancy is ever large enough for a reader to notice; and
 whether the banked figure matches Sleeper's own displayed score for the same
 team, which is the claim it rests on and only a live page can settle.
+
+### The stream stopped trusting an open socket, and the room stopped trusting a final scoreboard
+
+Three faults in the live half, found by review rather than by a Sunday, and
+each of them rendered an ordinary page. Nothing on the wire moved — no route,
+no contract field, no migration — and the delivery contract, the cumulative
+delta, the shared feed caches and the bounded row re-reads are all as they
+were. Gametime still carries no manual sync control.
+
+**A snapshot could overwrite recovered live data.** A fatal close asks the
+plain route for one snapshot and arms a reconnect; the reconnect can open and
+deliver a fresh payload while that snapshot — a full solve — is still in
+flight, and the snapshot then landed unconditionally: fresh numbers replaced by
+older ones, the page flipped to `snapshot`, and every delta after it folded
+onto a baseline the server never sent. A fallback is **owned** now
+(`features/gametime/hooks/live-connection.ts`): it carries a token, a usable
+frame off the stream (a payload, or a delta with something to fold onto)
+retires whatever fallback is pending — aborting it *and* disowning it, because
+an abort does not stop a response already parsing — and a fallback that is not
+the owner when it completes changes nothing, on success or on failure. Only one
+is ever in flight, so two cannot commit out of order; a completed one clears
+the slot so the next fatal close may ask again. The `No week left to follow`
+ending retires the pending fallback too, since a week landing under a season
+that has none is the same fault the other way.
+
+**`onopen` reset the backoff.** The server opens the stream and *then* reads
+the reader's lineups, so a stream can open and close on a terminal fault every
+time — and each open reset `attempts` to zero, so a run of those retried every
+ten seconds and asked the plain route for a solve each time. Opening is
+transport; the backoff resets and the connection reads `live` only on a usable
+frame. Repeated open-then-fail cycles now back off 10 → 20 → 40 → 80 → 120s and
+hold there. Every handler asks whether the source it was written for is still
+the current one, so a superseded source can neither close its replacement nor
+arm a second retry beside the one scheduled.
+
+**An all-final scoreboard beside a failed feed stopped the poller.** The
+room's failure count read the two live feeds as healthy unless *both* had
+failed, so a scoreboard reading every game final beside a stats feed that was
+refusing cleared the failure state, `pollIntervalMs` answered null for the
+final board, and the timer was never armed again — a `Final` caption over a
+week priced as a projection, for as long as the tab was open, and the same
+for a reader who joined the week already in that state. The two questions are
+two predicates now (`live-rules.ts`): `feedsFailed` is still the stale note's
+— both live feeds, counted in a run, told at three — and `feedsIncomplete` is
+the retry's, any of the three feeds the answer needs. `tickIntervalMs` is the
+one cadence decision, and null is reachable only through its last arm, the
+**finalization policy**:
+
+- **An untrusted read keeps retrying at the failure cadence (30s)**, however
+  final the board reads and however long it has read so. The statuses on the
+  wire are the explicit degraded state, per feed, and a healthy read is what
+  clears them; there is no terminal `failed` state for a week, deliberately,
+  and the retry is bounded by the readers — a room with nobody in it closes
+  after its linger.
+- **A healthy all-final read settles at `FINAL_SETTLE_INTERVAL_MS` (60s)**,
+  for `FINAL_SETTLE_WINDOW_MS` (ten minutes) measured from the first read of
+  the current unbroken run of healthy all-final reads (`settledSince`) —
+  never from the first all-final observation, so a feed that was down through
+  the whole window and answered once cannot settle the room on that one
+  answer. Any untrusted read, or a game the scoreboard un-finals, breaks the
+  run and the window restarts.
+- **The read at the end of the window is the last one.** About eleven reads
+  in all, which is what lets the stats feed catch a scoreboard that went final
+  a few seconds ahead of it — the two are two requests on two twenty-second
+  caches, and one successful stats response says nothing about whether it is
+  synchronised with the scoreboard beside it.
+
+**What that window is not is a corrections watch.** Sleeper's official stat
+corrections arrive hours or days later and are outside it on purpose: a room
+polling a finished week for days to catch them is the picktracker's
+complete-draft waste wearing a scoreboard, and a reload — which opens a fresh
+room with fresh reads — is what asks again. The other cost is that a room
+opened on a Tuesday, long after the week ended, still spends the window
+settling; that is the price of one rule rather than two and is modest against
+a reader with the page open.
+
+**Two more things the room now does, both about identity.** Every path that
+resumes after an `await`, and the one path that arms a timer, asks whether the
+room is still the one its key names rather than whether the key is present —
+a room closed under an in-flight read used to find a *new* room under the same
+key when it resumed and arm the old one's timer again, a poller nothing pointed
+at. And `schedule` refuses a closed room itself, so a delivery that closed the
+room mid-walk cannot be followed by a timer.
+
+**What moved so a test could say any of this.** `live-room.ts` is the room
+with its feed reader, its row reader, the solve, the clock and the timers as
+arguments, on `sleeper/request.ts`' terms; `live.ts` is the wiring and the
+`globalThis` registry, and declares the background scope once in front of the
+only path the room has to Sleeper — which `request-scopes.test.ts` now pins in
+place of the two-declarations rule. `live-connection.ts` is `useGametime`'s
+whole effect as a function of what it reaches (`EventSource`, `fetch`, timers),
+and the hook is the three pieces of state, the render-time reset and the
+browser's own environment. `live-wiring.test.ts` reads the room file for the
+decisions that are still textual.
+
+#### Verified
+
+Under Node's own runner, on the declared range (`v22.22.2`; the earlier
+review's ten test-file loading failures were an uninstalled `node_modules`
+under Node 24, not React). Forty-five tests are new — 2,694 pass against
+2,649 before — and `check:full` is clean: the production build, then lint,
+typecheck and the suite. `live-room.test.ts`
+drives the real room with scripted feeds and scripted timers: stats down on
+every read of an all-final week retries at the failure cadence past three
+windows and every frame says `stats: "error"`; the scoreboard failing is the
+same; a room opened on an already-final week with the stats feed down delivers
+the recovered read as a delta and is then settling rather than stopped; a feed
+down for two windows and recovering once starts the window then, and runs its
+whole length; both feeds down tells the readers once and never settles; stat
+lines landing after the first final scoreboard reach the reader; a healthy room
+makes exactly eleven reads over ten minutes and none in the day after, with
+the room still open; a failed read inside the window restarts it; an un-finalled
+game returns the room to the live cadence; the live, waiting and both-failed
+cadences are unchanged, a single failed feed during a game included; the last
+reader leaving during finalization leaves nothing armed after the linger; a
+room closed under an in-flight read arms nothing when it lands; and a room
+reopened under the same key is not ticked by the one that closed.
+`live-connection.test.ts` drives the controller with a scripted `EventSource`,
+a `fetch` deliberately deaf to its abort signal, and scripted timers: a delayed
+snapshot landing after a recovered payload, an obsolete one rejecting or
+answering 503 after recovery, snapshots across failed attempts, the one-in-flight
+bound, a stop before an old response lands, a delta folding over the recovered
+payload rather than the snapshot, a delta with nothing held, the seven-cycle
+ladder to the cap, a transport open that neither resets the backoff nor reads
+as live, recovery resetting it for a later failure, a superseded source's three
+callbacks, a browser-side reconnect, the no-week ending on a first stream and
+on a reconnect, and an unmount. `live-rules.test.ts` pins the two predicates,
+`weekFinal`, `settledSince`, `finalizationIntervalMs` and `tickIntervalMs`.
+
+**Not verified against real traffic**, which is the gap to close first. Three
+things a scripted feed cannot say — whether ten minutes at one read a minute is
+enough for Sleeper's stats feed to catch its own scoreboard on a real Sunday
+night, which a live week's last deltas would settle; whether a room opened on
+a Tuesday settling for ten minutes reads as wasteful against real traffic, in
+which case the window could be shortened for a board that was already final
+when the room opened; and whether the open-then-terminal-fault cycle the
+backoff now survives is reached in production at all, since it needs the
+reader's Postgres read to fail on every attempt.

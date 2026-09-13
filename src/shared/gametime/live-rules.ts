@@ -41,6 +41,34 @@ export const FAILURE_INTERVAL_MS = 30_000;
 export const STALE_AFTER_FAILURES = 3;
 
 /**
+ * How often the feeds are re-read once the scoreboard reads the whole week
+ * final, while the room is still **settling** — see {@link tickIntervalMs}.
+ *
+ * Slower than the live cadence, because nothing on the board can move any
+ * more except a stat line catching up; faster than the failure cadence,
+ * because the reads it makes are the ones that decide whether the numbers on
+ * screen are the week's final ones.
+ */
+export const FINAL_SETTLE_INTERVAL_MS = 60_000;
+
+/**
+ * How long a room keeps reading after the scoreboard first reads all-final
+ * with every feed healthy, before it stops for good.
+ *
+ * **The stats feed and the scoreboard are two requests on two caches**, so the
+ * tick that first sees every game final may well be carrying stat lines read
+ * a few seconds before the last play was filed — a successful stats response
+ * says nothing about whether it is synchronised with the scoreboard beside
+ * it. Ten minutes at the settling cadence is about ten more reads, which is
+ * what lets the last plays of the late game land; it is also the whole of
+ * what this catches. Sleeper's official stat corrections arrive hours or days
+ * later and are deliberately outside it: a room that polled a finished week
+ * for days to catch them is the picktracker's complete-draft waste wearing a
+ * scoreboard, and a reload is what asks again.
+ */
+export const FINAL_SETTLE_WINDOW_MS = 10 * 60_000;
+
+/**
  * How long a subscriber's stored lineups answer for before the room re-reads
  * them from Postgres.
  *
@@ -96,13 +124,22 @@ export function rowsDueAt(readAt: number, random: number): number {
  */
 export const LINGER_MS = 30_000;
 
+/** Every game on the board is over: nothing left to happen, only to settle. */
+export function weekFinal(games: Record<GamePhase, number>): boolean {
+  return games.live === 0 && games.pre === 0 && games.final > 0;
+}
+
 /**
- * How long between ticks, given where the week's games are.
+ * How long between ticks, given where the week's games are — the **healthy**
+ * cadence, and nothing else.
  *
  * **Null when nothing is left to happen** — every game final and none to come
  * — which is the whole point of the function: a finished week is a fact, not
  * a feed, and a room polling it forever is the picktracker's complete-draft
  * waste wearing a scoreboard. The stream stays open holding the final numbers.
+ * What null does *not* decide is whether the room may stop yet: that is
+ * {@link tickIntervalMs}'s, which reads this first and then asks whether the
+ * numbers behind an all-final board are trustworthy and settled.
  *
  * A game in progress is the live cadence. Games still to come are the waiting
  * cadence, shortened to the time until the next kickoff (less a lead) where
@@ -121,12 +158,139 @@ export function pollIntervalMs(input: {
   const { games, nextKickoff, now } = input;
   if (games.live > 0) return LIVE_INTERVAL_MS;
   if (games.pre === 0) {
-    return games.final > 0 ? null : WAITING_INTERVAL_MS;
+    return weekFinal(games) ? null : WAITING_INTERVAL_MS;
   }
   if (nextKickoff === null) return WAITING_INTERVAL_MS;
   const until = nextKickoff - KICKOFF_LEAD_MS - now;
   if (until <= 0) return LIVE_INTERVAL_MS;
   return Math.min(MAX_WAIT_MS, Math.max(WAITING_INTERVAL_MS, until));
+}
+
+/** The health of the three feeds a tick reads, as the wire spells it. */
+export type FeedStatuses = Record<"projections" | "stats" | "scores", GametimeFeedStatus>;
+
+/**
+ * Both feeds a tick reads for itself failed — the projections board is cached
+ * apart. This is the **stale-note** policy's own predicate: it counts a run of
+ * these, and tells the readers at {@link STALE_AFTER_FAILURES}. It says
+ * nothing about whether a tick's answer is one the room may stop on.
+ */
+export function feedsFailed(statuses: FeedStatuses): boolean {
+  return statuses.stats === "error" && statuses.scores === "error";
+}
+
+/**
+ * A feed the answer *needs* failed on this read — the **retry** policy's own
+ * predicate, and deliberately a different question from {@link feedsFailed}.
+ *
+ * A tick with the scoreboard reading every game final and the stats feed
+ * refusing prices the whole week as a projection under a `Final` caption; one
+ * with the stats feed answering and the scoreboard refusing prices every
+ * player with a line as half played. Both are ordinary Sundays to look at and
+ * both are wrong, and the old rule — which read the pair as healthy unless
+ * *both* had failed — let either become the room's last word: `pollIntervalMs`
+ * answered null for the final board, the timer was never armed again, and a
+ * page said `Final` over numbers nobody had finished reading. A failed
+ * projections read counts too, since nothing can be seated without one.
+ */
+export function feedsIncomplete(statuses: FeedStatuses): boolean {
+  return (
+    statuses.projections === "error" ||
+    statuses.stats === "error" ||
+    statuses.scores === "error"
+  );
+}
+
+/**
+ * When the current unbroken run of **healthy, all-final** reads began, or
+ * null where there is no such run — the whole of a room's settlement state,
+ * folded one read at a time.
+ *
+ * The run starts on the first read that sees every game final with every feed
+ * answering, holds across later reads that see the same, and is **broken by
+ * any read that does not** — a game still to come (a flexed kickoff, a
+ * scoreboard that un-finalled a game), or a feed that failed. Measured from
+ * the first healthy read rather than from the first all-final observation, so
+ * a feed that was down through the whole window and then answered once cannot
+ * settle the room on that one answer: the clock starts when the numbers start
+ * being trustworthy, not when the games stopped.
+ */
+export function settledSince(
+  previous: number | null,
+  input: { games: Record<GamePhase, number>; incomplete: boolean; now: number },
+): number | null {
+  if (!weekFinal(input.games) || input.incomplete) return null;
+  return previous ?? input.now;
+}
+
+/**
+ * How long between ticks once the scoreboard reads every game final, or null
+ * once the room may stop — the **finalization policy**, named so it can be
+ * argued with in one place.
+ *
+ * Three answers, in order:
+ *
+ * - **A read that could not be trusted keeps retrying at the failure
+ *   cadence**, however final the board reads. A week whose stats feed is down
+ *   is not finished, it is unread; the readers already see `stats: "error"` on
+ *   every frame, and a room that stopped here would freeze that caption over
+ *   projections for as long as the tab was open. The retry is bounded by the
+ *   readers rather than by a count: a room with nobody in it closes after its
+ *   linger, and one with somebody in it keeps asking every half minute, which
+ *   is the same cost a failing live week already carries. There is no terminal
+ *   `failed` state for the week, deliberately — the statuses on the wire *are*
+ *   the explicit degraded state, per feed, and a healthy read is what clears
+ *   them.
+ * - **A healthy read inside the window keeps settling** at
+ *   {@link FINAL_SETTLE_INTERVAL_MS}, so the stat lines have a bounded number
+ *   of reads in which to catch the scoreboard up.
+ * - **A healthy read past the window is the last one.** The window is measured
+ *   from {@link settledSince}, so it is a run of trustworthy reads and not
+ *   merely time since the games ended.
+ *
+ * The first healthy all-final read never settles the room, by construction:
+ * the run began on that read, so nothing of the window has elapsed. A room
+ * opened on a Tuesday, long after the week ended, therefore still spends the
+ * window settling — about ten more reads — which is the price of one rule
+ * rather than two and is modest against a reader who has the page open.
+ */
+export function finalizationIntervalMs(input: {
+  incomplete: boolean;
+  settledSince: number | null;
+  now: number;
+}): number | null {
+  if (input.incomplete) return FAILURE_INTERVAL_MS;
+  if (input.settledSince === null) return FINAL_SETTLE_INTERVAL_MS;
+  return input.now - input.settledSince >= FINAL_SETTLE_WINDOW_MS
+    ? null
+    : FINAL_SETTLE_INTERVAL_MS;
+}
+
+/**
+ * The one cadence decision a room makes after every read, healthy or not.
+ *
+ * A run of wholly failed reads is the failure cadence (the stale-note policy's
+ * own count decides that, and nothing here second-guesses it). Otherwise the
+ * healthy cadence answers wherever a game is still to be played, and where it
+ * has nothing left to say — every game final — the finalization policy above
+ * decides whether the room may stop. **Null is the only way a room stops**,
+ * and it is reachable only through that last arm.
+ */
+export function tickIntervalMs(input: {
+  /** Consecutive reads on which both live feeds failed — `feedsFailed`'s count. */
+  failures: number;
+  games: Record<GamePhase, number>;
+  nextKickoff: number | null;
+  now: number;
+  /** `feedsIncomplete` of the latest read. */
+  incomplete: boolean;
+  /** `settledSince`, folded through the latest read. */
+  settledSince: number | null;
+}): number | null {
+  if (input.failures > 0) return FAILURE_INTERVAL_MS;
+  const healthy = pollIntervalMs(input);
+  if (healthy !== null) return healthy;
+  return finalizationIntervalMs(input);
 }
 
 /**

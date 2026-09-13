@@ -87,7 +87,6 @@ describe("the long-lived rooms tick as background traffic", () => {
   // what arms its timer chain, so a room opened inside an interactive scope
   // would carry that reader's budget and their signal for the life of the room.
   const rooms: [file: string[], name: string][] = [
-    [["src", "shared", "gametime", "live.ts"], "the gametime week room"],
     [["src", "shared", "picktracker", "live.ts"], "the picktracker draft room"],
   ];
 
@@ -101,6 +100,30 @@ describe("the long-lived rooms tick as background traffic", () => {
       );
     });
   }
+
+  test("the gametime week room declares it once, in front of its only path to Sleeper", () => {
+    // That room takes its feed reader as an argument (`gametime/live-room`) so
+    // its timer chain can be driven under Node's runner, and the wiring is
+    // where the real reader is named — wrapped there, one declaration covers
+    // the read that opens a room and every tick after it. What has to hold
+    // for that to be the whole story is that the room reaches Sleeper no
+    // other way.
+    const wiring = read("src", "shared", "gametime", "live.ts");
+    assert.match(
+      wiring,
+      /readFeeds: \(season, week\) => withBackgroundSleeper\(\(\) => readWeekFeeds\(season, week\)\)/,
+      "the wiring should hand the room a background-scoped feed reader",
+    );
+    const room = read("src", "shared", "gametime", "live-room.ts");
+    // No runtime import of anything that reaches Sleeper — a type import is
+    // erased before the runner sees it, and is allowed.
+    assert.doesNotMatch(
+      room,
+      /^import (?!type ).*from "(?:@\/shared\/(?:sleeper|projections|manager)|\.\/feeds)/m,
+    );
+    assert.doesNotMatch(room, /readWeekFeeds\(/);
+    assert.match(room, /deps\.readFeeds\(/);
+  });
 });
 
 describe("every background loop ticks as background traffic", () => {

@@ -6,19 +6,20 @@ import { describe, test } from "node:test";
 /**
  * The live room's wiring, pinned against its source.
  *
- * **`crawl-writes.test.ts`' bargain, for the same reason.** `./live` imports
- * `@/shared/manager` and `./feeds` imports `@/shared/projections`, so `npm
+ * **`crawl-writes.test.ts`' bargain, for the same reason.** `./feeds` imports
+ * `@/shared/projections` and `./live` imports `@/shared/manager`, so `npm
  * test` cannot resolve either — the runner strips types and knows nothing of
- * the `@/*` aliases. Every decision in them that *can* be a pure function has
- * been made one (`./live-rules`, `./live-delivery`, `manager/gametime`) and is
- * driven properly by the tests beside this file; what is left is which of
- * those functions the room actually calls, and in what order. Nothing fails
- * when that is wrong: a room that advanced a baseline before the send would
- * typecheck, commit and desynchronise a reader in silence.
+ * the `@/*` aliases. The room itself (`./live-room`) takes those as arguments
+ * now and `live-room.test.ts` drives its timer chain for real; what is left
+ * here is the handful of decisions that are still *which* function is called
+ * and in what order, and the wiring in `./live` and the feed reader, neither
+ * of which a scripted room can reach. Nothing fails when one of those is
+ * wrong: a room that advanced a baseline before the send would typecheck,
+ * commit and desynchronise a reader in silence.
  *
- * So this reads the three files and asserts the handful of textual facts their
- * doc comments spend paragraphs arguing for, so that an edit which flattens
- * one has to delete an assertion that says why.
+ * So this reads the files and asserts the textual facts their doc comments
+ * spend paragraphs arguing for, so that an edit which flattens one has to
+ * delete an assertion that says why.
  */
 
 const read = (path: string) => readFileSync(join(process.cwd(), path), "utf8");
@@ -33,7 +34,7 @@ function body(source: string, signature: string): string {
 }
 
 describe("the room's tick", () => {
-  const live = read("src/shared/gametime/live.ts");
+  const live = read("src/shared/gametime/live-room.ts");
   const tick = body(live, "async function tick(room: Room) {");
 
   test("movement is `feedsMoved`, never a comparison spelled here", () => {
@@ -52,6 +53,33 @@ describe("the room's tick", () => {
     assert.match(tick, /deliver\(room, subscriber, recovered\);/);
   });
 
+  test("the cadence is `tickIntervalMs`'s, and a closed room is never armed", () => {
+    // `pollIntervalMs` answers null for an all-final board, and that null used
+    // to be the whole decision: a week whose stats feed was down stopped being
+    // read the moment its scoreboard read final, under a `Final` caption. The
+    // finalization policy is `tickIntervalMs`'s last arm, and `schedule` is the
+    // only thing that arms a timer — after asking whether the room it was
+    // handed is still the one its key names.
+    const schedule = body(live, "function schedule(room: Room) {");
+    assert.match(schedule, /const interval = tickIntervalMs\(\{/);
+    assert.match(schedule, /incomplete: feedsIncomplete\(room\.feeds\.statuses\)/);
+    assert.match(schedule, /settledSince: room\.settledSince/);
+    assert.match(schedule, /if \(!isOpen\(room\)\) return;/);
+    assert.doesNotMatch(schedule, /pollIntervalMs\(/);
+    // A failed read whole breaks the settling run; a healthy one folds it.
+    assert.match(tick, /room\.settledSince = null;/);
+    assert.match(tick, /room\.settledSince = settledSince\(room\.settledSince, \{/);
+    // And every resumption after an await asks for the room by identity.
+    assert.doesNotMatch(tick, /rooms\.has\(room\.key\)/);
+    assert.match(tick, /if \(!isOpen\(room\)\) return;/);
+  });
+
+  test("the room opened on an already-final week folds the same state", () => {
+    const open = body(live, "async function openRoom(");
+    assert.match(open, /failures: feedsFailed\(feeds\.statuses\) \? 1 : 0,/);
+    assert.match(open, /settledSince: settledSince\(null, \{/);
+  });
+
   test("the row re-reads are bounded, and happen before anybody's frame", () => {
     assert.match(tick, /await refreshDue\(room, due\)/);
     // The refresh is its own pass, so no reader's frame waits behind another
@@ -64,7 +92,7 @@ describe("the room's tick", () => {
   });
 
   test("a re-read already in flight is not started again", () => {
-    assert.match(tick, /!subscriber\.refreshing && Date\.now\(\) >= subscriber\.rowsDueAt/);
+    assert.match(tick, /!subscriber\.refreshing && now >= subscriber\.rowsDueAt/);
   });
 
   const refreshDue = body(live, "async function refreshDue(room: Room, due: readonly Subscriber[]) {");
@@ -80,12 +108,12 @@ describe("the room's tick", () => {
     // Caught per subscriber, so a thrown read cannot abandon the rest of the
     // pass; stamped in `finally`, so a failing read is not retried every tick.
     assert.match(refreshRows, /catch \(error\)/);
-    assert.match(refreshRows, /finally \{[\s\S]*rowsDueAt\(Date\.now\(\), Math\.random\(\)\)/);
+    assert.match(refreshRows, /finally \{[\s\S]*rowsDueAt\(deps\.now\(\), deps\.random\(\)\)/);
   });
 });
 
 describe("the room's delivery", () => {
-  const live = read("src/shared/gametime/live.ts");
+  const live = read("src/shared/gametime/live-room.ts");
   const deliver = body(live, "function deliver(room: Room, subscriber: Subscriber, force = false) {");
 
   test("the baseline moves only on a frame the transport took", () => {
@@ -117,7 +145,7 @@ describe("the room's delivery", () => {
     assert.match(deliver, /removed_players: next\.players\.removed,/);
   });
 
-  const join = body(live, "export async function joinGametime(");
+  const join = body(live, "async function joinGametime(");
 
   test("the first frame goes out through the listener like any other", () => {
     // Returned to the route instead, a refused first payload left the room
