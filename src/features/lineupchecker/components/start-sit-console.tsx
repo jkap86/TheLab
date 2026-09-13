@@ -289,7 +289,18 @@ export function StartSitConsole({
    * to" two states a reader can hold at once.
    */
   const [picked, setPicked] = useState<string | null>(null);
-  /** The counterpart the decisions view is narrowed to, or null for all. */
+  /**
+   * The counterpart card that is open, or null for none.
+   *
+   * **Opening one does not take the others off the pane.** It used to — the
+   * press narrowed the list to that one pairing — which was worth it while
+   * every card carried its league rows and the list was mostly rows. The cards
+   * open shut now (see `DecisionsList`), so the list of counterparts *is* the
+   * thing a reader scans, and hiding it on a press would send them `Back` to
+   * compare two. What the open card still does is narrow the ledge: its line
+   * and its figure read that pairing's own leagues, which is what makes the
+   * figure answerable at all — see `narrowed` below.
+   */
   const [combo, setCombo] = useState<string | null>(null);
   /**
    * Which rows have their tray of narrowing keys open.
@@ -667,7 +678,7 @@ export function StartSitConsole({
                   />
                   <div className="lab-scroll-glass relative z-[1] min-h-0 flex-1 overflow-x-hidden overflow-y-auto p-1.5">
                     <DecisionsList
-                      groups={pairing ? [pairing] : groups}
+                      groups={groups}
                       picked={combo}
                       figureLabel={figureLabel}
                       onPick={(id) =>

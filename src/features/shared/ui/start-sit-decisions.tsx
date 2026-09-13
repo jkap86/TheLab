@@ -123,7 +123,18 @@ export function DecisionsDeck({
   );
 }
 
-/** The tray: one card per counterpart, or a word where there are none. */
+/**
+ * The tray: one card per counterpart, or a word where there are none.
+ *
+ * **Every card opens shut, and a press is what opens one.** The pane used to
+ * draw every counterpart with its league rows already under it, so pressing a
+ * player put a wall of rows in front of the reader — twelve leagues under each
+ * of eight counterparts — before they had said which pairing they wanted. It
+ * reads as a list of names first now, each with its two counts on the caption,
+ * and the rows are one press away. One card at a time: `picked` is a single id
+ * rather than a set, which is also what lets the caller narrow its figure and
+ * its line to the pairing that is open.
+ */
 export function DecisionsList({
   groups,
   picked,
@@ -131,7 +142,7 @@ export function DecisionsList({
   onPick,
 }: {
   groups: readonly DecisionGroup[];
-  /** The counterpart the view is narrowed to, or null for all of them. */
+  /** The counterpart whose league rows are open, or null for none. */
   picked: string | null;
   /** What every figure in the list is — see the module note. */
   figureLabel: string;
@@ -162,12 +173,14 @@ export function DecisionsList({
 }
 
 /**
- * One counterpart, as a key that can be held down.
+ * One counterpart, as a disclosure.
  *
- * Pressed and lit is the same state the shares row wears and means the same
- * thing: the view is narrowed to this pairing, and pressing again puts every
- * counterpart back. Flat, on the drawer's own budget — no perspective, no
- * `translateZ`, one composited layer at a time.
+ * Shut, it is the heading alone — badge, name, the two counts and his figure.
+ * Open, it is lit and carries its league rows; pressing again shuts it. The
+ * rows are **not mounted while shut** rather than hidden, on the start/sit
+ * console's own tray rule: a pane of shut cards should cost what it draws.
+ * Flat, on the drawer's own budget — no perspective, no `translateZ`, one
+ * composited layer at a time.
  */
 function CounterpartCard({
   group,
@@ -194,16 +207,16 @@ function CounterpartCard({
   return (
     <li
       className={
-        "rounded-xl border bg-[image:var(--key-bg)] px-[0.6875rem] pb-1.5 pt-2 transition-[box-shadow,border-color] duration-200 " +
+        "rounded-xl border bg-[image:var(--key-bg)] px-[0.6875rem] py-2 transition-[box-shadow,border-color] duration-200 " +
         (picked
           ? "border-active/50 shadow-[var(--key-shadow-pressed),inset_0_0_22px_color-mix(in_srgb,var(--accent)_14%,transparent),0_0_24px_-10px_var(--accent-glow)]"
-          : "border-foreground/9 shadow-[var(--key-shadow)]")
+          : "border-foreground/9 shadow-[var(--key-shadow)] hover:border-active/40")
       }
     >
       <button
         type="button"
         onClick={onPick}
-        aria-pressed={picked}
+        aria-expanded={picked}
         className="flex w-full min-w-0 items-center gap-2 text-left focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-active/60"
       >
         <span
@@ -243,13 +256,28 @@ function CounterpartCard({
             {group.figure === null ? "—" : group.figure.toFixed(1)}
           </span>
         </span>
+
+        {/* The caret says the card opens, which a shut card otherwise does
+            not; `aria-expanded` on the button carries the state, so it is
+            hidden. It turns rather than swapping glyph — the row's own
+            disclosure key's spelling. */}
+        <span
+          aria-hidden
+          className={`lab-anim w-3 shrink-0 text-center font-mono text-[length:var(--fs-10)] transition-transform duration-150 ${
+            picked ? "rotate-180 text-readout" : "text-foreground/60"
+          }`}
+        >
+          ▾
+        </span>
       </button>
 
-      <ul className="m-0 mt-1.5 flex list-none flex-col p-0">
-        {group.rows.map((row) => (
-          <LeagueRow key={row.league_id} row={row} />
-        ))}
-      </ul>
+      {picked && (
+        <ul className="m-0 mt-1.5 flex list-none flex-col p-0">
+          {group.rows.map((row) => (
+            <LeagueRow key={row.league_id} row={row} />
+          ))}
+        </ul>
+      )}
     </li>
   );
 }

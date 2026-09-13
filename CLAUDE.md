@@ -6584,6 +6584,40 @@ have fired anyway: `@md` is 28rem and the pane that holds this is 26rem, so a
 `basis-full` kept below it would have put **every** league call on two lines at
 every width.
 
+#### The counterpart cards open shut
+
+Pressing a player opened the decisions pane with **every counterpart already
+expanded** — each card carrying all of its league rows — so a player started in
+twenty lineups put a wall of rows in front of the reader before they had said
+which pairing they cared about. Reported by the user as the sub-players
+expanding on their own. `CounterpartCard` is a disclosure now: shut, it is the
+heading alone (badge, name, the `Started over in N` / `Sat behind in N` caption
+and the figure) with a turning caret; a press opens it and mounts its league
+rows, and a second press shuts it. The rows are **not mounted** while shut, on
+the console row tray's own rule. `aria-expanded` replaced `aria-pressed` on the
+card's button, since that is now what the press does.
+
+**One card open at a time, and opening one no longer hides the others.** It
+used to: a press narrowed the list to that single pairing, which was worth it
+while the list was mostly rows. With the cards shut the list of counterparts
+*is* what a reader scans, and taking it away on a press would send them to
+`Back` to compare two. `combo` is still the one open card, and it still narrows
+the ledge — the line reads `With X · N of M leagues` and the figure is re-folded
+over that pairing's leagues — because that is what makes a mixed-scoring
+player's figure answerable, and the open card is the pairing being read.
+
+The change is in the shared `DecisionsList`, so the dead `WeekSharesDrawer`
+inherits it; that drawer still passes `picked ? [picked] : groups` and would
+draw one card, open, if it were ever revived.
+
+Verified in the Browser pane against the running dev server and the live
+database on `/lineupchecker/jkap86`: a pressed player drew 155 counterpart cards
+with **0** open and **0** league rows mounted; pressing one opened it alone
+with its 5 rows and the line `With Jake Tonges · 5 of 116 leagues`, the rest
+still listed; pressing another switched to it (4 rows); pressing it again left
+0 open, 0 rows and the line back to `Started in 23 of 116 leagues`. No console
+errors, no horizontal overflow; `tsc` and `eslint` clean.
+
 #### Verified
 
 Driven over CDP against `next dev` with no `DATABASE_URL` — the boot hook skips
