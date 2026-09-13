@@ -29,6 +29,9 @@ import {
   statTrackWidth,
   statYards,
   playerLeagueScope,
+  PLAYER_READINGS,
+  READING_LABEL,
+  readingCount,
   usageLeagueScope,
   usageSummary,
   USAGE_CHIP,
@@ -774,6 +777,29 @@ describe("playerLeagueScope", () => {
 
   test("a reading he has none of is an empty set", () => {
     assert.equal(playerLeagueScope("bench", leagues)!.size, 0);
+  });
+
+  test("all is every league he is in, either side", () => {
+    assert.deepEqual([...playerLeagueScope("all", leagues)!].sort(), ["L1", "L2", "L3"]);
+    assert.equal(playerLeagueScope("all", null), null);
+  });
+});
+
+describe("readingCount", () => {
+  test("a reading is its own count, and all is the four summed", () => {
+    const r = row({ held: true, start: 2, bench: 1, oppStart: 3, oppBench: 0 });
+    assert.equal(readingCount(r, "start"), 2);
+    assert.equal(readingCount(r, "opp-start"), 3);
+    assert.equal(readingCount(r, "all"), 6);
+  });
+
+  test("a player nobody holds counts nothing rather than nought", () => {
+    assert.equal(readingCount(row({ held: false }), "all"), null);
+  });
+
+  test("the track reads All first, then the four", () => {
+    assert.deepEqual(PLAYER_READINGS, ["all", ...USAGE_KEYS]);
+    assert.equal(READING_LABEL.all, "All");
   });
 });
 

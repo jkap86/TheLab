@@ -99,9 +99,18 @@ export const CONSOLE_HOUSING =
   "inline-flex items-center rounded-full border border-foreground/8 " +
   "bg-[image:var(--key-bg)] p-1.5 shadow-[var(--plate-shadow)]";
 
+/**
+ * {@link CONSOLE_TRACK} with **no radius**, for a track whose keys wrap onto a
+ * second line, where a lozenge drawn round two lines is the wrong shape. It is
+ * a split rather than an override for `CONSOLE_KEY_PILL`'s reason: a caller
+ * appending `rounded-[…]` to the full constant is two base radius utilities of
+ * one specificity, settled by Tailwind's emit order rather than by the caller.
+ */
+export const CONSOLE_TRACK_SHELL =
+  "bg-[image:var(--key-bg)] shadow-[var(--track-shadow)]";
+
 /** The deep channel a single raised key sits in — the nav track, a lens toggle. */
-export const CONSOLE_TRACK =
-  "rounded-full bg-[image:var(--key-bg)] shadow-[var(--track-shadow)]";
+export const CONSOLE_TRACK = `rounded-full ${CONSOLE_TRACK_SHELL}`;
 
 /**
  * The **third depth**: a channel cut deeper than {@link CONSOLE_TRACK}, for a

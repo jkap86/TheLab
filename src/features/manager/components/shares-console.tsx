@@ -28,6 +28,7 @@ import {
   CONSOLE_WINDOW,
   CONSOLE_WINDOW_LEDGE,
   CONSOLE_WINDOW_SHELL,
+  DetailLedge,
   leaguematePlayerId,
   pickedSubject,
   Scanlines,
@@ -1681,57 +1682,17 @@ function Cell({ id, row }: { id: ColumnId; row: ConsoleRow }) {
 
 /* ------------------------------------------------------------------ */
 
-/** The detail pane's own header: the subject, its note, and the controls. */
-function DetailLedge({
-  row,
-  narrowing,
-  onNarrow,
-  narrowLabel,
-  children,
-}: {
-  row: ConsoleRow;
-  narrowing: boolean;
-  onNarrow: () => void;
-  /** What the grid would be narrowed *to* — the key's accessible name. */
-  narrowLabel: string;
-  children?: React.ReactNode;
-}) {
+/**
+ * The row's note beside the name in the detail pane's header — `DetailLedge`'s
+ * `aside`, which is `features/shared`'s since the gametime stat board's pane
+ * became its second reader.
+ */
+function LedgeNote({ note }: { note: string | null }) {
+  if (!note) return null;
   return (
-    <div
-      className={`${CONSOLE_WINDOW_LEDGE} relative z-[2] mx-1.5 mt-1.5 flex shrink-0 flex-col gap-1.5 rounded-[7px] px-2.5 py-2`}
-    >
-      <div className="flex min-w-0 items-baseline gap-2">
-        <span className="min-w-0 flex-1 truncate font-display text-[length:var(--fs-15)] font-semibold text-[color:var(--billet-name)] [text-shadow:var(--billet-name-shadow)]">
-          {row.name}
-        </span>
-        {row.note && (
-          <span className="shrink-0 font-mono text-[length:var(--fs-9)] uppercase tracking-[0.16em] text-[color:var(--billet-label)]">
-            {row.note}
-          </span>
-        )}
-      </div>
-      <div className="flex min-w-0 flex-wrap items-center gap-1.5">
-        {children}
-        {/* **One key, not a press on every row.** Every league in this pane
-            narrows to the same set, so a row here is a reading and this is the
-            control; pressed, it says the grid behind is already on it. */}
-        <button
-          type="button"
-          onClick={onNarrow}
-          aria-pressed={narrowing}
-          aria-label={
-            narrowing ? `Stop narrowing to ${narrowLabel}` : `Narrow the league grid to ${narrowLabel}`
-          }
-          className={`${CONSOLE_KEY_PILL_BARE} ml-auto px-3 py-[0.3125rem] text-[length:var(--fs-10)] tracking-[0.14em] ${
-            narrowing
-              ? "border-active/55 bg-[image:var(--key-bg)] text-readout shadow-[var(--key-shadow-pressed),inset_0_0_14px_color-mix(in_srgb,var(--accent)_16%,transparent)] [text-shadow:var(--readout-text-glow)]"
-              : "border-foreground/10 bg-[image:var(--key-metal)] text-foreground/80 shadow-[var(--key-shadow)] hover:text-readout"
-          }`}
-        >
-          {narrowing ? "Narrowing" : "Narrow grid"}
-        </button>
-      </div>
-    </div>
+    <span className="shrink-0 font-mono text-[length:var(--fs-9)] uppercase tracking-[0.16em] text-[color:var(--billet-label)]">
+      {note}
+    </span>
   );
 }
 
@@ -1769,7 +1730,8 @@ function PlayerDetail({
   return (
     <>
       <DetailLedge
-        row={row}
+        name={row.name}
+        aside={<LedgeNote note={row.note} />}
         narrowing={narrowing}
         onNarrow={onNarrow}
         narrowLabel={`${row.name}, ${MODE_WORD[mode]}`}
@@ -1939,7 +1901,8 @@ function MateDetail({
   return (
     <>
       <DetailLedge
-        row={row}
+        name={row.name}
+        aside={<LedgeNote note={row.note} />}
         narrowing={narrowing}
         onNarrow={onNarrow}
         narrowLabel={`the leagues you share with ${row.name}`}

@@ -12,6 +12,8 @@ import {
   CONSOLE_PANE_TRACK,
   CONSOLE_ROW_WELL,
   CONSOLE_WINDOW_LEDGE,
+  DetailLedge,
+  ModeTrack,
   rankColor,
   Scanlines,
   sharePercentile,
@@ -31,7 +33,10 @@ import {
   NO_SHARES,
   NO_STAT_FILTERS,
   playerLeagueScope,
+  PLAYER_READINGS,
   rankStatRows,
+  READING_LABEL,
+  readingCount,
   SCORING_LABEL,
   STAT_FIXED,
   STAT_POSITIONS,
@@ -50,12 +55,12 @@ import {
   toggleFilterValue,
   toggleSplit,
   topStatRow,
-  USAGE_COUNT,
   USAGE_KEYS,
   USAGE_LABEL,
   usageLeagueScope,
 } from "../helpers/stat-board";
 import type {
+  PlayerReading,
   RankedStatRow,
   StatBasis,
   StatBoardFilters,
@@ -248,20 +253,27 @@ export function StatBoard({
    */
   const [picked, setPicked] = useState<string | null>(null);
   /**
-   * Which one of his four readings narrows the grid — **single-select, and
-   * null is the resting state**.
+   * Which of his readings the pane is on, and whether the grid is narrowed to
+   * it — **two states, the manager console's own split**: the track says what
+   * a reader is looking at and the `Narrow grid` key says whether the page
+   * behind is filtered to it, so a reader can move between readings without
+   * the grid jumping and put one on the grid with one deliberate press.
    *
-   * It resets with `picked`, and that is a correctness rule rather than
-   * tidiness: a reading is a fact about *that* player, so carrying it onto the
-   * next one would narrow the grid by a question nobody asked about him. The
-   * reset happens where the pick is set, so there is no effect to run late.
+   * Both reset with `picked`, and that is a correctness rule rather than
+   * tidiness: a reading is a fact about *that* player, so carrying a narrowing
+   * onto the next one would filter the grid by a question nobody asked about
+   * him. The reset happens where the pick is set, so there is no effect to run
+   * late.
    */
-  const [scope, setScope] = useState<UsageKey | null>(null);
+  const [reading, setReading] = useState<PlayerReading>("all");
+  const [gridNarrowed, setGridNarrowed] = useState(false);
 
   const pick = useCallback((id: string) => {
     setPicked((held) => (held === id ? held : id));
-    setScope(null);
+    setReading("all");
+    setGridNarrowed(false);
   }, []);
+  const toggleGridNarrowed = useCallback(() => setGridNarrowed((v) => !v), []);
 
   /**
    * The fold, indexed by player id — the join `statRows` reads.
@@ -352,14 +364,13 @@ export function StatBoard({
      */
     if (!shares) return null;
     const page = usageLeagueScope(shown, usage, leaguesById);
-    const player = playerLeagueScope(
-      scope,
-      picked ? (leaguesById[picked] ?? null) : null,
-    );
+    const player = gridNarrowed
+      ? playerLeagueScope(reading, picked ? (leaguesById[picked] ?? null) : null)
+      : null;
     if (page === null) return player;
     if (player === null) return page;
     return new Set([...page].filter((id) => player.has(id)));
-  }, [shares, shown, usage, leaguesById, scope, picked]);
+  }, [shares, shown, usage, leaguesById, gridNarrowed, reading, picked]);
 
   /**
    * Published in an effect rather than during render, which is the one thing
@@ -441,8 +452,10 @@ export function StatBoard({
               row={detail}
               basis={basis}
               leagues={leagues}
-              scope={scope}
-              onScope={setScope}
+              reading={reading}
+              onReading={setReading}
+              narrowing={gridNarrowed}
+              onNarrow={toggleGridNarrowed}
             />
           </div>
         )}
@@ -1701,15 +1714,19 @@ function Detail({
   row,
   basis,
   leagues,
-  scope,
-  onScope,
+  reading,
+  onReading,
+  narrowing,
+  onNarrow,
 }: {
   className: string;
   row: RankedStatRow | null;
   basis: StatBasis;
   leagues: number;
-  scope: UsageKey | null;
-  onScope: (key: UsageKey | null) => void;
+  reading: PlayerReading;
+  onReading: (reading: PlayerReading) => void;
+  narrowing: boolean;
+  onNarrow: () => void;
 }) {
   return (
     <div
@@ -1722,41 +1739,58 @@ function Detail({
         </p>
       ) : (
         <>
-          {/* The header billet is hidden on the phone, where the bar above
-              already carries the name and the figure — see `Bar`. Its meta line
-              comes down here instead so nothing is lost. */}
-          <div className="relative z-[1] mx-1.5 mt-1.5 hidden shrink-0 overflow-hidden rounded-[7px] bg-[image:var(--billet-bg)] px-2.5 py-2 shadow-[var(--standing-strip-shadow)] lg:block">
-            <BilletFinish />
-            <div className="relative flex items-baseline gap-2">
-              <span className="min-w-0 flex-1 truncate font-display text-[length:var(--fs-17)] font-semibold text-[color:var(--billet-name)] [text-shadow:var(--billet-name-shadow)]">
-                {row.name ?? row.player_id}
-              </span>
+          {/* **The manager console's header, shared** — `DetailLedge`, with the
+              points well beside the name and the meta lines under it. It is
+              drawn at every width, where the billet it replaced was hidden
+              below `lg` because the bar already carries the name: the
+              `Narrow grid` key lives here, and a phone that lost the header
+              would lose the key. A player nobody holds gets no key — there is
+              no league of the reader's to narrow to. */}
+          <DetailLedge
+            name={row.name ?? row.player_id}
+            aside={
               <span
                 className={`${CONSOLE_MILLED_WELL} inline-flex shrink-0 items-baseline gap-[0.3125rem] rounded-[0.4375rem] px-[0.4375rem] py-px`}
               >
                 <BayLabel>Pts</BayLabel>
-                <span className="font-display text-[length:var(--fs-18)] font-semibold tabular-nums text-[color:var(--billet-accent)] [text-shadow:var(--standing-engrave),0_0_12px_var(--accent-glow)]">
+                <span className="font-display text-[length:var(--fs-15)] font-semibold tabular-nums text-[color:var(--billet-accent)] [text-shadow:var(--standing-engrave),0_0_12px_var(--accent-glow)]">
                   {row.points.toFixed(1)}
                 </span>
               </span>
-            </div>
-            <p className={`relative m-0 mt-[0.3125rem] ${META} text-[color:var(--billet-label)]`}>
-              {meta(row)}
-            </p>
-            <p className={`relative m-0 mt-[0.1875rem] ${META} text-[color:var(--billet-scope)]`}>
-              {standing(row, leagues)}
-            </p>
-          </div>
-
-          {/* The phone's own header: one line, on the glass under the bar. */}
-          <div className="relative z-[1] shrink-0 border-b border-black/45 px-2.5 py-2 lg:hidden">
-            <p className={`m-0 ${META} text-[color:var(--readout-label)]`}>
-              {meta(row)} · {standing(row, leagues)}
-            </p>
-          </div>
+            }
+            sub={
+              <div>
+                <p className={`m-0 ${META} text-[color:var(--billet-label)]`}>{meta(row)}</p>
+                <p className={`m-0 mt-[0.1875rem] ${META} text-[color:var(--billet-scope)]`}>
+                  {standing(row, leagues)}
+                </p>
+              </div>
+            }
+            narrowing={narrowing}
+            onNarrow={row.held ? onNarrow : undefined}
+            narrowLabel={`${row.name ?? "this player"}: ${READING_NOTE[reading].toLowerCase()}`}
+          />
 
           <div className="lab-scroll-glass relative z-[1] min-h-0 flex-1 overflow-x-hidden overflow-y-auto p-1.5">
-            {row.held && <ScopeKeys row={row} scope={scope} onScope={onScope} />}
+            {/* The manager pane's own mode track, over his readings: what the
+                `Narrow grid` key above puts on the grid. `All` is the resting
+                reading — every league he is in, either side. */}
+            {row.held && (
+              <ModeTrack
+                legend="Leagues"
+                label={`Which of your leagues ${row.name ?? "this player"} narrows to`}
+                options={PLAYER_READINGS.map((id) => ({
+                  id,
+                  label: READING_LABEL[id],
+                  count: readingCount(row, id),
+                }))}
+                value={reading}
+                onPick={onReading}
+                note={READING_NOTE[reading]}
+                wrap
+                className="px-1 pb-2.5 pt-0.5"
+              />
+            )}
             {statFamilies(row, basis).map((family) => (
               <LineGroup
                 key={family.key}
@@ -1787,62 +1821,24 @@ function Detail({
 }
 
 /**
- * The four keys, **single-select**, and the count the selection leaves.
+ * What each of his readings means, in the track's lit sentence and in the
+ * `Narrow grid` key's accessible name.
  *
- * **Single-select because the four are a partition.** He sits on one roster
- * per league, so `Started` ∧ `They sat` is empty by construction for one
- * player — a reader pressing the second would watch their grid go blank for a
- * press that looked exactly like the one before it. `Subject.readings` unions
- * for that same reason one narrowing over; this refuses to offer the choice,
- * which is the stronger answer where there is a key per reading on screen.
- * (The ledge's caps AND, and they can: they are asked over a *population*.)
- *
- * **The figure under them is derived from the selection**, never written: it is
- * the length of the league list the picked reading actually carries, so a key
- * that narrows to nothing says nothing rather than a stale number. Pressing the
- * lit key again clears it, which is the only way back to the resting state.
+ * **The track is single-select because the four are a partition.** He sits on
+ * one roster per league, so `Started` ∧ `They sat` is empty by construction for
+ * one player — a reader who could press two would watch their grid go blank
+ * for a press that looked exactly like the one before it. `All` is the one
+ * union worth offering, for the same reason: every league he is in, either
+ * side. (The ledge's caps AND, and they can: they are asked over a
+ * *population*.)
  */
-function ScopeKeys({
-  row,
-  scope,
-  onScope,
-}: {
-  row: StatRow;
-  scope: UsageKey | null;
-  onScope: (key: UsageKey | null) => void;
-}) {
-  return (
-    <div className="mb-2 rounded-[7px] bg-[color:var(--case-well-bg)] p-[7px] shadow-[var(--case-well-shadow)]">
-      <p className="m-0 mb-1.5 font-mono text-[length:var(--fs-9)] uppercase tracking-[0.14em] text-[color:var(--readout-label)]">
-        Narrow my leagues to
-      </p>
-      <span
-        role="group"
-        aria-label={`Narrow my leagues by how ${row.name ?? "this player"} was used`}
-        className={`${CONSOLE_CHANNEL_METAL} grid grid-cols-2 gap-1 rounded-[0.625rem] p-[5px]`}
-      >
-        {USAGE_KEYS.map((key) => (
-          <Cap
-            key={key}
-            lit={scope === key}
-            onPress={() => onScope(scope === key ? null : key)}
-            className="min-w-0 whitespace-nowrap px-2 tracking-[0.06em]"
-          >
-            {USAGE_LABEL[key]} {USAGE_COUNT[key](row) ?? 0}
-          </Cap>
-        ))}
-      </span>
-      <p
-        aria-live="polite"
-        className="m-0 mt-1.5 font-mono text-[length:var(--fs-10)] uppercase tracking-[0.1em] text-[color:var(--billet-accent)]"
-      >
-        {scope
-          ? `Grid narrowed to ${USAGE_COUNT[scope](row) ?? 0} leagues`
-          : "Every league — press a key to narrow"}
-      </p>
-    </div>
-  );
-}
+const READING_NOTE: Record<PlayerReading, string> = {
+  all: "Every league he is in, either side",
+  start: "The leagues you started him in",
+  bench: "The leagues you sat him in",
+  "opp-start": "The leagues he was started against you",
+  "opp-bench": "The leagues he sat on your opponent's bench",
+};
 
 /** One family of his line, or the sum: a stamped header over milled rows. */
 function LineGroup({

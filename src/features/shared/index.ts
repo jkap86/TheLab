@@ -43,6 +43,7 @@ export {
   CONSOLE_TILE_LIT,
   CONSOLE_TILE_SELECTED,
   CONSOLE_TRACK,
+  CONSOLE_TRACK_SHELL,
   CONSOLE_TRACK_SM,
   CONSOLE_WELL,
   CONSOLE_WINDOW,
@@ -85,6 +86,11 @@ export {
   useSummaryReadings,
 } from "./summary-readings";
 export { SummaryFold } from "./ui/summary-fold";
+// A detail pane's header and its `Narrow grid` key, and the mode track under
+// it — the manager shares console's two parts, shared when the gametime stat
+// board's pane became a second reader. See the modules.
+export { DetailLedge } from "./ui/detail-ledge";
+export { ModeTrack, type ModeTrackOption } from "./ui/mode-track";
 export { SummaryReadingsKey } from "./ui/summary-readings-key";
 export {
   DEFAULT_TRADE_VALUE_BASIS,

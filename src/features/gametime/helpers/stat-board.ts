@@ -981,20 +981,56 @@ export function usageLeagueScope(
 }
 
 /**
- * The leagues one player's single picked reading leaves — the pane's own
- * narrowing, and the figure its note states.
+ * What the pane's track picks among: his four readings, and `all` of them.
+ *
+ * `all` is the resting reading and the one the manager console's pane has no
+ * need of — there a player is always on exactly one of three arms, where here
+ * the question a reader asks first is "which of my leagues is he in at all,
+ * either side", and the four keys are the refinements of it.
+ */
+export type PlayerReading = UsageKey | "all";
+
+/** The track's keys, in order — `All` first, then the four as the rails draw them. */
+export const PLAYER_READINGS: readonly PlayerReading[] = ["all", ...USAGE_KEYS];
+
+export const READING_LABEL: Record<PlayerReading, string> = {
+  all: "All",
+  ...USAGE_LABEL,
+};
+
+/**
+ * How many of the reader's leagues a reading answers for, on one player.
+ *
+ * `all` is the four summed, which is exact rather than an estimate: he sits on
+ * one roster per league, so the four partition his leagues and the sum counts
+ * each once. Null for a player nobody holds, on `USAGE_COUNT`'s own terms — a
+ * nought there would be a claim about a player the fold never saw.
+ */
+export function readingCount(row: StatRow, reading: PlayerReading): number | null {
+  if (reading !== "all") return USAGE_COUNT[reading](row);
+  if (!row.held) return null;
+  return USAGE_KEYS.reduce((sum, key) => sum + (USAGE_COUNT[key](row) ?? 0), 0);
+}
+
+/**
+ * The leagues one player's picked reading leaves — the pane's own narrowing,
+ * and what its `Narrow grid` key puts on the grid.
  *
  * **Single-select, and it has to be**: the four readings partition one
  * player's leagues, so a second key ANDed onto the first is always zero
  * leagues and a reader would be shown an empty grid for a press that looked
  * exactly like the one before it. It is `Subject.readings`' own argument,
  * which unions for the same reason this refuses to offer the choice.
+ *
+ * `all` is the union of the four — every league he is in, either side — which
+ * is the one union that says something, by the same partition.
  */
 export function playerLeagueScope(
-  reading: UsageKey | null,
+  reading: PlayerReading | null,
   leagues: Readonly<Record<UsageKey, readonly string[]>> | null,
 ): ReadonlySet<string> | null {
   if (!reading || !leagues) return null;
+  if (reading === "all") return new Set(USAGE_KEYS.flatMap((key) => leagues[key] ?? []));
   return new Set(leagues[reading] ?? []);
 }
 

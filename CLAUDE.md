@@ -4209,6 +4209,40 @@ included), the strip was a second copy of four of its values costing the ledge
 a row. The ledge is now the search, the count, the Filters key and `Clear`.
 `CapRail` went with it, having no caller left; `Cap` stays for the tab channel.
 
+### Gametime's pane took the manager's header and its `Narrow grid` key
+
+The gametime stat board's pane narrowed the league grid through four
+single-select caps in a well ("Narrow my leagues to"), where the manager
+console's pane does it with one `Narrow grid` key on a header ledge over a mode
+track. Two tools answering "which of my leagues is this player in, and show me
+them" in two grammars is the drift the console passes remove, so the gametime
+pane now draws the manager's parts: **`DetailLedge`** (name, what sits beside
+it, and the key) and **`ModeTrack`** (a legend, single-select keys with counts,
+a lit sentence) moved to `features/shared/ui` on the second-reader rule, and the
+manager's `PlayerModeTrack` is now its vocabulary over `ModeTrack`.
+
+**Two states where there was one, which is the manager's own split.** The pane
+used to narrow on the press of a reading; it now holds `reading` (what the track
+shows) and `gridNarrowed` (whether the grid is filtered to it), so a reader can
+move between readings without the grid jumping and put one on it with a
+deliberate press. Both reset on a new pick, for the old rule's reason — a
+reading is a fact about *that* player.
+
+**`All` is a fifth reading, and the resting one.** The manager's three modes
+always have one on; gametime's four readings partition a player's leagues, so
+the question a reader asks first — every league he is in, either side — is
+their union, and it is the one union that says something. `playerLeagueScope`
+answers it and `readingCount` sums the four (exact, by the same partition; null
+for a player nobody holds). A player nobody holds gets no track and no key:
+there is no league of the reader's to narrow to.
+
+**The header is drawn at every width**, where the billet it replaced was hidden
+below `lg` because the bar carries the name: the key lives there now. Five keys
+do not fit the 320px pane on one line, so `ModeTrack` takes `wrap`, which puts
+the track on its own line and needs a radius rather than a lozenge —
+`CONSOLE_TRACK_SHELL` is `CONSOLE_TRACK` without its `rounded-full`, split for
+the emit-order reason every other constant here is.
+
 ## KeepTradeCut values
 
 `shared/ktc` scrapes both of KTC's markets — dynasty (`/dynasty-rankings`) and
