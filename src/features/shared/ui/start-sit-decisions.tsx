@@ -229,8 +229,15 @@ function CounterpartCard({
         </span>
 
         <span className="min-w-0 flex-1">
+          {/* **It wraps, and the caption under it already did.** The name is
+              the only flexible child of a five-item row whose other four are
+              `shrink-0` and take ~138px of it, so at 360 it had ~154px — under
+              what `Christian McCaffrey` sets at `--fs-13`, and well under an
+              `Amon-Ra St. Brown`. A truncated *name* is the one cut on this
+              card that cannot be recovered from the rest of the row, which is
+              the argument the caption beside it was already exempted on. */}
           <span
-            className={`block truncate text-[length:var(--fs-13)] tracking-[-0.005em] ${
+            className={`block text-[length:var(--fs-13)] tracking-[-0.005em] [overflow-wrap:break-word] [text-wrap:pretty] ${
               picked ? "font-semibold text-readout" : "text-foreground/85"
             }`}
           >

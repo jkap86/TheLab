@@ -13,6 +13,7 @@ import {
   BilletFinish,
   canonicalReadings,
   CONSOLE_CHANNEL_METAL,
+  CONSOLE_CHIP_TRAY,
   CONSOLE_GLASS,
   CONSOLE_KEY_PILL_BARE,
   CONSOLE_MILLED_WELL,
@@ -137,6 +138,21 @@ const COLUMN_LABEL: Record<WeekReading, string> = {
   "opp-bench": "Opp Bn",
 };
 
+/**
+ * And over a phone bay, where one caption says a whole side.
+ *
+ * **No letter-spacing, and that is a measurement rather than a preference.** At
+ * 360 the caption track is 111px and `Opp start / bench` measures exactly 111px
+ * at `--fs-8` with `tracking-normal`; any tracking at all truncates the one
+ * word that says which side the two figures under it belong to. Every other
+ * mono label on this console is tracked, so this is the exception and the
+ * reason it is an exception is the number.
+ */
+const BAY_CAPTION = {
+  mine: "Start / bench",
+  opp: "Opp start / bench",
+} as const;
+
 /** And on the rail, where there is room for the whole word. */
 const SORT_LABEL: Record<WeekReading, string> = {
   start: "Start",
@@ -159,6 +175,20 @@ const COLUMN_WIDTH: Record<WeekReading | "figure", string> = {
   "opp-bench": "3.5rem",
   figure: "3.75rem",
 };
+
+/**
+ * The phone arm's two bays, in the order {@link READING_COLUMNS} declares.
+ *
+ * **Sliced from that list rather than spelled again**, so the pair a bay holds
+ * and the order the cells and the tray's keys are drawn in cannot come apart —
+ * a bay captioned `Start / bench` printing the opposing pair is a perfectly
+ * ordinary row saying something untrue. Module level, so the two arrays are one
+ * identity for the life of the process rather than a pair rebuilt per row.
+ */
+const READING_BAYS = [
+  { caption: BAY_CAPTION.mine, readings: READING_COLUMNS.slice(0, 2) },
+  { caption: BAY_CAPTION.opp, readings: READING_COLUMNS.slice(2) },
+] as const;
 
 /** Nothing folded yet — one identity, so a memo sees one object. */
 const NO_ROWS: ConsoleRow[] = [];
@@ -195,6 +225,8 @@ type ConsoleRow = {
   figure: number | null;
   /** Every league he was fielded in, either side: what a row's press narrows to. */
   fielded: number;
+  /** `SF · fielded in 46` — the phone subline. See the fold for why not `note`. */
+  sub: string;
   /** The name, lower-cased once, for the search. */
   search: string;
   /** This row's `subjectSlot`, for the selection. */
@@ -384,24 +416,34 @@ export function StartSitConsole({
 
   const all = useMemo<ConsoleRow[]>(() => {
     if (!shares) return NO_ROWS;
-    return players.map((player) => ({
-      id: player.player_id,
-      name: player.name,
-      position: player.position ?? "—",
-      // **`filter(Boolean)` rather than a template**, which is what stops a
-      // player with no stored team reading as `WR · ` — a dangling separator
-      // promising a fact that is not there.
-      note: [player.position, player.team].filter(Boolean).join(" · ") || null,
-      started: player.started,
-      benched: player.benched,
-      oppStarted: player.oppStarted,
-      oppBenched: player.oppBenched,
-      figure: player.figure,
-      fielded:
-        player.started + player.benched + player.oppStarted + player.oppBenched,
-      search: player.name.toLowerCase(),
-      slot: subjectSlot({ kind: "week", id: player.player_id }),
-    }));
+    return players.map((player) => {
+      const fielded =
+        player.started + player.benched + player.oppStarted + player.oppBenched;
+      return {
+        id: player.player_id,
+        name: player.name,
+        position: player.position ?? "—",
+        // **`filter(Boolean)` rather than a template**, which is what stops a
+        // player with no stored team reading as `WR · ` — a dangling separator
+        // promising a fact that is not there.
+        note: [player.position, player.team].filter(Boolean).join(" · ") || null,
+        // The phone arm's subline, and it is a *different sentence* rather than
+        // a narrower `note`: the position moved into the bezel there, so
+        // repeating it would say it twice, and what the line has room for
+        // instead is the count the row's own press narrows to. The same
+        // `filter(Boolean)` rule — a player with no stored team reads
+        // `fielded in 12` rather than carrying a dangling separator.
+        sub: [player.team, `fielded in ${fielded}`].filter(Boolean).join(" · "),
+        started: player.started,
+        benched: player.benched,
+        oppStarted: player.oppStarted,
+        oppBenched: player.oppBenched,
+        figure: player.figure,
+        fielded,
+        search: player.name.toLowerCase(),
+        slot: subjectSlot({ kind: "week", id: player.player_id }),
+      };
+    });
   }, [shares, players]);
 
   // Keyed by slot, on `SharesDrawer.chosen`'s rule: a row is one narrowing
@@ -1126,6 +1168,7 @@ function List({
                 narrowing={chosen.has(row.slot)}
                 held={readings.get(row.id) ?? NO_READINGS}
                 open={trays.has(row.id)}
+                figureLabel={figureLabel}
                 onPick={onPick}
                 onDisclose={onDisclose}
                 onReading={onReading}
@@ -1193,9 +1236,30 @@ function Head({
  * still jump instantly under reduced motion, which is the thing the preference
  * is about.
  *
- * **Below `@md` the cells wrap onto a line of their own.** Five cells beside a
- * badge is wider than a phone-width row; unwrapped, the name collapses to
- * nothing. This is `ShareRow`'s existing finding and it lands identically here.
+ * **Below `@md` the row is two lines and the readouts are two bays.** Five
+ * cells beside a badge is wider than a phone-width row, and wrapped they cost
+ * three lines with the figure orphaned on the last of them — 116px a row at
+ * 390, of which the name got 213px at `--fs-13`. So the phone arm gives the
+ * name the row's own headline at `--fs-15` and lets it *wrap* rather than
+ * truncate, pairs it with the figure the way the decisions ledge already does,
+ * and groups the four counts into two captioned {@link ReadingBay}s — which is
+ * what replaces the head strip that arm has never had room for. Two lines,
+ * 105px, and a name that is never cut.
+ *
+ * **One DOM, two layouts, and two arms of content inside it.** The two line
+ * wrappers go `@md:contents`, so above the query their children are items of
+ * the press again and the single line the head aligns to is byte-identical —
+ * the `lg:contents` trick `DrawerRow` and the app rack's brand row already
+ * turn. What `contents` cannot do is change *what* is drawn, and the two arms
+ * genuinely differ there — two bays against five cells, a captioned figure
+ * window against a bare one, a subline naming the team and the fielded count
+ * against one naming the position and the team — so those are gated by
+ * `display: none`, which takes the arm that is not on screen out of the
+ * accessibility tree as well. It is `WeekStepper`'s own precedent and its two
+ * conditions: nothing in either arm holds state, and exactly one is ever read.
+ * What it costs is the nodes of the arm that is hidden, on a list with no
+ * virtualizer — which is the price of a breakpoint a client component must not
+ * have to hydrate to learn.
  */
 const Row = memo(function Row({
   row,
@@ -1203,6 +1267,7 @@ const Row = memo(function Row({
   narrowing,
   held,
   open,
+  figureLabel,
   onPick,
   onDisclose,
   onReading,
@@ -1214,6 +1279,8 @@ const Row = memo(function Row({
   held: readonly WeekReading[];
   /** Its tray of narrowing keys is open. */
   open: boolean;
+  /** What the figure is — the phone arm captions its own window with it. */
+  figureLabel: string;
   onPick: (id: string) => void;
   onDisclose: (id: string) => void;
   onReading: (id: string, reading: WeekReading) => void;
@@ -1231,69 +1298,134 @@ const Row = memo(function Row({
             : "border-foreground/9 shadow-[var(--key-shadow)]")
       }
     >
-      <div className="flex items-center gap-2 py-2 pl-[0.6875rem] pr-[0.4375rem]">
+      <div className="relative flex items-center py-2 pl-[0.6875rem] pr-[0.4375rem] @md:gap-2">
         <button
           type="button"
           onClick={() => onPick(row.id)}
           aria-pressed={picked}
-          className="flex min-w-0 flex-1 flex-wrap items-center gap-x-2 gap-y-1.5 rounded-lg text-left focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-active/60 @md:flex-nowrap"
+          className="flex min-w-0 flex-1 flex-col gap-1.5 rounded-lg text-left focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-active/60 @md:flex-row @md:flex-nowrap @md:items-center @md:gap-x-2"
         >
-          {/* The position, in a lit bezel. Start/sit rows are players seen
-              through a week's seats and the drawer never drew a face — what
-              tells two of them apart at a glance is which seat they compete
-              for. `—` where the feed named no position. */}
-          <span
-            aria-hidden
-            className={`inline-flex size-[1.875rem] shrink-0 items-center justify-center rounded-[0.4375rem] border border-foreground/12 bg-[image:var(--bezel-bg)] font-mono text-[length:var(--fs-9)] uppercase shadow-[var(--bezel-shadow)] ${
-              on ? "text-readout" : "text-foreground/68"
-            }`}
-          >
-            {row.position}
-          </span>
-
-          {/* `basis` is the button minus the badge and its gap, so the cells
-              cannot fit beside it and wrap to a line of their own. Above `@md`
-              it is `auto` and the row is one line. */}
-          <span className="min-w-0 flex-1 basis-[calc(100%-2.375rem)] @md:basis-auto">
+          {/* **Line one below `@md`, and nothing at all above it.** The wrapper
+              goes `contents` at the query, so the badge, the name and the
+              figure window are items of the press again and the row the head
+              strip aligns to is the one it always was. A variant beside a base
+              `flex` is safe; two base display utilities would be settled by
+              Tailwind's emit order rather than by this string. */}
+          <span className="flex min-w-0 items-start gap-2 @md:contents">
+            {/* The position, in a lit bezel. Start/sit rows are players seen
+                through a week's seats and the drawer never drew a face — what
+                tells two of them apart at a glance is which seat they compete
+                for. `—` where the feed named no position. **Smaller on the
+                phone**, where it is a mark beside a headline rather than the
+                row's own left column, and `mt-0.5` because that line is
+                `items-start`: a bezel centred against two lines of name sits
+                beside neither. */}
             <span
-              className={`block truncate text-[length:var(--fs-13)] tracking-[-0.005em] ${
-                on ? "font-semibold text-readout" : "text-foreground/85"
+              aria-hidden
+              className={`mt-0.5 inline-flex size-6 shrink-0 items-center justify-center rounded-md border border-foreground/12 bg-[image:var(--bezel-bg)] font-mono text-[length:var(--fs-8)] uppercase shadow-[var(--bezel-shadow)] @md:mt-0 @md:size-[1.875rem] @md:rounded-[0.4375rem] @md:text-[length:var(--fs-9)] ${
+                on ? "text-readout" : "text-foreground/68"
               }`}
             >
-              {row.name}
+              {row.position}
             </span>
-            {row.note && (
-              <span className="block truncate font-mono text-[length:var(--fs-9)] uppercase tracking-[0.16em] text-foreground/46">
-                {row.note}
+
+            <span className="min-w-0 flex-1">
+              {/* **The phone name wraps and is never cut.** `truncate` is the
+                  `@md` arm's, where the row is one line against a head strip
+                  and a second line would put every row at two heights; here
+                  there is no head, the line is the row's own headline, and a
+                  clipped surname is the fault this arm exists to fix.
+                  `leading-[inherit]` at the query rather than a figure of its
+                  own, so the single-line row's box is the one it was. */}
+              <span
+                className={`block font-display text-[length:var(--fs-15)] leading-[1.25] tracking-[-0.01em] [overflow-wrap:break-word] [text-wrap:pretty] @md:truncate @md:text-[length:var(--fs-13)] @md:leading-[inherit] @md:tracking-[-0.005em] ${
+                  on
+                    ? "font-semibold text-readout [text-shadow:var(--readout-text-glow)] @md:[text-shadow:none]"
+                    : "text-foreground/92 @md:text-foreground/85"
+                }`}
+              >
+                {row.name}
               </span>
-            )}
-            {/* **A closed tray says nothing**, and the readings are picked
-                inside one: a row scrolled past is still narrowing the grid
-                behind the panel, and without this the only thing saying so is a
-                lit cell a reader has to count along the row to find. It is
-                `NarrowingChip`'s argument, on the row itself. */}
-            {held.length > 0 && (
-              <span className="block truncate font-mono text-[length:var(--fs-9)] uppercase tracking-[0.16em] text-active">
-                {held.map((r) => READING_WORD[r]).join(" + ")} held
+              {/* Two sublines, one drawn at a time. The phone's says the team
+                  and what a press narrows to — the position is in the bezel
+                  beside it and would otherwise be said twice — and the `@md`
+                  arm's is the `position · team` note it has always carried,
+                  where the bezel is a column of its own. */}
+              <span className="mt-0.5 block font-mono text-[length:var(--fs-9)] uppercase tracking-[0.16em] text-foreground/46 @md:hidden">
+                {row.sub}
               </span>
-            )}
+              {row.note && (
+                <span className="hidden truncate font-mono text-[length:var(--fs-9)] uppercase tracking-[0.16em] text-foreground/46 @md:block">
+                  {row.note}
+                </span>
+              )}
+              {/* **A closed tray says nothing**, and the readings are picked
+                  inside one: a row scrolled past is still narrowing the grid
+                  behind the panel, and without this the only thing saying so is
+                  a lit cell a reader has to count along the row to find. It is
+                  `NarrowingChip`'s argument, on the row itself. */}
+              {held.length > 0 && (
+                <span className="block truncate font-mono text-[length:var(--fs-9)] uppercase tracking-[0.16em] text-active">
+                  {held.map((r) => READING_WORD[r]).join(" + ")} held
+                </span>
+              )}
+            </span>
+
+            {/* The figure, paired with the name rather than filed at the end of
+                a rank of counts — the pairing the decisions pane's own ledge
+                already makes, and what leaves line two to the two bays. It
+                captions itself because there is no head over it here; above
+                `@md` there is one, and it is the last `Cell` instead. */}
+            <span
+              className={`${CONSOLE_WINDOW} inline-flex shrink-0 items-baseline gap-[5px] rounded-lg px-[7px] py-[3px] @md:hidden`}
+            >
+              <Scanlines />
+              <span className="relative font-mono text-[length:var(--fs-8)] uppercase tracking-[0.1em] text-readout-label">
+                {figureLabel}
+              </span>
+              <span className="relative font-mono text-[length:var(--fs-13)] tabular-nums text-readout [text-shadow:var(--readout-text-glow)]">
+                {row.figure === null ? "—" : row.figure.toFixed(1)}
+              </span>
+            </span>
           </span>
 
-          {READING_COLUMNS.map((id) => (
-            <Cell
-              key={id}
-              width={COLUMN_WIDTH[id]}
-              lit={held.includes(id)}
-              figure={false}
-            >
-              {String(COUNT_OF[id](row))}
-            </Cell>
-          ))}
-          {/* The figure lights for nobody: it is not a reading, so there is no
-              key in the tray that could pick it. */}
-          <Cell width={COLUMN_WIDTH.figure} lit={false} figure>
-            {row.figure === null ? "—" : row.figure.toFixed(1)}
-          </Cell>
+          {/* **Line two below `@md`: the four counts as two bays.** `min-h-11`
+              is the disclosure key's own square, so the bays stretch to it and
+              the key beside them lands on the same two edges — the key is a
+              sibling of this press rather than a child (a control nested in a
+              control is not reliably reachable), so the two are aligned by
+              their heights agreeing rather than by sharing a flex line. */}
+          <span className="flex min-h-11 items-stretch gap-1 pr-12 @md:contents">
+            {READING_BAYS.map((bay) => (
+              <ReadingBay
+                key={bay.caption}
+                caption={bay.caption}
+                readings={bay.readings}
+                row={row}
+                held={held}
+              />
+            ))}
+            {/* The `@md` arm's five cells, unchanged and off the phone. The
+                wrapper is `contents` at the query rather than a box, so each
+                cell is an item of the press and sits under its own head. */}
+            <span className="hidden @md:contents">
+              {READING_COLUMNS.map((id) => (
+                <Cell
+                  key={id}
+                  width={COLUMN_WIDTH[id]}
+                  lit={held.includes(id)}
+                  figure={false}
+                >
+                  {String(COUNT_OF[id](row))}
+                </Cell>
+              ))}
+              {/* The figure lights for nobody: it is not a reading, so there is
+                  no key in the tray that could pick it. */}
+              <Cell width={COLUMN_WIDTH.figure} lit={false} figure>
+                {row.figure === null ? "—" : row.figure.toFixed(1)}
+              </Cell>
+            </span>
+          </span>
         </button>
 
         {/* **A sibling of the row's own press, deliberately**, so a row can be
@@ -1302,13 +1434,26 @@ const Row = memo(function Row({
             `@md`, where a thumb is the input and the row has already wrapped to
             two lines, and 24px wide above it, where the head row is on screen
             and the spacer beside it has to match. `SharesDrawer`'s own
-            geometry. */}
+            geometry.
+
+            **Taken out of flow below the query, and that is a width rather
+            than a position.** In flow it is a sibling of the press, so its 44px
+            and the gap beside it come off *both* of the press's lines — and
+            line one has no key on it: the name would pay 48px for a square
+            drawn under line two. Absolute, line one is the row's whole content
+            box (164px of name at 360 rather than 116, which is the difference
+            between a subline that fits and one that wraps), and line two buys
+            the square back with `pr-12` — 44 and the 4px gap, the same two
+            numbers, spent where they are actually drawn. The `pr` is inert
+            above the query without an override, because a `contents` box
+            generates none. Above it the key is `static` again and the row is
+            the single line it always was. */}
         <button
           type="button"
           onClick={() => onDisclose(row.id)}
           aria-expanded={open}
           aria-label={`${open ? "Hide" : "Show"} narrowing keys for ${row.name}`}
-          className={`lab-anim inline-flex size-11 shrink-0 items-center justify-center rounded-full border bg-[image:var(--key-metal)] font-mono text-[length:var(--fs-11)] shadow-[var(--key-shadow)] transition-[transform,color,border-color] duration-150 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-active/60 @md:h-7 @md:w-6 @md:text-[length:var(--fs-10)] ${
+          className={`lab-anim absolute bottom-2 right-[0.4375rem] inline-flex size-11 shrink-0 items-center justify-center rounded-full border bg-[image:var(--key-metal)] font-mono text-[length:var(--fs-11)] shadow-[var(--key-shadow)] transition-[transform,color,border-color] duration-150 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-active/60 @md:static @md:h-7 @md:w-6 @md:self-center @md:text-[length:var(--fs-10)] ${
             open ? "rotate-180" : ""
           } ${
             held.length > 0
@@ -1325,7 +1470,7 @@ const Row = memo(function Row({
           unchanged — its `line` arm is the one the drawer draws and the one the
           design names. */}
       {open && (
-        <div className="relative flex items-center pb-[0.5625rem] pl-[3.0625rem] pr-[0.6875rem]">
+        <div className="relative flex items-center pb-[0.5625rem] pl-[2.6875rem] pr-[0.6875rem] @md:pl-[3.0625rem]">
           <ReadingKeys
             counts={row}
             picked={held}
@@ -1416,6 +1561,75 @@ function Cell({
   );
 }
 
+/**
+ * One side's pair of counts, in a milled hole with a caption over it.
+ *
+ * **This is what replaces the column head on the phone**, and the reason it is
+ * a bay rather than four heads is 360px: a head strip has to be as wide as its
+ * cells, and five cells plus a 44px key run past the row's right edge there.
+ * A caption over a *pair* says the side once instead of naming each column, and
+ * two of them fit the row's own width with the key beside them. It is only ever
+ * drawn below `@md`; above it the head strip is on screen and the cells sit
+ * under it.
+ *
+ * **The windows are `flex-1` rather than {@link COLUMN_WIDTH}.** That constant
+ * is right above the query, where a head has to line up with a cell, and is
+ * exactly what breaks below it — a fixed width cannot give back what a 360px
+ * row does not have. Here the two figures share whatever the bay is.
+ *
+ * **The lit state is on the window and never on the bay**, which is the same
+ * rule {@link Cell} keeps and for the same reason: a reader picks a *reading*,
+ * so lighting the hole would say both of the figures in it were picked. It is
+ * a border and a halo rather than a fill — a tinted glass would make the number
+ * inside mean something different from the identical number beside it — and it
+ * is composed onto {@link CONSOLE_WINDOW_SHELL} rather than appended to
+ * {@link CONSOLE_WINDOW}, since two base border-colour utilities of the same
+ * specificity are settled by Tailwind's emit order and what that costs is a
+ * window that silently never lights.
+ */
+function ReadingBay({
+  caption,
+  readings,
+  row,
+  held,
+}: {
+  /** Which side these two are — the one thing the pair cannot say itself. */
+  caption: string;
+  readings: readonly WeekReading[];
+  row: ConsoleRow;
+  held: readonly WeekReading[];
+}) {
+  return (
+    <span
+      className={`${CONSOLE_CHIP_TRAY} flex min-w-0 flex-1 flex-col gap-[2px] rounded-lg p-[3px] @md:hidden`}
+    >
+      {/* **No tracking, and that is the measurement in `BAY_CAPTION`'s note**:
+          at 360 `Opp start / bench` is exactly as wide as the track it sits in
+          and any letter-spacing at all truncates it. */}
+      <span className="truncate pl-0.5 font-mono text-[length:var(--fs-8)] uppercase tracking-normal text-[color:var(--billet-label)]">
+        {caption}
+      </span>
+      <span className="flex items-stretch gap-[3px]">
+        {readings.map((id) => (
+          <span
+            key={id}
+            className={`${CONSOLE_WINDOW_SHELL} flex min-w-0 flex-1 flex-col justify-center rounded-md px-[5px] py-[3px] ${
+              held.includes(id)
+                ? "border-active/55 shadow-[var(--window-shadow),0_0_20px_-8px_var(--accent-glow)]"
+                : "border-black/85"
+            }`}
+          >
+            <Scanlines />
+            <span className="relative whitespace-nowrap font-mono text-[length:var(--fs-11)] leading-[1.2] tabular-nums text-readout [text-shadow:var(--readout-text-glow)]">
+              {COUNT_OF[id](row)}
+            </span>
+          </span>
+        ))}
+      </span>
+    </span>
+  );
+}
+
 /* ------------------------------------------------------------------ */
 
 /**
@@ -1447,17 +1661,24 @@ function DetailLedge({
     <div
       className={`${CONSOLE_WINDOW_LEDGE} relative z-[2] mx-1.5 mt-1.5 flex shrink-0 flex-col gap-1.5 rounded-[7px] px-2.5 py-2`}
     >
-      <div className="flex min-w-0 items-baseline gap-2">
-        <span className="min-w-0 flex-1 truncate font-display text-[length:var(--fs-15)] font-semibold text-[color:var(--billet-name)] [text-shadow:var(--billet-name-shadow)]">
-          {row.name}
-        </span>
+      {/* **The name takes the line**, at every width rather than below a
+          query: this pane is `26rem` even at `lg`, so a headline sharing one
+          line with the note and the figure window had about 160px whatever the
+          viewport was and cut `Christian McCaffrey` on a laptop as readily as
+          on a phone. Wrapping rather than truncating, for the row's reason —
+          a name is the subject, and a subject is the one thing on a readout
+          that must not be guessed at. */}
+      <span className="block font-display text-[length:var(--fs-16)] font-semibold leading-[1.25] tracking-[-0.015em] text-[color:var(--billet-name)] [overflow-wrap:break-word] [text-wrap:pretty] [text-shadow:var(--billet-name-shadow)]">
+        {row.name}
+      </span>
+      <div className="flex min-w-0 items-center gap-2">
         {row.note && (
-          <span className="shrink-0 font-mono text-[length:var(--fs-9)] uppercase tracking-[0.16em] text-[color:var(--billet-label)]">
+          <span className="min-w-0 truncate font-mono text-[length:var(--fs-9)] uppercase tracking-[0.16em] text-[color:var(--billet-label)]">
             {row.note}
           </span>
         )}
         <span
-          className={`${CONSOLE_WINDOW} inline-flex shrink-0 items-baseline gap-1.5 rounded-lg px-2 py-[0.1875rem]`}
+          className={`${CONSOLE_WINDOW} ml-auto inline-flex shrink-0 items-baseline gap-1.5 rounded-lg px-2 py-[0.1875rem]`}
         >
           <Scanlines />
           <span className="relative font-mono text-[length:var(--fs-9)] uppercase tracking-[0.14em] text-readout-label">
@@ -1469,7 +1690,10 @@ function DetailLedge({
         </span>
       </div>
       <div className="flex min-w-0 flex-wrap items-center gap-1.5">
-        <p className="m-0 min-w-0 flex-1 truncate font-mono text-[length:var(--fs-9)] uppercase tracking-[0.14em] text-readout-label">
+        {/* Wrapping rather than truncating too, and for a sharper version of
+            the same reason: this sentence ends in the count it is about, so
+            what a truncation cuts is the number rather than the preamble. */}
+        <p className="m-0 min-w-0 flex-1 font-mono text-[length:var(--fs-9)] uppercase leading-[1.6] tracking-[0.14em] text-readout-label">
           {line}
         </p>
         <button

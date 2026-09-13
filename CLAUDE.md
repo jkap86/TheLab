@@ -6701,6 +6701,171 @@ argued about since it was written and which this pass deliberately did not
 change; and how the six-cap Sort rail reads when it wraps to two lines on a real
 1024 laptop, which the fixtures' short ledge does not exercise.
 
+### The phone row gave the name the headline
+
+The start/sit console's list row was unreadable on a phone, and both halves of
+that were measurable. **The row was three lines tall** — below the list's `@md`
+container query the five readout cells wrapped under the name and the figure was
+orphaned onto a line of its own, 116px a row at 390, five on screen. **And the
+name was small and, in the decisions pane, cut** — 213px at `--fs-13` in the
+list, and about 160px at `--fs-15` in the ledge, where `Christian McCaffrey`
+truncated. The row is two lines now: the name is the row's own headline at
+`--fs-15` and **wraps rather than truncating**, the figure is paired with it the
+way the ledge already pairs them, and the four counts are two captioned bays.
+Applied from a design handoff. **Nothing on the wire moved** — no route, no
+query, no contract type, no payload field, no migration — and no token was
+added: every surface, size and shadow in it is one `globals.css` already
+carries.
+
+**Everything here is the phone arm's, and the `@md` arm is byte-identical.**
+That arm has a head strip to align to and this one has never had room for one,
+which is the whole reason the two differ — so `COLUMN_WIDTH`, the five `Cell`s,
+the head and the single-line row are untouched, and the render measures them to
+the pixel on both sides of the change.
+
+**One DOM, two layouts, and two arms of content inside it.** The two line
+wrappers go `@md:contents`, so above the query their children are items of the
+press again and the row is the one the head aligns to — the `lg:contents` trick
+`DrawerRow` and the app rack's brand row already turn, and safe beside a base
+`flex` because a variant outranks it where two *base* display utilities would be
+settled by Tailwind's emit order. What `contents` cannot do is change **what** is
+drawn, and the two arms genuinely differ there: two bays against five cells, a
+captioned figure window against a bare one, and a subline naming the team and the
+fielded count against one naming the position and the team. Those are gated by
+`display: none`, which takes the arm that is not on screen out of the
+accessibility tree as well — `WeekStepper`'s own precedent and its two
+conditions, that nothing in either arm holds state and exactly one is ever read.
+What it costs is the hidden arm's nodes on a list with no virtualizer, which is
+the price of a breakpoint a client component must not have to hydrate to learn.
+
+**The bay is what replaces the head strip, and 360px is why it is a bay.** A
+head has to be as wide as its cells, and five cells plus a 44px key run past the
+row's right edge there — which is the measurement that killed the handoff's own
+superseded turn. One caption over a *pair* says the side once instead of naming
+each column, and two of them fit the row with the key beside them. The windows
+are `flex-1` rather than `COLUMN_WIDTH`: a fixed width cannot give back what a
+360px row does not have. **The lit state stays on the window and never on the
+bay** — a reader picks a *reading*, so lighting the hole would say both figures
+in it were picked — and it is composed onto `CONSOLE_WINDOW_SHELL` rather than
+appended to `CONSOLE_WINDOW`, since that constant's own split is what stops a
+window silently never lighting.
+
+**The caption carries no letter-spacing, and that is the one value in the pass
+that is a measurement rather than a preference.** At 360 the caption track is
+111px and `Opp start / bench` is exactly that wide at `--fs-8` with
+`tracking-normal`; any tracking at all truncates the one word that says which
+side the two figures under it belong to. Every other mono label on this console
+is tracked, so the exception is stated where it is made.
+
+**`READING_BAYS` is sliced from `READING_COLUMNS` rather than spelled again**,
+so a bay captioned `Start / bench` cannot come to hold the opposing pair — an
+ordinary-looking row saying something untrue, which is the failure class this
+file is written against. And the phone subline is derived on the row list rather
+than in the render, on `ConsoleRow`'s own memo argument: a string built per
+render would rebuild a thousand rows to draw what they already drew.
+
+#### The key came out of flow, and that is a width rather than a position
+
+The disclosure key is a **sibling** of the row's press and has to be — a
+`<button>` inside a `<button>` is invalid and unreachable, which is what makes a
+row openable while unpicked. In flow that costs its 44px and the gap beside it
+off **both** of the press's lines, and line one has no key on it: measured, the
+name column came out **116px at 360** against the handoff's 164, the subline
+wrapped to a second line, and the row landed at 123px — *taller than the
+three-line row the change exists to replace*. Absolute below the query, line one
+is the row's whole content box and line two buys the square back with `pr-12`,
+the same two numbers spent where they are actually drawn. Measured after: the
+name is **163.92px at 360**, the handoff's figure to the tenth, and the row is
+107px. Above `@md` the key is `static` again and the row is the single line it
+was. The `pr` needs no override there, because a `contents` box generates none.
+
+#### The ledge is three lines at every width, not below a query
+
+The handoff offers keeping the decisions ledge's single-line arrangement above
+`lg`; it is three lines at every width instead, and the reason is that the pane
+is `lg:flex-[0_1_26rem]` — **416px on a laptop**. A headline sharing one line
+with the note and the figure window had about 160px whatever the viewport was,
+so `Christian McCaffrey` was cut on a desktop as readily as on a phone. The name
+takes the line, wraps, and the sentence under it wraps too — a truncation there
+cuts the count the sentence is *about* rather than its preamble.
+
+#### The counterpart cards had the same fault and took the same treatment
+
+The handoff flags them as the one thing its recreation does not cover and asks
+they be looked at. They truncate: `start-sit-decisions.tsx`'s counterpart name
+is the only flexible child of a five-item row whose other four are `shrink-0`
+and take ~138px of it, so at 360 it had ~154px — under what `Christian
+McCaffrey` sets at `--fs-13`. It wraps now, which is the rule the caption
+directly under it was already exempted on. Only the name changed; the card's
+size, layout and every other string are untouched, and `WeekSharesDrawer` is
+that component's second reader and gets the same fix for the same fault.
+
+#### Verified
+
+Driven over CDP against `next dev` with no `DATABASE_URL` — the boot hook skips
+migrations and the loops log their refusals, which is the server coming up
+healthy against nothing — through a temporary `/preview` route mounting the
+**real** `StartSitConsole` over the real fold, then deleted. The mechanics are
+the ones this file records: `--no-proxy-server`, `localhost` rather than
+`127.0.0.1`, a phone viewport from `Emulation.setDeviceMetricsOverride` with
+`mobile: true`, `data-theme` **and** `localStorage` cleared *before* hydration
+(navigate, clear, navigate again — the store notifies on its own writes, so a
+clear after load leaves the previous run's flag already read),
+`--disable-features=OverlayScrollbar`, the
+`--blink-settings=availablePointerTypes=4,…` flags built as a **template
+literal**, a client-component harness, a CDP client over Node's own `WebSocket`
+since Playwright is not in this project's `node_modules`, and a fresh
+`--remote-debugging-port` per run. Two are this pass's own and each cost a run.
+The bar's toggle is an `absolute inset-0` button with **no text**, so it is
+found by its `aria-label` rather than by content. And **visibility must be read
+off a rect, never off the element's own computed `display`**: a child of a
+`display: none` parent still reports its own, so a check for the hidden arm's
+cells found five of them on a phone with the CSS perfectly correct.
+
+**Eight renders — 360, 390, 430 and 1280 in dark and light — all clean**, and
+the geometry is the handoff's. The name column is **163.92 / 193.92 / 233.92px**
+against its 164 / ~183 / ~223, the bay **117 / 132 / 152px** against its 115 /
+~125 / ~145, and the row **107.48px** against its 105 — where the row this
+replaces was 116px with a clipped name. The badge is 24px and the key 44×44 with
+its bottom on the bays' own, both bays 44.73px under `min-h-11`; above `@md` the
+badge is 30px, the five cells are `56,56,56,56,60`, the head strip is up, the
+name truncates at 15.08px and the key is `static` at 24×28 — the arm unchanged,
+measured rather than asserted. The tray's keys sit at **x=71 against the name's
+x=71** at every phone width and 119.5 against 119.5 above the query, which is
+what settles the inset: the handoff's literal `pl-[2.4375rem]` and its stated
+intent disagree by 4px, and the intent — aligned to the name — is the one that
+is checkable, so it is `pl-[2.6875rem]` with the old value kept at `@md`.
+
+Every arm landed. **Twelve rows at four widths carry no clipped leaf text at
+all**, including two names past anything the NFL has: a 39-character one wraps
+to two lines at 360 and 390, fits one at 430, and overflows nothing. The ledge is
+three children with the name at `--fs-16` (18.24px on the phone's 1.14 scale,
+18.56 on the 1.16 above `sm` — the same token), `white-space: normal`, wrapping
+to two lines at 360 and never clipped. Eight counterpart cards read `normal` and
+clip nothing at any width. Both themes turn over from the tokens alone
+(`--readout-bg` `#04100f` against `#eaf6f4`), with no light-mode block written
+for any of it. At every width and in both schemes:
+`document.documentElement.scrollWidth` within the viewport, **zero** unclipped
+elements past it, zero inside an open row, exactly one `<h1>`, and **no console
+output of any kind** beyond the dev server's own HMR line.
+
+2,645 unit tests pass; `lint`, `typecheck` and `check:full` from a cleared
+`.next` — the production build, then lint, typecheck and the suite — are clean.
+
+**Not verified against real data**, which is the gap to close first: the fixture
+is twelve invented leagues over twelve players and no database was reachable
+from here. Four things a render cannot check — what the hidden arm's nodes
+actually cost on a real account, where the list runs to ~1,500 rows against this
+harness's twelve and the page re-renders per line of the leagues stream, which
+is the one price this arrangement knowingly pays; whether a real account's names
+wrap as rarely as the fixture's do, since the row's height is now a function of
+the longest name on screen rather than a constant; whether `team · fielded in N`
+is the subline a reader wants where the position used to be, which is the one
+reading this pass moves and only a reader settles; and whether the wrapped
+counterpart name reads as intended beside its own wrapped caption, which is the
+two-line-over-two-line case the drawer's note already flagged as the visually
+worst combination.
+
 ### IR, on the league's own rules
 
 The Roster tile counted IR against its allowance and stopped there. `1 over IR`
