@@ -161,6 +161,21 @@ async function readLeagueLineup(
       return NextResponse.json(empty, { headers: CACHE });
     }
 
+    // **Whose team to mark is a narrower question than whose ADP board to read.**
+    // The board is the reader's synced drafts whatever league this is; the mark
+    // is only theirs to take where they hold a roster here. `solveLeagueEntry`
+    // answers null for a *named* manager with no roster — right for the manager
+    // route, whose query has already dropped those leagues — so handing it the
+    // reader's id on a league they are not in emptied the card: every trade on
+    // this board from somebody else's league opened onto "no rosters read". A
+    // reader who is not in the league is nobody here, which solves every roster
+    // and marks none.
+    const holder =
+      managerUserId !== null &&
+      league.rosters.some((roster) => roster.owner_id === managerUserId)
+        ? managerUserId
+        : null;
+
     // **The reader's choice where they made one, the league's own reading
     // otherwise**, which is what `auto` means on both axes everywhere else.
     const superflex =
@@ -205,7 +220,7 @@ async function readLeagueLineup(
       ktc: ktc.stamp === null ? [] : [ktc.stamp],
       entry: solveLeagueEntry(
         league,
-        managerUserId,
+        holder,
         season,
         projections.board,
         adp,

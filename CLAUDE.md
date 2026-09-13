@@ -14927,6 +14927,28 @@ string template would otherwise have stopped loading. Verified on the live
 account at 375: all twelve rows of an open card carry a
 `sleepercdn.com/avatars/thumbs/…` image.
 
+### A trade from somebody else's league opened onto nothing
+
+Every trade card on `/trades` from a league the reader holds no team in opened
+onto "No rosters read for this league yet", beside a 200 whose body was
+`entry: null`. The route resolved `?user=` to the reader's id and handed it to
+`solveLeagueEntry`, which answers null for a *named* manager with no roster — a
+deliberate rule for the manager route, whose query has already dropped such
+leagues, and the opposite of what this route's own note promised ("solves every
+roster and marks none"). Nothing about the timing mattered; what made it look
+like a loading race is that the newest trades on the board are mostly other
+people's.
+
+**The fix is a narrower variable, not a change to the solve.** The route keeps
+the resolved id for the ADP board — the reader's synced drafts price a league
+whether or not they are in it — and passes it to the solve as `holder` only
+where `league.rosters` carries a roster they own; otherwise null, which solves
+every roster and marks none. `solveLeagueEntry`'s null for a named-but-absent
+manager is untouched, since the manager route still relies on it. `route.test.ts`
+beside the route pins both halves textually. Verified on the live database: the
+failing league answers 12 teams, none marked, all 12 with avatars, and one of the
+reader's own leagues still marks their team and fills 10 of its ranks.
+
 **Not verified against real data**, which is the gap to close first: every
 number above is a fixture and no database was reachable from here. Four things a
 render cannot check — whether a real account's league names are readable at two
@@ -18098,6 +18120,245 @@ be worth its column, since a null simply drops it; whether losing the `Mine` cap
 is felt, given that `Started` now floats a reader's own players to the top; and
 whether the league grid's narrowing is missed at all, which is the one capability
 this pass removes and only a reader settles.
+
+### The box score came back, pinned, and the four readings became a filter
+
+The pass above narrowed this board to two questions and took the splits off, on
+the argument that nineteen columns could not be read without travelling past
+four answers to reach one. **That was true of nineteen and of a table with
+nothing held still.** What returns is thirteen — passing, rushing and receiving
+under a two-tier head — and the two things that make them readable are the two
+the old board did not have: **`Player` is pinned to the left edge and `Pts` to
+the right**, so the column that names a row and the figure a reader is scanning
+for are both on screen for the whole journey between them, and the splits
+themselves are a reader's choice rather than all of them always. And the four
+usage readings, which were counts a row printed and nothing could act on, are
+now what narrows the reader's league grid. Applied from a design handoff.
+**Nothing on the wire moved** — no route, no query, no contract type, no payload
+field, no migration — and **no token was added**: `--stat-pin-lip`,
+`--stat-pin-left-shadow` and `--stat-pin-right-shadow` have been in
+`globals.css` since they were written for exactly this and had no reader until
+now.
+
+**The head's spans are derived from the cells' own widths**, which is the
+mismatch that is silent when it happens: a span one column short files every
+figure after it under the wrong family, with every number on the board correct
+and every one of them labelled wrong. `statGroupSpans` walks the same
+`STAT_COLUMNS` the row draws, so a column added, dropped or resized moves its
+group with it.
+
+**And the head pins the same two widths the rows do**, which is the thing a
+prototype can leave out and a real table cannot: pin only the rows and the
+`Player` and `Pts` *labels* slide away while the cells under them hold the edge
+— a head that stops naming its own columns. It is why the upper tier's two end
+spans are four rather than the two the design draws: `Player + Game` is one
+304px block on an artboard and has to be 228 pinned plus 76 scrolling here, or
+the head's pinned block would overhang the rows' by exactly the Game column.
+The head block carries **no `overflow-hidden`**, on this board's own recorded
+finding — an `overflow` other than `visible` makes an element a scroll
+container, so a cell pinned inside it would stick to the head, which is exactly
+as wide as the grid, and therefore not move at all.
+
+#### The two scopes, and why one ANDs where the other cannot
+
+The four readings are selectable at two scopes, and the difference between them
+is the whole of the design:
+
+- **The ledge's four caps are the page's**, ANDed, and they narrow the grid to
+  the leagues where the players *on this board* got those readings. They sit
+  beside the search field and the two menus rather than up in the page header
+  with the league filters, and that is not a placement so much as the argument:
+  asked over every player the reader's leagues fielded, `Started` is "leagues
+  where I started somebody", which is every league with a lineup in it. Asked
+  over the rows a reader has already narrowed to quarterbacks, or to one
+  surname, it is "the leagues I started a quarterback in". **Narrowing the
+  board is what gives them something to say.**
+- **The pane's four keys are one player's**, single-select. He sits on one
+  roster per league, so his four readings partition his leagues and every
+  intersection of two of them is empty by construction — a reader pressing a
+  second key would watch the grid go blank for a press that looked exactly like
+  the one before it. `Subject.readings` unions for that same reason one
+  narrowing over; this refuses to offer the choice, which is the stronger
+  answer where there is a key per reading on screen.
+
+So the AND at page scope is **across readings and an OR across players**, which
+is what `matchesSubjects`' own `all` mode does one narrowing over — and it is
+the only arrangement with anything to say.
+
+**The state is `gametime-home`'s and the derivation is the board's**, and the
+split is forced: the grid reads the narrowing and the header states it, so the
+state cannot live in the board; the population it is asked over is the board's
+own narrowed rows, so the derivation cannot live in the page. The board
+publishes the league set its two scopes leave and the page intersects it after
+`matchesFilters`, which is the cheap order the leagues console already uses.
+
+**The fold is taken over the league-filtered entries and never the
+usage-narrowed ones**, which is what keeps the two seams from feeding each
+other: the board describes one fixed population and `onScope` says which
+leagues it leaves. A fold taken over `visible` would be a row's `Started 7`
+falling to `Started 4` because of the cap that narrowed to those four — a board
+whose figures moved under the press that read them.
+
+**A held cap keeps the fold open**, and that is a correctness rule rather than a
+convenience. The gate was `boardOpen`; it is `boardOpen || usage.length > 0`,
+because the narrowing is answered out of that fold and a reader who narrows
+their grid and then collapses the bar would otherwise watch the maps go with it
+and the narrowing evaporate — with the summary still on screen naming it.
+
+**Null is not an empty set**, at both ends. Nothing pressed means every league
+stands; a narrowing that found nothing is rightly an empty grid. And a fold that
+has not arrived reads as *not narrowing* rather than as nothing matching, which
+is `matchesSubjects`' own third state: with no maps every reading answers for no
+league, so an intersection of them would empty the grid for a question whose
+evidence is still in flight.
+
+#### One term table, and what it cost to make it one
+
+**`How 25.2 adds up` is the column's own arithmetic itemised, never a second
+one.** `scoringTerms` is the whole of this board's scoring and `statPoints` sums
+it, so the rows in the pane are the *summands* of the figure at the top of it.
+An explanation that recomputed its subject would be the one kind of wrong nobody
+could see.
+
+Two things had to change to get there, and both are recorded because the cheap
+reading of each is that it is a no-op:
+
+- **A passing yard is `0.04` where it was `/ 25`**, because the pane states a
+  rate beside every term and `× 0.04` is one a reader can multiply where `÷ 25`
+  is one they have to invert. The two are **not** the same double — they differ
+  by an ulp on 129 of the first thousand integers — and they are the same
+  *figure*, which is the only thing that leaves the function: rounded to the
+  decimal the column prints, the two agree on every passing yardage from 0 to
+  1000 against every other term a line can carry. Measured, and pinned.
+- **Every term carries the column key it prices**, rather than being matched to
+  it by position. The first cut looked the rate up by index into `STAT_COLUMNS`,
+  which agreed by coincidence of declaration order and would have silently
+  priced the column after the one a later edit inserted.
+
+**A term nobody earned is dropped and a term worth nothing is not.** A row
+reading `0 interceptions × −2 = 0.0` says nothing; `8 receptions × 0 = 0.0` on
+the standard basis is exactly the reader's question answered, and dropping it
+would leave a pane whose rows do not add up to their own total.
+
+**And a minus is a minus sign, not a hyphen** — one spelling for the rate and
+the value, which a render caught: the rate read `× −2` in U+2212 and the value
+beside it `-2.0` in U+002D, two glyphs for one idea on one row.
+
+#### Three decisions taken against the handoff's letter
+
+- **The phone caps keep `touch:min-h-11`.** The handoff names this as a
+  decision: its compacted caps are 36px, under this app's 44px floor, and it
+  offers keeping them as a documented exception. The floor wins. It is the rule
+  every other cap, key and menu on this page already keeps, and spending it here
+  would make this ledge the only place in the app where a touch target is short
+  — to buy one list row, on a panel that scrolls. Driven under a genuinely
+  coarse pointer, every cap measures **44px**.
+- **The splits rail holds what it shows and starts full.** Read as
+  "empty means not asked" like every other multi-select on the ledge, a press on
+  one of three lit caps holds **only** that one — the reader presses `Pass` to
+  put the passing columns away and gets a board with nothing else on it, which
+  is the reverse of the gesture. A render is what said so. The floor is enforced
+  by **disabling the last lit cap rather than correcting the press**, which is
+  this app's own rule for a bound, and by `aria-disabled` rather than the
+  attribute, because the cap that is *last lit* moves as a reader presses its
+  neighbours and the real attribute would drop a keyboard reader to `<body>`
+  mid-rail.
+- **The two control groups are named apart.** Both are `Narrow my leagues to`
+  in the design, which is two groups a screen reader cannot tell apart; they
+  narrow by different questions, so the accessible names now say so in full and
+  the pane's carries the player it is about.
+
+**`player-breakdown.ts` is kept with no caller**, on `peekActiveSeason`'s terms
+and as the handoff's first option: the pane that drew its five groups now draws
+the player's line and how it adds up, and the counts it needed are the fold's
+own — but its `seatIn` partition is the argument for the pane's keys being
+single-select, and a reader who deleted the module would delete the reason for a
+decision still in force.
+
+#### Verified
+
+Driven over CDP against `next dev` with no `DATABASE_URL` — the boot hook skips
+migrations and the four loops log their refusals, which is the server coming up
+healthy against nothing — through a temporary `/preview` route mounting the
+**real** `StatBoard` against fixtures, then deleted. The mechanics are the ones
+this file records: `--no-proxy-server`, `localhost` rather than `127.0.0.1`, a
+phone viewport from `Emulation.setDeviceMetricsOverride` with `mobile: true`,
+`data-theme` **and** `localStorage`, `--disable-features=OverlayScrollbar`, the
+`--blink-settings=availablePointerTypes=…` flags built as a template literal, a
+**client-component** harness, a CDP client over Node's own `WebSocket`, and a
+fresh `--remote-debugging-port` per run. The fixtures are eight lines over three
+leagues, shaped so the two scopes are visibly different from each other and from
+the whole.
+
+The geometry is the design's to the pixel. Track **1112px**; head tiers **24px**
+and **30px**; tier one `228 · 76 · Passing 144 · Rushing 100 · Receiving 144 ·
+36 · 300 · 84`, which is the design's own `304 / 144 / 100 / 144 / 36 / 384`
+with the two ends split for pinning; tier two carrying every column at its own
+width; rows **38px** of thirteen cells. Scrolled 300px, the head's pinned
+`Player` and the rows' sit at the **same coordinate** and so do the two `Pts`
+— `aligned: true`, which is the finding the whole pinning exists for.
+
+The splits rail: **1112 → 968 → 868** as `Pass` (−144) and `Rush` (−100) come
+off, with the tier-one families following, and the last lit cap going
+`aria-disabled` and refusing its press. The sorts: `Yds` and `TD` light the
+three contributing split columns and carry **no arrow** (a sum across families
+is no one column's own order), the three usage keys light `Your leagues`, and
+`Pts` alone carries `▼`.
+
+Both scopes were driven end to end. `Started` took the grid to **2 of 3**,
+`+ They sat` to **1 of 3**, unpressing walked it back, and clearing returned
+`null` rather than an empty set. In the pane, `Started` gave **1 of 3** and
+`They sat` a *different* **1 of 3** — with the first key going unlit on the
+second press, which is the single-select rule on screen — unpressing returned
+`null`, and picking another player reset the scope with no key lit.
+
+The pane's arithmetic is exact: `RECEIVING 112 yd` over its three rates,
+`FUMBLES 1 lost`, and `HOW 23.2 ADDS UP 23.2` over `8 receptions × 1 = 8.0`,
+`112 receiving yards × 0.1 = 11.2`, `1 receiving touchdown × 6 = 6.0`,
+`1 fumble lost × −2 = −2.0` — which is the headline figure to the decimal, with
+the passing and rushing families absent for a receiver.
+
+The light scheme was checked on the two things the handoff names. The lit cap
+inverts to the dark-teal `--cap-accent-bg` with near-white ink; the channel is
+`rgba(15,23,42,0.1)` rather than 52% black; and the pinned casts resolve to a
+**white lip over a slate cast** with the two pin backgrounds opaque in both
+schemes (`--readout-bg` on a row, `--window-ledge-bg` on the head).
+
+At 1440 and 390 in both schemes: `document.documentElement.scrollWidth` within
+the viewport, **zero unclipped elements past it**, exactly one control group per
+name, **exactly one arm rendered** (the other `display: none`, which takes it
+out of the accessibility tree), and **no console output of any kind**. On the
+phone: three-line rows with the splits on the third (`PASS 288 yd · 3 td · 1
+int`), the three-row ledge with no `Splits` rail — the phone has no columns to
+hide — and **no horizontal scroll anywhere**, in the page or in either scroller.
+
+2,628 unit tests pass (29 more — the term table's tie, the rounding equivalence
+measured across a thousand yardages, the sum that reconciles with its own
+headline on all three bases, the family folds, the spans derived from their own
+columns, the pins, the usage AND, both league scopes and the two summed sorts);
+`lint`, `typecheck` and `check:full` from a build are clean.
+
+**One finding, reported rather than patched.** At 390 a player with three or
+four readings *and* a running clock needs about **160px** of the ~155 his tag
+line has left, so the tail of the fourth reading truncates — one row of eight in
+the fixture. It is the design's own arrangement and its own example line is
+longer still; the degradation is an ellipsis rather than a wrong number, and the
+pane one press away states all four with their counts. The two ways to close it
+each cost more than five pixels: summing the opposing pair on the phone would
+make it say something different from the chips above it, and letting the matchup
+shrink first would truncate `CIN @BAL`, the one clause on that line with no
+second home.
+
+**Not verified against real data**, which is the gap to close first: every
+number above is a fixture and no database was reachable from here. Four things a
+render cannot check — whether the page-scope caps are *asked* over the narrowed
+board as often as the design assumes, which is the one judgement this pass makes
+on the handoff's behalf and only a reader settles; what thirteen cells across
+four hundred rows cost on a live page where a frame lands every twenty seconds,
+which the row memos are for and nothing has measured; whether a real account's
+`Your leagues` cell holds four chips inside 300px as often as the fixture's does;
+and whether the pinned columns read as *held* rather than as a rendering fault on
+a real board wide enough to need the whole scroll.
 
 ### The countdown to the next kickoff is the page's hero
 

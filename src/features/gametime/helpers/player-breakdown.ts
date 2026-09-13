@@ -1,6 +1,19 @@
 /**
  * Where a reader stands on one player: their leagues, in five groups.
  *
+ * **Nothing reads this today, and it is kept deliberately** — on
+ * `peekActiveSeason`'s terms, which is this repo's rule for a module whose
+ * argument a later reader would otherwise have to reconstruct. The pane that
+ * drew these groups now draws the player's own stat line and how it adds up,
+ * and the counts it used to need are the fold's own; what is *not* stated
+ * anywhere else is {@link seatIn}'s partition, and that rule is load-bearing
+ * two components over: it is the whole reason the pane's four keys are
+ * single-select where the ledge's four caps AND. A reader who deleted this
+ * would delete the argument for a decision still in force.
+ *
+ * It is also the shape the league list comes back in, if a design ever wants
+ * it beside the line rather than instead of it.
+ *
  * The board's other half. The list answers *who is scoring what* and this
  * answers *where do I stand on this guy* — the two questions the drawer was
  * narrowed to, and the reason the box score came off it. A press on a row
