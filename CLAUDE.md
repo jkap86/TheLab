@@ -14801,6 +14801,28 @@ with it, and the key is stated at the same number rather than left to its
 padding, so the two cannot drift apart again when either's type moves. Their
 recesses come out 35px apiece. `lg:h-6` still governs the key above `lg`.
 
+**A standings team draws its owner's Sleeper avatar**, where it drew a lit
+initial on the argument that `LeagueTeam` carried no picture. It carries one
+now — `avatar_url`, a thumbnail URL or null — and no migration was needed:
+`league_users.avatar` has been stored since the league-graph migration and
+`LINEUP_LEAGUE_COLUMNS_SQL`'s `users` aggregate simply never selected it.
+`leagueTeamAvatar` sits beside `leagueTeamName` and reads the same `users`
+array by the same owner, so a team's name and its picture cannot name two
+people. The timeline's `TimelineRosterPayload` carries it too, from each
+season's own members, so a past stop on the rail keeps its faces rather than
+turning every mark back into a letter mid-scrub. The mount draws it as a
+`background-image` over the initial (`bg-center`, where a headshot is `bg-top`),
+so an orphan roster, an owner with no avatar and a URL that 404s all leave the
+letter.
+
+**`sleeperAvatarUrl` and `SLEEPER_CDN_BASE` moved to `shared/sleeper/avatar.ts`**,
+a module with no imports, and `client.ts` re-exports both so no caller moved.
+`league-teams.ts` is tested under Node's own runner, which cannot resolve the
+`@/shared/http` alias the client imports — so a pure module that wanted one
+string template would otherwise have stopped loading. Verified on the live
+account at 375: all twelve rows of an open card carry a
+`sleepercdn.com/avatars/thumbs/…` image.
+
 **Not verified against real data**, which is the gap to close first: every
 number above is a fixture and no database was reachable from here. Four things a
 render cannot check — whether a real account's league names are readable at two

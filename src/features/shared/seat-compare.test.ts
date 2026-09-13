@@ -29,6 +29,7 @@ function team(
   return {
     roster_id,
     name: `Roster ${roster_id}`,
+    avatar_url: null,
     is_manager,
     lineup: {
       league_id: "1",

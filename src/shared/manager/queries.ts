@@ -851,7 +851,8 @@ const LINEUP_LEAGUE_COLUMNS_SQL = `
             (SELECT COALESCE(jsonb_agg(jsonb_build_object(
                       'user_id',      u.user_id,
                       'display_name', u.display_name,
-                      'team_name',    u.team_name)), '[]'::jsonb)
+                      'team_name',    u.team_name,
+                      'avatar',       u.avatar)), '[]'::jsonb)
                FROM league_users u
               WHERE u.league_id = l.league_id) AS users`;
 

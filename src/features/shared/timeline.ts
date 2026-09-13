@@ -229,6 +229,8 @@ export type TimelineRoster = {
   roster_id: number;
   /** What that season's own member list calls it — see {@link timelineRosters}. */
   name: string;
+  /** That season's owner's avatar, carried beside the name it belongs with. */
+  avatar_url: string | null;
   /** The holder's user id, which is how the solve finds the manager's team. */
   user_id: string | null;
   players: string[];
@@ -280,6 +282,7 @@ export function timelineRosters(
   return season.rosters.map((roster) => ({
     roster_id: roster.roster_id,
     name: roster.name,
+    avatar_url: roster.avatar_url,
     user_id: roster.user_id,
     players: states.get(roster.roster_id)?.players ?? [],
     picks: states.get(roster.roster_id)?.picks ?? [],

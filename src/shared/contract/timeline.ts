@@ -238,13 +238,16 @@ export type TimelineSeasonPayload = {
  * username, then the team name they set, then "Roster N" — so a team is called
  * the same thing here as it is in the card's own teams pane.
  *
- * There is deliberately no avatar on it: the teams pane this rail swaps for
- * draws none. Re-adding a field is cheap.
+ * The avatar rides beside the name for the same reason: the teams pane this
+ * rail swaps for draws each team's owner, so a past stop that dropped them would
+ * turn every mark back into a letter as the reader scrubbed.
  */
 export type TimelineRosterPayload = {
   roster_id: number;
   /** What to call this team — see above. Never empty. */
   name: string;
+  /** That season's owner's avatar as a thumbnail URL, or null. */
+  avatar_url: string | null;
   /**
    * Who holds it today, or null on an orphaned roster.
    *

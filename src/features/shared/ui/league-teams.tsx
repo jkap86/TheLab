@@ -682,11 +682,10 @@ function StandingRow({
         numeric: true,
         hue: team.is_manager ? "var(--slot-metal-mine)" : undefined,
       }}
-      // **The letter mount, always** — `LeagueTeam` carries no avatar, and that
-      // is what the mark is: a lit initial is a claim about an image that was
-      // never fetched. The part draws the same milled disc a player's face sits
-      // in, which is what makes a standings row and a seat row one object.
-      face={{ playerId: null, name: team.name }}
+      // The owner's Sleeper avatar over the letter mount — the same milled disc
+      // a player's face sits in, which is what makes a standings row and a seat
+      // row one object. No avatar, or one that 404s, leaves the initial.
+      face={{ playerId: null, name: team.name, avatarUrl: team.avatar_url }}
       name={team.name}
       // The whole name at both widths, where a seat row opposite shortens a
       // player's: a team name is somebody's own words rather than a first

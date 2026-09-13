@@ -167,7 +167,16 @@ export type PaneRowLead = {
  * the same mount carrying the team's initial, which is what makes a standings
  * row and a seat row the same object at a glance.
  */
-export type PaneRowFace = { playerId: string | null; name: string };
+export type PaneRowFace = {
+  playerId: string | null;
+  name: string;
+  /**
+   * A picture that is not a player's headshot — a standings team's owner
+   * avatar. Drawn centred where a headshot is drawn from the top: an avatar is
+   * a square somebody uploaded rather than a head-and-shoulders crop.
+   */
+  avatarUrl?: string | null;
+};
 
 /** One figure, and where it stands. */
 export type PaneRowFigure = {
@@ -498,6 +507,14 @@ function PaneRowFaceMount({
           style={{
             backgroundImage: `url(https://sleepercdn.com/content/nfl/players/thumb/${face.playerId}.jpg)`,
           }}
+        />
+      )}
+      {/* A background over the initial, never an `<img>`, for the headshot's
+          reason: one that 404s paints nothing and the letter is the fallback. */}
+      {!face.playerId && face.avatarUrl && (
+        <span
+          className="absolute inset-0 bg-cover bg-center"
+          style={{ backgroundImage: `url(${face.avatarUrl})` }}
         />
       )}
     </span>

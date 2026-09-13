@@ -1,6 +1,8 @@
 import { http } from "@/shared/http";
 
 import { createLimiter, sleeperConcurrency } from "./limiter";
+// The CDN half lives in a module with no imports — see `./avatar`.
+export { SLEEPER_CDN_BASE, sleeperAvatarUrl } from "./avatar";
 import type { Limiter } from "./limiter";
 import { isMissingResource } from "./missing";
 import { createSleeperRequest } from "./request";
@@ -8,7 +10,6 @@ import type { SleeperRequestOptions } from "./request-policy";
 import type { SleeperUser } from "./types/sleeper.types";
 
 export const SLEEPER_API_BASE = "https://api.sleeper.app/v1";
-export const SLEEPER_CDN_BASE = "https://sleepercdn.com";
 
 /**
  * Sleeper's undocumented data host — projections, stats, scores. A different
@@ -109,16 +110,6 @@ export async function sleeperGetOptional<T>(
     if (isMissingResource(error)) return fallback;
     throw error;
   }
-}
-
-/** Build a full avatar URL from a Sleeper avatar id, or null when there is none. */
-export function sleeperAvatarUrl(
-  avatar: string | null,
-  size: "full" | "thumb" = "full",
-): string | null {
-  if (!avatar) return null;
-  const path = size === "thumb" ? "avatars/thumbs" : "avatars";
-  return `${SLEEPER_CDN_BASE}/${path}/${avatar}`;
 }
 
 /**
