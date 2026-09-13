@@ -16,7 +16,10 @@
  * (`schedule/game-clock`). Before kickoff it is the projection whole, at the
  * final whistle it is what he scored, and in between it is what he has done
  * plus what he was expected to do in the time left. Every total on the wire is
- * a sum of that figure over the starters, so the seat rows add up to the plate.
+ * a sum of that figure over the starters, so the seat rows add up to the plate
+ * — with one stated exception, a **best-ball** side's `scored`, which is a
+ * second solve over the same roster rather than a sum of the seats. See
+ * {@link solveSide}.
  *
  * Both feeds are scored through the league's own `scoring_settings` by the same
  * `scoreStatLine` — its doc says it serves projections and played weeks alike,
@@ -133,9 +136,28 @@ export function solveGametimeLeague(
  * estimate of the lineup that will be scored, and its total is the best
  * estimate of the total. Before kickoff every live figure is the projection
  * whole, so the two agree; they part company as games are played, which is
- * exactly what a live page is for. Seating each of the three totals by its own
- * metric was the alternative and it breaks the contract's own invariant —
- * three different lineups cannot all add up to the three figures on one plate.
+ * exactly what a live page is for.
+ *
+ * **`scored` is the one figure seated by its own metric, and a best-ball
+ * league is the one place it has to be.** Summed over the live-seated lineup
+ * it is a number about nothing: it is what the players we *expect* to be
+ * seated happen to have banked, so a Thursday receiver's thirty points are
+ * reported as nought whenever his projection did not earn him a seat — and on
+ * a Sunday morning, when almost nobody has played, that is every figure on the
+ * card. What a best-ball team has actually banked is its best lineup **by
+ * points already scored**, which is the figure Sleeper's own standings show
+ * and a different lineup from the one above. So the roster is solved a second
+ * time, by `scored`, and that total is the side's; `projected` and `live` stay
+ * the shipped lineup's own sums.
+ *
+ * The cost is stated rather than dodged: in a best-ball league the seat rows'
+ * scored column no longer adds up to the plate's `Now`, which is the only
+ * place on this wire the contract's sum-the-seats invariant gives way. It
+ * cannot be kept — "who will be seated" and "what is banked" have two
+ * different answers and there is one `lineup` field — and forcing them onto
+ * one lineup is exactly what produced the meaningless figure. A **managed**
+ * league is untouched: there the lineup is the lineup and all three totals
+ * read it.
  *
  * The bench is the roster less the seated — the checker's own candidate rule,
  * for its reason: Sleeper's two arrays can disagree for a moment after a move,
@@ -177,22 +199,40 @@ function solveSide(
     phases.push(held?.phase ?? null);
   };
 
+  // A best-ball side's banked total, solved by `scored` rather than summed off
+  // the seats above — see the note. Null in a managed league, where the lineup
+  // is the lineup.
+  let banked: number | null = null;
+
   if (league.best_ball) {
     const known = slots.filter((slot) => slot in SLOT_POSITIONS);
-    const pool = rostered.map((id) => {
-      const held = price(id);
-      return {
-        player_id: id,
-        positions: held.player.positions,
-        // A player with nothing to price from can only ever take a seat
-        // nobody else wanted, which is `solverPool`'s own reading one file
-        // over.
-        points: held.player.live ?? 0,
-      };
-    });
-    for (const filled of optimalLineup(known, pool)) {
+    const pool = (metric: (player: GametimePlayer) => number | null) =>
+      rostered.map((id) => {
+        const held = price(id);
+        return {
+          player_id: id,
+          positions: held.player.positions,
+          // A player with nothing to price from can only ever take a seat
+          // nobody else wanted, which is `solverPool`'s own reading one file
+          // over. A null `scored` is the same zero for a different reason: his
+          // game has not started, so he has banked nothing yet.
+          points: metric(held.player) ?? 0,
+        };
+      });
+
+    for (const filled of optimalLineup(known, pool((player) => player.live))) {
       seat(filled.slot, filled.player_id);
     }
+
+    // `optimalLineup` carries each seat's own points, so this is the solver's
+    // arithmetic rather than a second pass over the roster, and an empty seat
+    // is the zero it already answers.
+    banked = round(
+      optimalLineup(known, pool((player) => player.scored)).reduce(
+        (total, filled) => total + filled.points,
+        0,
+      ),
+    );
   } else {
     slots.forEach((slot, i) => {
       if (!(slot in SLOT_POSITIONS)) return;
@@ -210,11 +250,15 @@ function solveSide(
     );
 
   const status = sideStatus(phases);
+  const totals = sideTotals(lineup);
 
   return {
     roster_id: rosterId,
     team_name: teamName,
-    ...sideTotals(lineup),
+    ...totals,
+    // The one total that is not the shipped lineup's own sum, and only in a
+    // best-ball league — see the note above.
+    scored: banked ?? totals.scored,
     status,
     // **Two populations, and which one is the same rule the seating is.** A
     // managed lineup is what will be scored, so its seats are the whole of

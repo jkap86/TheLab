@@ -492,6 +492,70 @@ describe("solveGametimeLeague, best ball", () => {
     assert.equal(solved.mine.live, 26);
   });
 
+  /**
+   * Thursday night, in miniature: one receiver has played and nobody else has.
+   * His eight points are worth less than the eleven a still-unplayed flex is
+   * projected for, so the lineup that is the best estimate of what Sleeper
+   * will finally seat leaves him out — and what the team has *banked* is his
+   * eight all the same.
+   */
+  const THURSDAY = {
+    projections: {
+      ...BB_PROJECTIONS,
+      wr_bad: row("wr_bad", "SF", { rec_yd: 20, rec: 2 }, ["WR"]), // 4.0 projected
+    } satisfies WeekProjections,
+    stats: { wr_bad: row("wr_bad", "SF", { rec_yd: 50, rec: 3 }, ["WR"]) } satisfies WeekProjections, // 8.0 final
+    clocks: new Map<string, GameClock>([
+      ["SF", clock({ phase: "final", remaining: 0 })],
+      ["MIA", clock({ phase: "pre", remaining: 1 })],
+    ]),
+  };
+
+  test("a best-ball side banks its best lineup by points scored, not the live-seated one", () => {
+    const solved = solveGametimeLeague(bb(), THURSDAY)!;
+
+    // The lineup and the two forward-looking totals are unmoved: they answer
+    // who Sleeper will seat, which is still a question about projections.
+    assert.deepEqual(
+      solved.mine.lineup.map((seat) => seat.player?.player_id),
+      ["qb_good", "rb_good", "wr_good", "te_good", "wr_flex"],
+    );
+    assert.equal(solved.mine.live, 75);
+    assert.equal(solved.mine.projected, 75);
+
+    // Nobody in that lineup has played, so summing its seats banks nothing —
+    // which is the figure this exists to stop the card printing.
+    const seated = solved.mine.lineup.reduce((acc, s) => acc + (s.player?.scored ?? 0), 0);
+    assert.equal(seated, 0);
+    assert.equal(solved.mine.scored, 8);
+  });
+
+  test("a managed league's scored still adds up to its own seat rows", () => {
+    // The invariant gives way in a best-ball league and only there: with a
+    // lineup somebody set there is nothing to solve and nothing to reconcile.
+    const solved = solveGametimeLeague(bb({ best_ball: false }), THURSDAY)!;
+    const seated = solved.mine.lineup.reduce((acc, s) => acc + (s.player?.scored ?? 0), 0);
+    assert.equal(solved.mine.scored, seated);
+    assert.equal(solved.mine.scored, 8);
+  });
+
+  test("the median's Now is the middle of the pool's banked totals", () => {
+    // One roster of the three cannot bank the Thursday receiver at all; the
+    // other two can. Read off the live-seated lineups every one of them would
+    // report nought, which is the reading the Now bay is on the card to make.
+    const solved = solveGametimeLeague(
+      bb({
+        median_rosters: [
+          { roster_id: 1, starters: [], players: ALL },
+          { roster_id: 2, starters: [], players: ALL.filter((id) => id !== "wr_bad") },
+          { roster_id: 3, starters: [], players: ALL },
+        ],
+      }),
+      THURSDAY,
+    )!;
+    assert.deepEqual(solved.median, { scored: 8, projected: 75, live: 75 });
+  });
+
   test("the opponent and the median are solved the same way", () => {
     const solved = solveGametimeLeague(
       bb({
