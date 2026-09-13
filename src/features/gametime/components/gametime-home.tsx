@@ -1,6 +1,6 @@
 "use client";
 
-import { type ReactNode, useCallback, useMemo, useRef } from "react";
+import { type ReactNode, useCallback, useMemo, useRef, useState } from "react";
 
 import {
   activeFilterCount,
@@ -51,12 +51,41 @@ import {
 import { GametimeCard } from "./gametime-card";
 import { KickoffCountdown } from "./kickoff-countdown";
 import { StatBoard, STAT_BAR_H } from "./stat-board";
+import { usageSummary } from "../helpers/stat-board";
+import type { UsageKey } from "../helpers/stat-board";
 
 /** Stable empty answer, so a render before the read lands hands the memos the same object. */
 const NO_LEAGUES: Record<string, never> = {};
 const NO_BOARD: Record<string, never> = {};
 const NO_LINES: Record<string, never> = {};
 const NO_ENTRIES: WeekLineupEntry[] = [];
+/** Nothing pressed — a module-level identity, so a resting page has one. */
+const NO_USAGE: readonly UsageKey[] = [];
+
+/**
+ * Whether two league scopes say the same thing.
+ *
+ * **Null and the empty set are not the same scope**, which is the one thing
+ * this has to get right: null is "nothing is narrowing" and an empty set is "a
+ * narrowing that left no leagues". Folding them together would have a cap that
+ * matched nothing read as a cap nobody had pressed.
+ *
+ * It exists so the setter can bail out of an equal answer: the board
+ * recomputes its scope whenever its own rows move, which is every keystroke in
+ * its search field, and most of those leave the same leagues. A re-render of a
+ * hundred league cards to arrive where the page already was is the cost this
+ * comparison is cheaper than.
+ */
+function sameScope(
+  a: ReadonlySet<string> | null,
+  b: ReadonlySet<string> | null,
+): boolean {
+  if (a === b) return true;
+  if (a === null || b === null) return false;
+  if (a.size !== b.size) return false;
+  for (const id of a) if (!b.has(id)) return false;
+  return true;
+}
 
 /**
  * One player, as the shared week panels compare him — **this tool's live
@@ -175,6 +204,35 @@ function Live({
    * there is nothing left to keep alive and the gate is the bar alone.
    */
   const boardOpen = useStatBoardOpen();
+  /**
+   * The board's four usage caps — **the page's state, not the board's**.
+   *
+   * It is up here because the league grid is what it narrows, and the header
+   * states it beside the league filters' own summary. The board owns the
+   * *derivation*, because the population the caps are asked over is the rows
+   * it has narrowed; what comes back is {@link usageScope}.
+   *
+   * Not persisted, on the board's own rule for its three: a narrowing is a way
+   * of reading this week rather than a device preference, and one that
+   * outlived the visit would have a reader open the page to a grid missing
+   * five of their leagues for a press they made on a Sunday.
+   */
+  const [usage, setUsage] = useState<readonly UsageKey[]>(NO_USAGE);
+  /**
+   * The leagues the board's two scopes leave, or **null for "not narrowing"**
+   * — a third state and not an empty set, which is `matchesSubjects`' own
+   * distinction: nothing pressed means every league stands, where a narrowing
+   * that found nothing is rightly an empty grid.
+   *
+   * The setter bails out of an equal set, which is what keeps a keystroke in
+   * the board's search field from re-rendering a hundred league cards to
+   * arrive at the same answer. Returning the held value from the updater is
+   * how React is told there is nothing to do.
+   */
+  const [usageScope, setUsageScope] = useState<ReadonlySet<string> | null>(null);
+  const onScope = useCallback((next: ReadonlySet<string> | null) => {
+    setUsageScope((held) => (sameScope(held, next) ? held : next));
+  }, []);
 
   const { payload, pending, connection, stale } = useGametime(
     username,
@@ -220,8 +278,17 @@ function Live({
    * `/api/trades/facets`' own bargain: a reader who never opens the panel pays
    * nothing for it. The walk below is over every player of every roster on the
    * account, and on a live page it would re-run on every frame the room pushes.
+   *
+   * **A held usage cap keeps it open, and that is a correctness rule rather
+   * than a convenience.** The narrowing those caps make is what the grid and
+   * the header summary are drawn from, and it is answered out of this fold —
+   * so a reader who narrows their grid and then collapses the bar would
+   * otherwise watch the maps go with it and the narrowing quietly evaporate,
+   * with the summary still on screen naming it. It is the `opened` latch one
+   * page over, gated on the thing that is still true rather than on the thing
+   * that opened it.
    */
-  const browsed = boardOpen;
+  const browsed = boardOpen || usage.length > 0;
 
   /**
    * One league's contribution to a week fold, adapted to the shared side shape
@@ -262,16 +329,30 @@ function Live({
   );
 
   /**
-   * The list the page draws, which is the league filters and nothing else.
+   * The list the page draws: the league filters, then the board's usage scope.
    *
-   * **There is no second narrowing any more.** The board's row trays were the
-   * only thing on this page that made a subject, and the redesign replaced them
-   * with a breakdown that *names* a player's leagues — so `weekSubjectRolls`,
-   * `matchesSubjects` and the token strip that reported a selection all went
-   * with them. The lineup checker still asks all three of the same leagues; it
-   * is this page that stopped having a second question to ask.
+   * **The second narrowing is back**, and it is a different shape from the one
+   * that went. The board's row trays used to make a *subject* — a player, and
+   * the readings picked on his own row — which is why `weekSubjectRolls` and
+   * `matchesSubjects` went with them. What answers now is a set of league ids
+   * the board hands up, because both of its scopes are questions it is the
+   * only thing that can ask: the ledge's caps are asked over the rows it has
+   * narrowed, and the pane's key is asked about the row a reader picked in it.
+   *
+   * **The order is the cheap one** — the league filters first, on the leagues
+   * console's own arrangement — and it is also the one that keeps the fold
+   * honest: `entries` is built from `leagueFiltered` and never from this, so
+   * the counts a row prints cannot move because of a cap pressed on that row.
+   * A narrowing that fed its own population would be a board whose figures
+   * changed under the press that read them.
    */
-  const visible = leagueFiltered;
+  const visible = useMemo(
+    () =>
+      usageScope === null
+        ? leagueFiltered
+        : leagueFiltered.filter((league) => usageScope.has(league.league_id)),
+    [leagueFiltered, usageScope],
+  );
 
   /**
    * The three counts per player, folded once per entry list.
@@ -292,6 +373,8 @@ function Live({
   );
 
   const narrowing = activeFilterCount(filters) > 0;
+  /** Whether the board's caps are narrowing — what raises their own summary. */
+  const usageNarrowing = usage.length > 0;
 
   const listRef = useRef<HTMLUListElement | null>(null);
   const ids = useMemo(() => visible.map((l) => l.league_id), [visible]);
@@ -319,8 +402,27 @@ function Live({
    * `/lineupchecker` draw, and inlining the one arm this page can reach would
    * be a third spelling of them.
    */
-  const empty = narrowedEmptyState(narrowing, false, filterSummary(filters));
-  const clearNarrowing = () => setFilters(DEFAULT_LEAGUE_FILTERS);
+  const empty = narrowedEmptyState(
+    narrowing,
+    usageNarrowing,
+    filterSummary(filters),
+  );
+  /**
+   * The empty plate's key, which clears **both** narrowings whichever arm
+   * named it.
+   *
+   * That is not the key doing more than its legend says: `narrowedEmptyState`
+   * only reaches `Clear selection` when the filters are already at their
+   * defaults, and `Clear filters` when nothing is selected, so on two of the
+   * three arms one of these calls is a no-op and on the third the legend reads
+   * `Clear all`. One handler rather than a switch on `empty.action`, because a
+   * second reading of which narrowing is in force is a second chance to
+   * disagree with the one that wrote the sentence above the key.
+   */
+  const clearNarrowing = () => {
+    setFilters(DEFAULT_LEAGUE_FILTERS);
+    setUsage(NO_USAGE);
+  };
 
   const name = user ? user.display_name || user.username : username;
 
@@ -363,9 +465,29 @@ function Live({
                     </button>
                   )}
                 </span>
+                {/* **Two summaries rather than one sentence**, because they
+                    are two narrowings a reader clears separately: the league
+                    filters are a fact about which leagues this page is about,
+                    and the board's caps are a question asked of the players on
+                    it. Each carries its own count of what it left, which is
+                    the shape this line has always had. */}
                 {narrowing && (
                   <p className="relative order-6 m-0 w-full min-w-0 truncate font-mono text-[length:var(--fs-10)] uppercase tracking-[0.16em] text-[color:var(--billet-accent)] lg:order-none">
                     {filterSummary(filters)} · {visible.length} of {leagues.length}
+                  </p>
+                )}
+                {usageNarrowing && (
+                  <p className="relative order-7 m-0 flex w-full min-w-0 items-center gap-2 font-mono text-[length:var(--fs-10)] uppercase tracking-[0.16em] text-[color:var(--billet-accent)] lg:order-none">
+                    <span className="min-w-0 truncate">
+                      {usageSummary(usage)} · {visible.length} of {leagues.length}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => setUsage(NO_USAGE)}
+                      className={`${PLATE_KEY} ${BILLET_KEY_CHROME} shrink-0 border-foreground/10 text-foreground/80 hover:text-readout`}
+                    >
+                      Clear
+                    </button>
                   </p>
                 )}
               </>
@@ -544,17 +666,21 @@ function Live({
           card; the rack stays, because the rack is the app's rather than this
           page's.
 
-          `entries` is the league-filtered list on both seams — the fold's
-          population above and the breakdown's walk here — which is
-          `weekTwoSidedShares`' own rule and the reason a row's `Started 7` and
-          the leagues a press names are counting the same leagues. */}
+          `shares` is folded over the **league-filtered** list and never over
+          the usage-narrowed one, which is what keeps the two seams from
+          feeding each other: the board describes one fixed population and
+          `onScope` says which leagues it leaves. A fold taken over `visible`
+          would be a row's `Started 7` falling to `Started 4` because of the
+          cap that narrowed to those four. */}
       <StatBoard
         week={payload?.week ?? null}
         lines={payload?.players ?? NO_LINES}
         board={board}
         chromeClass={card.chromeClass}
         shares={shares}
-        entries={entries}
+        usage={usage}
+        onUsage={setUsage}
+        onScope={onScope}
       />
     </div>
   );
