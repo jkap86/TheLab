@@ -230,9 +230,25 @@ function Live({
    * how React is told there is nothing to do.
    */
   const [usageScope, setUsageScope] = useState<ReadonlySet<string> | null>(null);
-  const onScope = useCallback((next: ReadonlySet<string> | null) => {
-    setUsageScope((held) => (sameScope(held, next) ? held : next));
-  }, []);
+  /**
+   * The board pane's `Narrow grid` key, and what it is narrowing to in words.
+   *
+   * **Up here rather than in the board**, which is the fix for the key looking
+   * dead: the open board covers nearly the whole viewport, so a reader who
+   * narrows collapses it to see the grid — and while the key's state lived in
+   * the board, the gate below could not see it, collapsing dropped the fold,
+   * and the narrowing went with it. The label is the board's to write (it
+   * knows the player and the reading) and the page's to state and clear.
+   */
+  const [gridNarrowed, setGridNarrowed] = useState(false);
+  const [paneLabel, setPaneLabel] = useState<string | null>(null);
+  const onScope = useCallback(
+    (next: ReadonlySet<string> | null, label: string | null) => {
+      setUsageScope((held) => (sameScope(held, next) ? held : next));
+      setPaneLabel(label);
+    },
+    [],
+  );
 
   const { payload, pending, connection, stale } = useGametime(
     username,
@@ -288,7 +304,11 @@ function Live({
    * page over, gated on the thing that is still true rather than on the thing
    * that opened it.
    */
-  const browsed = boardOpen || usage.length > 0;
+  // **And so does the pane's `Narrow grid` key**, for the same reason and more
+  // sharply: the open board covers the grid, so collapsing it is how a reader
+  // *sees* that narrowing — and a gate that closed with the bar made the key
+  // look as though it did nothing.
+  const browsed = boardOpen || usage.length > 0 || gridNarrowed;
 
   /**
    * One league's contribution to a week fold, adapted to the shared side shape
@@ -375,6 +395,8 @@ function Live({
   const narrowing = activeFilterCount(filters) > 0;
   /** Whether the board's caps are narrowing — what raises their own summary. */
   const usageNarrowing = usage.length > 0;
+  /** Whether the board narrows the grid at all — its caps, or its pane's key. */
+  const boardNarrowing = usageNarrowing || paneLabel !== null;
 
   const listRef = useRef<HTMLUListElement | null>(null);
   const ids = useMemo(() => visible.map((l) => l.league_id), [visible]);
@@ -404,7 +426,7 @@ function Live({
    */
   const empty = narrowedEmptyState(
     narrowing,
-    usageNarrowing,
+    boardNarrowing,
     filterSummary(filters),
   );
   /**
@@ -422,6 +444,7 @@ function Live({
   const clearNarrowing = () => {
     setFilters(DEFAULT_LEAGUE_FILTERS);
     setUsage(NO_USAGE);
+    setGridNarrowed(false);
   };
 
   const name = user ? user.display_name || user.username : username;
@@ -484,6 +507,24 @@ function Live({
                     <button
                       type="button"
                       onClick={() => setUsage(NO_USAGE)}
+                      className={`${PLATE_KEY} ${BILLET_KEY_CHROME} shrink-0 border-foreground/10 text-foreground/80 hover:text-readout`}
+                    >
+                      Clear
+                    </button>
+                  </p>
+                )}
+                {/* **The pane's narrowing, stated and clearable up here** —
+                    the board is usually collapsed by the time a reader looks at
+                    the grid it narrowed, and a filtered grid with nothing on
+                    screen naming the filter reads as a page missing leagues. */}
+                {paneLabel && (
+                  <p className="relative order-8 m-0 flex w-full min-w-0 items-center gap-2 font-mono text-[length:var(--fs-10)] uppercase tracking-[0.16em] text-[color:var(--billet-accent)] lg:order-none">
+                    <span className="min-w-0 truncate">
+                      {paneLabel} · {visible.length} of {leagues.length}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => setGridNarrowed(false)}
                       className={`${PLATE_KEY} ${BILLET_KEY_CHROME} shrink-0 border-foreground/10 text-foreground/80 hover:text-readout`}
                     >
                       Clear
@@ -681,6 +722,8 @@ function Live({
         usage={usage}
         onUsage={setUsage}
         onScope={onScope}
+        gridNarrowed={gridNarrowed}
+        onGridNarrowed={setGridNarrowed}
       />
     </div>
   );

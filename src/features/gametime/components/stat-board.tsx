@@ -149,6 +149,8 @@ export function StatBoard({
   usage,
   onUsage,
   onScope,
+  gridNarrowed,
+  onGridNarrowed,
 }: {
   /** The week the page is on — the stepper's own, echoed by the payload. */
   week: number | null;
@@ -213,7 +215,26 @@ export function StatBoard({
    * the board's: the page scope is asked over the rows this component narrowed
    * and the player scope is the row a reader picked in it.
    */
-  onScope: (leagues: ReadonlySet<string> | null) => void;
+  /**
+   * …and, beside it, what the pane's `Narrow grid` key is narrowing to in
+   * words (`Ja'Marr Chase · Every league he is in, either side`), or null when
+   * the key is off — the page states it in its header, since a grid filtered
+   * with nothing on screen saying so is the one thing a narrowing must not be.
+   */
+  onScope: (leagues: ReadonlySet<string> | null, paneLabel: string | null) => void;
+  /**
+   * Whether the pane's `Narrow grid` key is on — **the page's state, not the
+   * board's**, and the reason is the bug it fixes.
+   *
+   * The open board covers nearly the whole viewport, so a reader who narrows
+   * collapses it to see the grid — and the page builds the fold this narrowing
+   * is answered from only while something needs it. Held down here, the page
+   * could not know the key was on: collapsing dropped the fold and the
+   * narrowing with it, and the key looked like it did nothing. Up there it
+   * keeps the fold alive, and the header can state it and clear it.
+   */
+  gridNarrowed: boolean;
+  onGridNarrowed: (narrowed: boolean) => void;
 }) {
   const open = useStatBoardOpen();
   /**
@@ -253,11 +274,12 @@ export function StatBoard({
    */
   const [picked, setPicked] = useState<string | null>(null);
   /**
-   * Which of his readings the pane is on, and whether the grid is narrowed to
-   * it — **two states, the manager console's own split**: the track says what
-   * a reader is looking at and the `Narrow grid` key says whether the page
-   * behind is filtered to it, so a reader can move between readings without
-   * the grid jumping and put one on the grid with one deliberate press.
+   * Which of his readings the pane is on — and, in `gridNarrowed` (the
+   * page's; see the prop), whether the grid is narrowed to it. **Two states,
+   * the manager console's own split**: the track says what a reader is looking
+   * at and the `Narrow grid` key says whether the page behind is filtered to
+   * it, so a reader can move between readings without the grid jumping and put
+   * one on the grid with one deliberate press.
    *
    * Both reset with `picked`, and that is a correctness rule rather than
    * tidiness: a reading is a fact about *that* player, so carrying a narrowing
@@ -266,14 +288,19 @@ export function StatBoard({
    * late.
    */
   const [reading, setReading] = useState<PlayerReading>("all");
-  const [gridNarrowed, setGridNarrowed] = useState(false);
 
-  const pick = useCallback((id: string) => {
-    setPicked((held) => (held === id ? held : id));
-    setReading("all");
-    setGridNarrowed(false);
-  }, []);
-  const toggleGridNarrowed = useCallback(() => setGridNarrowed((v) => !v), []);
+  const pick = useCallback(
+    (id: string) => {
+      setPicked((held) => (held === id ? held : id));
+      setReading("all");
+      onGridNarrowed(false);
+    },
+    [onGridNarrowed],
+  );
+  const toggleGridNarrowed = useCallback(
+    () => onGridNarrowed(!gridNarrowed),
+    [gridNarrowed, onGridNarrowed],
+  );
 
   /**
    * The fold, indexed by player id — the join `statRows` reads.
@@ -379,11 +406,21 @@ export function StatBoard({
    * length. The page bails out of an equal set, so a filter keystroke that
    * leaves the same leagues costs no render up there.
    */
+  /**
+   * The pane's narrowing in words, for the page's header — null whenever it is
+   * not actually narrowing, including a pick the week no longer has leagues
+   * for, so the header can never name a narrowing the grid is not under.
+   */
+  const paneLabel = useMemo(() => {
+    if (!gridNarrowed || !picked || !leaguesById[picked]) return null;
+    return `${lines[picked]?.name ?? picked} · ${READING_NOTE[reading]}`;
+  }, [gridNarrowed, picked, leaguesById, lines, reading]);
+
   useEffect(() => {
-    onScope(leagueScope);
-  }, [leagueScope, onScope]);
-  /** And it lets go when the panel does — a shut board narrows nothing. */
-  useEffect(() => () => onScope(null), [onScope]);
+    onScope(leagueScope, paneLabel);
+  }, [leagueScope, paneLabel, onScope]);
+  /** And it lets go when the board unmounts — a board that is gone narrows nothing. */
+  useEffect(() => () => onScope(null, null), [onScope]);
 
   const leagues = shares?.starter_league_count ?? 0;
 

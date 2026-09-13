@@ -4243,6 +4243,19 @@ the track on its own line and needs a radius rather than a lozenge —
 `CONSOLE_TRACK_SHELL` is `CONSOLE_TRACK` without its `rounded-full`, split for
 the emit-order reason every other constant here is.
 
+**The key's state is the page's, and the first cut that kept it in the board
+looked dead.** The page builds the fold the narrowing is answered from only
+while something needs it (`browsed`), and the open board covers ~810 of a 900px
+viewport — so a reader who pressed `Narrow grid` collapsed the board to look at
+the grid, the gate closed with the bar, the fold went, and the narrowing with
+it. The harness that verified the key mounted the board alone, so it could not
+see this. `gridNarrowed` lives in `gametime-home` now and joins the gate beside
+the held caps; the board publishes the narrowing in words beside its league set
+(`onScope(leagues, paneLabel)`), and the header states it —
+`Ja'Marr Chase · Every league he is in, either side · 4 of 116` — with a
+`Clear` of its own, because a filtered grid with nothing naming the filter
+reads as a page missing leagues.
+
 ## KeepTradeCut values
 
 `shared/ktc` scrapes both of KTC's markets — dynasty (`/dynasty-rankings`) and
