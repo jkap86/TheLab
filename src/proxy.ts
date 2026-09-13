@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import type { NextFetchEvent, NextRequest } from "next/server";
 
-import { clientIp, recordVisit } from "@/shared/logs";
+import { clientIp, loggedRoute, recordVisit } from "@/shared/logs";
 
 /**
  * Records a visit, and does nothing else.
@@ -26,12 +26,13 @@ import { clientIp, recordVisit } from "@/shared/logs";
  * throw, so nothing here can fail a page.
  */
 export function proxy(request: NextRequest, event: NextFetchEvent) {
-  if (isPageView(request)) {
+  const route = isPageView(request)
+    ? loggedRoute(request.nextUrl.pathname)
+    : null;
+
+  if (route !== null) {
     event.waitUntil(
-      recordVisit({
-        ip: clientIp(request.headers),
-        route: request.nextUrl.pathname,
-      }),
+      recordVisit({ ip: clientIp(request.headers), route }),
     );
   }
 
@@ -105,36 +106,41 @@ function isPageView(request: NextRequest): boolean {
  */
 
 /**
- * The pages worth recording.
+ * Where the proxy runs, which is not the same question as what gets recorded.
  *
- * **A positive list, and it cannot be generated from `constants/tools.ts`**,
- * however much it looks like it should be: Next requires matcher values to be
- * static constants so they can be analysed at build time, so a seventh tool is
- * a line here as well as there. A negative pattern would avoid that at the cost
- * of logging `_next` chunks, images and every API call, and of logging `/logs`
- * itself — which this list excludes by simply not naming it.
+ * **This is a coarse pre-filter now, and it used to be the vocabulary.** It
+ * carried the eight routes this app serves, one matcher entry each, with
+ * `shared/logs/routes.ts` spelling the same list a second time as a predicate
+ * for the beacon — because Next requires matcher values to be static constants
+ * so they can be analysed at build time, and a list of strings cannot be read
+ * out of a module. Two spellings of one list is a tool added to one and
+ * forgotten in the other, and a positive list cannot record a path this app
+ * does not serve, which is exactly the row worth having when somebody arrives
+ * on a link that leads nowhere. So the list is gone from both files: everything
+ * is a page unless `loggedRoute` says otherwise, and this decides only whether
+ * the proxy is invoked at all.
  *
- * `/` needs no entry: `next.config.ts` redirects it to `/tools`, and the
- * redirect is what the browser follows. What that means for every redirect in
- * that file is worth knowing rather than rediscovering — redirects are checked
- * *before* the proxy, so what lands here is the destination and the path the
- * reader actually asked for is never recorded. A hit on `/manager` is a `/tools`
- * row.
+ * It is still worth having. Proxy runs on the **Node.js runtime**, so a
+ * catch-all with no exclusions would spin one up for every chunk, image and
+ * `fetch` the app makes — all of which `isPageView` would then reject, having
+ * already paid for the invocation. The two namespaces named here are the ones
+ * that carry that traffic; `favicon.ico` is named for the same reason at the
+ * one path a browser asks for unprompted on every load.
  *
- * `shared/logs/routes.ts` is this list again as a predicate, for
- * `/api/logs/visit` to apply to what the beacon reports. It cannot be generated
- * from this one — matcher values have to be static constants — so
- * `routes.test.ts` pins the two against each other by reading this file.
+ * **What it must never do is exclude something `loggedRoute` would keep.** The
+ * beacon reaches that predicate through `/api/logs/visit` without passing this
+ * matcher at all, so an exclusion here that the predicate does not share is a
+ * page whose in-app navigations are recorded and whose hard loads are not.
+ * `routes.test.ts` reads this file and pins that direction — which is what
+ * replaces the two-lists check it used to make.
+ *
+ * `/` needs no entry, and its absence is not an exclusion: `next.config.ts`
+ * redirects it to `/tools`, and redirects are checked *before* the proxy, so
+ * what lands here is the destination and the path the reader actually asked for
+ * is never seen. A hit on `/manager` is a `/tools` row. That is the one gap
+ * this change does not close, and it is why anything worth a permanent redirect
+ * has to be named in that file.
  */
 export const config = {
-  matcher: [
-    "/tools",
-    "/manager/:path+",
-    "/lineupchecker/:path+",
-    "/gametime/:path+",
-    "/trades",
-    "/picktracker",
-    "/picktracker/:path+",
-    "/comps",
-  ],
+  matcher: ["/((?!api/|_next/|favicon.ico).*)"],
 };

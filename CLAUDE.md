@@ -4737,8 +4737,9 @@ for Manager's reason — the tool card and the rack key resolve to
 because there is still nothing behind "your lineups" without knowing whose. The
 `NoAccount` plate went with the change: with a username in the path it was
 unreachable. Two other files name the route and both moved with it — `proxy.ts`'s
-matcher takes `/lineupchecker/:path+` (a positive list, which is why a route
-shape is a line there as well as here), and `logs/derive-visit.ts` reads the
+matcher took `/lineupchecker/:path+` — a positive list, which is why a route
+shape was a line there as well as here, and which has since been replaced by a
+rule (see Every page is a page) — and `logs/derive-visit.ts` reads the
 second segment as a **username**, so a visit to this tool now names its subject
 in the log the way a visit to `/manager` does.
 
@@ -8799,23 +8800,124 @@ request with no fetch metadata, and `sec-fetch-dest` is browser-set and cannot b
 forged, with its *absence* read as a page view so a crawler or a curl still
 counts.
 
-**The matcher is a positive list and cannot be generated from
-`constants/tools.ts`**, however much it looks like it should be: Next requires
-matcher values to be static constants so they can be analysed at build time. A
-seventh tool is a line in both places. A negative pattern would avoid that and
-pay for it by logging `_next` chunks, images, every API call — and `/logs`
-itself, which this list excludes by not naming it.
+**The matcher was a positive list and is a coarse pre-filter — see Every page
+is a page, below**, which supersedes the paragraph this replaces. What that
+paragraph got right and is kept is the constraint behind it: Next requires
+matcher values to be static constants, so the matcher cannot be generated from
+`constants/tools.ts` or read out of a module.
 
 **And a redirect logs its destination, never the path a reader asked for.**
 Redirects are checked before the proxy, so a hit on `/manager` is a `/tools`
 row and a bookmarked `/manager/<u>/leagues` is a `/manager/<u>` one. That is
 right — those paths are not pages here — but it means the log cannot answer
 which retired URL somebody is still holding, which is the one question the
-cutover made worth asking. `app/not-found.tsx` is quieter still: its redirect
-runs on the *client*, so an unknown URL records neither the path (not in the
-list) nor, in production, the landing on `/tools`. In development that route
-answers a real 307 and the landing *is* recorded, which is a difference worth
-knowing before reading a local table as though it were the deployed one.
+cutover made worth asking. That is **still** the one gap, and it is the only one
+the pass below does not close: it is a fact about where redirects run rather
+than about what is recorded. `app/not-found.tsx` is the half that *did* close —
+its redirect runs on the *client*, so an unknown URL used to record neither the
+path (not in the list) nor, in production, the landing on `/tools`, and the path
+is now a row of its own.
+
+### Every page is a page
+
+The log recorded a **list**: eight matcher entries in `proxy.ts`, the same list
+again as a predicate in `shared/logs/routes.ts` because a matcher cannot read an
+array, and `routes.test.ts` holding the two together. It covered every page but
+one. What a list cannot do is the point of removing it — **a path this app does
+not serve is a path nobody asked about**, so the log could say which of its
+pages were read and never which link somebody was holding that led nowhere,
+which is the question the cutover onto TheLabX's address made worth asking and
+which this file had already named as the gap to close.
+
+**The question is inverted, and it is one rule in one place.** Everything is a
+page unless it is plainly not one — a namespace this app answers with something
+other than a page (`api`, `_next`), one of Next's metadata conventions, or a
+request for a *file* — and `loggedRoute` is that rule, applied by **both**
+writers. The proxy calls it rather than relying on its matcher, so there is no
+second spelling of a vocabulary to drift: the matcher is now a catch-all
+excluding `api/`, `_next/` and `favicon.ico`, and it exists only so the
+Node-runtime proxy is not spun up for every chunk and `fetch` the app makes,
+which `isPageView` would then reject having already paid for the invocation.
+
+**What the test pins is therefore a direction rather than an agreement.** The
+matcher may be broader than the predicate and must never be narrower, because
+the beacon reaches the predicate through `/api/logs/visit` without passing the
+matcher at all — an exclusion there that the predicate does not share is a page
+whose in-app navigations are recorded and whose hard loads are not, with a green
+suite behind it. And the two lists that *are* still lists are read off the
+filesystem rather than written down: every `page.tsx` under `app/` must be
+recorded and every generated metadata route must be refused, so a page added to
+this app is logged without anybody remembering to say so.
+
+**`/logs` is recorded now**, where it used to be excluded by not being named,
+and it is the one place this reads as a judgement rather than a widening: it is
+a page somebody visits, which is the whole of the rule, and the cost is that the
+operator's own reads of the log appear in it. The Address facet takes them back
+out in one press, and naming `logs` in `NOT_A_PAGE` is the one line that
+restores the old behaviour if the noise turns out to be worse than the reading.
+
+**The metadata conventions are matched on the *last* segment, and the build is
+what said so.** A first-segment test looked right and was wrong: this app
+carries `app/picktracker/[leagueId]/opengraph-image.tsx` as well as the root
+one, and the old matcher's `/picktracker/:path+` had been recording every
+crawler's unfurl of a shared draft link as `/picktracker/<id>/opengraph-image`
+— a row deriving to the `picktracker` tool and that league's id, and
+indistinguishable in the facet menus from somebody actually opening the board.
+**That is a defect this pass fixes rather than one it introduced**: a share is
+not a visit, and the link being miscounted is the one this tool exists to have
+pasted into a league chat.
+
+**A request for a file is refused by its extension**, which covers every static
+asset this app serves and the overwhelming majority of what a scanner asks a
+strange host for — `/wp-login.php`, `/.env`, `/config.json` — under one rule
+rather than a list of extensions that would go stale the way the route list just
+did. The cost is written down rather than guarded: a page whose last segment
+carries a dot would be refused, which on this app means a Sleeper username or a
+league id with one in it, and a league id is a number and a username is letters,
+digits and underscores.
+
+**The one thing to watch is volume.** Before this, a path the app does not serve
+wrote nothing; now it writes a row, so a scanner that gets past the extension
+rule — `/admin`, `/wp-admin` — costs a row apiece against a table nothing prunes.
+That is the same exposure a reader mashing refresh on `/tools` already had, one
+surface wider, and the remedies if it bites are the ones already in the tree:
+the beacon's per-address throttle, applied to the proxy too, or the retention
+loop this file's own "deliberately not ported" list already reserves a lock key
+for.
+
+#### Verified
+
+Against `next dev` with no `DATABASE_URL` — the boot hook skips migrations and
+`recordVisit` catches and logs, which is what makes *which* paths reach the
+writer observable without a database. Every page is recorded (`/tools`,
+`/trades`, `/comps`, `/logs`, `/picktracker`, `/manager/<u>`,
+`/lineupchecker/<u>`, `/gametime/<u>`, `/picktracker/<id>`); `/opengraph-image`,
+`/picktracker/<id>/opengraph-image`, `/favicon.ico`, `/icon.svg`, `/api/logs`,
+`/_next/...` and `/wp-login.php` are not; and `/nonsense` and
+`/old/thelabx/path` are — the capability the list could not have.
+
+**The before-state was reproduced in the same harness** by stashing the diff,
+which is the check that the change is doing something and the one that found the
+share-image defect: `/logs`, `/nonsense` and `/old/thelabx/path` all recorded
+nothing, and `/picktracker/<id>/opengraph-image` **recorded a visit**.
+
+Three deliberate mutations were checked against the suite and each fails a named
+assertion: excluding `/logs` again, matching the metadata conventions on the
+first segment, and narrowing the matcher to exclude a real page. 2,601 unit
+tests pass; `lint`, `typecheck` and `build` are clean, and the build is what
+validates the matcher's regex — path-to-regexp rejects a shape Next cannot
+analyse, so a matcher that does not compile is a failed build rather than a
+silent no-op.
+
+**Not verified against real data**, which is the gap to close first: no database
+was reachable from where this was built, so what was measured is which paths
+reach `recordVisit` rather than which rows land. Three things that cannot
+answer for — how much scanner traffic actually gets past the extension rule on a
+deployed host, which is what decides whether the volume note above becomes a
+change; whether `/logs` in the log reads as useful or as noise, which is the one
+judgement this pass makes on the reader's behalf; and whether the Tool facet
+stays legible once its menu can hold whatever a stale link's first segment
+happened to be.
 
 ### The in-app press is reported from the browser
 
@@ -8860,8 +8962,9 @@ are what make this one a different object.** TheLab2026's
 method, so its table holds whatever the internet felt like putting there. Here
 the address is read from the request and never from the body (the same
 `clientIp` the proxy uses, with the same caveat about what an address *proves*);
-the route must canonicalise to one of the seven this log keeps, so the column
-cannot hold a sentence, a URL or a page this app does not serve;
+the route must canonicalise to a path a browser could be showing, so the column
+cannot hold a sentence, a URL, a namespace this app answers with something other
+than a page, or a request for a file;
 `Sec-Fetch-Site` must say `same-origin`, which is a header a page cannot forge
 and which costs a browser too old to send it its rows — the *opposite* call from
 `isPageView`'s treatment of absent fetch metadata, and right for the opposite
@@ -9024,9 +9127,10 @@ clean.
 - **The open write endpoint.** `/api/common/logs/update` accepts any `ip` and
   `route` from anyone, over both GET and POST. `POST /api/logs/visit` is this
   app's write path and is a different object: the address comes off the request,
-  the route must be one of the seven this log keeps, the report must be
-  same-origin, and a repeat is throttled — see The in-app press is reported from
-  the browser.
+  the route must canonicalise through `loggedRoute` — the same rule the proxy
+  applies — the report must be same-origin, and a repeat is throttled; see The
+  in-app press is reported from the browser, and Every page is a page for what
+  that rule became.
 - **A user-agent column, and therefore bot filtering.** Neither app has one; this
   is named because the absence is what makes "a visit" a request rather than a
   person, and it is the first thing to add if the log ever reads as noise.
