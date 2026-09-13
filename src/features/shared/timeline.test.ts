@@ -54,6 +54,7 @@ const payload: RosterTimelinePayload = {
           {
             roster_id: 1,
             name: "Alpha",
+            avatar_url: null,
             user_id: "u1",
             players: ["moved", "pickup"],
             picks: [{ season: "2027", round: 1, roster_id: 2 }],
@@ -61,6 +62,7 @@ const payload: RosterTimelinePayload = {
           {
             roster_id: 2,
             name: "Beta",
+            avatar_url: null,
             user_id: "u2",
             players: ["late"],
             picks: [],
@@ -123,6 +125,7 @@ const chained: RosterTimelinePayload = {
           {
             roster_id: 1,
             name: "Gamma",
+            avatar_url: null,
             user_id: "u3",
             players: ["old-a"],
             picks: [],
@@ -130,6 +133,7 @@ const chained: RosterTimelinePayload = {
           {
             roster_id: 2,
             name: "Alpha (2025)",
+            avatar_url: null,
             user_id: "u1",
             players: ["old-b"],
             picks: [],

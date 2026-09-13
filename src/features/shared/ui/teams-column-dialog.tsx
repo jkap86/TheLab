@@ -151,7 +151,7 @@ export function TeamsColumnDialog({
         // reading this key exists to show — it shrinks (`0 1 190px`) on a card
         // too narrow to hold it, which is a truncation the accessible name below
         // does not share.
-        className="lab-anim flex min-w-0 flex-1 items-center justify-between gap-2 rounded-full border border-active/45 bg-[image:var(--key-bg)] py-[5px] pl-[9px] pr-[7px] font-mono text-[length:var(--fs-10)] uppercase tracking-[0.1em] text-readout shadow-[var(--key-shadow)] [text-shadow:var(--readout-text-glow)] transition-[color,box-shadow] duration-150 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-active/60 lg:h-6 lg:flex-[0_1_190px] lg:py-0 lg:pl-[11px] lg:pr-[9px] lg:text-[length:var(--fs-11)] lg:tracking-[0.12em]"
+        className="lab-anim flex min-w-0 flex-1 items-center justify-between gap-2 rounded-full border border-active/45 bg-[image:var(--key-bg)] h-[29px] py-0 pl-[9px] pr-[7px] font-mono text-[length:var(--fs-10)] uppercase tracking-[0.1em] text-readout shadow-[var(--key-shadow)] [text-shadow:var(--readout-text-glow)] transition-[color,box-shadow] duration-150 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-active/60 lg:h-6 lg:flex-[0_1_190px] lg:py-0 lg:pl-[11px] lg:pr-[9px] lg:text-[length:var(--fs-11)] lg:tracking-[0.12em]"
       >
         {/* **Two names for one column, switched by the cascade.** At `lg` the
             key reads the metric's own name (`ROS starters`); below it, where the

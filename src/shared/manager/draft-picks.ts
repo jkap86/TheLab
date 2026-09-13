@@ -296,6 +296,12 @@ export type LeagueUserName = {
   user_id: string;
   display_name: string | null;
   team_name: string | null;
+  /**
+   * Sleeper's avatar id as stored, or null. Optional because the pick grid
+   * never reads it — only the teams pane's mark does, through
+   * `leagueTeamAvatar` — so a caller building picks alone need not supply it.
+   */
+  avatar?: string | null;
 };
 
 /** Everything {@link leagueRosterPicks} reads off one league's stored graph. */

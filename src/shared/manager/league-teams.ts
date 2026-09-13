@@ -28,6 +28,7 @@ import type {
 } from "@/shared/contract";
 
 import { ktcPickPrice, pickTier } from "../ktc/picks.ts";
+import { sleeperAvatarUrl } from "../sleeper/avatar.ts";
 import type { KtcPickPrice } from "../ktc/picks.ts";
 import { ktcBoardValue } from "../ktc/roster.ts";
 import type { RosProjections } from "../projections/ros.ts";
@@ -73,6 +74,21 @@ export function leagueTeamName(
   return (
     user?.display_name?.trim() || user?.team_name?.trim() || `Roster ${rosterId}`
   );
+}
+
+/**
+ * The avatar of whoever owns a roster, as a thumbnail URL — or null for an
+ * orphaned roster or an owner with none stored.
+ *
+ * Read off the same `users` array as {@link leagueTeamName} and by the same
+ * owner, so a team's name and its picture cannot come to name two people.
+ */
+export function leagueTeamAvatar(
+  users: PickLeague["users"],
+  ownerId: string | null,
+): string | null {
+  const user = ownerId === null ? null : users.find((u) => u.user_id === ownerId);
+  return sleeperAvatarUrl(user?.avatar, "thumb");
 }
 
 /**
@@ -196,6 +212,7 @@ export function solveLeagueEntry(
     ({ roster, lineup, totals, columns }) => ({
       roster_id: roster.roster_id,
       name: leagueTeamName(league.users, roster.roster_id, roster.owner_id),
+      avatar_url: leagueTeamAvatar(league.users, roster.owner_id),
       // Never `roster.owner_id === managerUserId` unguarded: an orphan roster's
       // owner is null, and a null manager would mark every one of them.
       is_manager: managerUserId !== null && roster.owner_id === managerUserId,

@@ -126,6 +126,14 @@ describe("the two one-line lists", () => {
     });
   }
 
+  test("a standings team stacks its figure under its name on a phone", () => {
+    // On one ~150px line a six-figure total beside a face left a team name two
+    // characters. `stacked` gives the name the column and the figure a line.
+    for (const row of rows(read("src/features/shared/ui/league-teams.tsx"))) {
+      assert.ok(/^\s*stacked\b/m.test(row), "a standings team passes `stacked`");
+    }
+  });
+
   test("a roster seat and a bench row keep theirs", () => {
     // They carry `POS · TEAM`, at **both** widths — which is where they part
     // company with the week row's own arm, whose phone line drops the position

@@ -167,7 +167,16 @@ export type PaneRowLead = {
  * the same mount carrying the team's initial, which is what makes a standings
  * row and a seat row the same object at a glance.
  */
-export type PaneRowFace = { playerId: string | null; name: string };
+export type PaneRowFace = {
+  playerId: string | null;
+  name: string;
+  /**
+   * A picture that is not a player's headshot — a standings team's owner
+   * avatar. Drawn centred where a headshot is drawn from the top: an avatar is
+   * a square somebody uploaded rather than a head-and-shoulders crop.
+   */
+  avatarUrl?: string | null;
+};
 
 /** One figure, and where it stands. */
 export type PaneRowFigure = {
@@ -500,6 +509,14 @@ function PaneRowFaceMount({
           }}
         />
       )}
+      {/* A background over the initial, never an `<img>`, for the headshot's
+          reason: one that 404s paints nothing and the letter is the fallback. */}
+      {!face.playerId && face.avatarUrl && (
+        <span
+          className="absolute inset-0 bg-cover bg-center"
+          style={{ backgroundImage: `url(${face.avatarUrl})` }}
+        />
+      )}
     </span>
   );
 }
@@ -777,6 +794,7 @@ export function PaneWeekRow({
   figure,
   second = null,
   line2 = true,
+  stacked = false,
   selected = false,
   onPress,
   ground = "glass",
@@ -858,6 +876,18 @@ export function PaneWeekRow({
    * visible as a wobble rather than as anything a reader could name.
    */
   line2?: boolean;
+  /**
+   * Below `lg`, set the figure **under** the name, right-aligned, with the face
+   * a row cell beside both lines rather than a 17px mark on the first.
+   *
+   * For a one-line row whose name is somebody's own words — a standings team.
+   * The phone arm otherwise puts face, name and figure on one ~150px line, and
+   * a six-figure KTC total beside a face left a team name two characters and an
+   * ellipsis. Stacked, the name has the column's whole width and the figure has
+   * a line of its own. From `lg` up nothing changes: the row has room for all
+   * three on one line and a figure column the pane opposite lines up with.
+   */
+  stacked?: boolean;
   /** The seat the pane opposite is solving: lit four ways. */
   selected?: boolean;
   /** Absent renders an `<li>`; present renders an `<li><button>`. */
@@ -983,19 +1013,32 @@ export function PaneWeekRow({
         {locked && <Padlock />}
       </span>
 
-      {/* The face as a row cell, from `lg` up. */}
+      {/* The face as a row cell, from `lg` up — and at every width on a
+          stacked row, where it stands beside both lines. Two whole strings, so
+          `hidden` and `flex` are never two base displays in one attribute. */}
       {face && (
-        <PaneRowFaceMount face={face} className="hidden size-10 text-[length:var(--fs-15)] lg:flex" />
+        <PaneRowFaceMount
+          face={face}
+          className={
+            stacked
+              ? "flex size-[30px] text-[length:var(--fs-12)] lg:size-10 lg:text-[length:var(--fs-15)]"
+              : "hidden size-10 text-[length:var(--fs-15)] lg:flex"
+          }
+        />
       )}
 
       <span
         className={`relative flex min-w-0 flex-1 ${
-          line2 ? "flex-col gap-[2px]" : "items-center"
+          line2
+            ? "flex-col gap-[2px]"
+            : stacked
+              ? "flex-col gap-[3px] lg:flex-row lg:items-center"
+              : "items-center"
         }`}
       >
         {/* ── Line one: who he is, and — below `lg` — what he projects ──── */}
         <span className="flex min-w-0 items-center gap-[5px] lg:gap-[7px]">
-          {face && (
+          {face && !stacked && (
             <PaneRowFaceMount
               face={face}
               className="flex size-[17px] text-[length:var(--fs-8)] lg:hidden"
@@ -1013,8 +1056,12 @@ export function PaneWeekRow({
           </span>
           {marks}
           {status && <StatusLamp status={status} />}
-          <span className="shrink-0 lg:hidden">{figureNode}</span>
+          {!stacked && <span className="shrink-0 lg:hidden">{figureNode}</span>}
         </span>
+
+        {/* A stacked row's figure, on a line of its own under the name and
+            right-aligned — below `lg` only; the row cell carries it above. */}
+        {stacked && <span className="flex justify-end lg:hidden">{figureNode}</span>}
 
         {/* ── Line two: where and when the game is ────────────────────────
             One row of parts, each gated at the width it belongs to, rather

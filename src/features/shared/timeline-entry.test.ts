@@ -58,6 +58,7 @@ const payload: RosterTimelinePayload = {
           {
             roster_id: 1,
             name: "Alpha",
+            avatar_url: null,
             user_id: "u1",
             players: ["scrub"],
             picks: [{ season: "2027", round: 1, roster_id: 1 }],
@@ -65,6 +66,7 @@ const payload: RosterTimelinePayload = {
           {
             roster_id: 2,
             name: "Beta",
+            avatar_url: null,
             user_id: "u2",
             players: ["star"],
             picks: [{ season: "2027", round: 1, roster_id: 2 }],
@@ -296,6 +298,7 @@ const chained: RosterTimelinePayload = {
             roster_id: 1,
             // Somebody else's team that year, on the id the manager holds now.
             name: "Gamma",
+            avatar_url: null,
             user_id: "u9",
             players: ["star"],
             picks: [],
@@ -304,6 +307,7 @@ const chained: RosterTimelinePayload = {
             roster_id: 2,
             name: "Alpha (2025)",
             // `u1` is the manager — on roster 2 that year, not roster 1.
+            avatar_url: null,
             user_id: "u1",
             players: ["scrub"],
             picks: [],

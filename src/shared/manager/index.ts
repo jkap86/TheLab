@@ -109,6 +109,7 @@ export type {
   RankVariant,
 } from "./league-ranks";
 export {
+  leagueTeamAvatar,
   leagueTeamName,
   pickValue,
   solveLeagueEntry,

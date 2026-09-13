@@ -185,12 +185,14 @@ export function timelineEntry(
   );
 
   const named = new Map(rosters.map((r) => [r.roster_id, r.name]));
+  const faces = new Map(rosters.map((r) => [r.roster_id, r.avatar_url]));
   const teams: LeagueTeam[] = solved.rosters.map(({ roster, lineup, totals, columns }) => ({
     roster_id: roster.roster_id,
     // The timeline's own name, which is `leagueTeamName`'s answer resolved on
     // the server — so a team is called the same thing at every stop and on the
     // card the rail swaps for.
     name: named.get(roster.roster_id) ?? `Roster ${roster.roster_id}`,
+    avatar_url: faces.get(roster.roster_id) ?? null,
     // By roster rather than by owner, because the card knows which roster is
     // the reader's even where the payload's owner column is null — resolved for
     // this season above, since a roster id does not survive a year boundary.

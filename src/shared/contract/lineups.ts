@@ -357,6 +357,12 @@ export type LeagueTeam = {
   roster_id: number;
   /** The team's own name, its owner's display name, or "Roster N". */
   name: string;
+  /**
+   * The owner's Sleeper avatar, as a thumbnail URL, or null — an orphaned
+   * roster, or an owner who never set one. The teams pane draws the initial
+   * under it, so null is the letter mount rather than a missing picture.
+   */
+  avatar_url: string | null;
   /** True on the page's manager — the card's default selection, at most one. */
   is_manager: boolean;
   lineup: LeagueLineup;

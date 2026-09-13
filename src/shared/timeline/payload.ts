@@ -5,7 +5,7 @@ import type {
   TimelineRosterPayload,
   TimelineSeasonPayload,
 } from "@/shared/contract";
-import { leagueTeamName } from "@/shared/manager";
+import { leagueTeamAvatar, leagueTeamName } from "@/shared/manager";
 import type { DraftPickAsset } from "@/shared/manager";
 import { getPlayersByIds } from "@/shared/players";
 
@@ -110,6 +110,7 @@ function resolveSeason(
   const rosters: TimelineRosterPayload[] = league.rosters.map((roster) => ({
     roster_id: roster.roster_id,
     name: leagueTeamName(league.users, roster.roster_id, roster.owner_id),
+    avatar_url: leagueTeamAvatar(league.users, roster.owner_id),
     user_id: roster.owner_id,
     players: roster.players.filter((id) => typeof id === "string" && id),
     picks: (owned?.get(roster.roster_id) ?? []).map((pick) => ({
