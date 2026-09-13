@@ -10,7 +10,10 @@ import type {
 // nothing of the `@/*` aliases. It is the exception `shares-columns.ts` and
 // `helpers/seat-compare.ts` already take, for the same reason. The barrel would
 // also drag every drawer in this folder reads into a pure module.
-import { leaguematePlayerId } from "../../shared/league-subjects.ts";
+import {
+  leaguematePlayerId,
+  type SubjectMode,
+} from "../../shared/league-subjects.ts";
 
 /**
  * What everybody else in a manager's leagues holds, folded three ways.
@@ -173,36 +176,100 @@ export function playerModeCounts(
   rosters: Record<string, readonly LeagueRosterEntry[]>,
   selfId: string | null,
 ): ModeCounts {
-  const counts: ModeCounts = { owned: 0, taken: 0, available: 0 };
-  if (!isPlayerId(playerId)) return counts;
+  // **The lengths of the partition rather than three counters of its own**,
+  // which is what stops the figure on a mode key from ever disagreeing with the
+  // list of leagues under it. The three arrays are built for a *picked* player
+  // — one or two of several hundred — so what the allocation buys is worth
+  // strictly more than it costs. See {@link playerModeLeagues}.
+  const byMode = playerModeLeagues(leagues, playerId, rosters, selfId);
+  return {
+    owned: byMode.owned.length,
+    taken: byMode.taken.length,
+    available: byMode.available.length,
+  };
+}
+
+/** One league on one of the three arms, and who holds him there. */
+export type PlayerModeLeague = {
+  league: ManagerLeague;
+  /**
+   * The leaguemate rostering him, on the `taken` arm and **null everywhere
+   * else** — `leagueOwners`' own rule, spelled once here and read back by that
+   * function.
+   *
+   * Null on `owned` because the manager holds him and there is nobody else to
+   * name; null on `available` because nobody does.
+   */
+  holder: string | null;
+};
+
+/**
+ * The three arms as **lists**, which is what a panel that draws them needs and
+ * what {@link playerModeCounts} is the lengths of.
+ *
+ * **One walk, three readings, so none of them can drift.** This module already
+ * had two folds over these rows — how many leagues each mode answers for, and
+ * whose team he is on in each taken one — and a third spelling of the same
+ * partition would be a list under a key whose figure it did not match, with
+ * neither visibly wrong. So the partition is here and both of the others are
+ * derived from it.
+ *
+ * Every rule the two carried is this function's now, and each is silent when
+ * dropped:
+ *
+ * - **A league absent from the map is on no arm at all.** Its rosters were
+ *   never stored, and an absence is not evidence that anybody is free in it —
+ *   which is why the three sum to the leagues that *answered* rather than to
+ *   the panel's own count.
+ * - **An orphan team is nobody.** It holds him without anybody owning him, so
+ *   it is neither `taken` nor `available`, and `available` is the complement of
+ *   *anyone* rather than the negation of the other two.
+ * - **The manager's own roster settles a league whatever else names him**, so a
+ *   league where a leaguemate also holds him is `owned` with no holder — naming
+ *   that leaguemate would present them as the person who has him instead of
+ *   you.
+ * - **The first qualifying roster wins** where a league answers with two.
+ *   Sleeper can return two rosters for one owner in one league, and a genuine
+ *   pair of different leaguemates holding one player is not a state the
+ *   platform produces.
+ *
+ * The leagues come back in the order they were given, which is the order the
+ * caller narrowed and sorted them into.
+ */
+export function playerModeLeagues(
+  leagues: readonly ManagerLeague[],
+  playerId: string,
+  rosters: Record<string, readonly LeagueRosterEntry[]>,
+  selfId: string | null,
+): Record<SubjectMode, PlayerModeLeague[]> {
+  const byMode: Record<SubjectMode, PlayerModeLeague[]> = {
+    owned: [],
+    taken: [],
+    available: [],
+  };
+  if (!isPlayerId(playerId)) return byMode;
 
   for (const league of leagues) {
     const entries = rosters[league.league_id];
     if (!entries) continue;
 
     let mine = false;
-    let theirs = false;
     let anyone = false;
+    let holder: string | null = null;
     for (const entry of entries) {
       if (!entry.players.includes(playerId)) continue;
       anyone = true;
-      // **An orphan team is nobody**, so it makes a player neither mine nor
-      // taken while still holding him — which is why `available` is the
-      // complement of `anyone` rather than the negation of the other two.
       if (selfId != null && entry.user_id === selfId) mine = true;
-      else if (entry.user_id != null) theirs = true;
+      else if (entry.user_id != null) holder ??= entry.user_id;
     }
 
-    if (mine) counts.owned++;
-    else if (theirs) counts.taken++;
-    else if (!anyone) counts.available++;
-    // The arm with no counter is a player held **only** by an orphan team: not
-    // the manager's, nobody else's, and not free either. It falls out of all
-    // three, which is why these sum to the leagues that answered rather than to
-    // a fixed total — and why the panel prints them as three figures rather
-    // than as a breakdown of one.
+    if (mine) byMode.owned.push({ league, holder: null });
+    else if (holder != null) byMode.taken.push({ league, holder });
+    else if (!anyone) byMode.available.push({ league, holder: null });
+    // The arm with no list is a player held **only** by an orphan team: not the
+    // manager's, nobody else's, and not free either.
   }
-  return counts;
+  return byMode;
 }
 
 /**
@@ -242,25 +309,17 @@ export function leagueOwners(
   selfId: string | null,
 ): Map<string, string> {
   const owners = new Map<string, string>();
-  if (!isPlayerId(playerId)) return owners;
-
-  for (const league of leagues) {
-    const entries = rosters[league.league_id];
-    if (!entries) continue;
-
-    let owner: string | null = null;
-    for (const entry of entries) {
-      if (!entry.players.includes(playerId)) continue;
-      if (selfId != null && entry.user_id === selfId) {
-        // The manager's own, which settles the league whatever else names him:
-        // this is not a taken league and there is nobody to put on the card.
-        owner = null;
-        break;
-      }
-      if (entry.user_id != null) owner ??= entry.user_id;
-    }
-
-    if (owner != null) owners.set(league.league_id, owner);
+  // **Read off the partition rather than walked again**, which is what makes
+  // the sentence above true rather than a promise: the card's readout and the
+  // panel's `Taken` count are now one fold's two readings, and the three
+  // exclusions are stated in one place.
+  for (const { league, holder } of playerModeLeagues(
+    leagues,
+    playerId,
+    rosters,
+    selfId,
+  ).taken) {
+    if (holder != null) owners.set(league.league_id, holder);
   }
   return owners;
 }

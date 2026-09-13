@@ -12,7 +12,6 @@ import type { ManagerLineupsPayload } from "@/shared/contract";
 
 import {
   activeFilterCount,
-  BrowseDock,
   DEFAULT_LEAGUE_FILTERS,
   filterSummary,
   BILLET_KEY_CHROME,
@@ -37,13 +36,13 @@ import {
   toggleSubject,
   type LeagueSubjects,
   type Subject,
-  type RackDrawerKey,
   type SubjectMode,
   type SubjectRolls,
   useActiveCard,
   useKtcBoard,
   useLeagueFilters,
   useLineupColumns,
+  useSharesConsoleOpen,
   useSummaryReadings,
   toggleSummaryReadings,
   useTeamsColumn,
@@ -61,11 +60,9 @@ import {
   modeRolls,
   leaguematePlayerRolls,
 } from "../helpers/leaguemate-rosters";
-import { LeaguematesMark, PlayersMark } from "./browse-marks";
 import { LeagueCard } from "./league-card";
-import { LeaguemateSharesDrawer } from "./leaguemate-shares-drawer";
-import { PlayerSharesDrawer } from "./player-shares-drawer";
 import { SeasonSummary } from "./season-summary";
+import { SHARES_BAR_H, SharesConsole } from "./shares-console";
 
 /** How a moded player pick reads in the token tray — see `subjectName`. */
 const MODE_WORDS: Record<SubjectMode, string> = {
@@ -80,30 +77,6 @@ const MODE_WORDS: Record<SubjectMode, string> = {
  * changed prop per render, and this page renders on every stream chunk.
  */
 const EMPTY_KTC: ManagerLineupsPayload["ktc"] = [];
-
-/**
- * The two Browse keys: their legends, and the glyphs drawn beside them.
- *
- * **They are the dock's now rather than the rack's.** They used to be published
- * upward into the rack, which is where the `RackDrawerKey` shape comes from and
- * why it is still the shape: the dock takes the identical array, so the day a
- * page wants them in either place there is one vocabulary rather than two. See
- * `browse-dock.tsx` for what moved and why.
- *
- * **Module scope, not a literal in the render**, which was `usePublishRackControls`'
- * own requirement and survives the move for a smaller reason: `BrowseDock` is
- * one component rather than a hundred, so an array rebuilt each render costs a
- * re-render of it rather than a loop through an ancestor's state. The two
- * `icon` elements are built once here on the same terms.
- *
- * The glyphs are this folder's — see `browse-marks.tsx` — because the page owns
- * its own vocabulary, which is the argument that made the legends data back
- * when the rack could not `switch` on the route.
- */
-const BROWSE_KEYS: readonly RackDrawerKey[] = [
-  { kind: "player", label: "Players", icon: <PlayersMark /> },
-  { kind: "leaguemate", label: "Leaguemates", icon: <LeaguematesMark /> },
-];
 
 /**
  * A manager's leagues for a season, as one console.
@@ -199,8 +172,21 @@ export function LeaguesHome({
   // rather than the open flag: a picked subject keeps narrowing the grid after
   // its drawer closes, and the predicate still needs the map behind it.
   const [subjects, setSubjects] = useState<LeagueSubjects>(NO_SUBJECTS);
-  const [drawer, setDrawer] = useState<Subject["kind"] | null>(null);
-  const [opened, setOpened] = useState<ReadonlySet<Subject["kind"]>>(new Set());
+  /**
+   * **The latch the three reads are gated on, and nothing else.**
+   *
+   * It was a set of drawer kinds and it is one boolean, because there is one
+   * panel now and both of its tabs are behind the same press: a reader who has
+   * raised the console once has asked for all three reads, and gating them per
+   * tab would make switching tabs a wait. It is still a *latch* rather than the
+   * open flag — a picked subject keeps narrowing the grid after the console
+   * comes down, and the predicate behind it still needs the maps.
+   */
+  const [browsed, setBrowsed] = useState(false);
+  // The console's own open flag lives on the device, the way the stat board's
+  // does — see `shares-console-open`. Read here because the latch follows it.
+  const consoleOpen = useSharesConsoleOpen();
+  if (consoleOpen && !browsed) setBrowsed(true);
 
   const subject = `${username} ${season ?? ""}`;
   const [renderedSubject, setRenderedSubject] = useState(subject);
@@ -214,8 +200,13 @@ export function LeaguesHome({
     // second account keeps the question and changes the answer. Writing the
     // store here would also be a side effect during render.
     setSubjects(NO_SUBJECTS);
-    setDrawer(null);
-    setOpened(new Set());
+    // **The latch resets with the subjects and the open flag does not.** A
+    // subject picked for one manager narrows nothing on the next, and a latch
+    // carried over would fetch the new manager's maps before anyone asked to
+    // see them; where the *console* is — up or down — is a fact about the
+    // reader's device rather than about whose page this is, and writing that
+    // store during render would be a side effect anyway.
+    setBrowsed(false);
   }
 
   // The KTC market this device reads, for the shares drawer's Value column —
@@ -232,12 +223,7 @@ export function LeaguesHome({
 
   // Read once, by both drawers and by the predicate below — see the hook for
   // why the latch rather than `drawer !== null`.
-  const players = useManagerPlayers(
-    username,
-    state.season,
-    opened.has("player"),
-    ktcBoard,
-  );
+  const players = useManagerPlayers(username, state.season, browsed, ktcBoard);
   // **Latched on either drawer, like the rosters read below it**, and for the
   // same kind of reason one step further on. Its `users` map is the only place
   // a user id becomes a name and a face on this page, and the card's ownership
@@ -249,18 +235,14 @@ export function LeaguesHome({
   // It is the cheap one of the three to widen: ~1,300 member ids and ~720 user
   // rows on a 113-league account, against every roster of every league for the
   // read below. See `ManagerLeaguematesPayload`.
-  const leaguemates = useManagerLeaguemates(
-    username,
-    state.season,
-    opened.has("leaguemate") || opened.has("player"),
-  );
+  const leaguemates = useManagerLeaguemates(username, state.season, browsed);
   // **Latched on either drawer**, which is the one of the three that is: the
   // leaguemate panel's rail wants it on open, and the players panel's three
   // mode keys want it one press later. See the hook.
   const leaguemateRosters = useManagerLeaguemateRosters(
     username,
     state.season,
-    opened.has("leaguemate") || opened.has("player"),
+    browsed,
   );
 
   const filtersActive = activeFilterCount(filters) > 0;
@@ -505,48 +487,12 @@ export function LeaguesHome({
   const listRef = useRef<HTMLUListElement | null>(null);
   const ids = useMemo(() => visible.map((l) => l.league_id), [visible]);
   const card = useActiveCard({ param: "league", ids, listRef });
-  // Read out so the handler below can depend on it by name: `close` is a
-  // `useCallback` over a literal `param` and a stable helper, which is what
-  // keeps `openDrawer` stable in turn.
-  const { close: closeCard } = card;
-
-  // Latch and open in one handler — never during render. It is a `useCallback`
-  // because it is `BrowseDock`'s `onOpen`, and this page re-renders once per
-  // line of the leagues stream: a fresh identity each time would re-render the
-  // dock on every one of them. It used to be the rack seam that required it,
-  // where a new identity re-published and set an ancestor's state in a loop —
-  // the same rule at a much lower price, which is what moving the keys down
-  // into the page bought.
-  //
-  // **It closes the open card first, and that is the point of the press rather
-  // than tidiness.** These two drawers exist to *narrow the grid* — a player
-  // row or a leaguemate row is a subject, and picking one leaves the leagues
-  // they are in. While a card is parked there is no grid to narrow: the page is
-  // locked, the header has stood down and every league but the open one is
-  // `display: none`, so the reader picked a subject and watched one card that
-  // may or may not still be in the selection, with the count that would have
-  // told them off screen. The drawer is a modal over a page in the wrong state.
-  //
-  // So the press does what the reader means by it — take me back to the list I
-  // am about to filter — and the collapse runs behind the drawer's own
-  // backdrop, so the grid is standing again by the time they have picked. A
-  // press with no card open is a no-op: `close` reads the URL and returns when
-  // it names no card.
-  const openDrawer = useCallback(
-    (kind: Subject["kind"]) => {
-      closeCard();
-      setOpened((prev) => (prev.has(kind) ? prev : new Set(prev).add(kind)));
-      setDrawer(kind);
-    },
-    [closeCard],
-  );
-  // The drawers' three handlers, stable for the page's life: each is a
+  // The console's two handlers, stable for the page's life: each is a
   // functional update on a setter and closes over nothing else, and each is a
-  // prop of a drawer that stays mounted and holds several hundred memo'd rows
-  // — an inline arrow here would re-render every one of them on every stream
-  // chunk and card toggle.
-  const closeDrawer = useCallback(() => setDrawer(null), []);
-  const toggleDrawerSubject = useCallback(
+  // prop of a panel that stays mounted and holds a thousand memo'd rows — an
+  // inline arrow here would re-render every one of them on every stream chunk
+  // and card toggle.
+  const toggleConsoleSubject = useCallback(
     (s: Subject) => setSubjects((prev) => toggleSubject(prev, s)),
     [],
   );
@@ -556,27 +502,22 @@ export function LeaguesHome({
     [],
   );
 
-  // **This page publishes nothing into the rack**, and the two keys that were
-  // the last thing it did open the same two drawers from `BrowseDock`, which is
-  // the first thing in the tree below and is drawn at the foot of the viewport.
+  // **This page publishes nothing into the rack and mounts no `BrowseDock`.**
   //
   // Filters and Columns came down onto the plate and the tray under it first —
   // a Filters key in the rack said "a filter is on" while the plate's
   // `Leagues 9 / 14` said the same thing with a number, and neither named what
-  // had been narrowed. What is left went the other way rather than back up: the
-  // Browse pair does not describe the page at all, so it is not header
-  // furniture, and the scroll-depth argument that kept it in the rack is
-  // answered better by a control pinned to the viewport than by one pinned to
-  // the top of it.
+  // had been narrowed. The Browse pair then went the *other* way, out of the
+  // rack and down into a dock pinned to the foot of the viewport, on the
+  // argument that these are the page's exits rather than a description of it.
   //
-  // **The two week tools have since followed**, so no page publishes into the
-  // rack at all and `BrowseDock` is `features/shared`'s. What that costs up
-  // there is the wordmark's own conditional, which is gated on a page having
-  // controls and so can no longer fire: the legend draws at every width on
-  // every route. The seam itself is kept and noted dead where it is declared —
-  // see `rack-controls.tsx` — because `RackDrawerKey` is still the shape all
-  // three pages type their keys as, which is exactly what let the dock take
-  // them without a `switch` on the route.
+  // **The dock has gone the same way as the drawers it opened**, and for the
+  // reason gametime's did when Player Scores became the stat board: the panel
+  // those two keys opened is the console at the foot of the console now, and a
+  // key promising a drawer nothing opens is worse than no key. The bar is the
+  // whole control. `BrowseDock` itself stays — the lineup checker draws it —
+  // and so does `browse-marks.tsx`, which is this page's own glyph vocabulary
+  // and is noted dead where it is declared.
 
   /**
    * What to say, and what to offer, when the grid narrows to nothing.
@@ -597,25 +538,10 @@ export function LeaguesHome({
   };
 
   return (
-    <div className="relative">
-      {/*
-        **First in the tree, and pinned to the bottom-right of the viewport.**
-
-        Where it is drawn and where it sits in the tab order are two questions,
-        and a `fixed` part is what lets them be answered separately. These two
-        keys are the page's exits, and in the rack a keyboard reader reached
-        them immediately — rendered where they are drawn they would be behind a
-        hundred league cards and two dialogs, which is a reach this change has
-        no business costing. So the DOM says what the rack said and the
-        stylesheet puts it where the design does.
-      */}
-      <BrowseDock
-        keys={BROWSE_KEYS}
-        drawer={drawer}
-        onOpen={openDrawer}
-        parked={card.parked}
-        chromeClass={card.chromeClass}
-      />
+    /* `SHARES_BAR_H` on the root rather than on the console alone: the league
+       grid's own bottom margin has to clear the bar, and both read the one
+       declaration. See the constant. */
+    <div className={`relative ${SHARES_BAR_H}`}>
       {/* The page's own header stands down while a card is parked: it is
           `display: none` rather than unmounted, so the two dialogs it holds
           keep their draft state and neither is rebuilt when the card closes.
@@ -945,7 +871,18 @@ export function LeaguesHome({
               // trades board's cards are a different height and its list ends
               // in an infinite-scroll sentinel, which is the one arrangement a
               // first-layout height estimate could disturb.
-              className="lab-card-contain relative m-0 mt-2 grid list-none grid-cols-1 gap-[1.125rem] p-0 [overflow-anchor:none]"
+              // **A margin rather than padding**, and the difference is what
+              // the park does to each. The collapsed bar is ~52px of fixed
+              // chrome over the foot of the page, so the last card needs
+              // clearance below it — but while a card is parked
+              // `useActiveCard` writes this list's `height` from a
+              // measurement, and padding inside a border-box height comes out
+              // of the card's own room. The same write zeroes the margin,
+              // which is exactly right: a parked card is the screen, the
+              // console stands down with the rest of the page's chrome, and
+              // there is nothing left to clear. It is `gametime-home.tsx`'s own
+              // figure for its own bar.
+              className="lab-card-contain relative m-0 mb-[5.5rem] mt-2 grid list-none grid-cols-1 gap-[1.125rem] p-0 [overflow-anchor:none]"
             >
               {visible.map((league) => (
                 <LeagueCard
@@ -1013,40 +950,39 @@ export function LeaguesHome({
         </>
       )}
 
-      {/* Mounted once each kind has been opened, and kept: a closed drawer is
-          `open={false}`, which is what lets its search state and its scroll
-          position survive a second press. Both count over `leagueFiltered` —
-          the population a selection is made *against*, never the one it
-          leaves. */}
-      {opened.has("player") && (
-        <PlayerSharesDrawer
-          open={drawer === "player"}
-          onClose={closeDrawer}
-          leagues={leagueFiltered}
-          leagueTotal={leagues.length}
-          filterSummary={leagueNarrowing}
-          read={players}
-          rosters={leaguemateRosters}
-          selfId={user?.user_id ?? null}
-          subjects={subjects}
-          onToggle={toggleDrawerSubject}
-          onMode={setPlayerMode}
-        />
-      )}
-      {opened.has("leaguemate") && (
-        <LeaguemateSharesDrawer
-          open={drawer === "leaguemate"}
-          onClose={closeDrawer}
-          leagues={leagueFiltered}
-          leagueTotal={leagues.length}
-          filterSummary={leagueNarrowing}
-          read={leaguemates}
-          rosters={leaguemateRosters}
-          selfId={user?.user_id ?? null}
-          subjects={subjects}
-          onToggle={toggleDrawerSubject}
-        />
-      )}
+      {/*
+        **Last in the tree, and pinned to the foot of the viewport.**
+
+        Where it is drawn and where it sits in the tab order are two questions,
+        and a `fixed` part is what lets them be answered separately — but here
+        the two agree rather than needing to be told apart. The console is the
+        page's own foot: a reader tabbing through the header's controls and then
+        the grid reaches it where they would reach it on screen, which is not
+        true of a dock pinned to a corner. `BrowseDock` carried the opposite
+        note for the opposite reason, and it kept its keys first because they
+        were two keys rather than a panel.
+
+        It is mounted **unconditionally** — there is no `opened` gate around it,
+        because the bar *is* the control and a page that only drew one once it
+        had been pressed would have nothing to press. What the latch gates is
+        the three reads behind it, which is where the cost actually is.
+
+        `leagueFiltered` is the population a selection is made *against*, never
+        the one it leaves — see the console's own note.
+      */}
+      <SharesConsole
+        leagues={leagueFiltered}
+        leagueTotal={leagues.length}
+        filterSummary={leagueNarrowing}
+        players={players}
+        leaguemates={leaguemates}
+        rosters={leaguemateRosters}
+        selfId={user?.user_id ?? null}
+        subjects={subjects}
+        onToggle={toggleConsoleSubject}
+        onMode={setPlayerMode}
+        chromeClass={card.chromeClass}
+      />
     </div>
   );
 }
