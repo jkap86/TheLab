@@ -13,6 +13,7 @@ import {
   leaguematePlayers,
   modeRolls,
   playerModeCounts,
+  playerModeLeagues,
   rosterIndex,
   rosterMatcher,
 } from "./leaguemate-rosters.ts";
@@ -216,6 +217,72 @@ describe("playerModeCounts", () => {
       taken: 1,
       available: 1,
     });
+  });
+});
+
+describe("playerModeLeagues", () => {
+  test("names the leagues on each arm, in the order they were given", () => {
+    const byMode = playerModeLeagues(LEAGUES, "p2", ROSTERS, ME);
+    // p2: the mate's in `a`, both of theirs *and* the manager's in `b`.
+    assert.deepEqual(
+      byMode.taken.map((l) => l.league.league_id),
+      ["a"],
+    );
+    assert.deepEqual(
+      byMode.owned.map((l) => l.league.league_id),
+      ["b"],
+    );
+    assert.deepEqual(byMode.available, []);
+  });
+
+  test("the holder is named on `taken` and on neither of the others", () => {
+    const byMode = playerModeLeagues(LEAGUES, "p2", ROSTERS, ME);
+    assert.equal(byMode.taken[0].holder, MATE);
+    // The manager's own league has nobody else to name, even though the mate
+    // holds him there too — see the `owned` arm's note.
+    assert.equal(byMode.owned[0].holder, null);
+    assert.equal(
+      playerModeLeagues(LEAGUES, "p1", ROSTERS, ME).available[0].holder,
+      null,
+    );
+  });
+
+  test("an orphan team puts a league on no arm at all", () => {
+    // p9 is held only by the ownerless roster in `a`, so that league is neither
+    // taken nor free — and `b` has nobody holding him, so it is free.
+    const byMode = playerModeLeagues(LEAGUES, "p9", ROSTERS, ME);
+    assert.deepEqual(
+      byMode.available.map((l) => l.league.league_id),
+      ["b"],
+    );
+    assert.deepEqual(byMode.taken, []);
+    assert.deepEqual(byMode.owned, []);
+  });
+
+  test("a league nobody stored is on no arm either", () => {
+    // `c` is absent from the map throughout, so it never appears.
+    for (const id of ["p1", "p2", "p3", "p9"]) {
+      const byMode = playerModeLeagues(LEAGUES, id, ROSTERS, ME);
+      for (const arm of [byMode.owned, byMode.taken, byMode.available]) {
+        assert.equal(
+          arm.some((l) => l.league.league_id === "c"),
+          false,
+        );
+      }
+    }
+  });
+
+  test("the counts are exactly the three lengths", () => {
+    // The invariant the derivation buys: a figure on a mode key and the list of
+    // leagues under it are one fold read twice.
+    for (const id of ["p1", "p2", "p3", "p9", "", "0"]) {
+      const byMode = playerModeLeagues(LEAGUES, id, ROSTERS, ME);
+      assert.deepEqual(playerModeCounts(LEAGUES, id, ROSTERS, ME), {
+        owned: byMode.owned.length,
+        taken: byMode.taken.length,
+        available: byMode.available.length,
+      });
+    }
   });
 });
 

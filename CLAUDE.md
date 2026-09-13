@@ -3945,6 +3945,214 @@ from the sandbox and every face rendered as its letter mount; and how often a
 league's owner is a person the users map has *not* named, which is the one case
 that falls back to a raw id on screen.
 
+### The two drawers became one bottom console
+
+`/manager` answered "which of my leagues is this player in?" and "which do I
+share with this person?" through **two side drawers** — native modal
+`<dialog>`s opened from the two `BrowseDock` keys pinned bottom-right. They are
+one **bottom console** now: the part gametime's `StatBoard` is, a billet bar
+fixed to the foot of the page's own `max-w-6xl` shell that expands upward into
+a two-pane panel, with `Players` / `Leaguemates` as two accent caps travelling
+in a channel on the bar itself. The dock goes with them, exactly as it did on
+gametime when Player Scores became the board. Applied from a design handoff.
+**Nothing on the wire moved** — no route, no query, no contract type, no payload
+field, no migration — and no token was added.
+
+**What was wrong with the drawers was not their content but what a modal *is*.**
+The whole point of picking a row here is that it narrows the league grid, and a
+backdrop over that grid meant the reader pressed a subject and then dismissed
+the panel to see what it had done. The console is **non-modal by design** — no
+backdrop, no focus trap, no `showModal()` — so the grid re-filters,
+`SubjectTokens` grows a chip, the header's `Leagues 9 / 113` and its win-rate
+dial recompute, and a `Taken` narrowing puts `OwnerBillet` back on each card,
+all while the panel is still up. That is the entire argument for the part, and
+it is what the two shed pieces of machinery were in the way of.
+
+**62dvh rather than the fold is the same argument as a number.** A case that
+took the viewport would be a modal with no backdrop. On a phone there is no
+"beside" — one card fills the row — so it takes the fold there, because a 62dvh
+case over a one-card grid shows a header and half a card, which is neither the
+page nor the panel.
+
+**The open height is a custom property the cascade sets and the inline style
+only ever reads**, and that is a correction a render forced rather than a
+preference. The animated, positioned box is the `<section>`, so the phone arm
+has to reach *it* — and an inline style cannot carry a media query. Written as a
+height on the case inside instead, the inner box simply overflowed a section
+still sized at 62dvh: at 390 the panel's top half was drawn outside the thing
+that was supposed to be sliding, 523px of case in a 768px hole. Two whole
+declarations, and no value interpolated into a class name.
+
+**A pick is not a narrowing, which is the one thing that differs from the
+drawers.** There, pressing a row *was* the subject. Here it opens the detail
+pane, and one `Narrow grid` key inside that pane is what edits the grid — so
+"what am I looking at" and "what is the grid filtered to" are two states a
+reader can hold at once. The key is one control rather than a press on every
+league row, because every row in that pane narrows to the same set: a row is a
+reading and the key is the control, and pressed it says the grid behind is
+already on it. **The prototype contradicts its own comment here** and makes
+every league tile fire the same toggle while drawing it unlit — a control that
+edits the grid with nothing on it saying so — which is why the tiles here are
+`<li>`s.
+
+**The mode still lives on the subject**, which is what lets two picks sit on two
+modes and the token above the grid name a narrowing (`Chase · Taken`) rather
+than a player. A picked-but-not-narrowing row has no subject to carry one, so
+`restingMode` is the pane's own fallback and is kept in step on every press:
+read through one function, written to both, so clearing the narrowing leaves the
+pane on the reading the reader last chose rather than jumping to one they did
+not. The prototype's `mode` is console-global and its `toggleSubject` *replaces*
+a held player when the mode changes, which is the same fact one grain coarser
+and loses the second pick.
+
+**The leaguemate pane needed its own `Narrow grid` key**, and the prototype has
+none: nothing in it constructs a `kind: "leaguemate"` subject at all, so
+`Slim` and `Slim · Chase` being lit at once — which the handoff states as the
+behaviour — was not reachable. A chip's press is independent of the row's, and
+both are.
+
+**The population rule survives the move verbatim.** Every fold is taken over the
+league-filtered, subject-**un**narrowed list; folded over the selection, every
+row collapses to the row just picked the moment it is picked and cannot be
+widened without clearing first. Both drawers' file comments were written on it
+and `facetsQuery` enforces it one page over. The reads stay latched and the
+display folds stay gated on `open`, so a shut console releases a thousand row
+objects — the drawers' own rule, and `usePanelCap`'s `mounted` one component
+over.
+
+**The latch went from a set of drawer kinds to one boolean**, because there is
+one panel now and both tabs are behind the same press: a reader who has raised
+the console has asked for all three reads, and gating them per tab would make
+switching tabs a wait.
+
+**One fold replaced three walks of the same rows.** The detail pane needs the
+*leagues* on each mode arm and their holders, where `playerModeCounts` counted
+and `leagueOwners` named — three spellings of one partition, and a list under a
+key whose figure it did not match would have neither visibly wrong.
+`playerModeLeagues` is the partition and both of the others are derived from it,
+so the three exclusions (an absent league is on no arm, an orphan team is
+nobody, the manager's own roster settles a league whatever else names him) are
+stated once.
+
+**Two vocabularies for the record column, not one truncated.** The head says
+`Rec·Win` — what is in the cell, a record *and* a win rate — and the Sort rail
+says `Record`, which is what a press orders by. A render at 1280 cut
+`Rec · Win` to `Rec · W…` in the cell's own `4.75rem`, naming the first reading
+and dropping the second; the rail has room for the whole word and the head does
+not.
+
+**The cell gutter is the design's `0.375rem`, not the drawer's `px-2`**, and
+that is what the four fixed widths are drawn against: at eight pixels, `9,412`
+at `--fs-13` wants 45px of the 44 a `3.75rem` Value cell has left, and the
+cell's own `overflow-hidden` takes the last digit off a price with nothing on
+screen saying so.
+
+**The scope track is `CONSOLE_TRACK`, not the bar's channel**, which is a
+decision rather than an inconsistency: it sits exactly where `PlayerModeTrack`
+sits on the other tab, so the two have to be one recess. A channel is what the
+*bar* cuts into the case for a set of caps; a track is the key stock a single
+travelling key runs in, which is what both of these are.
+
+**Esc collapses rather than cancels**, because this is not a `<dialog>` and
+nothing gives it back for free. It listens only while up, so it cannot swallow
+an Escape meant for the league filters dialog or a card. The `Esc` key pill went
+with the modal; the bar is the control.
+
+**Unchanged, and deliberately**: `shares-drawer.tsx` (the lineup checker's two
+panels and `week-shares-drawer.tsx` still call it), `PlayerFilters`,
+`PlayerModeTrack`, `LeaguemateRosterRail`, `SubjectTokens`, `BrowseDock` (the
+lineup checker draws it) and `shares-columns.ts` — whose **Columns strip** is
+what was dropped, the console's four columns being fixed like the stat board's.
+`browse-marks.tsx` is kept with no caller and noted dead where it is declared,
+on `peekActiveSeason`'s terms: what it carries is the page's own glyph
+vocabulary. The two drawer components are **deleted** rather than kept, because
+every argument in them travels into the console with the code.
+
+#### Two defects found on the way, one of them gametime's
+
+**A gradient token needs the `image:` hint, and the stat board's lamp did not
+have it.** `--pip-lit-bg` is a *gradient*; an arbitrary background with a bare
+`var()` and no hint compiles to `background-color`, which the browser drops as
+invalid — so gametime's live lamp has been a glow around nothing.
+`league-config-window.tsx` has always written the hint and `stat-board.tsx` did
+not. Verified against the compiler rather than reasoned about: a probe through
+this project's own Tailwind emits `background-color: var(--pip-lit-bg)` for the
+hintless form and `background-image:` for the other. Both read it the same way
+now.
+
+**And Tailwind scans comment text.** Writing the hintless form in prose — to
+explain the bug — generated it as a real class, and an illustrative one with an
+ellipsis in it fails the CSS parse and takes the whole stylesheet down: `next
+dev` refused to start on `Unexpected token Ident("…")` pointing at a rule nobody
+wrote. Both comments are worded so no bracketed utility appears in them, and the
+one in `shares-console.tsx` says so.
+
+#### Verified
+
+Driven over CDP against `next dev` with no `DATABASE_URL` — the boot hook skips
+migrations and the four loops log their refusals, which is the server coming up
+healthy against nothing — through a temporary `/preview` route mounting the
+**real** `SharesConsole`, `SubjectTokens`, `PageShell` and `ConsoleGround` over
+the real `matchesSubjects` chain, so the grid behind the panel is live and the
+narrowing is what it claims. Then deleted. The mechanics are the ones this file
+records: `--no-proxy-server`, `localhost` rather than `127.0.0.1`, a phone
+viewport from `Emulation.setDeviceMetricsOverride` with `mobile: true`,
+`data-theme` **and** `localStorage`, `--disable-features=OverlayScrollbar`, the
+`--blink-settings=availablePointerTypes=4,…` flags, a **client-component**
+harness, a CDP client over Node's own `WebSocket` since Playwright is not in
+this project's `node_modules`, and a fresh `--remote-debugging-port` per run.
+Two are this pass's own and each cost a run: **`--no-sandbox`**, without which
+Chrome refuses to start as root and the debugging port never opens; and a
+**`localStorage.clear()` must be followed by a reload**, because the store
+notifies on its own writes — cleared after load, a stored `open` from the
+previous run survives into the first assertion and the first press toggles it
+*shut*. A third is worth writing down because it produced four false failures:
+`innerText` reflects `text-transform`, so every text match against a console
+label has to be case-insensitive.
+
+**Eight geometry renders — 1280, 1023, 640 and 390 in both schemes — all
+clean**, and a behaviour pass at 1280. Shut: the case is **52px** at `sm` and up
+and **48px** below, sitting exactly on the fold, with **zero rows mounted**, the
+section `pointer-events: none` at `z-40`, the lamp painting a gradient, and the
+grid's own `88px` of clearance under it. Open: **558px at a 900 viewport**
+(62dvh) and **768px at 844** on the phone (the fold less `--rack-clear`), cells
+at **76 / 76 / 60 / 46px**, one `<h1>`, `documentElement.scrollWidth` inside the
+viewport and **zero elements painted past it**. Above `lg` both panes are on
+screen and the detail prompts at rest; below it the detail replaces the list and
+`‹ List` is offered, and above it that key is `display: none`. Nothing is
+clipped that does not declare `truncate`.
+
+Every behaviour arm landed. The open flag and the tab persist and a stored open
+console comes up on reload; the tab switch clears the pick and returns the sort
+to `Share` while the narrowing survives it; `Pos WR` takes six players to the
+two receivers; the leaguemates tab carries two cells, two sorts, no position
+rail and a placeholder naming both — and its search matches **a player somebody
+rosters** rather than only the person. A row press left the grid at five cards
+(a pick is not a narrowing) and `Narrow grid` took it to three, live, with the
+key reading `Narrowing` and the bar admitting `Held 1`. A roster chip narrowed
+independently of its row's own key. The toggle covers the whole bar and a press
+on the population readout reaches it. Esc collapsed the console and left the
+narrowing standing. Under `prefers-reduced-motion: reduce` the case's
+transition, the lamp's animation and the caret's transition all compute to
+`none`. **No console output of any kind** across either sweep beyond the
+sandbox's cert refusals for the headshot CDN, which is the `faceUrl` fallback
+arm being exercised rather than a fault.
+
+2,639 unit tests pass (11 more — the store's two parsers and the partition's
+five arms, including that the counts are exactly its three lengths); `lint`,
+`typecheck` and `check:full` from a cleared `.next` are clean.
+
+**Not verified against real data**, which is the gap to close first: every
+number above is a fixture and no database was reachable from here. Four things a
+render cannot check — what the folds cost on a real 113-league account, where
+the players list is ~470 rows and the leaguemates ~720 against this harness's
+six and three; whether a 26rem detail pane holds a real leaguemate's fifty-player
+board comfortably behind `RAIL_PREVIEW`, which the prototype has no cap for at
+all; whether readers find the `Narrow grid` key, which is the one behaviour this
+change adds a step to and the only thing a measurement cannot settle; and how the
+row badges read with pictures in them, since `sleepercdn.com` is unreachable from
+the sandbox and every face rendered as its letter mount.
+
 ## KeepTradeCut values
 
 `shared/ktc` scrapes both of KTC's markets — dynasty (`/dynasty-rankings`) and

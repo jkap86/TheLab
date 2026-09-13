@@ -1,6 +1,14 @@
 /**
  * The two glyphs this page's Browse keys carry in the rack.
  *
+ * **No caller, and kept.** The keys went down into `BrowseDock`, and the dock
+ * went when the two shares drawers became the bottom console — see
+ * `shares-console.tsx`, whose tabs are legends travelling in a channel rather
+ * than keys with marks on them. These stay on `peekActiveSeason`'s terms and
+ * `rack-controls.tsx`': what they carry is the page's *own* vocabulary, drawn
+ * to the grid and stroke weight the note below measures, and a page that wants
+ * a Browse key again wants these rather than a third drawing of a person.
+ *
  * **They live here rather than in `features/tools` because the page owns
  * them**, which is the rule `RackDrawerKey.icon` states and the same one that
  * made the legends data: the rack is mounted above `{children}` and cannot

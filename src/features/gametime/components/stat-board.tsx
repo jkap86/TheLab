@@ -525,10 +525,18 @@ function Bar({
             the page's own pulsing lamp (`lab-anim animate-pulse`) rather than a
             second spelling of one — the readout beside the week stepper already
             draws it, and two pulses at two rates on one page read as two
-            different claims. */}
+            different claims.
+
+            **The `image:` hint is not optional here.** `--pip-lit-bg` is a
+            *gradient*, and an arbitrary background with a bare `var()` and no
+            hint compiles to `background-color` — an invalid declaration,
+            dropped, leaving a transparent disc with a glow around nothing. This
+            was written without the hint and was exactly that;
+            `league-config-window.tsx` has always carried it, and the shares
+            console reads it the same way now. */}
         <span
           aria-hidden
-          className={`lab-anim size-[0.4375rem] shrink-0 animate-pulse rounded-full bg-[var(--pip-lit-bg)] shadow-[0_0_8px_var(--accent-glow)] ${
+          className={`lab-anim size-[0.4375rem] shrink-0 animate-pulse rounded-full bg-[image:var(--pip-lit-bg)] shadow-[0_0_8px_var(--accent-glow)] ${
             back ? "hidden lg:block" : ""
           }`}
         />

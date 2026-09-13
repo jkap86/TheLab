@@ -47,6 +47,7 @@ export {
   CONSOLE_WELL,
   CONSOLE_WINDOW,
   CONSOLE_WINDOW_KEY,
+  CONSOLE_WINDOW_SHELL,
   CONSOLE_WINDOW_LEDGE,
   BILLET_KEY_CHROME,
   PLATE_KEY,
@@ -57,6 +58,16 @@ export { storeKtcBoard, useKtcBoard } from "./ktc-board";
 // Whether the gametime stat board is up — one boolean on the device, on the
 // theme toggle's own courtesy. See the module for why it is not in the URL.
 export { storeStatBoardOpen, useStatBoardOpen } from "./stat-board-open";
+// Whether the manager page's shares console is up, and which of its two lists
+// it shows — two values on the device, on the stat board's own courtesy. See
+// the module for why neither is in the URL and why nothing else persists.
+export {
+  storeSharesConsoleOpen,
+  storeSharesTab,
+  useSharesConsoleOpen,
+  useSharesTab,
+  type SharesTab,
+} from "./shares-console-open";
 // Whether an open card keeps its summary readings on screen — one boolean for
 // both league cards, and the fold and the key that read it. See the module.
 export {
