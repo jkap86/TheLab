@@ -4177,6 +4177,38 @@ it, and that margin is each arm's own gap (`-mt-1.5` / `lg:-mt-2`) where it was 
 at 800 wide and **151 → 108** at 1280, the list starting directly under the last
 control, and the tray opening to 257px and shutting back to 0.
 
+#### The column heads are the sort
+
+The ledge's Sort rail is gone and the list's own column heads sort it. The rail
+spent a row of the ledge restating the columns — its whole rule was "offer
+exactly the columns on screen" — and a head *is* its column, so the rule now
+holds by construction. The two-vocabularies note above (`Rec·Win` on the head,
+`Record` on the rail) survives only as the head's accessible name.
+
+**A press sorts by that column in its natural direction; a press on the lit head
+reverses it** (`nextSort`). That reverses the drawer-era rule that directions
+are fixed per metric: the first press is still the direction a reader means
+(counts and price descending, age ascending, name A–Z), but the reverse — the
+one-league stashes, the oldest roster — is a real question, and with the head as
+the key it costs one more press in the same place. **Name is sortable**, being a
+head like the others. Absent still sorts last in both directions.
+
+**The header is drawn at every width**, where it was hidden below `@md`: it is a
+control now, and a phone that lost it would lose the sort. Below `@md` the row's
+cells wrap to a second line, so the row is `justify-end` and that line sits
+flush right — under the heads, which are the same fixed widths behind the same
+gap (measured at 390: every head within 1px of its cell). That leaves the name's
+key ~24px, where `Name ▲` is 33, so below `@md` it reads `A–Z` / `Z–A` — the
+letters are the direction as well as the label.
+
+**The Pos strip went the same way.** It was four caps (`All QB RB WR TE`) that
+wrote the very `filters.positions` the Filters tray's `Pos` row writes — one
+axis reached from two places, argued for as a shortcut. With the tray's key one
+press away and carrying the whole vocabulary (every IDP group and `—`
+included), the strip was a second copy of four of its values costing the ledge
+a row. The ledge is now the search, the count, the Filters key and `Clear`.
+`CapRail` went with it, having no caller left; `Cap` stays for the tab channel.
+
 ## KeepTradeCut values
 
 `shared/ktc` scrapes both of KTC's markets — dynasty (`/dynasty-rankings`) and

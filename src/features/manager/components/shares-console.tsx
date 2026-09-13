@@ -140,10 +140,7 @@ type ColumnId = "share" | "record" | "value" | "age";
  *
  * **Two vocabularies, not one list narrowed twice.** A leaguemate has no age
  * and no market price — those are facts about a player — so their rows carry
- * the two columns that mean something and the Sort rail offers exactly those.
- * That is `SortTrack`'s own rule in the drawer this replaces: the order and the
- * number a reader is comparing come off one list, or the sort can name a column
- * that is not on screen.
+ * the two columns that mean something, and their heads are the only sort keys.
  */
 const COLUMNS: Record<SharesTab, readonly ColumnId[]> = {
   player: ["share", "record", "value", "age"],
@@ -166,17 +163,28 @@ const COLUMN_LABEL: Record<ColumnId, string> = {
 };
 
 /**
- * What each column is called **on the Sort rail**, which is a different word
- * for the one that carries two readings.
+ * What the rows can be ordered by: any column on screen, and the name.
  *
- * A head says what is in the cell — a record *and* a win rate — where the rail
- * says what a press orders by, which is one of them. The rail has room for the
- * whole word and the head does not, so they are two vocabularies rather than
- * one truncated.
+ * **The column heads are the sort keys**, which is what retired the Sort rail
+ * that used to sit in the ledge. A head *is* the column it orders, so the order
+ * and the number a reader is comparing come off one list by construction — the
+ * rail had to be kept in step with the columns to promise that, and it spent a
+ * whole row of the ledge doing it.
  */
-const SORT_LABEL: Record<ColumnId, string> = {
+type SortKey = ColumnId | "name";
+
+/** The sort in force: a key, and which way it reads. */
+type SortState = { key: SortKey; ascending: boolean };
+
+/**
+ * What a head's key is called **to a screen reader**. The visible head says
+ * `Rec·Win` because that is what is in the cell — a record *and* a win rate —
+ * where a press orders by one of them, which is the record.
+ */
+const SORT_LABEL: Record<SortKey, string> = {
   ...COLUMN_LABEL,
   record: "Record",
+  name: "Name",
 };
 
 /**
@@ -193,20 +201,32 @@ const COLUMN_WIDTH: Record<ColumnId, string> = {
 };
 
 /**
- * Which way each metric reads when it is the sort key — fixed per metric rather
- * than a direction the reader flips.
+ * Which way each key reads on its **first** press — and a second press on the
+ * same head reverses it.
  *
- * A press is one press: nobody wants the leagues they hold a player in *fewest*
- * of. Age is the one that ascends, because younger first is what a dynasty
- * reader means by sorting on it. Lifted from `SharesDrawer`'s `SORT_ASCENDING`
- * with its two dead entries left behind.
+ * The first press is the direction a reader means by sorting on a column:
+ * nobody opens this list for the leagues they hold a player in *fewest* of, so
+ * the counts and the price descend, and age ascends because younger first is
+ * what a dynasty reader is asking. But the reverse is a real question too — the
+ * one-league stashes, the oldest roster — and with the head as the key it costs
+ * one more press on the same place rather than a control of its own.
  */
-const SORT_ASCENDING: Record<ColumnId, boolean> = {
+const SORT_ASCENDING: Record<SortKey, boolean> = {
   share: false,
   record: false,
   value: false,
   age: true,
+  name: true,
 };
+
+const DEFAULT_SORT: SortState = { key: "share", ascending: false };
+
+/** A press on a head: its own first direction, or the held sort reversed. */
+function nextSort(held: SortState, key: SortKey): SortState {
+  return held.key === key
+    ? { key, ascending: !held.ascending }
+    : { key, ascending: SORT_ASCENDING[key] };
+}
 
 /** The main figure's size, per metric — a record and a share carry two lines. */
 const CELL_TEXT: Record<ColumnId, string> = {
@@ -215,18 +235,6 @@ const CELL_TEXT: Record<ColumnId, string> = {
   value: "text-[length:var(--fs-13)]",
   age: "text-[length:var(--fs-13)]",
 };
-
-/**
- * The four positions the ledge reaches for directly.
- *
- * **One axis, two places to reach it** — the tray's `Pos` facet writes the same
- * `filters.positions` and carries the *whole* vocabulary the population
- * actually holds, `—` and every IDP group included. These four are the ones a
- * reader reaches for on a ledge with room for four, which is the league card's
- * own lens/column arrangement one panel over: a control worth a press of its
- * own, and the panel behind it for everything else.
- */
-const LEDGE_POSITIONS = ["QB", "RB", "WR", "TE"] as const;
 
 /** Nothing folded yet — one identity, so a memo sees one object. */
 const NO_ROWS: ConsoleRow[] = [];
@@ -357,7 +365,7 @@ export function SharesConsole({
    * are a place to be rather than a question asked; see `shares-console-open`.
    */
   const [query, setQuery] = useState("");
-  const [sort, setSort] = useState<ColumnId>("share");
+  const [sort, setSort] = useState<SortState>(DEFAULT_SORT);
   /**
    * The row the detail pane is reading.
    *
@@ -389,6 +397,7 @@ export function SharesConsole({
   // line of the leagues stream.
   const clearFilters = useCallback(() => setFilters(NO_PLAYER_FILTERS), []);
   const toggleTray = useCallback(() => setTrayOpen((v) => !v), []);
+  const pressSort = useCallback((key: SortKey) => setSort((held) => nextSort(held, key)), []);
 
   /**
    * Switching tabs clears the pick and returns the sort to `Share`.
@@ -402,7 +411,7 @@ export function SharesConsole({
     storeSharesTab(next);
     storeSharesConsoleOpen(true);
     setPicked(null);
-    setSort("share");
+    setSort(DEFAULT_SORT);
   }, []);
 
   /**
@@ -634,10 +643,14 @@ export function SharesConsole({
           return false;
         })
       : all;
-    const ascending = SORT_ASCENDING[sort];
+    const { key, ascending } = sort;
     return [...found].sort((a, b) => {
-      const left = weightOf(a, sort);
-      const right = weightOf(b, sort);
+      if (key === "name") {
+        const byName = NAME_ORDER.compare(a.name, b.name);
+        return ascending ? byName : -byName;
+      }
+      const left = weightOf(a, key);
+      const right = weightOf(b, key);
       // **Absent sorts last in either direction.** An unpriced player is off
       // KTC's board rather than the cheapest on it, and flipping the key must
       // not make him the dearest either.
@@ -785,14 +798,12 @@ export function SharesConsole({
                 trayOpen={trayOpen}
                 onToggleTray={toggleTray}
                 onClearFilters={clearFilters}
-                sort={sort}
-                onSort={setSort}
-                cols={cols}
               />
               <List
                 rows={rows}
                 cols={cols}
                 sort={sort}
+                onSort={pressSort}
                 picked={picked}
                 onPick={pick}
                 chosen={chosen}
@@ -1117,40 +1128,13 @@ function Cap({
   );
 }
 
-/** A rail of caps under a stamped legend, in a channel cut into the case. */
-function CapRail({
-  legend,
-  label,
-  children,
-  className = "",
-}: {
-  legend: string;
-  label: string;
-  children: React.ReactNode;
-  className?: string;
-}) {
-  return (
-    <span
-      role="group"
-      aria-label={label}
-      className={`${CONSOLE_CHANNEL_METAL} flex min-w-0 items-center gap-1 p-1 ${className}`}
-    >
-      <span
-        aria-hidden
-        className="shrink-0 pl-[0.4375rem] pr-1 font-mono text-[length:var(--fs-8)] uppercase leading-[1.15] tracking-[0.1em] text-[color:var(--billet-label)] lg:text-[length:var(--fs-9)] lg:tracking-[0.14em]"
-      >
-        {legend}
-      </span>
-      {children}
-    </span>
-  );
-}
-
 /* ------------------------------------------------------------------ */
 
 /**
- * The search, the count, the position caps and the sort — in a hole cut into
- * the case.
+ * The search, the count and the filters — in a hole cut into the case. The
+ * sort is the list's own column heads (see `HeadKey`), and position is one of
+ * the tray's facets rather than a strip of its own: the strip only ever wrote
+ * the same `filters.positions` the tray's `Pos` row does, four of its values.
  *
  * A `--case-well-bg` recess rather than a panel: what sits in it is a set of
  * controls, and the case is the part they are set into. One wrapping row above
@@ -1171,9 +1155,6 @@ function Ledge({
   trayOpen,
   onToggleTray,
   onClearFilters,
-  sort,
-  onSort,
-  cols,
 }: {
   tab: SharesTab;
   query: string;
@@ -1189,9 +1170,6 @@ function Ledge({
   trayOpen: boolean;
   onToggleTray: () => void;
   onClearFilters: () => void;
-  sort: ColumnId;
-  onSort: (key: ColumnId) => void;
-  cols: readonly ColumnId[];
 }) {
   const isPlayers = tab === "player";
   return (
@@ -1253,62 +1231,6 @@ function Ledge({
         </span>
       </div>
 
-      {/* **Players only.** The four a reader reaches for; the tray behind the
-          key carries the whole vocabulary, plus age, class and team. */}
-      {isPlayers && (
-        <CapRail
-          legend="Pos"
-          label="Narrow to a position"
-          className="shrink-0 rounded-full lg:order-3"
-        >
-          <Cap
-            lit={filters.positions.length === 0}
-            onPress={() => onFilters({ ...filters, positions: [] })}
-            className="px-2"
-          >
-            All
-          </Cap>
-          {LEDGE_POSITIONS.map((position) => (
-            <Cap
-              key={position}
-              lit={filters.positions.includes(position)}
-              onPress={() =>
-                onFilters({
-                  ...filters,
-                  positions: filters.positions.includes(position)
-                    ? filters.positions.filter((p) => p !== position)
-                    : [...filters.positions, position],
-                })
-              }
-              className="px-2"
-            >
-              {position}
-            </Cap>
-          ))}
-        </CapRail>
-      )}
-
-      {/* **The caps are a single-select rail** and the chosen one is the rack's
-          own accent cap — one spelling of a lit cap in this app. They offer
-          exactly the columns on screen, which is `SortTrack`'s own rule: the
-          order and the number a reader is comparing come off one list. */}
-      <CapRail
-        legend="Sort"
-        label="Sort by"
-        className="min-w-0 flex-wrap rounded-[1.25rem] lg:order-4 lg:flex-none lg:rounded-full"
-      >
-        {cols.map((id) => (
-          <Cap
-            key={id}
-            lit={sort === id}
-            onPress={() => onSort(id)}
-            className="flex-auto px-2 tracking-[0.06em] lg:flex-none lg:px-2.5 lg:tracking-[0.12em]"
-          >
-            {SORT_LABEL[id]}
-          </Cap>
-        ))}
-      </CapRail>
-
       {/* The facet tray rides as its own key — see `PlayerFilters`. Three rules
           keep a shut tray from costing the list anything, and each was a bug:
 
@@ -1358,6 +1280,7 @@ function List({
   rows,
   cols,
   sort,
+  onSort,
   picked,
   onPick,
   chosen,
@@ -1370,8 +1293,10 @@ function List({
 }: {
   rows: readonly ConsoleRow[];
   cols: readonly ColumnId[];
-  /** Which column the rows are ordered by — the head lights it. */
-  sort: ColumnId;
+  /** Which head the rows are ordered by, and which way — the head lights it. */
+  sort: SortState;
+  /** A press on a head — see `nextSort`. */
+  onSort: (key: SortKey) => void;
   picked: string | null;
   onPick: (id: string) => void;
   chosen: ReadonlySet<string>;
@@ -1410,30 +1335,27 @@ function List({
       ) : (
         <>
           {/* The column header, above the scroller so it does not travel with
-              it. **Gone below `@md`**, where the cells wrap under the name and
-              there is no column for a label to be over. */}
+              it, and **the only sort control** — see `HeadKey`.
+
+              **Drawn at every width**, where it used to be gone below `@md`:
+              it is a control now rather than a caption, and a phone reader
+              who lost it would lose the sort. Below `@md` the row's cells wrap
+              onto a second line, and the row is `justify-end` so that line
+              sits flush right — exactly under these heads, which are the same
+              fixed widths behind the same gap. */}
           <div
-            aria-hidden
-            className={`${CONSOLE_WINDOW_LEDGE} relative z-[2] mx-[3px] mt-[3px] hidden items-center gap-2 rounded-[7px] py-1 pl-[0.6875rem] pr-[0.6875rem] @md:flex`}
+            className={`${CONSOLE_WINDOW_LEDGE} relative z-[2] mx-[3px] mt-[3px] flex items-center gap-2 rounded-[7px] py-1 pl-[0.6875rem] pr-[0.6875rem]`}
           >
-            <span className="min-w-0 flex-1 font-mono text-[length:var(--fs-9)] uppercase tracking-[0.14em] text-[color:var(--billet-label)]">
-              Name
-            </span>
+            <HeadKey id="name" sort={sort} onSort={onSort} className="min-w-0 flex-1" />
             {cols.map((id) => (
-              <span
+              <HeadKey
                 key={id}
-                style={{ width: COLUMN_WIDTH[id] }}
-                /* **The sorted column's head is lit**, which is the one thing
-                   the header says that the Sort rail below does not: which of
-                   these columns the rows under it are in the order of. */
-                className={`shrink-0 truncate whitespace-nowrap px-2 font-mono text-[length:var(--fs-9)] uppercase tracking-[0.1em] ${
-                  sort === id
-                    ? "text-[color:var(--billet-accent)]"
-                    : "text-[color:var(--billet-label)]"
-                }`}
-              >
-                {COLUMN_LABEL[id]}
-              </span>
+                id={id}
+                sort={sort}
+                onSort={onSort}
+                className="shrink-0 px-[0.375rem]"
+                width={COLUMN_WIDTH[id]}
+              />
             ))}
           </div>
           <ul className="lab-scroll-glass relative z-[1] m-0 flex min-h-0 flex-1 list-none flex-col gap-[5px] overflow-y-auto p-[3px]">
@@ -1451,6 +1373,81 @@ function List({
         </>
       )}
     </div>
+  );
+}
+
+/**
+ * One column head, as the key that sorts by it.
+ *
+ * **A press sorts by this column; a press on the lit head reverses it** — see
+ * `nextSort`. The lit head carries the direction as an arrow, which is the one
+ * thing the rail it replaced never had to say, since its directions were fixed.
+ * The arrow is drawn only on the lit head, so an unlit head spends no width on
+ * one: `Age ▲` is 32px of the 34 a `2.875rem` column leaves inside its gutter.
+ *
+ * The gutter is the cell's own `0.375rem`, so a head's label starts where the
+ * figure under it does.
+ */
+function HeadKey({
+  id,
+  sort,
+  onSort,
+  className,
+  width,
+}: {
+  id: SortKey;
+  sort: SortState;
+  onSort: (key: SortKey) => void;
+  className: string;
+  width?: string;
+}) {
+  const on = sort.key === id;
+  const label = id === "name" ? "Name" : COLUMN_LABEL[id];
+  return (
+    <button
+      type="button"
+      onClick={() => onSort(id)}
+      aria-pressed={on}
+      aria-label={
+        on
+          ? `${SORT_LABEL[id]}, sorted ${sort.ascending ? "ascending" : "descending"} — press to reverse`
+          : `Sort by ${SORT_LABEL[id]}`
+      }
+      style={width ? { width } : undefined}
+      className={`${className} flex items-center gap-1 whitespace-nowrap rounded-[4px] text-left font-mono text-[length:var(--fs-9)] uppercase focus-visible:outline-1 focus-visible:outline-offset-1 focus-visible:outline-active/60 ${
+        id === "name" ? "tracking-[0.14em]" : "tracking-[0.1em]"
+      } ${
+        on
+          ? "text-[color:var(--billet-accent)]"
+          : "text-[color:var(--billet-label)] hover:text-readout"
+      }`}
+    >
+      {/* **Below `@md` the name head reads `A–Z` / `Z–A`.** The cells wrap
+          under the name there and sit flush right under the column heads, so
+          the name's key has only the ~24px left of them — where `Name ▲` is 33
+          and truncated to `N ▲`. The letters are the direction as well as the
+          label, so that arm needs no arrow. */}
+      {id === "name" ? (
+        <>
+          <span aria-hidden className="min-w-0 truncate tracking-normal @md:hidden">
+            {on && !sort.ascending ? "Z–A" : "A–Z"}
+          </span>
+          <span className="hidden min-w-0 truncate @md:inline">{label}</span>
+        </>
+      ) : (
+        <span className="min-w-0 truncate">{label}</span>
+      )}
+      {on && (
+        <span
+          aria-hidden
+          className={`shrink-0 text-[length:var(--fs-8)] tracking-normal ${
+            id === "name" ? "hidden @md:inline" : ""
+          }`}
+        >
+          {sort.ascending ? "▲" : "▼"}
+        </span>
+      )}
+    </button>
   );
 }
 
@@ -1510,7 +1507,10 @@ const Row = memo(function Row({
         type="button"
         onClick={() => onPick(row.id)}
         aria-pressed={picked}
-        className="flex w-full min-w-0 flex-wrap items-center gap-2 rounded-xl py-2 pl-[0.6875rem] pr-[0.6875rem] text-left focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-active/60 @md:flex-nowrap"
+        // `justify-end` moves only the wrapped cell line below `@md` (the name
+        // is `flex-1`, so every other line is already full): it puts the cells
+        // flush right, under the list's heads.
+        className="flex w-full min-w-0 flex-wrap items-center justify-end gap-2 rounded-xl py-2 pl-[0.6875rem] pr-[0.6875rem] text-left focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-active/60 @md:flex-nowrap"
       >
         <Badge badge={row.badge} selected={on} />
 
