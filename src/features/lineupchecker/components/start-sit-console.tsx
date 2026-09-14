@@ -12,7 +12,6 @@ import {
 import {
   BilletFinish,
   canonicalReadings,
-  CONSOLE_CHANNEL_METAL,
   CONSOLE_CHIP_TRAY,
   CONSOLE_GLASS,
   CONSOLE_KEY_PILL_BARE,
@@ -37,6 +36,15 @@ import {
   type WeekReading,
   type WeekTwoSidedShare,
 } from "@/features/shared";
+
+import {
+  DEFAULT_START_SIT_SORT,
+  nextStartSitSort,
+  sortStartSit,
+  startSitAscending,
+  type StartSitSort,
+  type StartSitSortKey,
+} from "../helpers/start-sit-sort";
 
 /**
  * **Start / sit**: every player a week's lineups fielded, either side, and what
@@ -99,22 +107,6 @@ export const START_SIT_BAR_H =
 
 /* ------------------------------------------------------------------ */
 
-/**
- * What the rows are ordered by.
- *
- * The five columns on screen, plus `fielded` — which is no column at all but
- * the sum of the four counts, and therefore **exactly what a press on a row
- * narrows to**: every league that fielded him, either side, which is what an
- * unrefined `week` subject means. So the rail can order the list by the thing
- * the row's own press is about, which no single column can say.
- *
- * That is also why `Start` is the default rather than `Fielded`: the panel's
- * first question is the reader's own lineups, which is the order the drawer
- * this replaces opened on (`defaultSort="start"`) and the order
- * `weekTwoSidedShares` already returns its players in.
- */
-type SortId = WeekReading | "figure" | "fielded";
-
 /** The four counts, in the order the cells and the tray's keys are drawn. */
 const READING_COLUMNS: readonly WeekReading[] = [
   "start",
@@ -127,9 +119,10 @@ const READING_COLUMNS: readonly WeekReading[] = [
  * What each column is called **over its cells**.
  *
  * `Opp St` and `Opp Bn` are tight because they have to fit the cell's own
- * `3.5rem`; the Sort rail spells both out. A head says what is in the cell and
- * the rail says what a press orders by, and the rail has the room — which is
- * `SharesConsole`'s own split between `COLUMN_LABEL` and `SORT_LABEL`.
+ * `3.5rem`; {@link SORT_LABEL} spells both out. A head says what is in the cell
+ * and its accessible name says what a press orders by — `SharesConsole`'s own
+ * split between `COLUMN_LABEL` and `SORT_LABEL`, which survived that console's
+ * Sort rail going the same way this one's did.
  */
 const COLUMN_LABEL: Record<WeekReading, string> = {
   start: "Start",
@@ -153,7 +146,11 @@ const BAY_CAPTION = {
   opp: "Opp start / bench",
 } as const;
 
-/** And on the rail, where there is room for the whole word. */
+/**
+ * And in words, where there is room for the whole word: a head's accessible
+ * name (`Opp bench, sorted descending — press to reverse`) and the phone's
+ * sort menu, which has no cell to fit.
+ */
 const SORT_LABEL: Record<WeekReading, string> = {
   start: "Start",
   bench: "Bench",
@@ -223,8 +220,6 @@ type ConsoleRow = {
   oppBenched: number;
   /** Null where the counted leagues disagree — see `WeekTwoSidedShare.figure`. */
   figure: number | null;
-  /** Every league he was fielded in, either side: what a row's press narrows to. */
-  fielded: number;
   /** `SF · fielded in 46` — the phone subline. See the fold for why not `note`. */
   sub: string;
   /** The name, lower-cased once, for the search. */
@@ -310,7 +305,7 @@ export function StartSitConsole({
    * than a question asked; see `start-sit-console-open`.
    */
   const [query, setQuery] = useState("");
-  const [sort, setSort] = useState<SortId>("start");
+  const [sort, setSort] = useState<StartSitSort>(DEFAULT_START_SIT_SORT);
   /**
    * The row the decisions pane is reading.
    *
@@ -439,7 +434,6 @@ export function StartSitConsole({
         oppStarted: player.oppStarted,
         oppBenched: player.oppBenched,
         figure: player.figure,
-        fielded,
         search: player.name.toLowerCase(),
         slot: subjectSlot({ kind: "week", id: player.player_id }),
       };
@@ -477,29 +471,17 @@ export function StartSitConsole({
    * thousand rows — the drawer's own call.
    */
   const needle = useDeferredValue(query).trim().toLowerCase();
-  const rows = useMemo(() => {
-    const found = needle
-      ? all.filter((row) => row.search.includes(needle))
-      : all;
-    return [...found].sort((a, b) => {
-      const left = weightOf(a, sort);
-      const right = weightOf(b, sort);
-      // **Absent sorts last in either direction.** A player the counted
-      // leagues disagree about has no figure rather than the lowest one, and
-      // there is no direction a reader could flip to make him the highest.
-      // Only `figure` can be null; the four counts are zero at worst.
-      if (left === null && right === null) {
-        return NAME_ORDER.compare(a.name, b.name);
-      }
-      if (left === null) return 1;
-      if (right === null) return -1;
-      // **Descending on all six**, fixed per metric rather than a direction the
-      // reader flips: nobody wants the players their lineups started *fewest*
-      // of, and a press is one press.
-      if (left !== right) return right - left;
-      return NAME_ORDER.compare(a.name, b.name);
-    });
-  }, [all, needle, sort]);
+  // The order is `sortStartSit`'s, pure and tested: that module is where an
+  // absent figure sorts last in either direction and the tiebreak never
+  // reverses — the two rules a reversible sort gets wrong without a symptom.
+  const rows = useMemo(
+    () =>
+      sortStartSit(
+        needle ? all.filter((row) => row.search.includes(needle)) : all,
+        sort,
+      ),
+    [all, needle, sort],
+  );
 
   const detail = useMemo(
     () => (picked ? (all.find((r) => r.id === picked) ?? null) : null),
@@ -666,13 +648,11 @@ export function StartSitConsole({
                 onQuery={setQuery}
                 shown={rows.length}
                 total={all.length}
-                sort={sort}
-                onSort={setSort}
-                figureLabel={figureLabel}
               />
               <List
                 rows={rows}
                 sort={sort}
+                onSort={setSort}
                 picked={picked}
                 chosen={chosen}
                 readings={readings}
@@ -737,29 +717,6 @@ export function StartSitConsole({
     </section>
   );
 }
-
-/** The metric's own number for a row, or null where it has none. */
-function weightOf(row: ConsoleRow, id: SortId): number | null {
-  switch (id) {
-    case "start":
-      return row.started;
-    case "bench":
-      return row.benched;
-    case "opp-start":
-      return row.oppStarted;
-    case "opp-bench":
-      return row.oppBenched;
-    case "figure":
-      return row.figure;
-    case "fielded":
-      return row.fielded;
-  }
-}
-
-// One collator for the name tiebreak rather than `localeCompare` per
-// comparison, which re-resolves the locale each call — a sort over a thousand
-// rows is thousands of them, on every keystroke.
-const NAME_ORDER = new Intl.Collator();
 
 /**
  * What the panel is counting over, on the bar.
@@ -929,49 +886,22 @@ function Bar({
   );
 }
 
-/**
- * One cap on the Sort rail, lit or not — the rack's own key.
- *
- * **Every cap sets its background explicitly**, lit or not, so the UA's own
- * button fill never shows through; an unlit cap has *no* fill at all and the
- * recessed channel behind it does the grouping. `bg-transparent` is not
- * optional — without it an unlit cap renders as a white lozenge.
- * `aria-pressed` carries the state.
- */
-function Cap({
-  lit,
-  onPress,
-  children,
-}: {
-  lit: boolean;
-  onPress: () => void;
-  children: React.ReactNode;
-}) {
-  return (
-    <button
-      type="button"
-      aria-pressed={lit}
-      onClick={onPress}
-      className={`touch:min-h-11 flex-auto shrink-0 whitespace-nowrap rounded-full border bg-transparent px-2 py-[0.3125rem] font-mono text-[length:var(--fs-9)] uppercase tracking-[0.06em] transition-colors duration-150 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-active/60 lg:flex-none lg:px-2.5 lg:text-[length:var(--fs-10)] lg:tracking-[0.12em] ${
-        lit
-          ? "border-[var(--cap-accent-border)] bg-[image:var(--cap-accent-bg)] text-[var(--cap-accent-ink)] shadow-[var(--cap-accent-shadow)] [text-shadow:var(--cap-ink-emboss)]"
-          : "border-transparent text-[color:var(--billet-label)] hover:text-readout"
-      }`}
-    >
-      {children}
-    </button>
-  );
-}
-
 /* ------------------------------------------------------------------ */
 
 /**
- * The search, the count and the sort — in a hole cut into the case.
+ * The search and the count — in a hole cut into the case.
  *
  * A `--case-well-bg` recess rather than a panel: what sits in it is a set of
- * controls, and the case is the part they are set into. One wrapping row above
- * `lg` and stacked below, which is `SharesConsole`'s `Ledge` and its
- * arrangement.
+ * controls, and the case is the part they are set into. One row at every
+ * width.
+ *
+ * **No Sort rail.** It was six caps restating the columns under it — its whole
+ * rule was "the five columns on screen, plus `Fielded`" — and a head *is* its
+ * column, so the heads are the sort now and that rule holds by construction;
+ * see {@link HeadKey}. It is the move `SharesConsole` and the gametime stat
+ * board both made first. What the ledge gives back is a row of controls: below
+ * `lg` the rail stacked under the field, and above it the two shared a
+ * wrapping row a 1024 laptop could not hold on one line.
  *
  * **No `Pos` rail and no facet tray.** Those are the manager console's player
  * filters, over a season's rosters; this panel's population is one week's
@@ -983,109 +913,57 @@ function Ledge({
   onQuery,
   shown,
   total,
-  sort,
-  onSort,
-  figureLabel,
 }: {
   query: string;
   onQuery: (value: string) => void;
   shown: number;
   total: number;
-  sort: SortId;
-  onSort: (key: SortId) => void;
-  figureLabel: string;
 }) {
   return (
-    <div className="relative flex shrink-0 flex-col gap-1.5 rounded-xl bg-[color:var(--case-well-bg)] p-1.5 shadow-[var(--case-well-shadow)] lg:flex-row lg:flex-wrap lg:items-center lg:gap-2 lg:p-2">
-      {/* The field and the count share one row below `lg`; above it the wrapper
-          stops generating a box and its children join the wrapping row. */}
-      <div className="flex min-w-0 items-center gap-1.5 lg:contents">
-        <label
-          className={`${CONSOLE_PANE_TRACK} relative flex min-w-0 flex-1 items-center gap-2 px-3.5 lg:order-1 lg:min-w-44 lg:flex-[1_1_11rem]`}
-        >
-          <svg
-            viewBox="0 0 24 24"
-            width="14"
-            height="14"
-            fill="none"
-            stroke="var(--readout-label)"
-            strokeWidth="2"
-            strokeLinecap="round"
-            aria-hidden
-            className="shrink-0"
-          >
-            <circle cx="10.5" cy="10.5" r="6" />
-            <path d="M15 15l4.5 4.5" />
-          </svg>
-          <span className="sr-only">Search players</span>
-          <input
-            type="text"
-            value={query}
-            onChange={(e) => onQuery(e.target.value)}
-            placeholder="Search players"
-            className="w-full min-w-0 border-0 bg-transparent py-2 font-mono text-[length:var(--fs-12)] tracking-[0.04em] text-[color:var(--billet-name)] outline-none placeholder:text-[color:var(--readout-label)]"
-          />
-        </label>
-
-        {/* **The denominator only where it says something.** At rest the design
-            draws the bare figure, and a `471 / 471` beside it would be the same
-            number twice; narrowed, what a reader wants is what it was narrowed
-            *from*. */}
-        <span
-          className={`${CONSOLE_WINDOW} inline-flex shrink-0 items-baseline gap-1 rounded-xl px-[0.6875rem] py-[0.4375rem] lg:order-2`}
-        >
-          <Scanlines />
-          <span className="relative font-mono text-[length:var(--fs-13)] tabular-nums text-readout [text-shadow:var(--readout-text-glow)]">
-            {shown}
-          </span>
-          {shown !== total && (
-            <span className="relative font-mono text-[length:var(--fs-9)] tabular-nums text-[color:var(--readout-label)]">
-              / {total}
-            </span>
-          )}
-        </span>
-      </div>
-
-      {/* **The caps are a single-select rail** and the chosen one is the rack's
-          own accent cap — one spelling of a lit cap in this app. They offer the
-          five columns on screen plus `Fielded`, which is what a press on a row
-          narrows to and the one order no column can say.
-
-          **It stays shrinkable and stays a lozenge at every width**, which is
-          where it parts company with `SharesConsole`'s rail and is a render's
-          doing rather than a preference. That one offers at most four caps and
-          fits its ledge on one line, so it takes `lg:flex-none lg:rounded-full`
-          and is a pill. Six caps and a legend are ~540px against the 531 a
-          1024-wide list column leaves, and at `flex-none` a rail cannot shrink
-          below its own one-line max-content: measured, it ran 9px past the
-          ledge and the case's `overflow-hidden` took `Fielded` off the screen
-          with nothing saying so. Left shrinkable it wraps inside itself, which
-          is what its own `flex-wrap` is for — and a wrapped rail is two lines
-          tall, which is why the radius is the 20px lozenge rather than a pill
-          drawn round a box that is no longer one line. It is the stat board's
-          own finding about its Sort track, one panel over. */}
-      <span
-        role="group"
-        aria-label="Sort by"
-        className={`${CONSOLE_CHANNEL_METAL} flex min-w-0 flex-wrap items-center gap-1 rounded-[1.25rem] p-1 lg:order-3`}
+    <div className="relative flex shrink-0 items-center gap-1.5 rounded-xl bg-[color:var(--case-well-bg)] p-1.5 shadow-[var(--case-well-shadow)] lg:gap-2 lg:p-2">
+      <label
+        className={`${CONSOLE_PANE_TRACK} relative flex min-w-0 flex-1 items-center gap-2 px-3.5`}
       >
-        <span
+        <svg
+          viewBox="0 0 24 24"
+          width="14"
+          height="14"
+          fill="none"
+          stroke="var(--readout-label)"
+          strokeWidth="2"
+          strokeLinecap="round"
           aria-hidden
-          className="shrink-0 pl-[0.4375rem] pr-1 font-mono text-[length:var(--fs-8)] uppercase leading-[1.15] tracking-[0.1em] text-[color:var(--billet-label)] lg:text-[length:var(--fs-9)] lg:tracking-[0.14em]"
+          className="shrink-0"
         >
-          Sort
+          <circle cx="10.5" cy="10.5" r="6" />
+          <path d="M15 15l4.5 4.5" />
+        </svg>
+        <span className="sr-only">Search players</span>
+        <input
+          type="text"
+          value={query}
+          onChange={(e) => onQuery(e.target.value)}
+          placeholder="Search players"
+          className="w-full min-w-0 border-0 bg-transparent py-2 font-mono text-[length:var(--fs-12)] tracking-[0.04em] text-[color:var(--billet-name)] outline-none placeholder:text-[color:var(--readout-label)]"
+        />
+      </label>
+
+      {/* **The denominator only where it says something.** At rest the design
+          draws the bare figure, and a `471 / 471` beside it would be the same
+          number twice; narrowed, what a reader wants is what it was narrowed
+          *from*. */}
+      <span
+        className={`${CONSOLE_WINDOW} inline-flex shrink-0 items-baseline gap-1 rounded-xl px-[0.6875rem] py-[0.4375rem]`}
+      >
+        <Scanlines />
+        <span className="relative font-mono text-[length:var(--fs-13)] tabular-nums text-readout [text-shadow:var(--readout-text-glow)]">
+          {shown}
         </span>
-        {READING_COLUMNS.map((id) => (
-          <Cap key={id} lit={sort === id} onPress={() => onSort(id)}>
-            {SORT_LABEL[id]}
-          </Cap>
-        ))}
-        <Cap lit={sort === "figure"} onPress={() => onSort("figure")}>
-          {figureLabel}
-        </Cap>
-        <Cap lit={sort === "fielded"} onPress={() => onSort("fielded")}>
-          Fielded
-        </Cap>
+        {shown !== total && (
+          <span className="relative font-mono text-[length:var(--fs-9)] tabular-nums text-[color:var(--readout-label)]">
+            / {total}
+          </span>
+        )}
       </span>
     </div>
   );
@@ -1097,6 +975,7 @@ function Ledge({
 function List({
   rows,
   sort,
+  onSort,
   picked,
   chosen,
   readings,
@@ -1109,8 +988,10 @@ function List({
   onReading,
 }: {
   rows: readonly ConsoleRow[];
-  /** Which column the rows are ordered by — the head lights it. */
-  sort: SortId;
+  /** Which head the rows are ordered by, and which way — the head lights it. */
+  sort: StartSitSort;
+  /** Set the order: a head's press, or the phone's menu and its arrow. */
+  onSort: (sort: StartSitSort) => void;
   picked: string | null;
   chosen: ReadonlySet<string>;
   readings: ReadonlyMap<string, readonly WeekReading[]>;
@@ -1138,28 +1019,56 @@ function List({
       ) : (
         <>
           {/* The column header, above the scroller so it does not travel with
-              it. **Gone below `@md`**, where the cells wrap under the name and
-              there is no column for a label to be over. Its gutters are the
-              row's own, and the trailing spacer is the disclosure key's, so
-              a head sits over the cell it names. */}
+              it, and **the sort control** — see `HeadKey`. **Gone below
+              `@md`**, where the cells wrap under the name as two bays and there
+              is no column for a head to be over; `PhoneSort` takes the same
+              slot there, gated by the same query, so exactly one of the two is
+              ever on screen. Its gutters are the row's own, and the trailing
+              spacer is the disclosure key's, so a head sits over the cell it
+              names.
+
+              **It reserves the list's scrollbar gutter without scrolling**, and
+              that is the other half of a head sitting over its column. The
+              strip is outside the scroller, so the rows lose the scrollbar's
+              width and the strip did not: measured, every head landed 11px
+              right of the cell it named — a drift the caption strip had too,
+              which mattered less while nothing pressed it. `.lab-scroll`
+              answers the same problem with a hard-coded `+11px`; here the strip
+              takes the scroller's own class and `scrollbar-gutter: stable`
+              under `overflow: hidden`, and the list reserves its gutter too, so
+              the two agree to the pixel beside a classic bar, beside an overlay
+              one, and while the list is too short to scroll — with no number to
+              keep in step. */}
           <div
-            aria-hidden
-            className={`${CONSOLE_WINDOW_LEDGE} relative z-[2] mx-[3px] mt-[3px] hidden items-center gap-2 rounded-[7px] py-1 pl-[0.6875rem] pr-[0.4375rem] @md:flex`}
+            className={`${CONSOLE_WINDOW_LEDGE} lab-scroll-glass relative z-[2] mx-[3px] mt-[3px] hidden items-center gap-2 overflow-hidden rounded-[7px] py-1 pl-[0.6875rem] pr-[0.4375rem] [scrollbar-gutter:stable] @md:flex`}
           >
-            <span className="min-w-0 flex-1 font-mono text-[length:var(--fs-9)] uppercase tracking-[0.14em] text-[color:var(--billet-label)]">
-              Name
-            </span>
-            {READING_COLUMNS.map((id) => (
-              <Head key={id} lit={sort === id} width={COLUMN_WIDTH[id]}>
-                {COLUMN_LABEL[id]}
-              </Head>
+            <HeadKey
+              id="name"
+              sort={sort}
+              onSort={onSort}
+              figureLabel={figureLabel}
+              className="min-w-0 flex-1"
+            />
+            {HEAD_COLUMNS.map((id) => (
+              <HeadKey
+                key={id}
+                id={id}
+                sort={sort}
+                onSort={onSort}
+                figureLabel={figureLabel}
+                width={COLUMN_WIDTH[id]}
+                className="shrink-0 pl-[0.375rem] pr-0.5"
+              />
             ))}
-            <Head lit={sort === "figure"} width={COLUMN_WIDTH.figure}>
-              {figureLabel}
-            </Head>
             <span className="w-6 shrink-0" />
           </div>
-          <ul className="lab-scroll-glass relative z-[1] m-0 flex min-h-0 flex-1 list-none flex-col gap-[5px] overflow-y-auto p-[3px]">
+          <PhoneSort sort={sort} onSort={onSort} figureLabel={figureLabel} />
+          {/* The list's gutter is reserved **from `@md` up only**, where there
+              is a head strip to agree with. Below it there is nothing outside
+              the scroller to line up, and `.lab-scroll-glass` reserves nothing
+              by design — `league-teams.tsx` records the 11px that decision was
+              made against. */}
+          <ul className="lab-scroll-glass relative z-[1] m-0 flex min-h-0 flex-1 list-none flex-col gap-[5px] overflow-y-auto p-[3px] @md:[scrollbar-gutter:stable]">
             {rows.map((row) => (
               <Row
                 key={row.id}
@@ -1181,34 +1090,186 @@ function List({
   );
 }
 
+/** The heads that stand over a cell — every order but the name's. */
+const HEAD_COLUMNS: readonly (WeekReading | "figure")[] = [
+  ...READING_COLUMNS,
+  "figure",
+];
+
 /**
- * One column head.
- *
- * **The sorted column's head is lit**, which is the one thing the header says
- * that the Sort rail below does not: which of these columns the rows under it
- * are in the order of. `Fielded` lights none of them, correctly — it is the sum
- * of four rather than any one.
+ * The orders on offer, in the heads' own left-to-right order — so the phone's
+ * menu lists them as a reader would read them off the strip above `@md`.
  */
-function Head({
-  lit,
+const SORT_KEYS: readonly StartSitSortKey[] = ["name", ...HEAD_COLUMNS];
+
+/** An order's whole name: a head's accessible name and the phone menu's. */
+function spokenLabel(key: StartSitSortKey, figureLabel: string): string {
+  if (key === "name") return "Name";
+  if (key === "figure") return figureLabel;
+  return SORT_LABEL[key];
+}
+
+/**
+ * One column head, as the key that sorts by it.
+ *
+ * **A press sorts by this column; a press on the lit head reverses it** — see
+ * `nextStartSitSort`. The lit head takes the accent and an arrow, and the arrow
+ * is drawn only on the lit head: an unlit one spends none of its `3.5rem` on
+ * one, and six arrows would be six claims about one ordering. It is
+ * `SharesConsole`'s `HeadKey` and the stat board's `HeadCell`, one console
+ * over, and the two predecessors agree on everything this needs.
+ *
+ * **`aria-pressed` and the label carry the state**, which is `SharesConsole`'s
+ * pair rather than the stat board's `columnheader` + `aria-sort`: this is a
+ * list of keys rather than a table, and a header role over a `<ul>` would
+ * announce columns of cells that are not there. The label says what a press
+ * would do — `Sort by Opp bench` unlit, `Opp bench, sorted descending — press
+ * to reverse` lit — so nobody has to press one to learn it is in force.
+ *
+ * **A `3.5rem` head has 48px for a label and an arrow, and the widths are
+ * measured rather than hoped.** At the old `px-2` and `0.1em` tracking,
+ * `Opp St` wanted 44px of the 40 it was given and rendered as `OPP S…` — a
+ * clip the caption strip carried before its heads were keys, and silent,
+ * since the text was all still in the DOM. So a column head's label starts on
+ * the cell's own `0.375rem` gutter, where the figure under it starts, and
+ * keeps 2px on its right; the column heads spend their letter-spacing, which is
+ * this repo's first thing to spend where width is short (`Opp St` is 38px
+ * untracked); and the arrow is {@link SortArrow}, 7px wide everywhere. Lit,
+ * `Opp St` is then 38 + 2 + 7 = 47 of 48. `Name` keeps its tracking: its head
+ * is the row's whole remaining width.
+ */
+function HeadKey({
+  id,
+  sort,
+  onSort,
+  figureLabel,
   width,
-  children,
+  className,
 }: {
-  lit: boolean;
-  width: string;
-  children: React.ReactNode;
+  id: StartSitSortKey;
+  sort: StartSitSort;
+  onSort: (sort: StartSitSort) => void;
+  figureLabel: string;
+  /** A column's fixed width, so the head sits over its cells; the name has none. */
+  width?: string;
+  /** Layout only — the head's own type and state are spelled here. */
+  className: string;
 }) {
+  const on = sort.key === id;
+  const spoken = spokenLabel(id, figureLabel);
+  const label =
+    id === "name" ? "Name" : id === "figure" ? figureLabel : COLUMN_LABEL[id];
   return (
-    <span
-      style={{ width }}
-      className={`shrink-0 truncate whitespace-nowrap px-2 font-mono text-[length:var(--fs-9)] uppercase tracking-[0.1em] ${
-        lit
+    <button
+      type="button"
+      onClick={() => onSort(nextStartSitSort(sort, id))}
+      aria-pressed={on}
+      aria-label={
+        on
+          ? `${spoken}, sorted ${sort.ascending ? "ascending" : "descending"} — press to reverse`
+          : `Sort by ${spoken}`
+      }
+      style={width ? { width } : undefined}
+      className={`${className} flex cursor-pointer items-center gap-0.5 whitespace-nowrap rounded-[4px] border-0 bg-transparent text-left font-mono text-[length:var(--fs-9)] uppercase focus-visible:outline-1 focus-visible:outline-offset-1 focus-visible:outline-active/60 ${
+        id === "name" ? "tracking-[0.14em]" : "tracking-normal"
+      } ${
+        on
           ? "text-[color:var(--billet-accent)]"
-          : "text-[color:var(--billet-label)]"
+          : "text-[color:var(--billet-label)] hover:text-readout"
       }`}
     >
-      {children}
-    </span>
+      <span className="min-w-0 truncate">{label}</span>
+      {on && <SortArrow ascending={sort.ascending} />}
+    </button>
+  );
+}
+
+/**
+ * The direction of the order in force, drawn rather than typed.
+ *
+ * **`▲` and `▼` are not in IBM Plex Mono**, so the browser draws them from
+ * whichever font the platform falls back to — measured on macOS Chrome, a
+ * glyph 12.4px wide at `--fs-8`, which is more than a fifth of a `3.5rem` head
+ * and what squeezed a lit `Start ▼` to `ST…`. A drawn triangle is 7px on every
+ * platform, so the arithmetic in {@link HeadKey} holds wherever it is read.
+ * `currentColor`, so it takes the lit head's accent with the label beside it.
+ */
+function SortArrow({ ascending }: { ascending: boolean }) {
+  return (
+    <svg
+      aria-hidden
+      viewBox="0 0 7 5"
+      width="7"
+      height="5"
+      fill="currentColor"
+      className="shrink-0"
+    >
+      <path d={ascending ? "M3.5 0 7 5H0Z" : "M0 0h7L3.5 5Z"} />
+    </svg>
+  );
+}
+
+/**
+ * The sort, below `@md` — where there are no heads to press.
+ *
+ * **The heads are the sort, and a phone has none**: its rows are two captioned
+ * bays rather than five cells under a strip, so a phone that simply lost the
+ * strip would have a list it could not reorder. This is the stat board's own
+ * phone arm (`Sort players by`): a native menu over exactly the orders the
+ * heads name, in their long forms, with the direction on a key beside it where
+ * a head carries its arrow.
+ *
+ * **It stands in the heads' own slot, gated by the heads' own query**, where
+ * the stat board's sits in its ledge. The ledge is outside the list's
+ * container, so a control there could only be gated on the viewport — and the
+ * list's width is not the viewport's: a picked row at `lg` puts the pane
+ * beside the list, so a threshold read off the viewport would show both
+ * controls or neither across a band of widths. Here `@md:hidden` and the head
+ * strip's `@md:flex` are one measurement, and exactly one is ever drawn.
+ */
+function PhoneSort({
+  sort,
+  onSort,
+  figureLabel,
+}: {
+  sort: StartSitSort;
+  onSort: (sort: StartSitSort) => void;
+  figureLabel: string;
+}) {
+  return (
+    <div
+      className={`${CONSOLE_WINDOW_LEDGE} relative z-[2] mx-[3px] mt-[3px] flex items-center gap-1.5 rounded-[7px] py-0.5 pl-[0.6875rem] pr-1 @md:hidden`}
+    >
+      <span
+        aria-hidden
+        className="shrink-0 font-mono text-[length:var(--fs-9)] uppercase tracking-[0.14em] text-[color:var(--billet-label)]"
+      >
+        Sort
+      </span>
+      <select
+        aria-label="Sort players by"
+        value={sort.key}
+        onChange={(e) => {
+          const key = e.target.value as StartSitSortKey;
+          onSort({ key, ascending: startSitAscending(key) });
+        }}
+        className="touch:min-h-11 min-w-0 flex-1 cursor-pointer appearance-none truncate border-0 bg-transparent py-1 font-mono text-[length:var(--fs-10)] uppercase tracking-[0.1em] text-[color:var(--billet-accent)] outline-none"
+      >
+        {SORT_KEYS.map((key) => (
+          <option key={key} value={key}>
+            {spokenLabel(key, figureLabel)}
+          </option>
+        ))}
+      </select>
+      <button
+        type="button"
+        aria-label={`Sorted ${sort.ascending ? "ascending" : "descending"} — press to reverse`}
+        onClick={() => onSort(nextStartSitSort(sort, sort.key))}
+        className="touch:min-h-11 touch:min-w-11 inline-flex shrink-0 cursor-pointer items-center justify-center rounded-full border-0 bg-transparent px-2 py-1.5 text-[color:var(--billet-accent)] focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-active/60"
+      >
+        <SortArrow ascending={sort.ascending} />
+      </button>
+    </div>
   );
 }
 
