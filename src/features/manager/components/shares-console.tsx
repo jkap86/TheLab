@@ -32,6 +32,7 @@ import {
   leaguematePlayerId,
   pickedSubject,
   Scanlines,
+  SortArrow,
   storeSharesConsoleOpen,
   storeSharesTab,
   subjectSlot,
@@ -1343,9 +1344,22 @@ function List({
               who lost it would lose the sort. Below `@md` the row's cells wrap
               onto a second line, and the row is `justify-end` so that line
               sits flush right — exactly under these heads, which are the same
-              fixed widths behind the same gap. */}
+              fixed widths behind the same gap.
+
+              **It reserves the list's scrollbar gutter without scrolling.** The
+              strip is outside the scroller, so beside a classic bar the rows
+              lost the bar's width and the strip did not: measured on
+              `/manager/jkap86`, the strip's right edge at 917px against the
+              first row's at 906 — every head 11px right of the column it
+              names. The strip takes the scroller's own class (so the same
+              `thin` width) and `scrollbar-gutter: stable` under
+              `overflow: hidden`, and the list reserves its gutter too, so the
+              two agree to the pixel beside a classic bar, beside an overlay
+              one, and while the list is too short to scroll — with no number to
+              keep in step. It is the start/sit console's fix; see the list's
+              own note for why this one is not scoped to `@md`. */}
           <div
-            className={`${CONSOLE_WINDOW_LEDGE} relative z-[2] mx-[3px] mt-[3px] flex items-center gap-2 rounded-[7px] py-1 pl-[0.6875rem] pr-[0.6875rem]`}
+            className={`${CONSOLE_WINDOW_LEDGE} lab-scroll-glass relative z-[2] mx-[3px] mt-[3px] flex items-center gap-2 overflow-hidden rounded-[7px] py-1 pl-[0.6875rem] pr-[0.6875rem] [scrollbar-gutter:stable]`}
           >
             <HeadKey id="name" sort={sort} onSort={onSort} className="min-w-0 flex-1" />
             {cols.map((id) => (
@@ -1359,7 +1373,25 @@ function List({
               />
             ))}
           </div>
-          <ul className="lab-scroll-glass relative z-[1] m-0 flex min-h-0 flex-1 list-none flex-col gap-[5px] overflow-y-auto p-[3px]">
+          {/* **The list's gutter is reserved at every width**, where the
+              start/sit console reserves it from `@md` up only — because that
+              console's heads are gone below `@md` and these are not. Below
+              `@md` the cells wrap flush right under the heads, so a list that
+              reserved nothing there would put every cell 11px right of its
+              head beside a classic bar, the fault this fixes.
+
+              That reverses the rule `.lab-scroll-glass` is written by, and the
+              argument behind that rule is about a different surface:
+              `league-teams.tsx` declines 11px off a ~165px card pane that has
+              nothing outside its scroller to line up with. This list is the
+              console's full width and has a strip outside it at every width,
+              and the narrow devices it is read on draw overlay bars, where
+              `stable` reserves nothing — the 11px is spent only in a narrow
+              desktop window with classic bars, which is exactly where the heads
+              would otherwise drift. What it costs there is 11px of the head
+              row's room: measured, the name head's `A–Z` needs a list at least
+              348px wide rather than 337. */}
+          <ul className="lab-scroll-glass relative z-[1] m-0 flex min-h-0 flex-1 list-none flex-col gap-[5px] overflow-y-auto p-[3px] [scrollbar-gutter:stable]">
             {rows.map((row) => (
               <Row
                 key={row.id}
@@ -1384,7 +1416,15 @@ function List({
  * `nextSort`. The lit head carries the direction as an arrow, which is the one
  * thing the rail it replaced never had to say, since its directions were fixed.
  * The arrow is drawn only on the lit head, so an unlit head spends no width on
- * one: `Age ▲` is 32px of the 34 a `2.875rem` column leaves inside its gutter.
+ * one.
+ *
+ * **The arrow is {@link SortArrow}, a drawn 7px triangle, and the widths are
+ * measured rather than hoped.** It was a typed `▲`/`▼`, which IBM Plex Mono does
+ * not carry: macOS Chrome drew it from a fallback 12.4px wide, and at a 4px gap
+ * that clipped both narrow heads when lit — `Value` 37px of label in the 32 left
+ * of a `3.75rem` head, `Age` 22 in 18 of a `2.875rem` one. Drawn, and at a 2px
+ * gap, lit `Value` is 37 + 2 + 7 = 46 of 48 and lit `Age` 22 + 2 + 7 = 31 of 34,
+ * on every platform.
  *
  * The gutter is the cell's own `0.375rem`, so a head's label starts where the
  * figure under it does.
@@ -1415,7 +1455,7 @@ function HeadKey({
           : `Sort by ${SORT_LABEL[id]}`
       }
       style={width ? { width } : undefined}
-      className={`${className} flex items-center gap-1 whitespace-nowrap rounded-[4px] text-left font-mono text-[length:var(--fs-9)] uppercase focus-visible:outline-1 focus-visible:outline-offset-1 focus-visible:outline-active/60 ${
+      className={`${className} flex items-center gap-0.5 whitespace-nowrap rounded-[4px] text-left font-mono text-[length:var(--fs-9)] uppercase focus-visible:outline-1 focus-visible:outline-offset-1 focus-visible:outline-active/60 ${
         id === "name" ? "tracking-[0.14em]" : "tracking-[0.1em]"
       } ${
         on
@@ -1438,16 +1478,14 @@ function HeadKey({
       ) : (
         <span className="min-w-0 truncate">{label}</span>
       )}
-      {on && (
-        <span
-          aria-hidden
-          className={`shrink-0 text-[length:var(--fs-8)] tracking-normal ${
-            id === "name" ? "hidden @md:inline" : ""
-          }`}
-        >
-          {sort.ascending ? "▲" : "▼"}
-        </span>
-      )}
+      {on &&
+        (id === "name" ? (
+          <span aria-hidden className="hidden shrink-0 @md:inline-flex">
+            <SortArrow ascending={sort.ascending} />
+          </span>
+        ) : (
+          <SortArrow ascending={sort.ascending} />
+        ))}
     </button>
   );
 }

@@ -406,6 +406,10 @@ export {
 // Two glass scrollers mirrored — the checker's week view and the gametime
 // panes both read their two lineups across each other.
 export { useLinkedScroll } from "./use-linked-scroll";
+// A lit column head's direction, drawn — `▲`/`▼` are not in Plex Mono and the
+// fallback glyph is wide enough to clip a fixed-width head. The manager's shares
+// console and the start/sit console both press their heads to sort.
+export { SortArrow } from "./ui/sort-arrow";
 export type {
   DrawerTray,
   PaneRowFace,

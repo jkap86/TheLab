@@ -4426,6 +4426,63 @@ included), the strip was a second copy of four of its values costing the ledge
 a row. The ledge is now the search, the count, the Filters key and `Clear`.
 `CapRail` went with it, having no caller left; `Cap` stays for the tab channel.
 
+#### The heads sit over their columns, and the arrow is drawn
+
+Two faults in the head strip, both silent — every figure right, every label
+there — and both found by measuring `/manager/jkap86` in Chrome at desktop
+width. Nothing on the wire moved.
+
+**Every head sat 11px right of its column.** The strip is outside the list's
+scroller, so beside a classic scrollbar the rows lost the bar's width and the
+strip did not: the strip's right edge at 917px against the first row's at 906,
+and every head label 11px right of the figure it names. It is the start/sit
+console's fix (The start/sit heads are the sort, on
+`claude/start-sit-sortable-heads` when this landed): the strip takes
+`.lab-scroll-glass` — the list's own `thin` width — and `scrollbar-gutter:
+stable` under `overflow: hidden`, and the list reserves its gutter too, so the
+two agree to the pixel beside a classic bar, beside an overlay one, and while
+the list is too short to scroll, with no number to keep in step.
+
+**The list's gutter is reserved at every width, where start/sit scopes it to
+`@md` up.** That console's heads are gone below `@md`; these are drawn at every
+width, and below `@md` the cells wrap flush right under them, so a list that
+reserved nothing there would put every cell a bar's width off its head in
+exactly the case this fixes. It reverses the rule `.lab-scroll-glass` is written
+by, and the argument behind that rule does not reach this surface:
+`league-teams.tsx` declines 11px off a ~165px card pane with nothing outside its
+scroller to line up with, where this list is the console's full width with a
+strip outside it at every width. On a phone the bar is an overlay and `stable`
+reserves nothing, so the cost is confined to a narrow desktop window with
+classic bars, where the head row runs out of room 11px sooner: the name head's
+`A–Z` needs a list at least 348px wide rather than 337 (roughly a 396px viewport
+rather than 385), and below ~330 the heads overflow the strip. A desktop window
+that narrow is rare, and misplaced heads over every column is the worse fault.
+
+**The lit arrow is drawn.** `▲`/`▼` are not in IBM Plex Mono; macOS Chrome drew
+them from a fallback 12.36px wide, and at a 4px gap that clipped both narrow
+heads when lit — `Value` 37px of label in the 32 left of its `3.75rem` head,
+`Age` 22 in 18 of its `2.875rem` one. `SortArrow` — start/sit's 7×5 triangle —
+is `features/shared/ui/sort-arrow.tsx` and exported from the barrel, and the
+gap is 2px, so lit `Value` is 37 + 2 + 7 = 46 of 48 and lit `Age` 31 of 34.
+**The start/sit branch still carries a private copy of it**, byte-identical;
+whichever of the two lands second deletes that copy and imports the shared one.
+
+Verified in the Browser pane against a dev server run from this change's
+worktree (the one on :3000 serves another checkout) and the live database, on
+`/manager/jkap86`. At 1280 in both schemes, set by `data-theme`: strip and list
+each reserve 11px, and every column head's label starts on **the same pixel** as
+the figure under it — delta 0 on all four, against 11 on the unchanged build —
+and all five heads lit in both directions clip nothing, the arrow 7px, the lit
+label and arrow `#08554d` in light. At 375 (mobile emulation, overlay bars) in
+both schemes: both gutters 0, deltas 0, no page overflow, no column head
+clipped. With the list forced narrow at 1280 (classic bars): deltas 0 down to a
+342px list. 2,874 tests pass; `tsc` and eslint are clean.
+
+**Not fixed here, and not caused by this:** below `@md` the name head's `A–Z` is
+clipped on a 375px phone — 18px of label in a 9px head, measured on the
+unchanged build with no gutter involved. It fits at 390. Fixing it is a decision
+about the name head's phone arm rather than about the gutter.
+
 ### Gametime's pane took the manager's header and its `Narrow grid` key
 
 The gametime stat board's pane narrowed the league grid through four
