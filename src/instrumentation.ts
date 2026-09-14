@@ -128,4 +128,16 @@ export async function register(): Promise<void> {
   } catch (error) {
     console.error("[comps] Failed to start the corpus loader:", error);
   }
+
+  // The visit log's retention: rows older than `VISITOR_LOG_RETENTION_DAYS`
+  // removed in bounded batches, every six hours, under its own advisory lock.
+  // The one loop here that writes nothing anybody reads and exists so the one
+  // table holding personal data is not also the one that never forgets.
+  // `VISITOR_LOG_RETENTION=off` disables it, on `KTC_SYNC`'s exact terms.
+  try {
+    const { startVisitorLogRetention } = await import("@/shared/logs");
+    startVisitorLogRetention();
+  } catch (error) {
+    console.error("[logs] Failed to start the retention loop:", error);
+  }
 }

@@ -7,11 +7,10 @@ import { loggedRoute } from "./routes.ts";
 
 describe("loggedRoute", () => {
   test("records every page this app serves", () => {
-    // Read off the filesystem rather than listed, which is the whole point of
-    // the rule replacing a list: a page added under `app/` is recorded without
-    // anybody remembering to say so, and this fails if that ever stops being
-    // true. `/logs` is in here now — it is a page somebody visits, and it used
-    // to be excluded by not being named.
+    // Read off the filesystem rather than listed: a page added under `app/`
+    // that no shape names fails here rather than going silently unrecorded,
+    // which is the honest cost of a positive table. `/logs` is in here — it is
+    // a page somebody visits.
     const pages = appPageRoutes();
     assert.ok(pages.length >= 8, `found only ${pages.length} pages under app/`);
     for (const page of pages) {
@@ -19,13 +18,40 @@ describe("loggedRoute", () => {
     }
   });
 
-  test("records a path this app does not serve", () => {
-    // The capability a positive list could not have. A reader arriving on a
-    // link that leads nowhere is the row worth having — `app/not-found.tsx`
-    // sends them to `/tools`, and without this the log could never say what
-    // they were holding.
-    assert.equal(loggedRoute("/old/thelabx/path"), "/old/thelabx/path");
-    assert.equal(loggedRoute("/nonsense"), "/nonsense");
+  test("refuses a path this app does not serve", () => {
+    // An invented path used to be a row, so a scanner walking a thousand of
+    // them was a thousand inserts into a table nothing pruned. Which retired
+    // link a reader arrived on is the router log's to answer.
+    for (const invented of [
+      "/old/thelabx/path",
+      "/nonsense",
+      "/admin",
+      "/wp-admin",
+      "/Tools",
+      "/tools/extra",
+      "/manager",
+      "/manager/jkap86/leagues",
+      "/picktracker/abc",
+      "/picktracker/123/extra",
+      "/gametime/",
+    ]) {
+      assert.equal(loggedRoute(invented), null, invented);
+    }
+  });
+
+  test("a subject is recorded only in the shape Sleeper issues it", () => {
+    assert.equal(loggedRoute("/manager/jkap86"), "/manager/jkap86");
+    assert.equal(loggedRoute("/lineupchecker/Slim_Jim99"), "/lineupchecker/Slim_Jim99");
+    assert.equal(loggedRoute("/gametime/x"), "/gametime/x");
+    assert.equal(loggedRoute("/picktracker/1234567890123456789"), "/picktracker/1234567890123456789");
+    // Not a username: an encoded space, a dot, a hyphen, or a name too long.
+    assert.equal(loggedRoute("/manager/a%20b"), null);
+    assert.equal(loggedRoute("/manager/a.b"), null);
+    assert.equal(loggedRoute("/manager/a-b"), null);
+    assert.equal(loggedRoute("/manager/" + "a".repeat(65)), null);
+    // Not a league id.
+    assert.equal(loggedRoute("/picktracker/-1"), null);
+    assert.equal(loggedRoute("/picktracker/1.5"), null);
   });
 
   test("one page is one row however the path was spelled", () => {
@@ -35,13 +61,6 @@ describe("loggedRoute", () => {
     assert.equal(loggedRoute("/manager//jkap86"), "/manager/jkap86");
     assert.equal(loggedRoute("/manager/jkap86/"), "/manager/jkap86");
     assert.equal(loggedRoute("/tools/"), "/tools");
-  });
-
-  test("an encoded segment is stored encoded, as the proxy stores it", () => {
-    // `nextUrl.pathname` and `usePathname` both hand back the encoded form, so
-    // decoding here would make one visit two different rows depending on which
-    // of the two writers recorded it.
-    assert.equal(loggedRoute("/manager/a%20b"), "/manager/a%20b");
   });
 
   test("a namespace that is not a page is refused, bare and with a path under it", () => {
@@ -167,6 +186,17 @@ describe("the proxy's matcher", () => {
   });
 });
 
+/**
+ * A value that satisfies each dynamic segment's shape — a league id is a
+ * number, and a name where a page names a person. A segment not listed here is
+ * a page whose subject `loggedRoute` has not been told the shape of, which the
+ * page walk then reports.
+ */
+const SAMPLE_SEGMENTS: Record<string, string> = {
+  "[username]": "sample_user",
+  "[leagueId]": "1234567890",
+};
+
 /** Every route under `app/` that renders a page. */
 function appPageRoutes(): string[] {
   return appRoutesMatching((name) =>
@@ -201,7 +231,7 @@ function appRoutesMatching(
       const segments = relative(root, dir)
         .split(sep)
         .filter((segment) => segment.length > 0 && !segment.startsWith("("))
-        .map((segment) => (segment.startsWith("[") ? "sample" : segment));
+        .map((segment) => (segment.startsWith("[") ? SAMPLE_SEGMENTS[segment] ?? "sample" : segment));
       if (tail.length > 0) segments.push(tail);
       if (segments.length > 0) routes.push(`/${segments.join("/")}`);
     }

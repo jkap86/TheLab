@@ -431,6 +431,15 @@ function emit(room: Room, frame: RoomFrame) {
   if (room.subscribers.size === 0) close(room);
 }
 
+/**
+ * Whether a league's room is already open or opening — so the stream route can
+ * tell a join from a cold open and claim an opening slot only for the second.
+ * See `shared/streams/admission`.
+ */
+export function hasRoom(leagueId: string): boolean {
+  return rooms.has(leagueId) || openings.has(leagueId);
+}
+
 /** Open rooms and their sizes — for a log line or a test. */
 export function roomStats(): { leagues: number; subscribers: number } {
   let subscribers = 0;

@@ -9310,6 +9310,14 @@ is now a row of its own.
 
 ### Every page is a page
 
+**Superseded — see The public surface, hardened, below.** The inverted rule
+this section argues for is gone again: an invented path was a row, so a scanner
+walking a thousand of them was a thousand inserts into a table nothing pruned.
+`loggedRoute` is a table of page *shapes* now, and what this section got right
+survives it — one vocabulary for both writers, the filesystem walk in
+`routes.test.ts` that fails when a page has no shape, the matcher as a coarse
+pre-filter that must never be narrower than the predicate.
+
 The log recorded a **list**: eight matcher entries in `proxy.ts`, the same list
 again as a predicate in `shared/logs/routes.ts` because a matcher cannot read an
 array, and `routes.test.ts` holding the two together. It covered every page but
@@ -9514,6 +9522,12 @@ requirement to be undercounting.
 
 ### Reading it back
 
+**Superseded — see The public surface, hardened, below.** The credential no
+longer rides `?key=` or `x-logs-key`; it is entered once and what the page and
+the API read is a signed session cookie. What survives of this section is the
+production/development split for an unset `LOGS_TOKEN`, the whole-window fetch
+and the facet rule.
+
 **A failed token is a 404, not a 401**, on both the page and `/api/logs`. The
 protection is that the page does not appear to exist, and a 401 confirms that it
 does — the only thing somebody guessing paths wants to learn. `logsAccess` is
@@ -9632,6 +9646,182 @@ clean.
   the client, so that menu would always be empty. Native `<select>`s carry the
   keyboard behaviour and a platform list on a phone, and the Search field covers
   what a typeahead would.
+
+
+## The public surface, hardened
+
+Five findings against the app as deployed, fixed together because each of them
+is the same shape: a bound that was reachable and not reached, or a credential
+where a credential should not be. Nothing a reader sees changed except `/logs`,
+which asks for its token once instead of carrying it in the address bar.
+**Every limit here is per process.** One dyno enforces it for that dyno; a
+second web dyno enforces its own copy, and nothing in this app claims to be a
+deployment-wide quota. The retention loop is the one deployment-wide bound,
+because it acts on the table rather than on a process.
+
+### Streams are admitted before they cost anything
+
+`shared/streams/admission.ts` is one gate in front of both SSE routes. A
+reservation is taken **as the first statement of the handler** — before the
+username is resolved, before the season and the week are, before any lineup is
+read — because a connection still initialising is a connection, and the work
+before the stream opens is the expensive part. Four bounds: the process total
+across both stream kinds (`STREAM_MAX_CONNECTIONS`, 40), one client address
+(`STREAM_MAX_PER_CLIENT`, 8 — several tabs or a household share it), one room
+(`STREAM_MAX_PER_SUBJECT`, 24), and how many *distinct* rooms may be
+cold-opening at once (`STREAM_MAX_OPENING`, 4) — a spray of unknown league ids
+was one four-call Sleeper read apiece with nothing between them. A refusal is a
+429 (the client's own cap) or a 503 (everything else) with `Retry-After`,
+answered **before** the stream opens, while a status can still reach the
+browser; `EventSource` cannot read one, but the gametime client's snapshot can,
+and does. Same-subject joiners share one opening slot, so the dedupe the rooms
+already had survives the bound.
+
+**`shared/streams/sse.ts` is the stream itself, extracted so the release rule
+is a test rather than a source pin.** The four things the two routes used to
+spell for themselves — bytes before the first await, a terminal frame before
+close, a heartbeat, the backpressure count — are one function, and
+`withStreamReservation` with the stream's own `onClose` hand the slot back on
+every exit exactly once: a handler that returns without streaming, one that
+throws, a request already aborted, an abort during the first read (the late
+seat is left, nothing is sent), the consumer cancelling, a stalled socket. A
+disconnect during initialisation leaves no orphan subscriber, which is the
+case that was silent before. `live-wiring.test.ts` pins that each route
+reserves before any `await`, releases only through `onClose`, and claims an
+opening slot only for a cold open and hands it back in a `finally`.
+
+**The gametime client stopped answering every refusal with a solve.** A
+refused stream is a fatal close to `EventSource`, and a fatal close fetched a
+snapshot — the most expensive read this app makes — every ten seconds for as
+long as the server was shedding. The snapshot is at most once a minute per
+follow now; a 429 or 503 on it carrying `Retry-After` pushes the next stream
+attempt out to that far (capped at ten minutes); and every backoff carries up
+to three seconds of jitter, so a roomful shed together does not come back
+together. The picktracker client never retried on its own and still does not.
+
+### The visit log's credential travels once
+
+`/logs` took `?key=` and the API took `x-logs-key`, which put `LOGS_TOKEN` in
+browser history, in the page's HTML, and — the reason it moved — in Heroku's
+router logs, which record every query string by default. The credential is
+posted once now, to `POST /api/logs/session`, and what comes back is a signed
+session in an `HttpOnly; Secure; SameSite=Strict` cookie with an explicit
+`Max-Age`: `v1.<expiry>.<nonce>.<mac>`, an HMAC-SHA256 under a key derived by
+HKDF from `LOGS_SESSION_SECRET` (optional) with `LOGS_TOKEN` as the salt, so
+**rotating either secret signs everybody out**. `shared/logs/session.ts` is
+pure and `node:crypto` is its one import; the page reads the cookie through
+`cookies()`, the API through the `Cookie` header, and each verifies for
+itself. The signature is checked before the expiry so a forged token is never
+told it had the shape right. Unset in production is still `notFound()`; a
+configured deployment with no session shows the sign-in form, which is the
+one place the page's existence is admitted.
+
+**`shared/logs/login.ts` decides what the endpoint answers, in the order of
+what each refusal costs:** unconfigured (404), not this app's own page by the
+browser's word (`sameOriginRequest`, 403), plain HTTP in production (403 —
+a body that crossed the wire in the clear is not made safe by asking again),
+a locked key (429 with `Retry-After`, from a per-address budget of five
+failures and a process budget of sixty, both before the guess is checked), a
+body that is not a sign-in (400, or 413 past a kilobyte, and not counted as a
+guess), the wrong credential (401), the right one (200 and the cookie).
+Every answer is `no-store`. Sign-out is `DELETE` on the same route and clears
+the cookie; there is no revocation list, and ending a session a browser still
+holds is a rotation, which is the honest shape for one operator reading one
+page. The throttles live on `globalThis` so a dev reload does not hand a
+locked client a fresh budget.
+
+### The client address is one policy, and the log has a budget
+
+`shared/request/client-ip.ts` replaces `shared/logs/client-ip.ts`, and the
+difference is which end of `X-Forwarded-For` is believed. The old reader took
+the **leftmost** entry, which is whatever the client put there; Heroku's router
+*appends* the connecting peer on the right, so the trustworthy entry is
+`length − TRUSTED_PROXY_HOPS` from the end (1 by default; a CDN in front is 2).
+`X-Real-IP` is not read at all. An address that does not parse (`net.isIP`
+after stripping `::ffff:`, refusing zone ids and brackets) is null rather than
+truncated to something plausible, and null folds into one `unknown` bucket
+for every limiter that keys by client. The stream admission, the sign-in
+throttle and the visit log all read it through `clientKey`.
+
+**`recordVisit` admits before it inserts**, so neither writer can forget: a
+two-second dedupe of one route from one client, an in-flight cap
+(`VISITOR_LOG_MAX_IN_FLIGHT`, 4 — the bound that protects the pool), a
+per-client token bucket (30 a minute) and a process bucket (300 a minute).
+Drops are counted by reason and printed at most once a minute. The beacon
+route reads its body **within** 512 bytes (`readJsonWithin`) rather than
+whole-then-measured, asks `sameOriginRequest` rather than `Sec-Fetch-Site`
+alone, and treats that as a forgery check, not authentication — the budget is
+what bounds a page that is genuinely this app's.
+
+**`loggedRoute` is a table of shapes again.** `/tools`, `/trades`, `/comps`,
+`/picktracker`, `/logs`; `/picktracker/<digits>`; `/manager`,
+`/lineupchecker`, `/gametime` over a Sleeper username (`[A-Za-z0-9_]{1,64}`).
+An invented path is not a row. `routes.test.ts` walks `app/` with a sample per
+dynamic segment and fails if a page has no shape, which is the honest cost of a
+positive table.
+
+**Retention is a fifth loop** (`shared/logs/retention.ts`,
+`LOCK_KEYS.visitorLogRetention = [8675309, 4]`, 60s into the boot stagger):
+rows older than `VISITOR_LOG_RETENTION_DAYS` (90; `off` keeps them) deleted by
+id from an oldest-first `LIMIT 5000` subquery, at most twenty batches a tick,
+every six hours, under a try/skip advisory lock. No migration: the delete
+walks the read's own `(seen_at DESC, id DESC)` index backwards.
+
+### Bodies are bounded while they arrive
+
+`shared/request/body.ts` — `readBodyWithin` and `readJsonWithin`. A declared
+`Content-Length` past the bound is refused before a byte is read; the bound is
+then enforced against what actually arrives, so a chunked body or a lying
+length is stopped at the first chunk that crosses it and the reader is
+**cancelled** there; bytes are counted, not characters; decoding is `fatal`
+UTF-8 and parsing happens only inside the bound; an errored or truncated
+stream is `interrupted`. `request.text()` on an App Router request allocates
+the whole body first, which is why a route that "checked the length" after
+calling it had already paid for a megabyte. Both the beacon and the sign-in
+route read through it; nothing in the framework bounds a route handler's body
+on this side.
+
+### HTTPS is the proxy's first decision
+
+`shared/request/https.ts` and `proxy.ts`. Heroku terminates TLS and hands the
+app plain HTTP either way, so the only signal is `X-Forwarded-Proto`. Marked
+`http`: a GET or HEAD is 301'd to **`SITE_URL`'s origin** with its path and
+query (less a retired `?key=` on the two logs paths) — never to the request's
+own `Host`, which anyone can set — and anything else is a 403, since a body
+that arrived in the clear is not made safe by re-sending it. Marked `https`:
+served with `Strict-Transport-Security` (`HSTS_MAX_AGE_SECONDS`, one day to
+start; `includeSubDomains` off unless asked; `preload` never emitted). No
+header at all: served untouched, which is what keeps `npm run dev` working and
+is also why there can be no loop — the router marks the redirected request
+`https`. Enforcement is on in production by default (`ENFORCE_HTTPS`) and
+needs an `https://` `SITE_URL`; without one it stands down with a warning,
+because the one thing worse than not redirecting is redirecting to a guess.
+
+**The matcher is `/((?!_next/|favicon.ico).*)`** — the API is in, because an
+API route reached over plain HTTP is exactly the request carrying the session
+cookie. The logging half still declines `/api` through `loggedRoute`, and the
+decision is taken *before* the visit is logged, so an insecure hard load is
+one row rather than two. `https-wiring.test.ts` pins the order and the reach.
+
+### Verified
+
+Under Node's own runner: 2,851 tests pass — 149 of them in the new
+`shared/request`, `shared/streams` and `shared/logs` files, five on the
+gametime client's cooldown, `Retry-After` and jitter, and the rewritten route
+and proxy pins, against the fourteen that went with `shared/logs/client-ip.ts`
+and the old access rule. `check:full` — the production build, then lint,
+typecheck and the suite — is clean; the build is what validates the matcher,
+since path-to-regexp rejects a shape Next cannot analyse.
+
+**Not verified against real traffic**, which is the gap to close first: no
+database and no route to Sleeper from where this was built, and no browser was
+driven against the sign-in form. Four things a scripted test cannot say —
+whether forty connections and eight per client are the right numbers against a
+real Sunday on one dyno, which a live refusal rate would settle; whether
+`Sec-Fetch-Site`/`Origin` are present on enough real browsers' beacon posts
+for `sameOriginRequest` not to undercount; whether one minute is the right
+snapshot cooldown against a real shedding server; and whether the widened
+matcher's per-API-call proxy invocation is measurable, which it should not be.
 
 ## The app rack
 

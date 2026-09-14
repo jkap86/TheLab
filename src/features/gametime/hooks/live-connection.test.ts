@@ -7,8 +7,11 @@ import type { GametimeConnection } from "../helpers/connection.ts";
 import {
   followGametime,
   NO_WEEK,
+  RETRY_AFTER_MAX_MS,
   RETRY_BASE_MS,
+  RETRY_JITTER_MS,
   RETRY_MAX_MS,
+  SNAPSHOT_COOLDOWN_MS,
   SOURCE_CLOSED,
 } from "./live-connection.ts";
 import type { LiveEnv, LiveSink, LiveSource, LiveTimer } from "./live-connection.ts";
@@ -90,13 +93,14 @@ type PendingFetch = {
   url: string;
   signal: AbortSignal;
   resolve: (body: ManagerGametimePayload) => void;
-  status: (code: number) => void;
+  /** A non-OK status, with the `Retry-After` seconds a shed one carries. */
+  status: (code: number, retryAfter?: number) => void;
   reject: (error: Error) => void;
 };
 
 type Timer = { at: number; run: () => void; cleared: boolean };
 
-function harness() {
+function harness(options: { random?: () => number } = {}) {
   const store: {
     payload: ManagerGametimePayload | null;
     connection: GametimeConnection;
@@ -142,8 +146,18 @@ function harness() {
           url,
           signal: init.signal,
           resolve: (body) => resolve({ ok: true, status: 200, json: async () => body }),
-          status: (code) =>
-            resolve({ ok: false, status: code, json: async () => ({}) }),
+          status: (code, retryAfter) =>
+            resolve({
+              ok: false,
+              status: code,
+              json: async () => ({}),
+              headers: {
+                get: (name) =>
+                  name.toLowerCase() === "retry-after" && retryAfter !== undefined
+                    ? String(retryAfter)
+                    : null,
+              },
+            }),
           reject,
         });
       }),
@@ -155,6 +169,9 @@ function harness() {
     clearTimeout: (timer) => {
       (timer as unknown as Timer).cleared = true;
     },
+    now: () => now,
+    // No jitter unless a test asks for it, so the ladder's figures are exact.
+    random: options.random ?? (() => 0),
   };
 
   const flush = async () => {
@@ -237,6 +254,9 @@ describe("a snapshot is owned by whoever has the newest word", () => {
     assert.equal(leagueTag(h.store.payload), "live");
 
     // And a non-OK status is the same rejection with a different spelling.
+    // (Past the cooldown, or the second close would stand the last answer in
+    // rather than ask again.)
+    await h.advance(SNAPSHOT_COOLDOWN_MS);
     h.current().send({ type: "error", error: "Failed to load lineups" });
     await h.flush();
     assert.equal(h.fetches.length, 2);
@@ -256,11 +276,13 @@ describe("a snapshot is owned by whoever has the newest word", () => {
     await h.flush();
     assert.equal(h.fetches.length, 1);
 
-    // Attempt 2 delivers, which retires A; then fails, which asks for B.
+    // Attempt 2 delivers, which retires A; then fails — past the cooldown —
+    // which asks for B.
     await h.advance(RETRY_BASE_MS);
     h.current().open();
     h.current().send({ type: "payload", payload: payload("live", { a: 1 }) });
     await h.flush();
+    await h.advance(SNAPSHOT_COOLDOWN_MS);
     h.current().send({ type: "error", error: "Failed to load lineups" });
     await h.flush();
     assert.equal(h.fetches.length, 2, "a second snapshot, since the first was retired");
@@ -471,6 +493,106 @@ describe("the backoff survives a transport that opens and then fails", () => {
     assert.equal(h.retryIn(), null);
     assert.equal(h.fetches.length, 0);
     assert.equal(h.current().closed, false);
+  });
+});
+
+describe("a shed stream is not answered with a solve", () => {
+  test("a snapshot is asked for at most once a minute, however many fatal closes there are", async () => {
+    const h = harness();
+    // Close, snapshot answered, close again inside the minute: no second ask.
+    h.current().fail();
+    await h.flush();
+    assert.equal(h.fetches.length, 1);
+    h.fetches[0].resolve(payload("A", { a: 1 }));
+    await h.flush();
+    assert.equal(h.store.connection, "snapshot");
+
+    await h.advance(RETRY_BASE_MS);
+    h.current().fail();
+    await h.flush();
+    assert.equal(h.fetches.length, 1, "inside the cooldown, the last answer stands in");
+    assert.equal(h.store.connection, "snapshot", "and it is still shown");
+    assert.equal(h.retryIn(), 2 * RETRY_BASE_MS, "the backoff still runs");
+
+    await h.advance(2 * RETRY_BASE_MS);
+    h.current().fail();
+    await h.flush();
+    assert.equal(h.fetches.length, 1, "still inside the minute");
+
+    // Past the minute, the next close may ask again.
+    await h.advance(4 * RETRY_BASE_MS);
+    h.current().fail();
+    await h.flush();
+    assert.equal(h.fetches.length, 2);
+  });
+
+  test("a snapshot shed with a Retry-After pushes the next attempt out to it", async () => {
+    const h = harness();
+    h.current().fail();
+    await h.flush();
+    assert.equal(h.retryIn(), RETRY_BASE_MS);
+    h.fetches[0].status(503, 45);
+    await h.flush();
+    assert.equal(h.store.connection, "failed");
+    assert.equal(h.retryIn(), 45_000, "the server's word, not the ladder's");
+
+    // The retry that eventually fires is one attempt, not a herd.
+    await h.advance(45_000);
+    assert.equal(h.sources.length, 2);
+    assert.equal(h.live().length, 1);
+  });
+
+  test("a Retry-After shorter than the armed wait, or on a status that is not a shed, is left alone", async () => {
+    const h = harness();
+    // Walk the ladder to a long wait first.
+    for (let i = 0; i < 3; i += 1) {
+      h.current().fail();
+      await h.flush();
+      await h.advance(h.retryIn() ?? 0);
+    }
+    h.current().fail();
+    await h.flush();
+    assert.equal(h.retryIn(), 8 * RETRY_BASE_MS);
+    // The pending snapshot (the first, still the owner) answers 429 with a short wait.
+    h.fetches[0].status(429, 5);
+    await h.flush();
+    assert.equal(h.retryIn(), 8 * RETRY_BASE_MS, "never pulled in");
+
+    const g = harness();
+    g.current().fail();
+    await g.flush();
+    g.fetches[0].status(500, 90);
+    await g.flush();
+    assert.equal(g.retryIn(), RETRY_BASE_MS, "a 500 is a fault, not a shed");
+
+    const k = harness();
+    k.current().fail();
+    await k.flush();
+    k.fetches[0].status(503, 24 * 60 * 60);
+    await k.flush();
+    assert.equal(k.retryIn(), RETRY_AFTER_MAX_MS, "capped");
+  });
+
+  test("a retired snapshot's Retry-After moves nothing", async () => {
+    const h = harness();
+    h.current().fail();
+    await h.flush();
+    await h.advance(RETRY_BASE_MS);
+    h.current().open();
+    h.current().send({ type: "payload", payload: payload("live", { a: 1 }) });
+    await h.flush();
+    h.fetches[0].status(503, 300);
+    await h.flush();
+    assert.equal(h.retryIn(), null, "nothing armed on a live stream");
+    assert.equal(h.store.connection, "live");
+  });
+
+  test("every wait is jittered", async () => {
+    const h = harness({ random: () => 0.999 });
+    h.current().fail();
+    await h.flush();
+    const wait = h.retryIn() ?? 0;
+    assert.ok(wait > RETRY_BASE_MS && wait < RETRY_BASE_MS + RETRY_JITTER_MS, String(wait));
   });
 });
 

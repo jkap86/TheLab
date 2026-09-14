@@ -53,11 +53,13 @@ async function main(): Promise<void> {
   const { startPlayersScheduler } = await import("@/shared/players");
   const { startLeagueCrawler } = await import("@/shared/manager");
   const { startCompsCorpusScheduler } = await import("@/shared/player-seasons");
+  const { startVisitorLogRetention } = await import("@/shared/logs");
 
   startKtcScheduler();
   startPlayersScheduler();
   startLeagueCrawler();
   startCompsCorpusScheduler();
+  startVisitorLogRetention();
 
   // **The loops `unref` their timers**, which is what keeps a web server from
   // being held open by one — and is exactly wrong here, where the timers are

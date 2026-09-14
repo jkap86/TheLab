@@ -58,6 +58,8 @@ const browserEnv: LiveEnv = {
   fetch: (url, init) => fetch(url, init),
   setTimeout: (callback, ms) => setTimeout(callback, ms),
   clearTimeout: (timer) => clearTimeout(timer),
+  now: () => Date.now(),
+  random: () => Math.random(),
 };
 
 export function useGametime(

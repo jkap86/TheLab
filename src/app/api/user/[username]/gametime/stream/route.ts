@@ -1,25 +1,26 @@
 import { NextResponse } from "next/server";
 
 import { interactiveRoute } from "@/shared/api";
-import type {
-  ApiErrorPayload,
-  GametimeStreamMessage,
-  ManagerGametimePayload,
-} from "@/shared/contract";
-import { joinGametime, toRoomFrame } from "@/shared/gametime";
-import type { RoomListener } from "@/shared/gametime";
+import type { ApiErrorPayload, ManagerGametimePayload } from "@/shared/contract";
+import { hasGametimeRoom, joinGametime, toRoomFrame } from "@/shared/gametime";
+import type { RoomFrame } from "@/shared/gametime";
 import { currentWeek, parseRequestedWeek } from "@/shared/projections";
+import { clientKey } from "@/shared/request";
 import { getActiveSeason, parseRequestedSeason } from "@/shared/season";
 import { getNflState } from "@/shared/sleeper";
+import {
+  SSE_HEADERS,
+  sseStream,
+  streamAdmission,
+  streamRefusalResponse,
+  withStreamReservation,
+} from "@/shared/streams";
+import type { StreamReservation } from "@/shared/streams";
 import { resolveManagerUser } from "@/shared/user";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-/** How often a silent stream proves it is still there. */
-const HEARTBEAT_MS = 20_000;
-/** Consecutive refused payloads before a stalled consumer is dropped. */
-const MAX_UNREAD = 20;
 /**
  * Bytes that may sit unread on one connection before the next payload or delta
  * is refused.
@@ -43,6 +44,9 @@ const MAX_UNREAD = 20;
  */
 const QUEUE_BYTES = 256 * 1024;
 
+/** A payload and a delta may be dropped on a stalled socket; a transition never. */
+const DROPPABLE = new Set<RoomFrame["type"]>(["payload", "delta"]);
+
 /**
  * One manager's week, live, as Server-Sent Events.
  *
@@ -50,37 +54,55 @@ const QUEUE_BYTES = 256 * 1024;
  * because Sleeper has no push API so something polls either way (see
  * `shared/gametime/live`, once per week however many watch it), and a
  * `ReadableStream` out of a route handler works today where an upgrade would
- * need a custom server. Every mechanic below is that route's, and its comments
- * carry the arguments — bytes before the first await so the headers flush, a
- * queuing strategy so `desiredSize` means something, a terminal `error` before
- * closing so `EventSource` stops reconnecting, a heartbeat so a proxy does not
- * cut a correctly silent stream.
+ * need a custom server. The mechanics of the stream itself — bytes before the
+ * first await so the headers flush, a terminal `error` before closing so
+ * `EventSource` stops reconnecting, a heartbeat, the backpressure rule — are
+ * `shared/streams`' and are driven under Node's own runner there.
  *
- * **The room writes the reader's first frame through {@link send} like any
- * other**, so there is one path a frame can be refused on and one place that
- * refusal is recorded. See `joinGametime`.
+ * **Admission is reserved before anything is awaited.** The reservation counts
+ * against the process total and this client's own cap from the first line of
+ * the handler — before the user is resolved, before the week is, before any
+ * lineup is read — because that work is the expensive part and a connection
+ * still initialising is a connection. A refusal is answered as a 429 or a 503
+ * with a `Retry-After` **before** the stream opens, while a status can still
+ * reach the browser. The room's own cap (`attach`) and the cold-open bound
+ * (`beginOpening`) are claimed once the week is known and before the first
+ * feed read; `withStreamReservation` and the stream's `onClose` between them
+ * hand the slot back on every exit exactly once.
  *
  * **The manager, the season and the week are resolved before the stream
- * opens**, which is the one place this differs: nothing has been written yet,
- * so an unknown manager or a malformed week can answer a real status rather
- * than a frame. The season that has no week left answers one payload saying
- * so and closes — a fact about the season, and nothing to stream.
+ * opens**, which is the one place this differs from the picktracker: nothing
+ * has been written yet, so an unknown manager or a malformed week can answer a
+ * real status rather than a frame. The season that has no week left answers
+ * one payload saying so and closes — a fact about the season, and nothing to
+ * stream.
  */
 export async function GET(
   request: Request,
   context: { params: Promise<{ username: string }> },
 ) {
+  const reservation = streamAdmission.reserve({
+    kind: "gametime",
+    client: clientKey(request.headers),
+  });
+  if (!reservation.ok) return streamRefusalResponse(reservation);
+
   // Interactive Sleeper traffic — a reader is waiting on this handler, so the
   // reads under it share one bounded budget rather than queueing behind a crawl
   // batch, and an overload is answered as one rather than as a 500 (see
   // `shared/api`). No `signal`: see `shared/sleeper/request-policy`, which is
-  // where both halves of that decision are argued.
-  return interactiveRoute(() => openGametimeStream(request, context));
+  // where both halves of that decision are argued. The room's own reads are
+  // background traffic and declared so in `shared/gametime/live`.
+  return withStreamReservation(reservation, request.signal, (streaming) =>
+    interactiveRoute(() => openGametimeStream(request, context, reservation, streaming)),
+  );
 }
 
 async function openGametimeStream(
   request: Request,
   { params }: { params: Promise<{ username: string }> },
+  reservation: StreamReservation,
+  streaming: () => void,
 ) {
   const { username } = await params;
 
@@ -106,120 +128,71 @@ async function openGametimeStream(
   const season = requestedSeason?.season ?? (await getActiveSeason());
   const week = requestedWeek?.week ?? (await currentWeek(season, getNflState));
 
-  const encoder = new TextEncoder();
-  let closed = false;
-  let teardown: (() => void) | null = null;
+  if (week === null) {
+    // Nothing to seat and nothing to open: one payload saying the season has
+    // no week left, then a terminal ending. The reservation is held for the
+    // moment the stream takes and released by its close.
+    const payload: ManagerGametimePayload = {
+      season,
+      week: null,
+      projections: "ok",
+      stats: "ok",
+      scores: "ok",
+      read_at: Date.now(),
+      games: { pre: 0, live: 0, final: 0 },
+      board: {},
+      players: {},
+      leagues: {},
+    };
+    streaming();
+    return sseResponse(request, reservation, async (send) => {
+      send(toRoomFrame({ type: "payload", payload }));
+      return { ok: false, error: "No week left to follow" };
+    });
+  }
 
-  const stream = new ReadableStream<Uint8Array>(
+  // The room's own cap: a week's room is bounded on its own however the
+  // process total is spread across weeks.
+  const seated = reservation.attach(`${season}:${week}`);
+  if (!seated.ok) return streamRefusalResponse(seated);
+
+  // A cold open is the expensive shape — the week's three feeds, read for the
+  // first time — and how many *distinct* weeks may be mid-open at once is
+  // bounded before the read begins. A join into a room that already exists
+  // costs no slot.
+  if (!hasGametimeRoom(season, week)) {
+    const opening = reservation.beginOpening();
+    if (!opening.ok) return streamRefusalResponse(opening);
+  }
+
+  streaming();
+  return sseResponse(request, reservation, async (send) => {
+    try {
+      return await joinGametime({ userId, username, season, week }, send);
+    } finally {
+      // The opening slot is the join's alone; the connection is the stream's.
+      reservation.endOpening();
+    }
+  });
+}
+
+function sseResponse(
+  request: Request,
+  reservation: StreamReservation,
+  join: Parameters<typeof sseStream<RoomFrame>>[0]["join"],
+): Response {
+  const stream = sseStream<RoomFrame>(
     {
-      async start(controller) {
-        let leave: (() => void) | null = null;
-        let beat: ReturnType<typeof setInterval> | null = null;
-        let unread = 0;
-
-        const write = (chunk: string): boolean => {
-          if (closed) return false;
-          try {
-            controller.enqueue(encoder.encode(chunk));
-            return true;
-          } catch {
-            closed = true;
-            return false;
-          }
-        };
-        const send: RoomListener = (frame) => {
-          const stalled = controller.desiredSize !== null && controller.desiredSize <= 0;
-          // A payload and a delta are both droppable, and the room is what
-          // makes that safe: it advances a reader's baseline only on a frame
-          // this answers `true` for, so the next delta is computed against
-          // what they actually hold and carries everything since. A transition
-          // (`stale`, a terminal `error`) is never droppable.
-          if (stalled && (frame.type === "payload" || frame.type === "delta")) {
-            // A reader who cannot take a frame for twenty ticks running is not
-            // reading; the socket is dropped rather than buffered against.
-            if ((unread += 1) >= MAX_UNREAD) finish();
-            return false;
-          }
-          unread = 0;
-          return write(`data: ${frame.json}\n\n`);
-        };
-        const finish = () => {
-          if (beat !== null) {
-            clearInterval(beat);
-            beat = null;
-          }
-          leave?.();
-          leave = null;
-          if (closed) return;
-          closed = true;
-          try {
-            controller.close();
-          } catch {
-            // Already closed by a disconnect.
-          }
-        };
-        teardown = finish;
-        request.signal.addEventListener("abort", finish, { once: true });
-
-        write(`retry: ${3000 + Math.floor(Math.random() * 3000)}\n\n`);
-
-        if (week === null) {
-          const payload: ManagerGametimePayload = {
-            season,
-            week: null,
-            projections: "ok",
-            stats: "ok",
-            scores: "ok",
-            read_at: Date.now(),
-            games: { pre: 0, live: 0, final: 0 },
-            board: {},
-            players: {},
-            leagues: {},
-          };
-          send(toRoomFrame({ type: "payload", payload }));
-          // Terminal on purpose: there is nothing to follow, and an open stream
-          // the browser would reconnect forever is not the honest end state.
-          const done: GametimeStreamMessage = { type: "error", error: "No week left to follow" };
-          send(toRoomFrame(done));
-          finish();
-          return;
-        }
-
-        const joined = await joinGametime({ userId, username, season, week }, send);
-
-        if (!joined.ok) {
-          const message: GametimeStreamMessage = { type: "error", error: joined.error };
-          send(toRoomFrame(message));
-          finish();
-          return;
-        }
-        if (closed) {
-          joined.leave();
-          return;
-        }
-        leave = joined.leave;
-
-        beat = setInterval(() => {
-          write(":\n\n");
-          if (closed) finish();
-        }, HEARTBEAT_MS);
-        beat.unref?.();
-      },
-      cancel() {
-        teardown?.();
-      },
+      signal: request.signal,
+      join,
+      droppable: DROPPABLE,
+      terminal: (error) => toRoomFrame({ type: "error", error }),
+      onClose: () => reservation.release(),
+      name: "gametime",
     },
     new ByteLengthQueuingStrategy({ highWaterMark: QUEUE_BYTES }),
   );
-
-  return new Response(stream, {
-    headers: {
-      "Content-Type": "text/event-stream; charset=utf-8",
-      "Cache-Control": "no-store, no-transform",
-      Connection: "keep-alive",
-      "X-Accel-Buffering": "no",
-    },
-  });
+  return new Response(stream, { headers: SSE_HEADERS });
 }
 
 export async function POST() {

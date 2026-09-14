@@ -6,7 +6,7 @@
 export { readWeekFeeds } from "./feeds";
 export type { WeekFeeds } from "./feeds";
 export { buildGametimePayload } from "./payload";
-export { joinGametime, gametimeRoomStats, toRoomFrame } from "./live";
+export { joinGametime, gametimeRoomStats, hasGametimeRoom, toRoomFrame } from "./live";
 export type { JoinResult, RoomFrame, RoomListener } from "./live";
 export {
   diffLeagues,

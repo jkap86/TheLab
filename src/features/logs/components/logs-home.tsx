@@ -1,6 +1,7 @@
 "use client";
 
-import { type ReactNode, useDeferredValue, useId, useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
+import { type ReactNode, useDeferredValue, useEffect, useId, useMemo, useState } from "react";
 
 import {
   CONSOLE_CARD,
@@ -51,18 +52,37 @@ const FACET_LABELS: Record<FacetKey, string> = {
 
 export function LogsHome({
   heading,
-  token,
+  canSignOut,
 }: {
   /** The page's static copy, kept on the server side of the client boundary. */
   heading: ReactNode;
-  /** Validated by the page before this renders; sent on every read. */
-  token: string;
+  /**
+   * Whether there is a session to end — false on an open development page,
+   * where the credential is unset and there is nothing to sign out of.
+   */
+  canSignOut: boolean;
 }) {
+  const router = useRouter();
   const [hours, setHours] = useState<LogWindow>(24);
   const [filters, setFilters] = useState<LogFilters>(NO_FILTERS);
   const [query, setQuery] = useState("");
-  const { payload, loading, error, refresh } = useVisitorLogs(hours, token);
+  const { payload, loading, error, unauthorized, refresh } = useVisitorLogs(hours);
   const searchId = useId();
+
+  // A read that came back 401 is a session that has ended under the page; the
+  // server render decides what stands here, so it is asked again and answers
+  // with the sign-in form. An effect rather than a render-time redirect: the
+  // router is being told to do something, not the tree.
+  useEffect(() => {
+    if (unauthorized) router.refresh();
+  }, [unauthorized, router]);
+
+  async function signOut() {
+    await fetch("/api/logs/session", { method: "DELETE", credentials: "same-origin" }).catch(
+      () => undefined,
+    );
+    router.refresh();
+  }
 
   const rows = useMemo(
     () => (payload?.entries ?? []).map(toLogRow),
@@ -119,6 +139,11 @@ export function LogsHome({
         <button type="button" onClick={refresh} className={CONSOLE_KEY}>
           Refresh
         </button>
+        {canSignOut ? (
+          <button type="button" onClick={signOut} className={CONSOLE_KEY}>
+            Sign out
+          </button>
+        ) : null}
       </div>
 
       <div className={`${CONSOLE_WELL} mt-6 p-3`}>

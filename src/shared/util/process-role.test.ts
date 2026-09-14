@@ -124,13 +124,14 @@ describe("BOOT_STAGGER_MS", () => {
     assert.ok(BOOT_STAGGER_MS.comps > BOOT_STAGGER_MS.players);
   });
 
-  test("the four are distinct and strictly ordered", () => {
+  test("the loops are distinct and strictly ordered", () => {
     // Two loops on one delay is two loops starting together, which is the thing
     // being fixed rather than a smaller version of it.
     const order = [
       BOOT_STAGGER_MS.players,
       BOOT_STAGGER_MS.ktc,
       BOOT_STAGGER_MS.crawl,
+      BOOT_STAGGER_MS.logs,
       BOOT_STAGGER_MS.comps,
     ];
     for (let i = 1; i < order.length; i++) {

@@ -12,6 +12,31 @@ import type { GametimeConnection } from "../helpers/connection.ts";
 /** The first backoff after a stream that will not stay open, and the ceiling. */
 export const RETRY_BASE_MS = 10_000;
 export const RETRY_MAX_MS = 2 * 60_000;
+/**
+ * Up to this much is added to every backoff, at random. Twenty-five readers
+ * whose streams were all shed by one deploy would otherwise all retry on the
+ * same tick of the same ladder, which is the herd the shedding exists to break.
+ */
+export const RETRY_JITTER_MS = 3_000;
+/**
+ * The least time between two snapshot fetches on one follow.
+ *
+ * A snapshot is a full solve of the reader's week — the most expensive read
+ * this app makes — and a fatal close can recur every ten seconds while the
+ * server is shedding load. Fetching one per close would turn every refused
+ * stream into exactly the request the refusal exists to spare the server; one
+ * per minute stands the last answer in and lets the backoff do the trying.
+ */
+export const SNAPSHOT_COOLDOWN_MS = 60_000;
+/**
+ * The longest a `Retry-After` on a shed snapshot is honoured for. A header is
+ * the server's word, and a server that asked for an hour is not one this page
+ * should sit silent against — it retries at this ceiling instead.
+ */
+export const RETRY_AFTER_MAX_MS = 10 * 60_000;
+
+/** The two statuses that mean "not now" rather than "not ever". */
+const SHED_STATUSES = new Set([429, 503]);
 
 /** The one message the server sends that is an ending rather than a fault. */
 export const NO_WEEK = "No week left to follow";
@@ -56,9 +81,15 @@ export type LiveEnv = {
   fetch: (
     url: string,
     init: { signal: AbortSignal },
-  ) => Promise<Pick<Response, "ok" | "status" | "json">>;
+  ) => Promise<
+    Pick<Response, "ok" | "status" | "json"> & { headers?: { get(name: string): string | null } }
+  >;
   setTimeout: (callback: () => void, ms: number) => LiveTimer;
   clearTimeout: (timer: LiveTimer) => void;
+  /** The clock the snapshot cooldown and the retry are measured on. */
+  now: () => number;
+  /** In `[0, 1)`; what jitters the backoff. */
+  random: () => number;
 };
 
 /**
@@ -103,6 +134,18 @@ export type LiveEnv = {
  * so two cannot commit out of order; a completed one clears the slot so the
  * next fatal close may ask again.
  *
+ * **A refused stream is not answered with a solve.** A server shedding load
+ * refuses a stream with a 429 or a 503 before it opens, which `EventSource`
+ * reports as a fatal close and nothing more — the status is invisible from
+ * script. So the snapshot that stands in for a fatal close is fetched **at most
+ * once a minute** per follow, however many closes there are in that minute;
+ * the ones in between re-arm the backoff and keep whatever is on screen. And
+ * the snapshot is the one place the server's word *is* visible: a 429 or a 503
+ * on it carrying `Retry-After` pushes the next stream attempt out to at least
+ * that far, so a page told to wait waits, rather than trying again on its own
+ * ladder into the same refusal. Every wait carries a little jitter, so a
+ * roomful of readers shed together does not come back together.
+ *
  * **Opening is not recovery.** The server opens the stream and *then* answers
  * — the manager, the season and the week resolve before a byte is written,
  * but the reader's Postgres read happens after — so a stream can open and
@@ -136,12 +179,37 @@ export function followGametime(subject: LiveSubject, sink: LiveSink, env: LiveEn
   /** The fallback in flight, if any: its token is its ownership. */
   let fallback: { token: number; controller: AbortController } | null = null;
   let fallbackSeq = 0;
+  /** When the last snapshot was *asked for*, on `env.now`'s clock. */
+  let lastSnapshotAt = Number.NEGATIVE_INFINITY;
+  /** When the armed retry fires, on the same clock. */
+  let retryAt = 0;
 
   const clearRetry = () => {
     if (retry !== null) {
       env.clearTimeout(retry);
       retry = null;
     }
+  };
+
+  /** Arm the one retry, `wait` from now. */
+  const armRetry = (wait: number) => {
+    clearRetry();
+    retryAt = env.now() + wait;
+    retry = env.setTimeout(() => {
+      retry = null;
+      if (!stopped) open();
+    }, wait);
+  };
+
+  /**
+   * The server said how long to wait: push the armed retry out to at least
+   * that far. Never pulled in — the backoff already chose a longer wait for a
+   * reason of its own — and never past the ceiling.
+   */
+  const honourRetryAfter = (seconds: number) => {
+    const wait = Math.min(RETRY_AFTER_MAX_MS, seconds * 1000);
+    if (retry === null || retryAt - env.now() >= wait) return;
+    armRetry(wait);
   };
 
   /** Disown and abort the pending fallback, if any — nothing it does afterwards counts. */
@@ -164,13 +232,22 @@ export function followGametime(subject: LiveSubject, sink: LiveSink, env: LiveEn
    */
   const fetchSnapshot = async () => {
     if (fallback !== null) return;
+    const now = env.now();
+    if (now - lastSnapshotAt < SNAPSHOT_COOLDOWN_MS) return;
+    lastSnapshotAt = now;
     const token = ++fallbackSeq;
     const controller = new AbortController();
     fallback = { token, controller };
     const owns = () => !stopped && fallback !== null && fallback.token === token;
     try {
       const res = await env.fetch(`${base}?${query}`, { signal: controller.signal });
-      if (!res.ok) throw new Error(String(res.status));
+      if (!res.ok) {
+        if (owns() && SHED_STATUSES.has(res.status)) {
+          const seconds = Number(res.headers?.get("retry-after") ?? "");
+          if (Number.isFinite(seconds) && seconds > 0) honourRetryAfter(seconds);
+        }
+        throw new Error(String(res.status));
+      }
       const body = (await res.json()) as ManagerGametimePayload;
       if (!owns()) return;
       fallback = null;
@@ -193,14 +270,14 @@ export function followGametime(subject: LiveSubject, sink: LiveSink, env: LiveEn
     source = null;
     if (stopped) return;
     sink.setConnection((held) => (held === "snapshot" ? held : "failed"));
-    void fetchSnapshot();
-    clearRetry();
-    const wait = Math.min(RETRY_MAX_MS, RETRY_BASE_MS * 2 ** attempts);
+    const wait =
+      Math.min(RETRY_MAX_MS, RETRY_BASE_MS * 2 ** attempts) +
+      Math.floor(env.random() * RETRY_JITTER_MS);
     attempts += 1;
-    retry = env.setTimeout(() => {
-      retry = null;
-      if (!stopped) open();
-    }, wait);
+    // Armed before the snapshot is asked for, so a `Retry-After` on the
+    // snapshot's answer has a retry to push out.
+    armRetry(wait);
+    void fetchSnapshot();
   };
 
   const open = () => {

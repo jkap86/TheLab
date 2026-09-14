@@ -192,8 +192,59 @@ describe("the stream route", () => {
     assert.doesNotMatch(route, /CountQueuingStrategy/);
   });
 
-  test("a refused frame is reported to the room rather than swallowed", () => {
-    assert.match(route, /if \(\(unread \+= 1\) >= MAX_UNREAD\) finish\(\);\s*\n\s*return false;/);
-    assert.match(route, /return write\(`data: \$\{frame\.json\}/);
+  test("the room's listener is the stream's own send, so a refusal reaches the room", () => {
+    // The refusal mechanics — a droppable frame on a stalled socket answers
+    // `false` and counts toward the disconnect, a transition is never dropped —
+    // are `shared/streams/sse`' and are driven for real in `sse.test.ts`. What
+    // is the route's own is *which* frames may be dropped and that the room is
+    // handed the stream's `send` unwrapped, so the boolean it answers is the
+    // one the baseline is committed behind.
+    assert.match(route, /const DROPPABLE = new Set<RoomFrame\["type"\]>\(\["payload", "delta"\]\)/);
+    assert.match(route, /droppable: DROPPABLE/);
+    assert.match(route, /joinGametime\(\{ userId, username, season, week \}, send\)/);
   });
+});
+
+describe("the two stream routes admit before they work", () => {
+  // Admission is one module and the property that matters — every path
+  // releases exactly once, a disconnect during the first read seats nobody —
+  // is driven in `shared/streams/sse.test.ts`. What only a route can get wrong
+  // is the order: a reservation taken *after* the user is resolved is a
+  // pending connection nothing counted, and an `onClose` that forgot to
+  // release is a slot leaked on every ordinary disconnect. Both typecheck.
+  const routes = {
+    gametime: read("src/app/api/user/[username]/gametime/stream/route.ts"),
+    picktracker: read("src/app/api/picktracker/[leagueId]/stream/route.ts"),
+  };
+
+  for (const [name, route] of Object.entries(routes)) {
+    test(`${name}: the reservation is the handler's first statement`, () => {
+      const handler = body(route, "export async function GET(");
+      const reserve = handler.indexOf("streamAdmission.reserve({");
+      const firstAwait = handler.indexOf("await ");
+      assert.notEqual(reserve, -1);
+      assert.ok(firstAwait === -1 || reserve < firstAwait, "reserve before any await");
+      assert.match(handler, /if \(!reservation\.ok\) return streamRefusalResponse\(reservation\);/);
+      assert.match(handler, /withStreamReservation\(reservation, request\.signal,/);
+    });
+
+    test(`${name}: the stream's close is the reservation's release`, () => {
+      assert.match(route, /onClose: \(\) => reservation\.release\(\)/);
+      assert.doesNotMatch(route, /reservation\.release\(\)(?![,)])/m);
+    });
+
+    test(`${name}: the opening slot is claimed only for a cold open and handed back in a finally`, () => {
+      assert.match(route, /if \(!(?:hasGametimeRoom\(season, week\)|hasRoom\(leagueId\))\) \{\s*\n\s*const opening = reservation\.beginOpening\(\);/);
+      assert.match(route, /if \(!opening\.ok\) return streamRefusalResponse\(opening\);/);
+      assert.match(route, /\} finally \{[^}]*reservation\.endOpening\(\);/);
+    });
+
+    test(`${name}: the subject is seated before the opening is claimed`, () => {
+      const attach = route.indexOf("reservation.attach(");
+      const opening = route.indexOf("reservation.beginOpening(");
+      assert.notEqual(attach, -1);
+      assert.ok(attach < opening, "attach before beginOpening");
+      assert.match(route, /if \(!seated\.ok\) return streamRefusalResponse\(seated\);/);
+    });
+  }
 });

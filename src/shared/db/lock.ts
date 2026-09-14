@@ -36,6 +36,8 @@ export const LOCK_KEYS = {
   ktcValues: [8675309, 2],
   /** KeepTradeCut per-player history backfill (`shared/ktc/history.ts`). */
   ktcHistory: [8675309, 3],
+  /** The visit log's retention pass (`shared/logs/retention.ts`). */
+  visitorLogRetention: [8675309, 4],
   /** Sleeper players-map refresh (`shared/players/sync.ts`). */
   players: [8675309, 5],
   /**

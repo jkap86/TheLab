@@ -1,8 +1,8 @@
 import { NextResponse } from "next/server";
 
 import type { ApiErrorPayload } from "@/shared/contract";
-import { clientIp, loggedRoute, recordVisit } from "@/shared/logs";
-import { BoundedCache } from "@/shared/util";
+import { loggedRoute, recordVisit } from "@/shared/logs";
+import { clientIp, isJsonRequest, readJsonWithin, sameOriginRequest } from "@/shared/request";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -22,28 +22,27 @@ export const dynamic = "force-dynamic";
  *
  * **The port dropped an endpoint shaped like this and was right to.** TheLab2026's
  * `/api/common/logs/update` takes an `ip` and a `route` from anybody and writes
- * them, so its table is whatever the internet felt like putting there. Four
+ * them, so its table is whatever the internet felt like putting there. Five
  * things narrow this one to something a reader can still believe:
  *
  * - **The address is read from the request and never from the body.** It is the
- *   same `clientIp` the proxy uses, with the same caveat its own note carries —
- *   an address here is what the request *claimed* — and there is no field a
+ *   same `clientIp` the proxy uses — the entry the trusted router appended to
+ *   `x-forwarded-for`, on `request/client-ip`'s policy — and there is no field a
  *   caller could put a different one in.
- * - **The route must be a path a browser could be showing**, canonicalised by
- *   `loggedRoute`, so the column cannot hold a sentence, a URL, a namespace
- *   this app answers with something other than a page, or a request for a file.
- *   It is the same rule the proxy applies, which is the whole of the
- *   vocabulary; a path this app does not *serve* is kept deliberately, since
- *   the link somebody was holding is the row worth having.
- * - **`Sec-Fetch-Site` must say `same-origin`.** The only legitimate caller is
- *   this app's own page in a browser; a header a page cannot forge is what says
- *   so. The cost is that a browser too old to send it goes uncounted, which is
- *   the *opposite* call from `isPageView`'s treatment of absent fetch metadata
- *   and right for the opposite reason: there a missing header costs a visit,
- *   here it would open a write.
- * - **A repeat of one route from one address is dropped for a moment**, which
- *   bounds what hammering this buys and doubles as the dedupe a remounted
- *   layout would otherwise need.
+ * - **The route must be a page this app serves**, in a shape it serves,
+ *   canonicalised by `loggedRoute`, so the column cannot hold a sentence, a
+ *   URL, an invented path or a request for a file. It is the same rule the
+ *   proxy applies, which is the whole of the vocabulary.
+ * - **The browser must say the report came from this app's own page** —
+ *   `sameOriginRequest`, which asks `Sec-Fetch-Site` and `Origin` both. That is
+ *   a forgery check and not authentication: it proves a page on this origin
+ *   made the request, and nothing about who is at the keyboard, which is why
+ *   the two bounds below exist as well.
+ * - **The body is read within 512 bytes**, never whole: a body past that is
+ *   refused at its first chunk rather than allocated and then measured.
+ * - **Every write is admitted by `recordVisit`'s own bound** — a dedupe window,
+ *   an in-flight cap, a per-client rate and a process rate — so a script in a
+ *   loop buys a handful of rows a minute and then nothing.
  *
  * **Every well-formed report is answered identically whether or not it wrote**,
  * so the rule above cannot be learned by probing — and so the beacon has
@@ -51,30 +50,30 @@ export const dynamic = "force-dynamic";
  * error in a reader's console.
  */
 export async function POST(request: Request) {
-  if (request.headers.get("sec-fetch-site") !== "same-origin") {
+  if (!sameOriginRequest(request.headers).ok) {
     const error: ApiErrorPayload = { error: "Not found" };
     return NextResponse.json(error, { status: 404 });
   }
 
-  const route = await reportedRoute(request);
-  if (route === undefined) {
-    // A body this app's own client did not send. It is worth a status of its
-    // own rather than a silent 204: reaching it means the beacon and this route
-    // disagree about the shape, which is a bug on our side.
-    const error: ApiErrorPayload = { error: "Expected { route }" };
-    return NextResponse.json(error, { status: 400 });
+  if (!isJsonRequest(request.headers)) return notAReport();
+  const read = await readJsonWithin(request, MAX_BODY_BYTES);
+  if (!read.ok) {
+    if (read.reason === "too-large") {
+      const error: ApiErrorPayload = { error: "Body too large" };
+      return NextResponse.json(error, { status: 413 });
+    }
+    return notAReport();
+  }
+  if (typeof read.value !== "object" || read.value === null || !("route" in read.value)) {
+    return notAReport();
   }
 
+  const route = loggedRoute((read.value as { route: unknown }).route);
   if (route !== null) {
-    const ip = clientIp(request.headers);
-    const key = `${ip ?? "-"}|${route}`;
-    if (!throttle.get(key)) {
-      throttle.set(key, true);
-      // Not awaited, and it cannot throw — the same bargain the proxy makes
-      // through `waitUntil`. A route handler's invocation is already held open
-      // by the response, so there is nothing here to keep alive.
-      void recordVisit({ ip, route });
-    }
+    // Not awaited, and it cannot throw — the same bargain the proxy makes
+    // through `waitUntil`. A route handler's invocation is already held open by
+    // the response, so there is nothing here to keep alive.
+    void recordVisit({ ip: clientIp(request.headers), route });
   }
 
   return new NextResponse(null, { status: 204 });
@@ -86,58 +85,18 @@ export async function GET() {
 }
 
 /**
- * The route the report names: a canonical path, `null` for a page this log does
- * not keep, or `undefined` for a body that is not a report at all.
- *
- * Three states rather than two, on `parseRequestedSeason`'s terms — "not a page
- * we record" and "not something this app sent" are different facts and only the
- * second is worth a status.
+ * A body this app's own client did not send. Worth a status of its own rather
+ * than a silent 204: reaching it means the beacon and this route disagree
+ * about the shape, which is a bug on our side.
  */
-async function reportedRoute(
-  request: Request,
-): Promise<string | null | undefined> {
-  if (!request.headers.get("content-type")?.startsWith("application/json")) {
-    return undefined;
-  }
-  // Read as text and measured before parsing: `request.json()` on a body this
-  // app did not send is an unbounded parse of whatever arrived.
-  const body = await request.text().catch(() => "");
-  if (body.length === 0 || body.length > MAX_BODY_LENGTH) return undefined;
-
-  let parsed: unknown;
-  try {
-    parsed = JSON.parse(body);
-  } catch {
-    return undefined;
-  }
-  if (typeof parsed !== "object" || parsed === null || !("route" in parsed)) {
-    return undefined;
-  }
-  return loggedRoute((parsed as { route: unknown }).route);
+function notAReport() {
+  const error: ApiErrorPayload = { error: "Expected { route }" };
+  return NextResponse.json(error, { status: 400 });
 }
 
 /**
  * Enough for `{"route":"/manager/<username>"}` several times over, and far
  * short of anything worth parsing. `loggedRoute` bounds the route itself; this
- * bounds what reaches the parser.
+ * bounds what reaches the parser — and it is enforced while the bytes arrive.
  */
-const MAX_BODY_LENGTH = 512;
-
-/**
- * How long one address's report of one route is held to.
- *
- * A bound rather than a freshness policy, on `LEAGUE_REFRESH_COOLDOWN_MS`'
- * terms: what it is sized against is a double-fired effect and a script in a
- * loop, not a reader who genuinely opened the same page twice. Two seconds is
- * shorter than any real second look and longer than any remount.
- *
- * Module-level rather than on `globalThis`: it holds nothing worth surviving a
- * dev reload, and a throttle that forgot its window costs one duplicate row.
- */
-const VISIT_THROTTLE_MS = 2_000;
-
-/**
- * Bounded so a burst from many addresses cannot grow it without limit — the
- * `BoundedCache` bargain, with the entries uniform so no weight is needed.
- */
-const throttle = new BoundedCache<true>(2_000, VISIT_THROTTLE_MS);
+const MAX_BODY_BYTES = 512;

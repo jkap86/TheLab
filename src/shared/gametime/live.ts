@@ -65,5 +65,11 @@ const rooms = gametimeRooms(registry, deps);
  */
 export const joinGametime = rooms.join;
 
+/**
+ * Whether a week's room is already open or opening — so the stream route can
+ * tell a join from a cold open and claim an opening slot only for the second.
+ */
+export const hasGametimeRoom = rooms.has;
+
 /** Open rooms and their readers — for a log line or a test. */
 export const gametimeRoomStats = rooms.stats;

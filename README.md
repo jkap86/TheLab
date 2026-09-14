@@ -77,8 +77,9 @@ values, and the `Procfile` reads it in the two lines that matter:
 | `worker` | no (`npm run worker` starts no server) | yes |
 
 The loops are the league crawler, the KeepTradeCut refresh, the Sleeper players
-refresh and the comps corpus check. **Migrations run under every role**, because
-a process must not serve *or* maintain against a schema it cannot vouch for.
+refresh, the comps corpus check and the visit log's retention pass.
+**Migrations run under every role**, because a process must not serve *or*
+maintain against a schema it cannot vouch for.
 
 ### The initial deployment: one Heroku Basic dyno
 
@@ -156,6 +157,51 @@ Nothing here is Heroku-specific beyond the `Procfile`: any host that can run two
 commands can set `APP_PROCESS_ROLE` on each, and a host that runs only one gets
 `all` by leaving it unset.
 
+### Rollout checklist: HTTPS, the visit log, and the public limits
+
+Every name below is a config var, not a value; none of them is a secret except
+the two marked so, and those are set in the Heroku dashboard or with
+`heroku config:set`, never pasted anywhere else. The controls this app applies
+in-process — the stream admission, the sign-in throttle, the visit-log write
+budget — are **per dyno**: two web dynos admit twice the connections and twice
+the guesses. They bound what one process spends; they are not a deployment-wide
+quota, and nothing here claims to be one.
+
+1. **`SITE_URL`** — the `https://` origin the app is served from, set in the
+   build environment as well as at runtime. HTTPS enforcement redirects to this
+   origin and nowhere else; unset, or `http://`, and nothing is redirected (a
+   warning says so at boot).
+2. **`ENFORCE_HTTPS`** — on by default in production. Leave it. Every `http://`
+   GET is answered 301 to `SITE_URL`; every other `http://` request is refused
+   403. `HSTS_MAX_AGE_SECONDS` starts at one day (`86400`): run a day, confirm
+   every page and API path answers over HTTPS, then raise it to `31536000`.
+   `HSTS_INCLUDE_SUBDOMAINS` stays off unless every subdomain of the host is
+   also HTTPS. There is no preload setting, deliberately.
+3. **`TRUSTED_PROXY_HOPS`** — `1` for Heroku's router alone, which is the
+   default. Put a CDN in front and it is `2`. This is what decides which
+   `X-Forwarded-For` entry is the client's, for the stream admission, the
+   sign-in throttle and the visit log alike.
+4. **`LOGS_TOKEN`** (secret) — the visit log's credential, sixteen characters
+   or more. It is entered once on `/logs` and never travels on a URL again.
+   **If it ever appeared in a `?key=` URL, rotate it** — Heroku's router logged
+   the query string of every request by default, so the old value is in
+   retained logs. Rotating it signs every session out.
+5. **`LOGS_SESSION_SECRET`** (secret, optional) — a second secret whose
+   rotation signs every session out without changing the credential.
+   `LOGS_SESSION_TTL_MINUTES` is the session's life, eight hours by default.
+6. **Stop the router logging query strings**:
+   `heroku features:enable http-router-no-log-query -a <app-name>`. The app no
+   longer puts a credential in a query string, and this is what stops the next
+   one — a season, a week, an open card — being recorded beside every address.
+7. **`VISITOR_LOG_RETENTION_DAYS`** — ninety by default; `off` keeps rows for
+   ever. The first tick after a backlog removes up to a hundred thousand rows,
+   in batches, and continues on the next tick.
+8. The `STREAM_*` and `VISITOR_LOG_*` limits below are sized for one 512 MB
+   dyno serving a few dozen readers, several tabs each. Raise
+   `STREAM_MAX_CONNECTIONS` before `STREAM_MAX_PER_CLIENT`: a household behind
+   one address is several readers on one IP, and the per-client cap is what
+   they share.
+
 ## Configuration
 
 `.env` is gitignored, so none of these are in the repo. Only `DATABASE_URL`
@@ -180,6 +226,24 @@ matters for anything that reads the database; the rest are optional.
 | `SLEEPER_MAX_CONCURRENCY` | `24` | Ceiling on how many requests one process may have open to Sleeper at once. The knob to reach for on a 429, and the one to lower before touching any per-caller number — it is the only bound that applies to the process rather than to one call site. |
 | `APP_PROCESS_ROLE` | `all` | `all`, `web` or `worker` — which job this process does. See Deploying above. An unreadable value reads as `all`, which is the behaviour this app had before the switch existed. |
 | `COMPS_CORPUS_LOAD` | on | Set to `off` to stop the app loading the comps corpus on boot. The loop checks daily and loads only the seasons `player_seasons` is missing, so an ordinary boot fetches nothing; turn it off to keep the corpus entirely under `npm run comps:load-corpus`. |
+| `SITE_URL` | `http://localhost:3000` | The origin this app is served from — `metadataBase` for link previews, and **the only origin an HTTPS redirect may name**. Set it in the build environment too. |
+| `ENFORCE_HTTPS` | on in production, off elsewhere | Redirect `http://` GETs to `SITE_URL` (301) and refuse other `http://` methods (403), on the router's `X-Forwarded-Proto`. Needs an `https://` `SITE_URL`; without one it stands down with a warning rather than redirecting to a guess. Requests carrying no `X-Forwarded-Proto` (local development) are untouched. |
+| `HSTS_MAX_AGE_SECONDS` | `86400` | `Strict-Transport-Security` on every HTTPS response while enforcement is on. One day to start; raise to `31536000` once every path is confirmed over HTTPS. |
+| `HSTS_INCLUDE_SUBDOMAINS` | off | Adds `includeSubDomains`. A claim about hosts this app does not serve, so off unless they are all HTTPS. `preload` is never emitted. |
+| `TRUSTED_PROXY_HOPS` | `1` | How many trusted proxies appended to `X-Forwarded-For` — Heroku's router is one. The client is the entry that many from the right; `X-Real-IP` and the leftmost entry are never read. `0` trusts nothing and every client reads as unknown. |
+| `LOGS_TOKEN` | unset | **Secret.** The visit log's credential, entered once on `/logs`. Unset: `/logs` and `/api/logs` are 404 in production and open in development. Rotating it signs every session out. |
+| `LOGS_SESSION_SECRET` | unset | **Secret, optional.** Rotating it signs every `/logs` session out without changing `LOGS_TOKEN`. Sessions are HMAC-SHA256 tokens under a key derived from both. |
+| `LOGS_SESSION_TTL_MINUTES` | `480` | How long a `/logs` session lasts, 5 to 10080. |
+| `STREAM_MAX_CONNECTIONS` | `40` | Live streams (gametime and picktracker together) one process holds open or is opening. The 41st is refused 503 with `Retry-After` before any work is done. |
+| `STREAM_MAX_PER_CLIENT` | `8` | Streams one client address may hold. Several tabs, or a household on one IP, share it; a refusal is a 429. |
+| `STREAM_MAX_PER_SUBJECT` | `24` | Readers one room — a week, a draft — may seat. |
+| `STREAM_MAX_OPENING` | `4` | Distinct rooms that may be cold-opening (their first Sleeper read) at once. Joiners of a room already opening share its slot. |
+| `STREAM_RETRY_AFTER_SECONDS` | `15` | The `Retry-After` a refused stream carries. |
+| `VISITOR_LOG_WRITES_PER_MINUTE` | `300` | Visits one process will write per minute, across both writers; the rest are counted and dropped. |
+| `VISITOR_LOG_WRITES_PER_CLIENT_PER_MINUTE` | `30` | The same, per client address. |
+| `VISITOR_LOG_MAX_IN_FLIGHT` | `4` | Visit inserts in flight at once — the bound that protects the pool. |
+| `VISITOR_LOG_RETENTION_DAYS` | `90` | Visits older than this are deleted in bounded batches every six hours. `off` keeps them. |
+| `VISITOR_LOG_RETENTION` | on | `off` stops the retention loop without changing the policy. |
 | `COMPS_SAMPLE_CORPUS` | allowed in development, denied in production | `on` or `off`. Whether `/comps` may answer from its built-in sample corpus when `player_seasons` is empty. Production refuses by default so a deployment cannot silently serve twenty-six invented seasons; set `on` for a demo build that wants it deliberately. Anything that is not `on` or `off` falls to the default for the environment. |
 
 ## Sleeper request budgets

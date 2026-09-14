@@ -1,6 +1,6 @@
 /**
  * When each background loop takes its *first* tick, so a cold boot does not run
- * all four at once.
+ * them all at once.
  *
  * **The problem is a boot, not a cadence.** `instrumentation.ts` (and
  * `scripts/worker.ts`) start four loops in one pass and every one of them fired
@@ -67,6 +67,12 @@ export const BOOT_STAGGER_MS = {
   ktc: 15_000,
   /** 45s: no dependency, the largest resident set, and a 60s cadence. */
   crawl: 45_000,
+  /**
+   * 60s: the visit log's retention pass. Cheap on every boot but the first
+   * after a backlog, where it is up to twenty bounded deletes; after the crawl
+   * so the two are not taking a pool connection each in the same second.
+   */
+  logs: 60_000,
   /** 90s: the heaviest first boot, and it reads the players map. */
   comps: 90_000,
 } as const;

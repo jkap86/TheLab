@@ -158,14 +158,29 @@ export type JoinInput = { userId: string; username: string; season: string; week
 /** The rooms of one process, bound to what they reach. */
 export type GametimeRooms = {
   join: (input: JoinInput, listener: RoomListener) => Promise<JoinResult>;
+  /**
+   * Whether a week's room is open or opening — what the stream route asks
+   * before claiming a cold-open slot, so a join into a room that already
+   * exists costs no slot. See `shared/streams/admission`.
+   */
+  has: (season: string, week: number) => boolean;
   /** Open rooms and their readers — for a log line or a test. */
   stats: () => { weeks: number; subscribers: number };
 };
+
+/** One spelling of a room's key, for the registry and for whoever asks about it. */
+export function roomKey(season: string, week: number): string {
+  return `${season}:${week}`;
+}
 
 export function gametimeRooms(registry: RoomRegistry, deps: RoomDeps): GametimeRooms {
   const ctx: RoomContext = { deps, registry };
   return {
     join: (input, listener) => joinGametime(ctx, input, listener),
+    has: (season, week) => {
+      const key = roomKey(season, week);
+      return registry.rooms.has(key) || registry.openings.has(key);
+    },
     stats: () => {
       let subscribers = 0;
       for (const room of registry.rooms.values()) subscribers += room.subscribers.size;
@@ -211,7 +226,7 @@ async function joinGametime(
   listener: RoomListener,
 ): Promise<JoinResult> {
   const { rooms, openings } = ctx.registry;
-  const key = `${input.season}:${input.week}`;
+  const key = roomKey(input.season, input.week);
 
   let room = rooms.get(key);
   if (!room) {
