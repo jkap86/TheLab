@@ -1,13 +1,17 @@
 "use client";
 
-import { type ReactNode, useId, useMemo } from "react";
+import { useId, useMemo } from "react";
 
 import {
   CollapseTray,
   CONSOLE_KEY_PILL,
   CONSOLE_WELL,
-  CONSOLE_WINDOW,
-  Scanlines,
+  FacetChip,
+  FacetFoot,
+  FacetGroove,
+  FacetRow,
+  FiltersKey,
+  RangeRow,
 } from "@/features/shared";
 
 import {
@@ -15,7 +19,6 @@ import {
   facetCounts,
   playerFilterSummary,
   positionRank,
-  spanActive,
   toggleFacet,
   UNKNOWN_VALUE,
   type PlayerFilterState,
@@ -41,6 +44,13 @@ import type { PlayerShare } from "../helpers/shares";
  * `facetCounts`. The state itself and the predicate that reads it live in
  * `helpers/player-filters.ts`, because the decisions in them are silent when
  * wrong and have to resolve under Node's own test runner.
+ *
+ * **The parts are `features/shared/ui/filter-tray.tsx`'s** since the gametime
+ * board's own Filters tray became a second reader of the same grammar: the
+ * key and its facet-counting badge, the labelled row, the cut, the counting
+ * chip, the two-handle span and the foot. What stays here is this tray's four
+ * facets and the vocabulary they are asked in — which is everything a reader
+ * of *this* panel sees and nothing they would recognise on the other.
  */
 export function PlayerFilters({
   players,
@@ -123,14 +133,14 @@ export function PlayerFilters({
       >
         <div className={`${CONSOLE_WELL} flex flex-col gap-[0.4375rem] p-2`}>
           <FacetRow label="Pos">
-            <Chip
+            <FacetChip
               label="All"
               count={players.length}
               on={filters.positions.length === 0}
               onPick={() => set({ positions: [] })}
             />
             {positions.map(([value, count]) => (
-              <Chip
+              <FacetChip
                 key={value}
                 label={value}
                 count={count}
@@ -140,7 +150,7 @@ export function PlayerFilters({
             ))}
           </FacetRow>
 
-          <Groove />
+          <FacetGroove />
 
           <FacetRow label="Team">
             {/* A `<select>` rather than 32 chips, and it *adds* rather than
@@ -199,7 +209,6 @@ export function PlayerFilters({
               noun="age"
               bounds={ageBounds}
               span={filters.age ?? ageBounds}
-              active={spanActive(filters.age, ageBounds)}
               onChange={(age) => set({ age })}
             />
           )}
@@ -210,228 +219,17 @@ export function PlayerFilters({
               noun="draft class"
               bounds={classBounds}
               span={filters.draftClass ?? classBounds}
-              active={spanActive(filters.draftClass, classBounds)}
               onChange={(draftClass) => set({ draftClass })}
             />
           )}
 
-          <div className="flex items-center justify-between gap-2">
-            <span className="min-w-0 truncate font-mono text-[length:var(--fs-9)] uppercase tracking-[0.14em] text-foreground/42">
-              {summary ?? "Nothing narrowed"}
-            </span>
-            <button
-              type="button"
-              disabled={active === 0}
-              onClick={() => onChange({ positions: [], teams: [], age: null, draftClass: null })}
-              className={`${CONSOLE_KEY_PILL} border-foreground/10 bg-[image:var(--key-bg)] px-[0.5625rem] py-1 text-[length:var(--fs-10)] tracking-[0.14em] shadow-[var(--key-shadow)] ${
-                active === 0
-                  ? "cursor-default text-foreground/30"
-                  : "text-foreground/80 hover:text-readout"
-              }`}
-            >
-              Clear all
-            </button>
-          </div>
+          <FacetFoot
+            summary={summary}
+            active={active > 0}
+            onClear={() => onChange({ positions: [], teams: [], age: null, draftClass: null })}
+          />
         </div>
       </CollapseTray>
     </>
-  );
-}
-
-/**
- * The key the tray hangs off, in the search row.
- *
- * **The badge counts facets, not values**, and it is what makes a closed tray
- * honest: a reader who narrowed to two positions and a team and then collapsed
- * it can still see that two questions are answered without reopening.
- */
-function FiltersKey({
-  open,
-  count,
-  onPress,
-  controls,
-  className,
-}: {
-  open: boolean;
-  count: number;
-  onPress: () => void;
-  controls: string;
-  className: string;
-}) {
-  return (
-    <button
-      type="button"
-      aria-expanded={open}
-      aria-controls={controls}
-      onClick={onPress}
-      className={`${CONSOLE_KEY_PILL} ${className} inline-flex items-center gap-1.5 bg-[image:var(--key-bg)] px-[0.5625rem] py-[0.4375rem] text-[length:var(--fs-10)] tracking-[0.14em] shadow-[var(--key-shadow)] ${
-        open || count > 0
-          ? "border-active/45 text-readout"
-          : "border-foreground/10 text-foreground/75 hover:text-readout"
-      }`}
-    >
-      <span
-        aria-hidden
-        className={`lab-anim inline-block text-[length:var(--fs-8)] leading-none transition-transform duration-[260ms] ease-[cubic-bezier(0.2,0.9,0.3,1)] ${
-          open ? "rotate-90" : "rotate-0"
-        }`}
-      >
-        ▶
-      </span>
-      Filters
-      {count > 0 && (
-        <span className="inline-flex min-w-[0.9375rem] justify-center rounded-full bg-active/16 px-1 py-px tabular-nums text-readout">
-          {count}
-        </span>
-      )}
-    </button>
-  );
-}
-
-function FacetRow({ label, children }: { label: string; children: ReactNode }) {
-  return (
-    <div className="flex items-start gap-[0.5625rem]">
-      <span className="w-[2.375rem] shrink-0 pt-[0.3125rem] font-mono text-[length:var(--fs-9)] uppercase tracking-[0.16em] text-foreground/48">
-        {label}
-      </span>
-      <div className="flex min-w-0 flex-1 flex-wrap items-center gap-1.5">{children}</div>
-    </div>
-  );
-}
-
-function Groove() {
-  return (
-    <span
-      aria-hidden
-      className="h-px bg-[linear-gradient(to_right,transparent,rgba(0,0,0,0.55),transparent)] shadow-[0_1px_0_color-mix(in_srgb,var(--foreground)_6%,transparent)]"
-    />
-  );
-}
-
-/**
- * A chosen chip is drawn **lit**, not dimmed — the theme rule against an alpha
- * on the accent as text, and it has the advantage of being true: pressing it
- * again clears it.
- */
-function Chip({
-  label,
-  count,
-  on,
-  onPick,
-}: {
-  label: string;
-  count: number;
-  on: boolean;
-  onPick: () => void;
-}) {
-  return (
-    <button
-      type="button"
-      onClick={onPick}
-      aria-pressed={on}
-      className={`${CONSOLE_KEY_PILL} inline-flex items-center bg-[image:var(--key-bg)] px-[0.5625rem] py-1 text-[length:var(--fs-10)] tracking-[0.14em] shadow-[var(--key-shadow)] ${
-        on
-          ? "border-active/45 text-readout"
-          : "border-foreground/10 text-foreground/75 hover:text-readout"
-      }`}
-    >
-      {label}
-      <span className="ml-1.5 tabular-nums text-foreground/45">{count}</span>
-    </button>
-  );
-}
-
-/**
- * A two-handle span over a milled track, with the figures in a lit window.
- *
- * **Two stacked `<input type="range">`s**, not a library and not a pointer
- * handler: the native control brings arrow keys, Home/End, page steps and the
- * platform's own touch target with it, and a range is one of the few controls
- * where the native element is genuinely the better one. The inputs are
- * `pointer-events: none` with the thumbs re-enabled (`.lab-range`), which is
- * what lets the two overlap without the upper one swallowing the lower one's
- * handle. Each handle clamps against the other rather than crossing it.
- *
- * **The readout is quiet until the span is a filter.** The label is the numbers
- * either way — a prefix like "Any ·" is 99px of a 66px window and clips at both
- * ends — so the *state* is carried by the ink: `--readout-label` while it sits
- * on both bounds, lit with the glow once it narrows.
- */
-function RangeRow({
-  label,
-  noun,
-  bounds,
-  span,
-  active,
-  onChange,
-}: {
-  label: string;
-  /** What the handles are named in their accessible labels — "draft class". */
-  noun: string;
-  bounds: NonNullable<Span>;
-  span: NonNullable<Span>;
-  active: boolean;
-  onChange: (span: NonNullable<Span>) => void;
-}) {
-  const pct = (v: number) => ((v - bounds.lo) / (bounds.hi - bounds.lo)) * 100;
-  // The 7px inset and the 14px thumb: the fill has to start at the thumb's
-  // centre, or it runs out from under the handle at either end.
-  const inset = (p: number) => `calc(7px + ${p}% - ${(p / 100) * 14}px)`;
-
-  return (
-    <div className="flex items-center gap-[0.5625rem]">
-      <span className="w-[2.375rem] shrink-0 font-mono text-[length:var(--fs-9)] uppercase tracking-[0.16em] text-foreground/48">
-        {label}
-      </span>
-
-      <div className="relative h-[1.125rem] min-w-0 flex-1">
-        <span
-          aria-hidden
-          className="absolute inset-x-[7px] top-[7px] h-1 rounded-full bg-[var(--meter-track)] shadow-[inset_0_1px_3px_rgba(0,0,0,0.95)]"
-        />
-        <span
-          aria-hidden
-          className="absolute top-[7px] h-1 rounded-full bg-active shadow-[0_0_8px_var(--accent-glow)]"
-          style={{ left: inset(pct(span.lo)), right: inset(100 - pct(span.hi)) }}
-        />
-        <input
-          className="lab-range"
-          type="range"
-          min={bounds.lo}
-          max={bounds.hi}
-          step={1}
-          value={span.lo}
-          aria-label={`Minimum ${noun}`}
-          onChange={(e) =>
-            onChange({ lo: Math.min(Number(e.target.value), span.hi), hi: span.hi })
-          }
-        />
-        <input
-          className="lab-range"
-          type="range"
-          min={bounds.lo}
-          max={bounds.hi}
-          step={1}
-          value={span.hi}
-          aria-label={`Maximum ${noun}`}
-          onChange={(e) =>
-            onChange({ lo: span.lo, hi: Math.max(Number(e.target.value), span.lo) })
-          }
-        />
-      </div>
-
-      <span
-        className={`${CONSOLE_WINDOW} inline-flex w-[4.75rem] shrink-0 justify-center rounded-[0.4375rem] px-2 py-[0.1875rem]`}
-      >
-        <Scanlines />
-        <span
-          className={`relative whitespace-nowrap font-mono text-[length:var(--fs-11)] tabular-nums ${
-            active ? "text-readout [text-shadow:var(--readout-text-glow)]" : "text-readout-label"
-          }`}
-        >
-          {span.lo}–{span.hi}
-        </span>
-      </span>
-    </div>
   );
 }

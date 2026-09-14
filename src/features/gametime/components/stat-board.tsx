@@ -1,19 +1,29 @@
 "use client";
 
-import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { memo, useCallback, useEffect, useId, useMemo, useState } from "react";
 
 import {
   BilletFinish,
+  CollapseTray,
   CONSOLE_CHANNEL_METAL,
   CONSOLE_FIGURE_WELL,
   CONSOLE_FIGURE_WELL_SHELL,
   CONSOLE_GLASS,
+  CONSOLE_KEY_PILL,
   CONSOLE_MILLED_WELL,
   CONSOLE_PANE_TRACK,
   CONSOLE_ROW_WELL,
+  CONSOLE_WELL,
+  CONSOLE_WINDOW,
   CONSOLE_WINDOW_LEDGE,
   DetailLedge,
+  FacetChip,
+  FacetFoot,
+  FacetGroove,
+  FacetRow,
+  FiltersKey,
   ModeTrack,
+  RangeRow,
   rankColor,
   Scanlines,
   sharePercentile,
@@ -21,15 +31,13 @@ import {
   useStatBoardOpen,
   type WeekTwoSidedShares,
 } from "@/features/shared";
-import type {
-  GametimeGame,
-  GametimeStatLine,
-  StatBoardPosition,
-} from "@/shared/contract";
+import type { GametimeGame, GametimeStatLine } from "@/shared/contract";
 
 import {
-  menuSummary,
+  DEFAULT_STAT_SORT_STATE,
+  defaultStatAscending,
   narrowStatRows,
+  nextStatSort,
   NO_SHARES,
   NO_STAT_FILTERS,
   playerLeagueScope,
@@ -40,21 +48,26 @@ import {
   SCORING_LABEL,
   STAT_FIXED,
   STAT_POSITIONS,
-  STAT_SORTS,
+  STAT_STAGE_BOUNDS,
+  STAT_STAGES,
   ALL_SPLITS,
   STAT_SPLITS,
   statColumns,
+  statFacetCount,
+  statFacetCounts,
   statFamilies,
+  statFilterSummary,
   statGroupSpans,
+  statHeads,
   statRows,
   statScoring,
+  statSortFor,
   statTagLine,
-  statTags,
-  statTeams,
   statTrackWidth,
-  toggleFilterValue,
+  toggleFacet,
   toggleSplit,
   topStatRow,
+  USAGE_COUNT,
   USAGE_KEYS,
   USAGE_LABEL,
   usageLeagueScope,
@@ -66,12 +79,13 @@ import type {
   StatBoardFilters,
   StatColumn,
   StatFamily,
+  StatHead,
   StatLineRow,
   StatRow,
   StatShareCounts,
+  StatSort,
   StatSortKey,
   StatSplitKey,
-  StatTag,
   UsageKey,
 } from "../helpers/stat-board";
 
@@ -262,7 +276,30 @@ export function StatBoard({
    * nothing outside this panel can see one.
    */
   const [splits, setSplits] = useState<readonly StatSplitKey[]>(ALL_SPLITS);
-  const [sort, setSort] = useState<StatSortKey>("points");
+  /**
+   * Which head the list is ordered by, and which way.
+   *
+   * **The heads are the sort control and the `Sort` cap rail is gone**, which
+   * is what made a direction expressible at all: a rail of six caps can say
+   * which key is in force and has nowhere to put the arrow, so every ordering
+   * on the old board was descending and `Name` was not offered. A head can
+   * carry both, so a press on a fresh one takes its natural direction and a
+   * press on the lit one reverses — see `nextStatSort`.
+   */
+  const [sort, setSort] = useState<StatSort>(DEFAULT_STAT_SORT_STATE);
+  /**
+   * Drop or add a split family — **and keep the sort answerable**.
+   *
+   * The two are one press because the rail can take the lit head off the
+   * board: see `statSortFor`, which returns the held sort by identity where
+   * the columns still carry it, so the ordinary press re-renders nothing.
+   */
+  const pickSplits = useCallback((next: readonly StatSplitKey[]) => {
+    setSplits(next);
+    setSort((held) => statSortFor(held, statColumns(next)));
+  }, []);
+  /** Whether the ledge's Filters tray is down. A view, so it is not stored. */
+  const [trayOpen, setTrayOpen] = useState(false);
   /**
    * The player whose line is open.
    *
@@ -289,6 +326,28 @@ export function StatBoard({
    */
   const [reading, setReading] = useState<PlayerReading>("all");
 
+  /**
+   * Pick a row from its player cell: the pane reads him, and **nothing is
+   * narrowed**.
+   *
+   * Both states that ride a pick reset with it, and that is a correctness rule
+   * rather than tidiness: a reading is a fact about *that* player, so carrying
+   * one onto the next would leave a well lit on his row and the grid filtered
+   * by a question nobody asked about him. The reset happens where the pick is
+   * set, so there is no effect to run late.
+   */
+  /**
+   * Back to the list, from the phone bar's own `‹ List` key.
+   *
+   * It clears the reading and the narrowing with the pick, on `pick`'s rule:
+   * the pane is the only thing that could state either, and a reader who has
+   * gone back to the list is not looking at it.
+   */
+  const clearPick = useCallback(() => {
+    setPicked(null);
+    setReading("all");
+    onGridNarrowed(false);
+  }, [onGridNarrowed]);
   const pick = useCallback(
     (id: string) => {
       setPicked((held) => (held === id ? held : id));
@@ -297,6 +356,60 @@ export function StatBoard({
     },
     [onGridNarrowed],
   );
+  /**
+   * Press one of a row's four usage wells — **the board's one narrowing
+   * gesture**.
+   *
+   * On, it does three things at once, which is the design's whole claim for
+   * the columns: a reader looking at `Started 7` on a row presses it and has
+   * that player's seven leagues on the grid behind, with the pane reading him.
+   * Pressing the lit one clears the reading and the narrowing and leaves the
+   * row picked — the pane goes on answering about him, which is the state a
+   * reader who has just un-narrowed is in.
+   *
+   * **There is no `cellPick` state and a lit well is derived**, which is what
+   * keeps the well and the pane's own track one fact rather than two that
+   * agree until somebody presses the track. A well is lit when the pane is
+   * reading this row on this reading, so a press on the pane's `Sat` key moves
+   * the lit well down the row with it — where a stored pair would have left
+   * `Started` lit under a pane, and a grid, on something else.
+   *
+   * A row nobody in the reader's leagues holds prints an em dash and does not
+   * toggle: there is no league of theirs for it to narrow to.
+   */
+  const pressCount = useCallback(
+    (id: string, key: UsageKey) => {
+      const lit = picked === id && reading === key;
+      setPicked(id);
+      setReading(lit ? "all" : key);
+      onGridNarrowed(!lit);
+    },
+    [picked, reading, onGridNarrowed],
+  );
+  /**
+   * Esc collapses the panel.
+   *
+   * The one keyboard affordance to add, and the only one: this is not a
+   * `<dialog>`, so there is nothing to cancel and nothing gives it back for
+   * free. It listens only while up, so it cannot swallow an Escape meant for
+   * the league filters dialog or a card — `SharesConsole`'s own spelling one
+   * page over.
+   *
+   * **It collapses rather than cancelling**, which is the design's own wording
+   * and the honest one: the narrowing a reader made survives the bar coming
+   * down (the page holds it, and the fold behind it with it), so an Escape
+   * that undid the press would be undoing something the reader can see the
+   * result of on the grid it just uncovered.
+   */
+  useEffect(() => {
+    if (!open) return;
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === "Escape") storeStatBoardOpen(false);
+    };
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, [open]);
+
   const toggleGridNarrowed = useCallback(
     () => onGridNarrowed(!gridNarrowed),
     [gridNarrowed, onGridNarrowed],
@@ -348,11 +461,28 @@ export function StatBoard({
     () => ({ ...filters, usage }),
     [filters, usage],
   );
+  /**
+   * The tray edits one object and the two halves of it land in two places.
+   *
+   * `usage` is the page's — the league grid is what it narrows, and the header
+   * states it beside the league filters' own summary — where the other four
+   * are a way of reading *this list* and live here. The tray has no business
+   * knowing that, so it is handed one `StatBoardFilters` and this splits the
+   * write. The page bails out of an equal set, so a keystroke in the search
+   * field costs nothing up there.
+   */
+  const onNarrowing = useCallback(
+    (next: StatBoardFilters) => {
+      const { usage: nextUsage, ...rest } = next;
+      setFilters(rest);
+      onUsage(nextUsage);
+    },
+    [onUsage],
+  );
   const shown = useMemo(() => narrowStatRows(all, narrowing), [all, narrowing]);
   const columns = useMemo(() => statColumns(splits), [splits]);
   const rows = useMemo(() => rankStatRows(shown, sort), [shown, sort]);
 
-  const teams = useMemo(() => statTeams(all), [all]);
   const top = useMemo(() => topStatRow(all), [all]);
   /**
    * The ramp's population — every row's points, **unfiltered**.
@@ -445,7 +575,7 @@ export function StatBoard({
           leagues={leagues}
           top={top}
           detail={detail}
-          onList={() => setPicked(null)}
+          onList={clearPick}
         />
         {/* Mounted only while up — see the module note. */}
         {open && (
@@ -460,24 +590,29 @@ export function StatBoard({
               }`}
             >
               <Ledge
-                filters={filters}
-                onFilters={setFilters}
-                teams={teams}
+                filters={narrowing}
+                onFilters={onNarrowing}
+                rows={all}
+                shown={rows.length}
+                total={all.length}
                 splits={splits}
-                onSplits={setSplits}
-                usage={usage}
-                onUsage={onUsage}
+                onSplits={pickSplits}
+                columns={columns}
                 sort={sort}
                 onSort={setSort}
+                trayOpen={trayOpen}
+                onTrayOpen={setTrayOpen}
               />
               <List
                 rows={rows}
                 columns={columns}
                 population={population}
                 sort={sort}
-                basis={basis}
+                onSort={setSort}
                 picked={picked}
                 onPick={pick}
+                reading={reading}
+                onPressCount={pressCount}
                 narrowed={rows.length !== all.length}
               />
             </div>
@@ -736,160 +871,6 @@ function Cap({
 }
 
 /**
- * A multi-select menu: a pill that says what it is narrowed to, and a popover
- * of caps.
- *
- * One component for both axes, because they are the same control over two
- * vocabularies — a second spelling is one menu that stops agreeing with the
- * other about what a second press means, and about what `All` does.
- *
- * **The dismissal is spelled out because this is not a `<dialog>`**, on
- * `ToolsMenu`'s own terms: a filter menu that trapped focus and dimmed the page
- * to offer five caps would be heavier than the caps are worth. So a
- * capture-phase `pointerdown` — a press that starts outside dismisses before
- * whatever it landed on acts on it — and an Escape that **returns focus to the
- * trigger**, which is the one piece of the `<dialog>` behaviour that is not
- * optional. The prototype has neither and the handoff names both as needed in
- * the real build.
- *
- * **It stays open on a press**, deliberately: the whole point of a multi-select
- * is picking more than one, and a menu that shut on the first would make the
- * second press a second opening.
- */
-function FilterMenu({
-  legend,
-  label,
-  noun,
-  held,
-  options,
-  onToggle,
-  onClear,
-  anchor,
-  panel,
-  columns,
-  className = "",
-}: {
-  /** The stamped word on the pill — `Pos`, `Team`. */
-  legend: string;
-  /** What the popover's group is called to anything reading the page. */
-  label: string;
-  /** `3 positions` / `3 teams` — the one thing that differs in the summary. */
-  noun: string;
-  held: readonly string[];
-  options: readonly string[];
-  onToggle: (value: string) => void;
-  onClear: () => void;
-  /** Which edge the popover hangs from, so neither runs off the ledge. */
-  anchor: "left" | "right";
-  /** Its width, which is a function of how many caps it has to hold. */
-  panel: string;
-  columns: string;
-  className?: string;
-}) {
-  const [open, setOpen] = useState(false);
-  const root = useRef<HTMLSpanElement>(null);
-  const trigger = useRef<HTMLButtonElement>(null);
-
-  useEffect(() => {
-    if (!open) return;
-    const onDown = (event: PointerEvent) => {
-      if (!root.current?.contains(event.target as Node)) setOpen(false);
-    };
-    const onKey = (event: KeyboardEvent) => {
-      if (event.key !== "Escape") return;
-      setOpen(false);
-      trigger.current?.focus();
-    };
-    document.addEventListener("pointerdown", onDown, true);
-    document.addEventListener("keydown", onKey);
-    return () => {
-      document.removeEventListener("pointerdown", onDown, true);
-      document.removeEventListener("keydown", onKey);
-    };
-  }, [open]);
-
-  const summary = menuSummary(held, noun);
-  return (
-    <span ref={root} className={`relative ${className}`}>
-      <button
-        ref={trigger}
-        type="button"
-        onClick={() => setOpen((held) => !held)}
-        aria-expanded={open}
-        className={`${CONSOLE_PANE_TRACK} touch:min-h-11 flex w-full items-center gap-2 py-2 pl-3.5 pr-3`}
-      >
-        <span className="shrink-0 font-mono text-[length:var(--fs-9)] uppercase tracking-[0.14em] text-[color:var(--readout-label)]">
-          {legend}
-        </span>
-        <span
-          className={`min-w-0 flex-1 truncate text-left font-mono text-[length:var(--fs-11)] tracking-[0.06em] lg:text-[length:var(--fs-12)] ${
-            held.length > 0
-              ? "text-readout [text-shadow:var(--readout-text-glow)]"
-              : "text-[color:var(--billet-name)]"
-          }`}
-        >
-          {summary}
-        </span>
-        <span
-          aria-hidden
-          className={`lab-anim shrink-0 text-[length:var(--fs-9)] text-[color:var(--readout-label)] transition-transform duration-150 ${
-            open ? "rotate-180" : ""
-          }`}
-        >
-          ▾
-        </span>
-      </button>
-      {open && (
-        <span
-          className={`absolute top-[calc(100%+0.375rem)] z-20 flex flex-col gap-1.5 overflow-hidden rounded-[0.625rem] bg-[image:var(--billet-bg)] p-2 shadow-[var(--standing-strip-shadow)] ${panel} ${
-            anchor === "left" ? "left-0" : "right-0"
-          }`}
-        >
-          <BilletFinish />
-          <span className="relative flex items-center gap-2">
-            <span className="min-w-0 flex-1 font-mono text-[length:var(--fs-9)] uppercase tracking-[0.14em] text-[color:var(--billet-label)] [text-shadow:var(--standing-label-shadow)]">
-              {held.length > 0 ? `${held.length} selected` : `Every ${noun.replace(/s$/, "")}`}
-            </span>
-            {/* A metal key rather than a cap, because it is not one of the set
-                — it is what empties it. The positions menu keeps `All` in the
-                grid instead, where five caps read as one ladder. */}
-            {options.length > 5 && (
-              <button
-                type="button"
-                onClick={onClear}
-                className="touch:min-h-11 shrink-0 rounded-full border border-foreground/10 bg-[image:var(--key-metal)] px-2.5 py-1 font-mono text-[length:var(--fs-9)] uppercase tracking-[0.14em] text-foreground/80 shadow-[var(--key-shadow)]"
-              >
-                All
-              </button>
-            )}
-          </span>
-          <span
-            role="group"
-            aria-label={label}
-            className={`${CONSOLE_CHANNEL_METAL} relative grid gap-1 rounded-lg p-[0.3125rem] ${columns}`}
-          >
-            {options.length <= 5 && (
-              <Cap lit={held.length === 0} onPress={onClear}>
-                All
-              </Cap>
-            )}
-            {options.map((option) => (
-              <Cap
-                key={option}
-                lit={held.includes(option)}
-                onPress={() => onToggle(option)}
-              >
-                {option}
-              </Cap>
-            ))}
-          </span>
-        </span>
-      )}
-    </span>
-  );
-}
-
-/**
  * A rail of caps under a stamped legend, in a channel cut into the case.
  *
  * One component for all three rails, because they are one control over three
@@ -934,11 +915,26 @@ function CapRail({
 }
 
 /**
- * The narrowings, the splits and the sort, in a hole cut into the case.
+ * The narrowings and the splits, in a hole cut into the case.
  *
  * A `--case-well-bg` recess rather than a panel: what sits in it is a set of
  * controls, and the case is the part they are set into. One wrapping row above
- * `lg` and three stacked below, which is the design's own phone arrangement.
+ * `lg` and stacked below, which is the design's own phone arrangement.
+ *
+ * **Four facets are behind one key**, which is the manager players drawer's
+ * own bargain and the reason this ledge stopped being a row of pills: Pos,
+ * Team, Clock and the four usage readings on the ledge itself is a control
+ * deck taller than the list it narrows — the thing the panel exists to show.
+ * So the key carries a count of the *facets answered* and the tray carries the
+ * controls, and a reader who never opens it pays one key's height for all
+ * four. The parts are `features/shared/ui/filter-tray.tsx`'s, so a chip here
+ * counts the way a chip there does.
+ *
+ * **The `Sort` rail is gone** — the column heads are the sort control, which
+ * is where a direction can be shown. **The `Leagues where` rail is gone too**,
+ * and that narrowing is the tray's fourth row rather than the ledge's fifth
+ * control: it is a question about which rows the board leaves, which is what
+ * every other row of the tray is.
  *
  * **The phone carries no `Splits` rail**, and that is not an omission: the
  * phone has no columns to hide. Its rows fold the whole line onto one wrapping
@@ -955,32 +951,78 @@ function CapRail({
 function Ledge({
   filters,
   onFilters,
-  teams,
+  rows,
+  shown,
+  total,
   splits,
   onSplits,
-  usage,
-  onUsage,
+  columns,
   sort,
   onSort,
+  trayOpen,
+  onTrayOpen,
 }: {
-  filters: Omit<StatBoardFilters, "usage">;
-  onFilters: (filters: Omit<StatBoardFilters, "usage">) => void;
-  teams: readonly string[];
+  filters: StatBoardFilters;
+  onFilters: (filters: StatBoardFilters) => void;
+  /** The **unfiltered** population — every count in the tray is folded over it. */
+  rows: readonly StatRow[];
+  shown: number;
+  total: number;
   splits: readonly StatSplitKey[];
   onSplits: (splits: readonly StatSplitKey[]) => void;
-  usage: readonly UsageKey[];
-  onUsage: (usage: readonly UsageKey[]) => void;
-  sort: StatSortKey;
-  onSort: (key: StatSortKey) => void;
+  /** What the board carries — the phone's sort menu offers exactly these. */
+  columns: readonly StatColumn[];
+  sort: StatSort;
+  onSort: (sort: StatSort) => void;
+  trayOpen: boolean;
+  onTrayOpen: (open: boolean) => void;
 }) {
+  const trayId = useId();
+  const facets = statFacetCount(filters);
+  const set = (patch: Partial<StatBoardFilters>) =>
+    onFilters({ ...filters, ...patch });
+
+  const positions = useMemo(
+    () => statFacetCounts(rows, (row) => row.position),
+    [rows],
+  );
+  // Teams are ranked by how many rows they would leave, not alphabetically:
+  // the menu is 32 three-letter codes, and the ones worth reaching for are the
+  // ones with players on the board.
+  const teamCounts = useMemo(
+    () => statFacetCounts(rows, (row) => row.team),
+    [rows],
+  );
+  const teams = useMemo(
+    () =>
+      [...teamCounts.entries()].sort(
+        (a, b) => b[1] - a[1] || a[0].localeCompare(b[0]),
+      ),
+    [teamCounts],
+  );
+  /**
+   * How many rows each reading would leave — four walks of the population, and
+   * they are memoised because the ledge re-renders on **every keystroke** in
+   * the search field beside them. Over four hundred rows that is sixteen
+   * hundred reads per character typed, to print four numbers none of which can
+   * move while a reader types: the counts are folded over the *unfiltered*
+   * list, which is the rule that makes a chip say what it would leave.
+   */
+  const usageCounts = useMemo(() => {
+    const counts = {} as Record<UsageKey, number>;
+    for (const key of USAGE_KEYS) {
+      let n = 0;
+      for (const row of rows) if ((USAGE_COUNT[key](row) ?? 0) > 0) n++;
+      counts[key] = n;
+    }
+    return counts;
+  }, [rows]);
+
   return (
-    <div className="relative flex shrink-0 flex-col gap-[5px] rounded-xl bg-[color:var(--case-well-bg)] p-[5px] shadow-[var(--case-well-shadow)] lg:flex-row lg:flex-wrap lg:items-center lg:gap-2 lg:p-2">
-      {/* The field and the two menus share one row on the phone; above `lg`
-          the wrapper stops generating a box and its three children join the
-          wrapping row under their own order. */}
-      <div className="flex min-w-0 items-center gap-[5px] lg:contents">
+    <div className="relative flex shrink-0 flex-col gap-[5px] rounded-xl bg-[color:var(--case-well-bg)] p-[5px] shadow-[var(--case-well-shadow)] lg:gap-2 lg:p-2">
+      <div className="flex min-w-0 flex-wrap items-center gap-[5px] lg:gap-2">
         <label
-          className={`${CONSOLE_PANE_TRACK} relative flex min-w-0 flex-1 items-center gap-2 px-3.5 lg:order-1 lg:min-w-44 lg:flex-[1_1_7rem]`}
+          className={`${CONSOLE_PANE_TRACK} relative flex min-w-0 flex-[1_1_11rem] items-center gap-2 px-3.5`}
         >
           <svg
             viewBox="0 0 24 24"
@@ -996,128 +1038,239 @@ function Ledge({
             <circle cx="10.5" cy="10.5" r="6" />
             <path d="M15 15l4.5 4.5" />
           </svg>
-          <span className="sr-only">Search player</span>
+          <span className="sr-only">Search players</span>
           <input
             type="text"
             value={filters.query}
-            onChange={(e) => onFilters({ ...filters, query: e.target.value })}
-            placeholder="Search player"
+            onChange={(e) => set({ query: e.target.value })}
+            placeholder="Search players"
             className="touch:min-h-11 w-full min-w-0 border-0 bg-transparent py-2 font-mono text-[length:var(--fs-12)] tracking-[0.04em] text-[color:var(--billet-name)] outline-none placeholder:text-[color:var(--readout-label)]"
           />
         </label>
 
-        <FilterMenu
-          legend="Pos"
-          label="Position"
-          noun="positions"
-          held={filters.positions}
-          options={STAT_POSITIONS}
-          onToggle={(value) =>
-            onFilters({
-              ...filters,
-              positions: toggleFilterValue(
-                filters.positions,
-                value as StatBoardPosition,
-              ),
-            })
-          }
-          onClear={() => onFilters({ ...filters, positions: [] })}
-          anchor="left"
-          panel="w-52"
-          columns="grid-cols-5"
-          className="shrink-0 lg:order-2"
-        />
+        {/* **The denominator appears only while narrowed.** At rest `471 /
+            471` is the same number printed twice, and the figure a reader
+            wants off this window is how many rows are in front of them. */}
+        <span
+          className={`${CONSOLE_WINDOW} inline-flex shrink-0 items-baseline gap-1 rounded-xl px-[0.6875rem] py-[0.4375rem]`}
+        >
+          <Scanlines />
+          <span className="relative font-mono text-[length:var(--fs-13)] tabular-nums text-readout [text-shadow:var(--readout-text-glow)]">
+            {shown}
+          </span>
+          {shown !== total && (
+            <span className="relative font-mono text-[length:var(--fs-9)] tabular-nums text-[color:var(--readout-label)]">
+              / {total}
+            </span>
+          )}
+        </span>
 
-        <FilterMenu
-          legend="Team"
-          label="Teams"
-          noun="teams"
-          held={filters.teams}
-          options={teams}
-          onToggle={(value) =>
-            onFilters({ ...filters, teams: toggleFilterValue(filters.teams, value) })
-          }
-          onClear={() => onFilters({ ...filters, teams: [] })}
-          anchor="right"
-          panel="w-64 lg:w-68"
-          columns="grid-cols-4 lg:grid-cols-5"
-          className="shrink-0 lg:order-6"
+        {/* Which split families the table carries. Desktop only — see the note. */}
+        <CapRail
+          legend="Splits"
+          label="Splits shown"
+          className="hidden shrink-0 rounded-full lg:flex"
+        >
+          {STAT_SPLITS.map((split) => {
+            const lit = splits.includes(split.key);
+            return (
+              <Cap
+                key={split.key}
+                lit={lit}
+                /* The floor is a disabled key rather than a corrected press —
+                   see `toggleSplit`. A board with no splits at all is the
+                   four-column list this replaced, not a narrower one. */
+                disabled={lit && splits.length === 1}
+                onPress={() => onSplits(toggleSplit(splits, split.key))}
+                className="shrink-0 whitespace-nowrap px-2.5 tracking-[0.08em]"
+              >
+                {split.label}
+              </Cap>
+            );
+          })}
+        </CapRail>
+
+        {/* **Below `lg` there are no column heads, and the heads *are* the
+            sort** — so a phone would have had a list it could not reorder.
+            The old `Sort` cap rail is gone by the design's own change 2 and
+            this is not its survival: it is a native menu over exactly the
+            readings the heads name, in their **long** forms, because three
+            of the columns are headed `Yd` and three `TD` and a flat list of
+            those names nothing. It is the rule the shares panels' own Sort
+            track already lives by — offer exactly the columns on screen —
+            with the direction on a key beside it, which is where a head
+            carries its arrow.
+
+            A `<select>` rather than caps for the reason the `Team` menu two
+            rows down is one: twenty keys is a rail no phone row can hold,
+            and a native menu brings the platform's own list with it. */}
+        <span
+          className={`${CONSOLE_PANE_TRACK} inline-flex shrink-0 items-center gap-1 px-1 lg:hidden`}
+        >
+          <select
+            aria-label="Sort players by"
+            value={sort.key}
+            onChange={(e) => {
+              const key = e.target.value as StatSortKey;
+              onSort({ key, asc: defaultStatAscending(key) });
+            }}
+            className="touch:min-h-11 max-w-[8.5rem] appearance-none truncate border-0 bg-transparent py-1.5 font-mono text-[length:var(--fs-10)] uppercase tracking-[0.1em] text-[color:var(--billet-accent)] outline-none"
+          >
+            {statHeads(columns).map((head) => (
+              <option key={head.key} value={head.key}>
+                {head.hint}
+              </option>
+            ))}
+          </select>
+          <button
+            type="button"
+            aria-label={`Sorted ${
+              sort.asc ? "ascending" : "descending"
+            } — press to reverse`}
+            onClick={() => onSort(nextStatSort(sort, sort.key))}
+            className="touch:min-h-11 shrink-0 rounded-full px-1.5 py-1 text-[length:var(--fs-9)] leading-none text-[color:var(--billet-accent)]"
+          >
+            {sort.asc ? "▲" : "▼"}
+          </button>
+        </span>
+
+        <FiltersKey
+          open={trayOpen}
+          count={facets}
+          onPress={() => onTrayOpen(!trayOpen)}
+          controls={trayId}
+          className="shrink-0"
         />
       </div>
 
-      {/* Which split families the table carries. Desktop only — see the note. */}
-      <CapRail
-        legend="Splits"
-        label="Splits shown"
-        className="hidden shrink-0 rounded-full lg:flex lg:order-3"
+      <CollapseTray
+        id={trayId}
+        open={trayOpen}
+        className="w-full"
+        closedClassName="-mt-[5px] lg:-mt-2"
       >
-        {STAT_SPLITS.map((split) => {
-          const lit = splits.includes(split.key);
-          return (
-            <Cap
-              key={split.key}
-              lit={lit}
-              /* The floor is a disabled key rather than a corrected press —
-                 see `toggleSplit`. A board with no splits at all is the
-                 four-column list this replaced, not a narrower one. */
-              disabled={lit && splits.length === 1}
-              onPress={() => onSplits(toggleSplit(splits, split.key))}
-              className="shrink-0 whitespace-nowrap px-2.5 tracking-[0.08em]"
-            >
-              {split.label}
-            </Cap>
-          );
-        })}
-      </CapRail>
+        <div className={`${CONSOLE_WELL} flex flex-col gap-[0.4375rem] p-2`}>
+          <FacetRow label="Pos">
+            <FacetChip
+              label="All"
+              count={rows.length}
+              on={filters.positions.length === 0}
+              onPick={() => set({ positions: [] })}
+            />
+            {STAT_POSITIONS.map((value) => (
+              <FacetChip
+                key={value}
+                label={value}
+                count={positions.get(value) ?? 0}
+                on={filters.positions.includes(value)}
+                onPick={() =>
+                  set({ positions: toggleFacet(filters.positions, value) })
+                }
+              />
+            ))}
+          </FacetRow>
 
-      {/* The page's own narrowing — see the module note for the two scopes. */}
-      <CapRail
-        legend="Leagues where"
-        /* **Not the pane's own name**, which is the same phrase: two groups
-           called `Narrow my leagues to` are two controls a screen reader
-           cannot tell apart, and these two narrow by different questions —
-           this one over the players on the board, that one over one of them.
-           The visible legends already differ; the accessible names now say
-           the same thing in full. */
-        label="Narrow my leagues by how the board's players were used"
-        className="shrink-0 rounded-[1.25rem] lg:order-4 lg:rounded-full"
-        legendClassName="w-11 whitespace-normal lg:w-auto lg:whitespace-nowrap"
-      >
-        <span className="grid min-w-0 flex-1 grid-cols-2 gap-1 lg:flex lg:flex-none lg:gap-1">
-          {USAGE_KEYS.map((key) => (
-            <Cap
-              key={key}
-              lit={usage.includes(key)}
-              onPress={() => onUsage(toggleFilterValue(usage, key))}
-              className="min-w-0 whitespace-nowrap px-2 tracking-[0.06em] lg:px-2.5 lg:tracking-[0.08em]"
-            >
-              {USAGE_LABEL[key]}
-            </Cap>
-          ))}
-        </span>
-      </CapRail>
+          <FacetGroove />
 
-      {/* The caps are a single-select rail, and the chosen one is the rack's
-          own accent cap — one spelling of a lit cap in this app. They stretch
-          below `lg`, where the row is theirs, and never ellipsise: a sort key
-          a reader cannot read is a list ordered by something nothing on
-          screen names. */}
-      <CapRail
-        legend="Sort"
-        label="Sort by"
-        className="min-w-0 flex-wrap rounded-[1.25rem] lg:order-5 lg:flex-none lg:rounded-full"
-      >
-        {STAT_SORTS.map((option) => (
-          <Cap
-            key={option.key}
-            lit={sort === option.key}
-            onPress={() => onSort(option.key)}
-            className="flex-auto whitespace-nowrap px-2 tracking-[0.04em] lg:flex-none lg:px-2.5 lg:tracking-[0.14em]"
-          >
-            {option.label}
-          </Cap>
-        ))}
-      </CapRail>
+          <FacetRow label="Team">
+            {/* A `<select>` rather than 32 chips, and it *adds* rather than
+                selects: a native multiple-select is a scrolling list box on
+                every platform and a chip row of 32 is the tray's whole height.
+                Chosen teams come back out as removable chips, so what is
+                narrowed is readable without opening the menu. */}
+            <select
+              aria-label="Add an NFL team"
+              value=""
+              onChange={(e) => {
+                if (e.target.value)
+                  set({ teams: toggleFacet(filters.teams, e.target.value) });
+              }}
+              className={`${CONSOLE_KEY_PILL} appearance-none border-foreground/10 bg-[image:var(--key-bg)] px-[0.5625rem] py-[0.3125rem] text-[length:var(--fs-10)] tracking-[0.1em] text-foreground/75 shadow-[var(--key-shadow)]`}
+            >
+              <option value="">+ Add team</option>
+              {teams.map(([value, count]) => (
+                <option
+                  key={value}
+                  value={value}
+                  disabled={filters.teams.includes(value)}
+                >
+                  {value} · {count}
+                </option>
+              ))}
+            </select>
+
+            {filters.teams.map((value) => (
+              <button
+                key={value}
+                type="button"
+                title={`Remove ${value}`}
+                onClick={() =>
+                  set({ teams: toggleFacet(filters.teams, value) })
+                }
+                className={`${CONSOLE_KEY_PILL} inline-flex items-center gap-1.5 border-active/45 bg-[image:var(--key-bg)] px-[0.5625rem] py-1 text-[length:var(--fs-10)] tracking-[0.14em] text-readout shadow-[var(--key-shadow)] [text-shadow:var(--readout-text-glow)]`}
+              >
+                {value}
+                <span className="tabular-nums text-foreground/45">
+                  {teamCounts.get(value) ?? 0}
+                </span>
+                <span
+                  aria-hidden
+                  className="text-[length:var(--fs-9)] text-foreground/55"
+                >
+                  ✕
+                </span>
+              </button>
+            ))}
+
+            {filters.teams.length === 0 && (
+              // Read off the options rather than written down: a literal here
+              // is a claim, and it drifts the first time the population does.
+              <span className="font-mono text-[length:var(--fs-9)] uppercase tracking-[0.14em] text-foreground/36">
+                All {teams.length} teams
+              </span>
+            )}
+          </FacetRow>
+
+          {/* How far through his game is, on the six-stop scale
+              `STAT_STAGES` names. The window prints the stops rather than
+              their indices — a readout reading `1–5` would be a control whose
+              two ends name nothing on the board it narrows. */}
+          <RangeRow
+            label="Clock"
+            noun="game clock"
+            bounds={STAT_STAGE_BOUNDS}
+            span={filters.clock ?? STAT_STAGE_BOUNDS}
+            onChange={(clock) => set({ clock })}
+            format={(value) => STAT_STAGES[value] ?? ""}
+          />
+
+          <FacetGroove />
+
+          {/* The page-scope narrowing, and the tray's one facet that is a
+              question about the reader's own week rather than about the NFL's.
+              See `StatBoardFilters.usage` for why these AND where one player's
+              own four keys cannot. */}
+          <FacetRow label="Used">
+            {USAGE_KEYS.map((key) => (
+              <FacetChip
+                key={key}
+                label={USAGE_LABEL[key]}
+                count={usageCounts[key]}
+                on={filters.usage.includes(key)}
+                onPick={() => set({ usage: toggleFacet(filters.usage, key) })}
+              />
+            ))}
+          </FacetRow>
+
+          <FacetFoot
+            summary={statFilterSummary(filters)}
+            active={facets > 0}
+            onClear={() =>
+              set({ positions: [], teams: [], clock: null, usage: [] })
+            }
+          />
+        </div>
+      </CollapseTray>
     </div>
   );
 }
@@ -1152,18 +1305,23 @@ function List({
   columns,
   population,
   sort,
-  basis,
+  onSort,
   picked,
   onPick,
+  reading,
+  onPressCount,
   narrowed,
 }: {
   rows: readonly RankedStatRow[];
   columns: readonly StatColumn[];
   population: readonly number[];
-  sort: StatSortKey;
-  basis: StatBasis;
+  sort: StatSort;
+  onSort: (sort: StatSort) => void;
   picked: string | null;
   onPick: (id: string) => void;
+  /** Which reading the pane is on — what lights one of the picked row's wells. */
+  reading: PlayerReading;
+  onPressCount: (id: string, key: UsageKey) => void;
   narrowed: boolean;
 }) {
   const track = statTrackWidth(columns);
@@ -1173,15 +1331,26 @@ function List({
       <Scanlines />
       {empty ? (
         <p className="relative z-[1] px-3 py-6 text-center font-mono text-[length:var(--fs-11)] uppercase tracking-[0.12em] text-[color:var(--readout-label)]">
-          {narrowed ? "No player matches that narrowing." : "No scoring lines this week yet."}
+          {narrowed
+            ? "No player matches that narrowing."
+            : "No scoring lines this week yet."}
         </p>
       ) : (
         <>
           {/* The wide arm scrolls in both axes; its head and its two edge
               columns are `sticky` against this one scroller. */}
           <div className="lab-scroll-glass relative z-[1] hidden min-h-0 flex-1 overflow-auto p-[3px] lg:block">
-            <div role="table" aria-label="Player scores" style={{ width: track }}>
-              <Head columns={columns} sort={sort} track={track} />
+            <div
+              role="table"
+              aria-label="Player scores"
+              style={{ width: track }}
+            >
+              <Head
+                columns={columns}
+                sort={sort}
+                onSort={onSort}
+                track={track}
+              />
               {rows.map((row) => (
                 <WideRow
                   key={row.player_id}
@@ -1189,8 +1358,14 @@ function List({
                   columns={columns}
                   track={track}
                   population={population}
-                  lit={picked === row.player_id}
+                  picked={picked === row.player_id}
+                  litCount={
+                    picked === row.player_id && reading !== "all"
+                      ? reading
+                      : null
+                  }
                   onPick={onPick}
+                  onPressCount={onPressCount}
                 />
               ))}
             </div>
@@ -1200,7 +1375,6 @@ function List({
               <PhoneRow
                 key={row.player_id}
                 row={row}
-                basis={basis}
                 population={population}
                 lit={picked === row.player_id}
                 onPick={onPick}
@@ -1214,7 +1388,7 @@ function List({
 }
 
 /**
- * The head: two tiers in one sticky block, and the second names the columns.
+ * The head: two tiers in one sticky block, and **the second is the sort**.
  *
  * **No `overflow-hidden` on the block**, which is this board's own recorded
  * finding rather than a style: an `overflow` other than `visible` makes an
@@ -1223,34 +1397,30 @@ function List({
  * at all. The radius goes on the corner cells instead, which is what the clip
  * was doing the rest of its work for.
  *
- * **The sorted column is lit, and which column that is depends on the key.**
- * `Pts` carries the arrow and the accent while the list is ordered by points;
- * on the three usage keys the arrow clears and `Your leagues` takes the accent,
- * because all three are readings of that cell. On `Yds` and `TD` the *split*
- * columns that contribute light instead — three of them each, and **no arrow**,
- * because those two orderings are a sum across families rather than any one
- * column's own figure, and an arrow on three heads would claim three orderings.
+ * **Every head is a `<button>` and the `Sort` cap rail is gone.** This note
+ * used to say the opposite — that sorting lived in the ledge and a pressable
+ * head would be a second control for one fact "with no way to show the
+ * direction the caps cannot express". The direction is the reason it reversed:
+ * a rail can light one of six caps and has nowhere to put an arrow, so every
+ * ordering on the old board was descending and the name was not offered at
+ * all. A head can carry both, and it carries them over the column it is the
+ * head *of*, so the vocabulary cannot name an ordering the row could not show.
  *
- * Not pressable, which is the design's own call: sorting lives in the ledge's
- * rail, and a head that set the same key would be a second control for one
- * fact with no way to show the direction the caps cannot express.
+ * The lit head takes the accent and an arrow; every other is the quiet label
+ * ink. The upper tier is untouched by any of it — a family span is not an
+ * ordering, and lighting three heads under one word would claim three.
  */
 function Head({
   columns,
   sort,
+  onSort,
   track,
 }: {
   columns: readonly StatColumn[];
-  sort: StatSortKey;
+  sort: StatSort;
+  onSort: (sort: StatSort) => void;
   track: number;
 }) {
-  const points = sort === "points";
-  const usage = sort === "start" || sort === "bench" || sort === "against";
-  const summed = (column: StatColumn) =>
-    (sort === "yds" && column.label === "Yd") ||
-    (sort === "td" && column.label === "TD");
-  const ink = (lit: boolean) =>
-    lit ? "text-[color:var(--billet-accent)]" : "text-[color:var(--billet-label)]";
   return (
     <div
       role="row"
@@ -1275,52 +1445,88 @@ function Head({
           </span>
         ))}
       </div>
-      {/* Tier two: the columns themselves. */}
+      {/* Tier two: the columns themselves, each of them the sort control. */}
       <div className="flex h-[30px] items-center border-t border-[color:var(--milled-hairline)]">
-        <span
-          role="columnheader"
-          style={{ flex: `0 0 ${STAT_FIXED.player}px` }}
-          className={`${HEAD_CELL} rounded-bl-[7px] px-2.5 ${PIN_HEAD.left} ${ink(false)}`}
-        >
-          Player
-        </span>
-        <span
-          role="columnheader"
-          style={{ flex: `0 0 ${STAT_FIXED.game}px` }}
-          className={`${HEAD_CELL} justify-end whitespace-nowrap pr-2.5 ${ink(false)}`}
-        >
-          Game
-        </span>
-        {columns.map((column) => (
-          <span
-            key={column.key}
-            role="columnheader"
-            style={{ flex: `0 0 ${column.width}px` }}
-            className={`${HEAD_CELL} justify-end pr-2 tracking-[0.1em] ${ink(summed(column))}`}
-          >
-            {column.label}
-          </span>
+        {statHeads(columns).map((head) => (
+          <HeadCell key={head.key} head={head} sort={sort} onSort={onSort} />
         ))}
-        <span
-          role="columnheader"
-          style={{ flex: `0 0 ${STAT_FIXED.leagues}px` }}
-          className={`${HEAD_CELL} px-2.5 ${ink(usage)}`}
-        >
-          Your leagues
-        </span>
-        <span
-          role="columnheader"
-          aria-sort={points ? "descending" : undefined}
-          style={{ flex: `0 0 ${STAT_FIXED.points}px` }}
-          className={`${HEAD_CELL} justify-end gap-1 rounded-br-[7px] pr-3 ${PIN_HEAD.right} ${ink(points)}`}
-        >
-          Pts
-          <span aria-hidden className="text-[length:var(--fs-9)]">
-            {points ? "▼" : ""}
-          </span>
-        </span>
       </div>
     </div>
+  );
+}
+
+/**
+ * One head, pressed.
+ *
+ * **`aria-sort` carries the state and the label carries the invitation**, which
+ * is the pair a sortable column head owes: the role says which way the list is
+ * ordered by this column, and the accessible name says what a press would do
+ * — `Sort by Passing yards` unlit, and `…, sorted descending — press to
+ * reverse` lit, so nobody has to press one to find out it is already in force.
+ *
+ * The arrow is drawn **only on the lit head**, which is the whole of why the
+ * two pinned edges can carry it at all: an arrow on every head is thirteen
+ * claims about one ordering.
+ */
+function HeadCell({
+  head,
+  sort,
+  onSort,
+}: {
+  head: StatHead;
+  sort: StatSort;
+  onSort: (sort: StatSort) => void;
+}) {
+  const lit = sort.key === head.key;
+  return (
+    /* **The `columnheader` is the cell and the press is inside it.** Putting
+       the role on the `<button>` would override the button role, so a screen
+       reader would announce a column header and never say it could be pressed
+       — and `aria-sort` belongs on the header either way. */
+    <span
+      role="columnheader"
+      aria-sort={lit ? (sort.asc ? "ascending" : "descending") : undefined}
+      style={{ flex: `0 0 ${head.width}px` }}
+      /* **`min-w-0`, or a head stretches its own column.** A flex item's
+         `min-width` is `auto`, which is its content — so a head whose word is
+         wider than its track grows past it and takes every column after it out
+         from under its own head, with every figure on the board correct and
+         every one of them under the wrong word. It is the same mismatch
+         `statGroupSpans` is derived to prevent, one tier down, and a render is
+         what caught it. */
+      className={`${PIN_HEAD[head.pin ?? "none"]} h-full min-w-0 ${
+        head.pin === "left" ? "rounded-bl-[7px]" : ""
+      } ${head.pin === "right" ? "rounded-br-[7px]" : ""}`}
+    >
+      <button
+        type="button"
+        aria-label={
+          lit
+            ? `${head.hint}, sorted ${sort.asc ? "ascending" : "descending"} — press to reverse`
+            : `Sort by ${head.hint}`
+        }
+        onClick={() => onSort(nextStatSort(sort, head.key))}
+        className={`${HEAD_CELL} w-full cursor-pointer gap-1 border-0 bg-transparent ${
+          head.align === "left"
+            ? "justify-start px-2.5"
+            : "justify-end pl-1 pr-2"
+        } ${head.pin === "right" ? "pr-3" : ""} ${
+          lit
+            ? "text-[color:var(--billet-accent)]"
+            : "text-[color:var(--billet-label)]"
+        }`}
+      >
+        <span className="min-w-0 truncate">{head.label}</span>
+        {lit && (
+          <span
+            aria-hidden
+            className="shrink-0 text-[length:var(--fs-8)] tracking-normal"
+          >
+            {sort.asc ? "▲" : "▼"}
+          </span>
+        )}
+      </button>
+    </span>
   );
 }
 
@@ -1353,69 +1559,88 @@ const PIN_ROW = {
 /**
  * One row of the wide list.
  *
- * The whole row is the button and the cells are its children, which is what
- * makes the press target the row rather than the name — a reader aiming at a
- * four-hundred-row list should not have to hit a word. The well around it is a
- * plain box, because a channel and its own press are two things and a
- * `<button>` cannot carry the row's `margin-bottom` without the gap becoming
- * part of the target.
+ * **The player cell is the press and the four count wells are four more**,
+ * which is what the row could not be while the whole of it was one button: a
+ * `<button>` inside a `<button>` is invalid and unreachable, so the row's own
+ * press had to give up its outer target the moment a well became pressable.
+ * The player cell is where a reader aims anyway — it is the column that names
+ * the row, it is pinned, and it is 258px of the track.
+ *
+ * The well around it stays a plain box, because a channel and its own press
+ * are two things and a `<button>` cannot carry the row's `margin-bottom`
+ * without the gap becoming part of the target.
  *
  * **Memoised on what it prints**, which the live half of this page makes worth
- * doing: a frame lands every twenty seconds and the table is thirteen cells a
+ * doing: a frame lands every twenty seconds and the table is nineteen cells a
  * row, so a hundred rows re-rendering to move the two whose figures changed is
  * the cost `GametimeCard`'s own memo discipline exists to avoid. Every prop is
- * a value or a stable callback by construction.
+ * a value or a stable callback by construction — `litCount` is the row's own
+ * reading of the board's one `cellPick` rather than the pair itself, so a
+ * press on one row leaves every other row's props identical.
  */
 const WideRow = memo(function WideRow({
   row,
   columns,
   track,
   population,
-  lit,
+  picked,
+  litCount,
   onPick,
+  onPressCount,
 }: {
   row: RankedStatRow;
   columns: readonly StatColumn[];
   track: number;
   population: readonly number[];
-  lit: boolean;
+  picked: boolean;
+  /** Which of this row's four wells is lit, or null for none of them. */
+  litCount: UsageKey | null;
   onPick: (id: string) => void;
+  onPressCount: (id: string, key: UsageKey) => void;
 }) {
+  // A row is lit by either gesture: the pane is reading him, or the grid is
+  // narrowed by one of his readings. The two are one halo.
+  const lit = picked || litCount !== null;
   return (
     <div
-      className={`${CONSOLE_ROW_WELL} mb-[3px] rounded-[7px] ${
-        lit ? "shadow-[var(--row-well-shadow),0_0_24px_-10px_var(--accent-glow)]" : ""
+      role="row"
+      className={`${CONSOLE_ROW_WELL} mb-[3px] flex h-[38px] items-stretch rounded-[7px] ${
+        lit
+          ? "shadow-[var(--row-well-shadow),0_0_24px_-10px_var(--accent-glow)]"
+          : ""
       }`}
       style={{ width: track }}
     >
-      <button
-        type="button"
-        role="row"
-        /* **`aria-current`, not `aria-pressed`.** A `row` does not support the
-           second (the lint rule is right), and the first is the honest one
-           anyway: the rows are a single-selection set with no deselect, so the
-           picked one is *the current item* rather than a toggle somebody left
-           down. The phone arm says it the same way for the same reason. */
-        aria-current={lit ? "true" : undefined}
-        onClick={() => onPick(row.player_id)}
-        className="flex h-[38px] w-full cursor-pointer items-center rounded-[7px] border-0 bg-transparent p-0 text-left"
+      {/* The press is inside the cell rather than being it, on `HeadCell`'s
+          rule one tier up: `role="cell"` on the `<button>` would take the
+          button role off it. */}
+      <span
+        role="cell"
+        style={{ flex: `0 0 ${STAT_FIXED.player}px` }}
+        className={`flex min-w-0 rounded-l-[7px] ${PIN_ROW.left}`}
       >
-        <span
-          role="cell"
-          style={{ flex: `0 0 ${STAT_FIXED.player}px` }}
-          className={`flex h-[38px] min-w-0 items-center gap-2 rounded-l-[7px] px-2.5 ${PIN_ROW.left}`}
+        <button
+          type="button"
+          /* **`aria-current`, not `aria-pressed`.** The rows are a
+           single-selection set with no deselect, so the picked one is *the
+           current item* rather than a toggle somebody left down. The phone arm
+           says it the same way for the same reason. */
+          aria-current={picked ? "true" : undefined}
+          onClick={() => onPick(row.player_id)}
+          className="flex min-w-0 flex-1 cursor-pointer items-center gap-2 rounded-l-[7px] border-0 bg-transparent px-2.5 text-left outline-offset-[-2px]"
         >
           <span
             aria-hidden
-            className="inline-flex w-6 shrink-0 justify-end font-mono text-[length:var(--fs-10)] text-[color:var(--readout-label)]"
+            className="inline-flex w-[18px] shrink-0 justify-end font-mono text-[length:var(--fs-10)] tabular-nums text-[color:var(--readout-label)]"
           >
             {row.rank}
           </span>
+          <PlayerBadge row={row} lit={lit} />
           <span
-            className={`min-w-0 truncate font-display text-[length:var(--fs-13)] font-medium ${
-              lit
-                ? "text-readout [text-shadow:var(--readout-text-glow)]"
-                : "text-[color:var(--readout-line)]"
+            className={`min-w-0 flex-1 truncate font-display text-[length:var(--fs-13)] tracking-[-0.005em] ${
+              picked
+                ? "font-semibold text-readout [text-shadow:var(--readout-text-glow)]"
+                : "text-foreground/85"
             }`}
           >
             {row.name ?? row.player_id}
@@ -1425,41 +1650,169 @@ const WideRow = memo(function WideRow({
           >
             {row.position}
           </span>
-        </span>
-        <span
-          role="cell"
-          style={{ flex: `0 0 ${STAT_FIXED.game}px` }}
-          className={`flex items-center justify-end whitespace-nowrap pr-2.5 ${CLOCK} ${clockInk(row)}`}
-        >
-          {row.clock.text}
-        </span>
-        {columns.map((column) => (
-          <Figure key={column.key} width={column.width} value={row[column.key]} />
-        ))}
-        <span
-          role="cell"
-          style={{ flex: `0 0 ${STAT_FIXED.leagues}px` }}
-          className="flex min-w-0 items-center gap-1.5 overflow-hidden px-2.5"
-        >
-          {row.held ? (
-            statTags(row).map((tag) => <Tag key={tag.key} tag={tag} />)
-          ) : (
-            <span className="truncate font-mono text-[length:var(--fs-10)] uppercase tracking-[0.12em] text-[color:var(--readout-label)]">
-              Nobody in your leagues
+          {row.team && (
+            <span className="shrink-0 font-mono text-[length:var(--fs-9)] tracking-[0.08em] text-[color:var(--readout-muted)]">
+              {row.team}
             </span>
           )}
+        </button>
+      </span>
+      {/* `CIN @BAL` over the clock: the matchup is what a reader needs to place
+          a figure, and the two read as one cell rather than a column each. */}
+      <span
+        role="cell"
+        style={{ flex: `0 0 ${STAT_FIXED.game}px` }}
+        className="flex min-w-0 flex-col items-end justify-center gap-px overflow-hidden pl-0.5 pr-2.5"
+      >
+        <span className="max-w-full truncate font-mono text-[length:var(--fs-9)] uppercase tracking-[0.06em] text-[color:var(--readout-muted)]">
+          {matchup(row)}
         </span>
-        <span
-          role="cell"
-          style={{ flex: `0 0 ${STAT_FIXED.points}px` }}
-          className={`flex h-[38px] items-center justify-end rounded-r-[7px] pr-2 ${PIN_ROW.right}`}
-        >
-          <PointsFigure points={row.points} population={population} />
+        <span className={`whitespace-nowrap ${CLOCK} ${clockInk(row)}`}>
+          {row.clock.text}
         </span>
-      </button>
+      </span>
+      {columns.map((column) => (
+        <Figure key={column.key} width={column.width} value={row[column.key]} />
+      ))}
+      {USAGE_KEYS.map((key) => (
+        <CountWell
+          key={key}
+          row={row}
+          usage={key}
+          lit={litCount === key}
+          onPress={onPressCount}
+        />
+      ))}
+      <span
+        role="cell"
+        style={{ flex: `0 0 ${STAT_FIXED.points}px` }}
+        className={`flex items-center justify-end rounded-r-[7px] px-2 ${PIN_ROW.right}`}
+      >
+        <PointsFigure points={row.points} population={population} />
+      </span>
     </div>
   );
 });
+
+/**
+ * The 22px mount at the head of a row — a headshot with the initial behind it.
+ *
+ * **Not `Avatar`, and not an `<img>`.** That component draws *either* a face
+ * *or* a letter, where this wants the letter **behind** the face; and a broken
+ * `<img>` paints the platform's own placeholder glyph over the fallback even
+ * at `alt=""`, where a background image that 404s paints nothing and the
+ * letter underneath is exactly the fallback it was put there to be. It is
+ * `PaneRowFaceMount`'s rule, drawn on this board's own surface: a bezel on
+ * lit glass rather than a well milled into metal.
+ *
+ * `bg-top`, never `bg-center` — a Sleeper headshot is framed head and
+ * shoulders and a centred crop of one in a 22px disc is a chin.
+ */
+function PlayerBadge({ row, lit }: { row: StatRow; lit: boolean }) {
+  const initial = (row.name ?? row.player_id).trim().charAt(0).toUpperCase();
+  return (
+    <span
+      aria-hidden
+      className={`relative inline-flex size-[22px] shrink-0 items-center justify-center overflow-hidden rounded-full border border-foreground/12 bg-[image:var(--bezel-bg)] font-display text-[length:var(--fs-10)] font-semibold shadow-[var(--bezel-shadow)] ${
+        lit ? "text-readout" : "text-foreground/68"
+      }`}
+    >
+      {initial}
+      <span
+        className="absolute inset-0 bg-cover bg-top"
+        style={{
+          backgroundImage: `url(https://sleepercdn.com/content/nfl/players/thumb/${row.player_id}.jpg)`,
+        }}
+      />
+    </span>
+  );
+}
+
+/**
+ * One of the four counts, in a figure well that is also a button.
+ *
+ * **This is the board's one narrowing gesture**, and it is what the four
+ * readings became: they were chips a row printed and nothing could act on,
+ * then caps on the ledge asked of the whole population, and they are now a
+ * column each — pressed on the row a reader is actually looking at. A press
+ * lights the well, picks the row, puts the pane's track on that reading and
+ * narrows the grid behind to the leagues it names.
+ *
+ * `--tag-lit-shadow` is `--figure-well-shadow` plus an accent ring and glow,
+ * composed in CSS rather than appended here: a shadow list is atomic, so a
+ * second `shadow-[…]` would replace the chamfer rather than add to it. Hence
+ * the shell, which carries no shadow of its own.
+ *
+ * The inks are the four readings' own: the reader's starters are the accent,
+ * their bench is the amber this app spends on "neither", and the opposing pair
+ * is the quiet line ink — the same vocabulary the pane's group headers use.
+ *
+ * **A player nobody holds prints an em dash and does not toggle.** `held`
+ * decides it rather than the count, because a held player nobody started is a
+ * real nought where one their leagues have never heard of is an absence — and
+ * there is no league of the reader's for his well to narrow to.
+ */
+function CountWell({
+  row,
+  usage,
+  lit,
+  onPress,
+}: {
+  row: StatRow;
+  usage: UsageKey;
+  lit: boolean;
+  onPress: (id: string, key: UsageKey) => void;
+}) {
+  const count = USAGE_COUNT[usage](row);
+  const name = row.name ?? row.player_id;
+  return (
+    <span
+      role="cell"
+      style={{ flex: `0 0 ${STAT_FIXED.count}px` }}
+      className="flex items-center justify-end px-[3px]"
+    >
+      <button
+        type="button"
+        aria-pressed={lit}
+        aria-disabled={row.held ? undefined : true}
+        aria-label={
+          row.held
+            ? `${USAGE_LABEL[usage]} — ${name}`
+            : `${name} is in none of your leagues`
+        }
+        onClick={() => {
+          if (row.held) onPress(row.player_id, usage);
+        }}
+        className={`${CONSOLE_FIGURE_WELL_SHELL} relative flex flex-1 items-center justify-end border-0 px-[7px] py-0.5 ${
+          row.held ? "cursor-pointer" : "cursor-default"
+        } ${lit ? "shadow-[var(--tag-lit-shadow)]" : "shadow-[var(--figure-well-shadow)]"}`}
+      >
+        <span
+          className={`relative font-mono text-[length:var(--fs-12)] tabular-nums ${
+            !row.held
+              ? "text-[color:var(--stat-zero-ink)]"
+              : lit
+                ? "text-readout [text-shadow:var(--readout-text-glow)]"
+                : COUNT_INK[usage]
+          }`}
+        >
+          {row.held ? (count ?? 0) : EM_DASH}
+        </span>
+      </button>
+    </span>
+  );
+}
+
+/**
+ * A record over the four readings — exhaustive, so a fifth breaks the compile
+ * here rather than rendering an unstyled figure.
+ */
+const COUNT_INK: Record<UsageKey, string> = {
+  start: "text-readout",
+  bench: "text-[color:var(--median-ink)]",
+  "opp-start": "text-[color:var(--readout-line)]",
+  "opp-bench": "text-[color:var(--readout-line)]",
+};
 
 /**
  * One split figure — **a zero is an em dash**, and that is this column's own
@@ -1480,75 +1833,15 @@ function Figure({ width, value }: { width: number; value: number }) {
       role="cell"
       style={{ flex: `0 0 ${width}px` }}
       className={`flex items-center justify-end pr-2 font-mono text-[length:var(--fs-12)] tabular-nums ${
-        zero ? "text-[color:var(--stat-zero-ink)]" : "text-[color:var(--readout-line)]"
+        zero
+          ? "text-[color:var(--stat-zero-ink)]"
+          : "text-[color:var(--readout-line)]"
       }`}
     >
       {zero ? EM_DASH : value}
     </span>
   );
 }
-
-/**
- * One of the four counts, in a figure well.
- *
- * **The well lights when that reading is narrowing the reader's grid**, which
- * is where this parts company with what it used to say: it lit on the *sort*
- * key before, and one well cannot mean two things. The sort is named on its
- * own cap and in the head's accent; what a lit chip now says is "this is the
- * reading your leagues are narrowed by", which is a fact about the page and
- * worth a hundred rows' worth of repetition.
- *
- * `--tag-lit-shadow` is `--figure-well-shadow` plus an accent ring and glow,
- * composed in CSS rather than appended here: a shadow list is atomic, so a
- * second `shadow-[…]` would replace the chamfer rather than add to it. Hence
- * the shell, which carries no shadow of its own.
- *
- * The inks are the four readings' own: the reader's starters are the accent,
- * their bench is the amber this app spends on "neither", and the opposing pair
- * is the quiet line ink — the same vocabulary the pane's group headers use.
- */
-function Tag({ tag, lit = false }: { tag: StatTag; lit?: boolean }) {
-  const ink = TAG_INK[tag.key];
-  return (
-    <span
-      className={`${CONSOLE_FIGURE_WELL_SHELL} inline-flex shrink-0 items-baseline gap-[0.3125rem] px-[0.4375rem] py-px ${
-        lit ? "shadow-[var(--tag-lit-shadow)]" : "shadow-[var(--figure-well-shadow)]"
-      }`}
-    >
-      <span
-        className={`font-mono text-[length:var(--fs-9)] uppercase tracking-[0.1em] ${ink.label}`}
-      >
-        {tag.label}
-      </span>
-      <span className={`font-mono text-[length:var(--fs-11)] tabular-nums ${ink.figure}`}>
-        {tag.count}
-      </span>
-    </span>
-  );
-}
-
-/**
- * A record over the four readings — exhaustive, so a fifth breaks the compile
- * here rather than rendering an unstyled chip.
- */
-const TAG_INK: Record<UsageKey, { label: string; figure: string }> = {
-  start: {
-    label: "text-[color:var(--billet-accent)]",
-    figure: "text-readout [text-shadow:var(--readout-text-glow)]",
-  },
-  bench: {
-    label: "text-[color:var(--median-ink)]",
-    figure: "text-[color:var(--median-ink)]",
-  },
-  "opp-start": {
-    label: "text-[color:var(--readout-muted)]",
-    figure: "text-[color:var(--readout-line)]",
-  },
-  "opp-bench": {
-    label: "text-[color:var(--readout-muted)]",
-    figure: "text-[color:var(--readout-line)]",
-  },
-};
 
 /**
  * The clock, in the two inks a game has.
@@ -1558,7 +1851,19 @@ const TAG_INK: Record<UsageKey, { label: string; figure: string }> = {
  * a slip: what a reader is scanning a column of clocks for is the games still
  * running, and a final score that read as loudly as a live one would bury them.
  */
-const CLOCK = "font-mono text-[length:var(--fs-10)] uppercase tracking-[0.04em]";
+/**
+ * The clock, on both arms.
+ *
+ * **Untracked, where the design spells `0.04em`**, and it is spent rather than
+ * dropped: `Sun 12:00 PM` — what this app prints for an afternoon kickoff in
+ * an en-US locale — is 89px with it and 83.5 without, against the 90 a
+ * `STAT_FIXED.game` cell leaves. Tracking is the first thing to spend on a
+ * column that would otherwise clip, which is this repo's own rule for the
+ * lineup checker's `Kick` column and for this card's window labels one plane
+ * up; the rest of the 11px went to the track. At `--fs-10` in mono it is half
+ * a pixel a glyph, and what it buys is the day of the week.
+ */
+const CLOCK = "font-mono text-[length:var(--fs-10)] uppercase";
 
 const clockInk = (row: StatRow) =>
   row.clock.live
@@ -1572,7 +1877,8 @@ const POSITION_INK = (row: { position: string }) =>
     : "text-[color:var(--readout-label)]";
 
 /** `CIN @BAL`, or the team alone on a bye. */
-const matchup = (row: StatRow) => [row.team, row.opponent].filter(Boolean).join(" ");
+const matchup = (row: StatRow) =>
+  [row.team, row.opponent].filter(Boolean).join(" ");
 
 /**
  * The points figure, coloured by where it stands in the week.
@@ -1632,19 +1938,17 @@ function PointsFigure({
  */
 const PhoneRow = memo(function PhoneRow({
   row,
-  basis,
   population,
   lit,
   onPick,
 }: {
   row: RankedStatRow;
-  basis: StatBasis;
   population: readonly number[];
   lit: boolean;
   onPick: (id: string) => void;
 }) {
   const tags = statTagLine(row);
-  const families = statFamilies(row, basis);
+  const families = statFamilies(row);
   return (
     <li
       className={`${CONSOLE_ROW_WELL} mb-[3px] rounded-[7px] ${
@@ -1697,12 +2001,27 @@ const PhoneRow = memo(function PhoneRow({
           <span
             className={`${CONSOLE_FIGURE_WELL} ml-[1.625rem] flex min-w-0 flex-wrap items-center gap-x-2.5 gap-y-[3px] px-2 py-[3px]`}
           >
+            {/* **A family wraps inside itself rather than clipping.** The
+                well is `flex-wrap`, so a group that does not fit takes a line
+                of its own — and a dual-threat quarterback's passing group is
+                wider than the whole well at 390 now that the volume figures
+                are in it (`24 cmp · 35 att · 288 yd · 3 td · 1 int`), so a
+                line of its own is not enough. Left `shrink-0` it overflowed
+                the well's own `overflow-hidden` by ~23px and the interception
+                simply was not there, with nothing on screen saying so. Wrapped
+                it costs the row a line on the handful of lines long enough to
+                need one, and the separators make the break read as a break.
+                It is the rule this file keeps at three other grains: a
+                truncation loses the clause, a wrap loses only the space. */}
             {families.map((family) => (
-              <span key={family.key} className="inline-flex shrink-0 items-baseline gap-[0.3125rem]">
-                <span className="font-mono text-[length:var(--fs-9)] uppercase tracking-[0.12em] text-[color:var(--readout-label)]">
+              <span
+                key={family.key}
+                className="inline-flex min-w-0 items-baseline gap-[0.3125rem]"
+              >
+                <span className="shrink-0 font-mono text-[length:var(--fs-9)] uppercase tracking-[0.12em] text-[color:var(--readout-label)]">
                   {PHONE_FAMILY[family.key]}
                 </span>
-                <span className="font-mono text-[length:var(--fs-10)] tabular-nums text-[color:var(--readout-line)]">
+                <span className="min-w-0 font-mono text-[length:var(--fs-10)] tabular-nums text-[color:var(--readout-line)]">
                   {family.text}
                 </span>
               </span>
@@ -1828,7 +2147,7 @@ function Detail({
                 className="px-1 pb-2.5 pt-0.5"
               />
             )}
-            {statFamilies(row, basis).map((family) => (
+            {statFamilies(row).map((family) => (
               <LineGroup
                 key={family.key}
                 swatch={FAMILY_SWATCH[family.key]}

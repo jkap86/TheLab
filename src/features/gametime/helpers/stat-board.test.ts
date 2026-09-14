@@ -2,32 +2,39 @@ import assert from "node:assert/strict";
 import { describe, test } from "node:test";
 
 import {
-  menuSummary,
+  defaultStatAscending,
   heldStatRows,
   narrowStatRows,
+  nextStatSort,
   parseStatBasis,
   rankStatRows,
+  statFacetCount,
+  statFacetCounts,
+  statFilterSummary,
   statFiltersActive,
   statPoints,
   statRows,
   statTagLine,
   statTags,
-  statTeams,
-  toggleFilterValue,
+  toggleFacet,
   topStatRow,
+  ALL_SPLITS,
   DEFAULT_STAT_SORT,
+  DEFAULT_STAT_SORT_STATE,
   NO_STAT_FILTERS,
   STAT_POSITIONS,
   STAT_COLUMNS,
   STAT_FIXED,
-  STAT_SORTS,
+  STAT_STAGE_BOUNDS,
+  STAT_STAGES,
+  STAT_USAGE_WIDTH,
   statColumns,
   statFamilies,
   statGroupSpans,
+  statHeads,
   statScoring,
-  statTouchdowns,
+  statSortFor,
   statTrackWidth,
-  statYards,
   playerLeagueScope,
   PLAYER_READINGS,
   READING_LABEL,
@@ -39,7 +46,7 @@ import {
   USAGE_KEYS,
   USAGE_LABEL,
 } from "./stat-board.ts";
-import type { StatRow, StatSortKey } from "./stat-board.ts";
+import type { StatRow, StatSort, StatSortKey } from "./stat-board.ts";
 import type { GametimeGame, GametimeStatLine, StatBoardPosition } from "@/shared/contract";
 
 /**
@@ -56,11 +63,15 @@ function line(over: Partial<GametimeStatLine> = {}): GametimeStatLine {
     name: "A Player",
     position: "WR",
     team: "CIN",
+    pass_cmp: 0,
+    pass_att: 0,
     pass_yd: 0,
     pass_td: 0,
     pass_int: 0,
+    rush_att: 0,
     rush_yd: 0,
     rush_td: 0,
+    targets: 0,
     rec: 0,
     rec_yd: 0,
     rec_td: 0,
@@ -89,6 +100,7 @@ function row(over: Partial<StatRow> = {}): StatRow {
     ...line(),
     opponent: "@PIT",
     clock: { text: "Final", live: false },
+    stage: 5,
     points: 0,
     // Nobody in the reader's leagues, which is what a row is until the fold
     // has something to join onto it.
@@ -115,8 +127,9 @@ function mine(
 describe("statPoints", () => {
   test("prices a passing line the standard way", () => {
     const stat = line({ pass_yd: 250, pass_td: 2, pass_int: 1, rush_yd: 30, rush_td: 1 });
-    // 10 + 8 - 2 + 3 + 6
-    assert.equal(statPoints(stat, "ppr"), 25);
+    // 10 + 8 − 1 + 3 + 6. The interception is `−1` where this read `−2` until
+    // the redesign moved it — see `scoringTerms`, which states why.
+    assert.equal(statPoints(stat, "ppr"), 26);
   });
 
   test("the basis is the reception and nothing else", () => {
@@ -298,26 +311,14 @@ describe("statFiltersActive", () => {
   });
 });
 
-describe("toggleFilterValue", () => {
+describe("toggleFacet", () => {
   test("adds what is not held and drops what is", () => {
-    assert.deepEqual(toggleFilterValue(["QB"], "RB"), ["QB", "RB"]);
-    assert.deepEqual(toggleFilterValue(["QB", "RB"], "QB"), ["RB"]);
+    assert.deepEqual(toggleFacet(["QB"], "RB"), ["QB", "RB"]);
+    assert.deepEqual(toggleFacet(["QB", "RB"], "QB"), ["RB"]);
   });
 
-  test("order is the press order, which is what the trigger reads back", () => {
-    assert.deepEqual(toggleFilterValue(toggleFilterValue([], "LAR"), "CIN"), ["LAR", "CIN"]);
-  });
-});
-
-describe("menuSummary", () => {
-  test("nothing picked is `All`, never an empty string", () => {
-    assert.equal(menuSummary([], "positions"), "All");
-  });
-
-  test("one or two are named, and more are counted", () => {
-    assert.equal(menuSummary(["QB"], "positions"), "QB");
-    assert.equal(menuSummary(["CIN", "LAR"], "teams"), "CIN · LAR");
-    assert.equal(menuSummary(["QB", "RB", "WR"], "positions"), "3 positions");
+  test("order is the press order, which is what the foot reads back", () => {
+    assert.deepEqual(toggleFacet(toggleFacet([], "LAR"), "CIN"), ["LAR", "CIN"]);
   });
 });
 
@@ -327,28 +328,91 @@ describe("rankStatRows", () => {
     mine({ player_id: "b", name: "Bbb", points: 24, start: 7, bench: 1, against: 3 }),
     mine({ player_id: "c", name: "Ccc", points: 18, start: 2, bench: 0, against: 9 }),
   ];
-  const order = (key: StatSortKey, list: readonly StatRow[] = rows) =>
-    rankStatRows(list, key).map((r) => r.player_id);
+  const sorted = (key: StatSortKey, asc = false) => ({ key, asc }) as StatSort;
+  const order = (key: StatSortKey, list: readonly StatRow[] = rows, asc = false) =>
+    rankStatRows(list, sorted(key, asc)).map((r) => r.player_id);
 
-  test("points first is the default order", () => {
+  test("points first is the default order, descending", () => {
     assert.equal(DEFAULT_STAT_SORT, "points");
+    assert.deepEqual(DEFAULT_STAT_SORT_STATE, { key: "points", asc: false });
     assert.deepEqual(order("points"), ["b", "c", "a"]);
   });
 
   test("the rank is the row's place in this view, from one", () => {
-    assert.deepEqual(rankStatRows(rows, "points").map((r) => r.rank), [1, 2, 3]);
+    assert.deepEqual(rankStatRows(rows, sorted("points")).map((r) => r.rank), [1, 2, 3]);
   });
 
   test("it renumbers from one on a narrowing rather than carrying a stored place", () => {
     const narrowed = narrowStatRows(rows, { ...NO_STAT_FILTERS, query: "Ccc" });
-    assert.deepEqual(rankStatRows(narrowed, "points").map((r) => r.rank), [1]);
+    assert.deepEqual(rankStatRows(narrowed, sorted("points")).map((r) => r.rank), [1]);
   });
 
-  test("every cap orders descending on its own count", () => {
+  test("every head orders descending on its own count", () => {
     // `a` and `c` are level at two started, and points break it — see below.
     assert.deepEqual(order("start"), ["b", "c", "a"]);
     assert.deepEqual(order("bench"), ["a", "b", "c"]);
-    assert.deepEqual(order("against"), ["c", "b", "a"]);
+    assert.deepEqual(order("opp-start"), ["c", "b", "a"]);
+  });
+
+  test("a press on the lit head reverses it", () => {
+    assert.deepEqual(order("points", rows, true), ["a", "c", "b"]);
+    // **The tiebreak does not reverse with it**, which is the half of a
+    // reversible sort that is silent: `a` and `c` are level at two started,
+    // and points settle them the same way in both directions. Flipped, the
+    // list would reshuffle its own ties on every press.
+    assert.deepEqual(order("start", rows, true), ["c", "a", "b"]);
+  });
+
+  test("the name is the one head that opens ascending", () => {
+    assert.equal(defaultStatAscending("name"), true);
+    for (const key of ["points", "clock", "start", "rec_yd"] as const) {
+      assert.equal(defaultStatAscending(key), false);
+    }
+    assert.deepEqual(order("name", rows, true), ["a", "b", "c"]);
+    assert.deepEqual(order("name", rows, false), ["c", "b", "a"]);
+  });
+
+  test("a fresh press takes the key's own direction; the lit one flips", () => {
+    // The two arms are not symmetrical, which is the whole reason this is a
+    // function rather than a ternary at the call site.
+    const points = DEFAULT_STAT_SORT_STATE;
+    assert.deepEqual(nextStatSort(points, "name"), { key: "name", asc: true });
+    assert.deepEqual(nextStatSort(points, "points"), { key: "points", asc: true });
+    assert.deepEqual(nextStatSort({ key: "name", asc: true }, "name"), {
+      key: "name",
+      asc: false,
+    });
+  });
+
+  test("a sort the columns can still answer is kept, by identity", () => {
+    // Returned by identity so the splits handler may hand it straight back to
+    // `setState` and re-render nothing on the ordinary press.
+    const held: StatSort = { key: "pass_yd", asc: false };
+    assert.equal(statSortFor(held, statColumns(ALL_SPLITS)), held);
+    assert.equal(statSortFor(held, statColumns(["pass"])), held);
+  });
+
+  test("a sort whose column the splits rail dropped falls back to points", () => {
+    // The one thing the head-as-sort model can get wrong that the six-cap
+    // rail it replaced could not: a list ordered by a column nothing on
+    // screen names, no head lit, and no way back to that order.
+    assert.deepEqual(statSortFor({ key: "pass_yd", asc: true }, statColumns(["rush", "rec"])), {
+      key: "points",
+      asc: false,
+    });
+    assert.deepEqual(statSortFor({ key: "rec_td", asc: false }, statColumns(["pass"])), {
+      key: "points",
+      asc: false,
+    });
+  });
+
+  test("the four keys no rail can remove are never fallen back from", () => {
+    // Name, clock, the four usage readings and points are heads of their own
+    // rather than columns, so every set of splits still answers them.
+    for (const key of ["name", "clock", "start", "opp-bench", "points"] as const) {
+      const held: StatSort = { key, asc: true };
+      assert.equal(statSortFor(held, statColumns(["rec"])), held);
+    }
   });
 
   test("points break a tie on a count, and the name breaks that", () => {
@@ -372,6 +436,29 @@ describe("rankStatRows", () => {
       mine({ player_id: "some", name: "Ss", points: 2, start: 3, bench: 0, against: 0 }),
     ];
     assert.deepEqual(order("start", mixed), ["some", "zero", "none"]);
+    // **And still last with the arrow flipped**, which is the half only a
+    // reversible sort can get wrong: folded into the comparison, ascending
+    // would float every row the question is not about to the top.
+    assert.deepEqual(order("start", mixed, true), ["zero", "some", "none"]);
+  });
+
+  test("a row whose game the board could not read sorts last on the clock", () => {
+    const mixed = [
+      row({ player_id: "bye", name: "Bb", stage: null, points: 40 }),
+      row({ player_id: "pre", name: "Pp", stage: 0, points: 1 }),
+      row({ player_id: "done", name: "Dd", stage: 5, points: 2 }),
+    ];
+    assert.deepEqual(order("clock", mixed), ["done", "pre", "bye"]);
+    assert.deepEqual(order("clock", mixed, true), ["pre", "done", "bye"]);
+  });
+
+  test("a split column orders on its own figure", () => {
+    const mixed = [
+      row({ player_id: "a", name: "Aa", rec_yd: 40, targets: 9 }),
+      row({ player_id: "b", name: "Bb", rec_yd: 112, targets: 3 }),
+    ];
+    assert.deepEqual(order("rec_yd", mixed), ["b", "a"]);
+    assert.deepEqual(order("targets", mixed), ["a", "b"]);
   });
 
   test("so pressing `Started` floats the reader's own players to the top", () => {
@@ -384,20 +471,32 @@ describe("rankStatRows", () => {
 
   test("the rows handed in are not reordered", () => {
     const held = [...rows];
-    rankStatRows(held, "start");
+    rankStatRows(held, sorted("start"));
     assert.deepEqual(held.map((r) => r.player_id), ["a", "b", "c"]);
   });
 });
 
-describe("statTeams", () => {
-  test("distinct and sorted, and a row with no team offers none", () => {
+describe("statFacetCounts", () => {
+  test("how many rows each value would leave, over the unfiltered population", () => {
     const rows = [
-      row({ team: "LAR" }),
-      row({ team: "CIN" }),
-      row({ team: "LAR" }),
-      row({ team: null }),
+      row({ team: "LAR", position: "WR" }),
+      row({ team: "CIN", position: "QB" }),
+      row({ team: "LAR", position: "WR" }),
+      row({ team: null, position: "TE" }),
     ];
-    assert.deepEqual(statTeams(rows), ["CIN", "LAR"]);
+    assert.deepEqual([...statFacetCounts(rows, (r) => r.team)], [["LAR", 2], ["CIN", 1]]);
+    assert.deepEqual(
+      [...statFacetCounts(rows, (r) => r.position)],
+      [["WR", 2], ["QB", 1], ["TE", 1]],
+    );
+  });
+
+  test("a row with no answer is in no bucket rather than in one of its own", () => {
+    // The Team menu simply does not offer a code for a row the feed named no
+    // team for, where an `Unknown` chip would be a value nothing else on the
+    // board prints.
+    const counts = statFacetCounts([row({ team: null })], (r) => r.team);
+    assert.equal(counts.size, 0);
   });
 });
 
@@ -466,14 +565,6 @@ describe("statTagLine", () => {
 });
 
 describe("the ledge's vocabularies", () => {
-  test("the caps are the six sort keys, points first", () => {
-    assert.deepEqual(
-      STAT_SORTS.map((s) => s.key),
-      ["points", "yds", "td", "start", "bench", "against"],
-    );
-    assert.equal(STAT_SORTS[0].key, DEFAULT_STAT_SORT);
-  });
-
   test("every position the list filters by is one its rows can carry", () => {
     const positions: StatBoardPosition[] = ["QB", "RB", "WR", "TE"];
     assert.deepEqual([...STAT_POSITIONS], positions);
@@ -501,18 +592,28 @@ describe("the scoring terms are the column's own arithmetic", () => {
       rec: 1, rec_yd: 1, rec_td: 1,
       fumbles_lost: 1,
     });
-    assert.equal(statScoring(all, "ppr").length, STAT_COLUMNS.length);
-    // And the rate each column's own pane row states is that figure's, not
-    // its neighbour's: a receiving yard is a tenth and a passing yard is not.
-    const rows = statFamilies(all, "ppr");
-    const rate = (family: string, label: string) =>
-      rows.find((f) => f.key === family)?.rows.find((r) => r.label === label)?.rate;
-    assert.equal(rate("pass", "Yards"), "0.04 each");
-    assert.equal(rate("rush", "Yards"), "0.1 each");
-    assert.equal(rate("rec", "Yards"), "0.1 each");
-    assert.equal(rate("pass", "Touchdowns"), "4 each");
-    assert.equal(rate("rec", "Touchdowns"), "6 each");
-    assert.equal(rate("pass", "Interceptions"), "−2 each");
+    // Nine of the thirteen columns are priced; the four volume figures are
+    // not — a completion is not worth nothing, it is not worth anything.
+    assert.equal(statScoring(all, "ppr").length, STAT_COLUMNS.length - 4);
+    // And the rate each figure's own pane row states is that figure's, not its
+    // neighbour's: a receiving yard is a tenth and a passing yard is not.
+    const rate = (label: string) =>
+      statScoring(all, "ppr").find((r) => r.label.endsWith(label))?.rate;
+    assert.equal(rate("passing yard"), "0.04 / yd");
+    assert.equal(rate("rushing yard"), "0.1 / yd");
+    assert.equal(rate("receiving yard"), "0.1 / yd");
+    assert.equal(rate("passing touchdown"), "4.0 each");
+    assert.equal(rate("receiving touchdown"), "6.0 each");
+    assert.equal(rate("interception"), "−1.0 each");
+  });
+
+  test("the volume figures carry no term at all and are priced at nothing", () => {
+    // The distinction that decides how the pane draws a family: absent from
+    // the table rather than present at zero, so `statPoints` cannot price one
+    // by accident and a family row cannot print `0 each` beside a completion.
+    const volume = line({ pass_cmp: 24, pass_att: 35, rush_att: 9, targets: 11 });
+    assert.equal(statPoints(volume, "ppr"), 0);
+    assert.deepEqual(statScoring(volume, "ppr"), []);
   });
 
   test("moving a passing yard from ÷25 to ×0.04 changes no printed figure", () => {
@@ -526,7 +627,7 @@ describe("the scoring terms are the column's own arithmetic", () => {
         const old =
           stat.pass_yd / 25 +
           stat.pass_td * 4 -
-          stat.pass_int * 2 +
+          stat.pass_int * 1 +
           stat.rush_yd / 10 +
           stat.rush_td * 6 +
           stat.rec * 1 +
@@ -564,7 +665,7 @@ describe("the scoring terms are the column's own arithmetic", () => {
     const rows = statScoring(line({ rec: 8, rec_yd: 40 }), "std");
     assert.deepEqual(
       rows.map((r) => `${r.label} ${r.rate} ${r.value}`),
-      ["8 receptions × 0 0.0", "40 receiving yards × 0.1 4.0"],
+      ["8 receptions 0.0 each 0.0", "40 receiving yards 0.1 / yd 4.0"],
     );
     assert.equal(rows[0].zero, true);
     assert.equal(rows[1].zero, false);
@@ -572,8 +673,8 @@ describe("the scoring terms are the column's own arithmetic", () => {
 
   test("a minus is a minus sign, not a hyphen", () => {
     const rows = statScoring(line({ fumbles_lost: 2, pass_int: 1 }), "ppr");
-    assert.ok(rows.every((r) => !r.rate.includes("-")));
-    assert.ok(rows.some((r) => r.rate === "× −2"));
+    assert.ok(rows.every((r) => !(r.rate ?? "").includes("-")));
+    assert.ok(rows.some((r) => r.rate === "−2.0 each"));
     // And the value beside it is the same glyph — one spelling of a sign.
     assert.ok(rows.every((r) => !r.value.includes("-")));
     assert.ok(rows.some((r) => r.value === "−4.0"));
@@ -590,38 +691,118 @@ describe("the scoring terms are the column's own arithmetic", () => {
 describe("statFamilies", () => {
   test("a family with nothing in it is absent, a nought inside a live one is kept", () => {
     const families = statFamilies(
-      line({ rec: 8, rec_yd: 112, rec_td: 0, fumbles_lost: 1 }),
-      "ppr",
+      line({ targets: 11, rec: 8, rec_yd: 112, rec_td: 0, fumbles_lost: 1 }),
     );
     assert.deepEqual(families.map((f) => f.key), ["rec", "fum"]);
     // The phone's own line omits the nought; the pane's rows keep it, because
-    // there the rate beside it is the point.
-    assert.equal(families[0].text, "8 rec · 112 yd");
-    assert.deepEqual(families[0].rows.map((r) => r.value), ["8", "112", "0"]);
-    assert.equal(families[0].rows[2].zero, true);
+    // there the count beside its neighbours is the point.
+    assert.equal(families[0].text, "11 tgt · 8 rec · 112 yd");
+    assert.deepEqual(families[0].rows.map((r) => r.value), ["11", "8", "112", "0"]);
+    assert.equal(families[0].rows[3].zero, true);
   });
 
   test("a line with nothing in it has no families at all", () => {
-    assert.deepEqual(statFamilies(line(), "ppr"), []);
+    assert.deepEqual(statFamilies(line()), []);
   });
 
-  test("the rate each row states is the basis's own", () => {
-    const ppr = statFamilies(line({ rec: 3 }), "ppr")[0].rows[0];
-    const half = statFamilies(line({ rec: 3 }), "half")[0].rows[0];
-    assert.equal(ppr.rate, "1 each");
-    assert.equal(half.rate, "0.5 each");
+  test("a family row carries no rate, and the sum group carries them all", () => {
+    // The two groups answer two questions — a family says what he did and
+    // `How 25.2 adds up` says what it was worth — so a rate printed on both
+    // would be the second explaining a figure the first had already priced.
+    // With the volume columns it is more than untidy: a completion has no
+    // price, and `0 each` beside one is a claim.
+    const stat = line({ pass_cmp: 24, pass_att: 35, pass_yd: 288, pass_td: 3 });
+    assert.ok(statFamilies(stat).every((f) => f.rows.every((r) => r.rate === null)));
+    assert.ok(statScoring(stat, "ppr").every((r) => r.rate !== null));
+  });
+
+  test("volume leads the family it belongs to, on the strip and in the pane", () => {
+    const passer = statFamilies(line({ pass_cmp: 24, pass_att: 35, pass_yd: 288 }))[0];
+    assert.equal(passer.text, "24 cmp · 35 att · 288 yd");
+    assert.deepEqual(
+      passer.rows.map((r) => r.label),
+      ["Completions", "Attempts", "Yards", "Touchdowns", "Interceptions"],
+    );
+    const runner = statFamilies(line({ rush_att: 18, rush_yd: 96 }))[0];
+    assert.equal(runner.text, "18 car · 96 yd");
   });
 });
 
 describe("the column table and the head derived from it", () => {
   test("every split carried, and the track that holds them", () => {
-    assert.equal(statColumns([]).length, 9);
-    assert.equal(statTrackWidth(statColumns([])), 1112);
+    assert.equal(statColumns([]).length, 13);
+    // 258 + 100 + 600 of splits + 4 × 72 of counts + 84.
+    assert.equal(statTrackWidth(statColumns([])), 1330);
+    assert.equal(STAT_USAGE_WIDTH, STAT_FIXED.count * USAGE_KEYS.length);
+  });
+
+  test("volume leads each family in the column order too", () => {
+    // What a reader travelling left to right meets is the denominator before
+    // the numerator: the yardage is *earned from* the attempts in front of it.
+    assert.deepEqual(
+      statColumns([]).map((c) => c.key),
+      [
+        "pass_cmp", "pass_att", "pass_yd", "pass_td", "pass_int",
+        "rush_att", "rush_yd", "rush_td",
+        "targets", "rec", "rec_yd", "rec_td",
+        "fumbles_lost",
+      ],
+    );
+  });
+
+  test("every head is a column, a fixed track or a usage reading — and no more", () => {
+    // Derived from the same table the row and the spans are, so a column
+    // added, dropped or resized moves its own head with it. A hand-kept list
+    // is one that files `Rushing TD` over a passing touchdown the first time a
+    // column moves, with every number on the board correct.
+    const columns = statColumns([]);
+    const heads = statHeads(columns);
+    assert.deepEqual(
+      heads.map((h) => h.key),
+      ["name", "clock", ...columns.map((c) => c.key), ...USAGE_KEYS, "points"],
+    );
+    // And the heads are exactly as wide as the cells beneath them.
+    assert.equal(
+      heads.reduce((total, h) => total + h.width, 0),
+      statTrackWidth(columns),
+    );
+    for (const splits of [["pass"], ["rush", "rec"]] as const) {
+      const narrowed = statColumns([...splits]);
+      assert.equal(
+        statHeads(narrowed).reduce((total, h) => total + h.width, 0),
+        statTrackWidth(narrowed),
+      );
+    }
+  });
+
+  test("the two pinned heads are the two pinned cells, and nothing else pins", () => {
+    const heads = statHeads(statColumns([]));
+    assert.equal(heads.filter((h) => h.pin === "left").length, 1);
+    assert.equal(heads.filter((h) => h.pin === "right").length, 1);
+    assert.equal(heads.find((h) => h.pin === "left")?.width, STAT_FIXED.player);
+    assert.equal(heads.find((h) => h.pin === "right")?.width, STAT_FIXED.points);
+    // The name reads left and every figure reads right, under its own column.
+    assert.equal(heads[0].align, "left");
+    assert.ok(heads.slice(1).every((h) => h.align === "right"));
+  });
+
+  test("every head names itself in full for a press that cannot show a word", () => {
+    // `Yd` is three heads under three families, and `Tgt` is three letters:
+    // the hint is what a screen reader hears instead of either.
+    const hints = new Map(statHeads(statColumns([])).map((h) => [h.key, h.hint]));
+    assert.equal(hints.get("pass_yd"), "Passing yards");
+    assert.equal(hints.get("rec_yd"), "Receiving yards");
+    assert.equal(hints.get("targets"), "Targets");
+    assert.equal(hints.get("start"), USAGE_LABEL.start);
+    assert.ok([...hints.values()].every((hint) => hint.length > 0));
   });
 
   test("a narrowed set keeps its own families and never the fumble", () => {
     const only = statColumns(["rec"]);
-    assert.deepEqual(only.map((c) => c.key), ["rec", "rec_yd", "rec_td", "fumbles_lost"]);
+    assert.deepEqual(
+      only.map((c) => c.key),
+      ["targets", "rec", "rec_yd", "rec_td", "fumbles_lost"],
+    );
   });
 
   test("each family's span is the sum of its own columns", () => {
@@ -640,7 +821,7 @@ describe("the column table and the head derived from it", () => {
       }
       // And the whole tier is the row's own track, to the pixel.
       assert.equal(
-        spans.reduce((total, s) => total + s.width, 0),
+        spans.reduce((total, span) => total + span.width, 0),
         statTrackWidth(columns),
       );
     }
@@ -648,21 +829,155 @@ describe("the column table and the head derived from it", () => {
 
   test("the head pins the same two widths the rows do", () => {
     const spans = statGroupSpans(statColumns([]));
-    const left = spans.find((s) => s.pin === "left");
-    const right = spans.find((s) => s.pin === "right");
+    const left = spans.find((span) => span.pin === "left");
+    const right = spans.find((span) => span.pin === "right");
     assert.equal(left?.width, STAT_FIXED.player);
     assert.equal(right?.width, STAT_FIXED.points);
     // Exactly one of each — two pinned left blocks would stack at the edge.
-    assert.equal(spans.filter((s) => s.pin === "left").length, 1);
-    assert.equal(spans.filter((s) => s.pin === "right").length, 1);
+    assert.equal(spans.filter((span) => span.pin === "left").length, 1);
+    assert.equal(spans.filter((span) => span.pin === "right").length, 1);
+  });
+
+  test("the four usage columns sit under one word, which the lower tier cannot say", () => {
+    const leagues = statGroupSpans(statColumns([])).find((span) => span.key === "leagues");
+    assert.equal(leagues?.label, "Your leagues");
+    assert.equal(leagues?.width, STAT_USAGE_WIDTH);
+    // And it is the only span in the upper tier that labels anything the
+    // lower one does not already say.
+    assert.deepEqual(
+      statGroupSpans(statColumns([]))
+        .filter((span) => span.label !== "")
+        .map((span) => span.label),
+      ["Passing", "Rushing", "Receiving", "Your leagues"],
+    );
   });
 
   test("the first span is uncut and every boundary after it is not", () => {
     const spans = statGroupSpans(statColumns([]));
     assert.equal(spans[0].cut, false);
     assert.deepEqual(
-      spans.map((s) => s.key),
+      spans.map((span) => span.key),
       ["player", "game", "pass", "rush", "rec", "fum", "leagues", "points"],
+    );
+  });
+});
+
+describe("the clock facet", () => {
+  const at = (over: Partial<import("@/shared/contract").GametimeGame>) =>
+    statRows(
+      { "1": line({ team: "CIN" }) },
+      { CIN: game(over) },
+      "ppr",
+    )[0].stage;
+
+  test("six stops, and `Pre` is the one the design's five could not hold", () => {
+    // A five-stop scale has nowhere to put a game that has not kicked off but
+    // `F`, which is a filter that lies about a four o'clock kickoff.
+    assert.deepEqual([...STAT_STAGES], ["Pre", "Q1", "Q2", "Q3", "Q4", "F"]);
+    assert.deepEqual(STAT_STAGE_BOUNDS, { lo: 0, hi: 5 });
+  });
+
+  test("a stop is read off the game, never parsed back out of the clock's label", () => {
+    assert.equal(at({ phase: "pre", kickoff: 1 }), 0);
+    assert.equal(at({ phase: "live", quarter: 1, clock: "12:00" }), 1);
+    assert.equal(at({ phase: "live", quarter: 3, clock: "04:11" }), 3);
+    assert.equal(at({ phase: "final" }), 5);
+  });
+
+  test("overtime is the last running stop, not the finished one", () => {
+    // It is past the fourth quarter and it is not over, and the distinction
+    // the facet is asked about is running against finished.
+    assert.equal(at({ phase: "live", overtime: true, quarter: 5, clock: "07:20" }), 4);
+  });
+
+  test("a bye and a live game with no quarter are both unknown, not a guess", () => {
+    assert.equal(statRows({ "1": line({ team: "CIN" }) }, {}, "ppr")[0].stage, null);
+    assert.equal(at({ phase: "live", quarter: null, clock: null }), null);
+  });
+
+  test("an untouched span narrows nothing, including the rows with no stop", () => {
+    const rows = [row({ player_id: "bye", stage: null }), row({ player_id: "q1", stage: 1 })];
+    assert.equal(narrowStatRows(rows, NO_STAT_FILTERS).length, 2);
+    assert.equal(
+      narrowStatRows(rows, { ...NO_STAT_FILTERS, clock: { lo: 0, hi: 5 } }).length,
+      2,
+    );
+  });
+
+  test("a narrowing span takes its own stops, and an unknown stop is outside it", () => {
+    const rows = [
+      row({ player_id: "bye", stage: null }),
+      row({ player_id: "pre", stage: 0 }),
+      row({ player_id: "q3", stage: 3 }),
+      row({ player_id: "done", stage: 5 }),
+    ];
+    assert.deepEqual(
+      narrowStatRows(rows, { ...NO_STAT_FILTERS, clock: { lo: 1, hi: 4 } }).map(
+        (r) => r.player_id,
+      ),
+      ["q3"],
+    );
+    assert.deepEqual(
+      narrowStatRows(rows, { ...NO_STAT_FILTERS, clock: { lo: 0, hi: 0 } }).map(
+        (r) => r.player_id,
+      ),
+      ["pre"],
+    );
+  });
+});
+
+describe("the Filters key's badge and the tray's foot", () => {
+  test("facets are counted, never values", () => {
+    // "3" beside the key means three questions are answered, which is what a
+    // reader can act on; the chips inside them are the tray's own business.
+    assert.equal(statFacetCount(NO_STAT_FILTERS), 0);
+    assert.equal(
+      statFacetCount({ ...NO_STAT_FILTERS, positions: ["QB", "RB", "WR"] }),
+      1,
+    );
+    assert.equal(
+      statFacetCount({
+        ...NO_STAT_FILTERS,
+        positions: ["QB"],
+        teams: ["CIN"],
+        clock: { lo: 1, hi: 4 },
+        usage: ["start"],
+      }),
+      4,
+    );
+  });
+
+  test("the search is not one of them, and a full-width span is not either", () => {
+    // The field is on the ledge with its own text in it, so a badge counting
+    // it would be the same narrowing stated twice on one row; and a span on
+    // both bounds is the reader not having asked.
+    assert.equal(statFacetCount({ ...NO_STAT_FILTERS, query: "chase" }), 0);
+    assert.equal(statFacetCount({ ...NO_STAT_FILTERS, clock: { lo: 0, hi: 5 } }), 0);
+    // It is still a narrowing, which is what lights the ledge's own count.
+    assert.equal(statFiltersActive({ ...NO_STAT_FILTERS, query: "chase" }), true);
+    assert.equal(statFiltersActive({ ...NO_STAT_FILTERS, clock: { lo: 0, hi: 5 } }), false);
+  });
+
+  test("every facet the badge counts is named in the foot", () => {
+    // A foot reading `Nothing narrowed` under a badge reading `1` is a
+    // contradiction on one row of one tray.
+    assert.equal(statFilterSummary(NO_STAT_FILTERS), null);
+    assert.equal(
+      statFilterSummary({
+        ...NO_STAT_FILTERS,
+        positions: ["QB"],
+        teams: ["CIN", "LAR"],
+        clock: { lo: 1, hi: 3 },
+        usage: ["start", "opp-bench"],
+      }),
+      "Pos QB · Team CIN · LAR · Clock Q1–Q3 · Started · They sat",
+    );
+  });
+
+  test("the foot names the stops rather than their indices", () => {
+    assert.equal(
+      statFilterSummary({ ...NO_STAT_FILTERS, clock: { lo: 0, hi: 4 } }),
+      "Clock Pre–Q4",
     );
   });
 });
@@ -800,34 +1115,6 @@ describe("readingCount", () => {
   test("the track reads All first, then the four", () => {
     assert.deepEqual(PLAYER_READINGS, ["all", ...USAGE_KEYS]);
     assert.equal(READING_LABEL.all, "All");
-  });
-});
-
-describe("the two summed sorts", () => {
-  const stat = (over: Partial<StatRow>) => row(over);
-
-  test("yards are the three families summed, and so are touchdowns", () => {
-    const r = stat({ pass_yd: 100, rush_yd: 20, rec_yd: 5, pass_td: 1, rush_td: 2, rec_td: 3 });
-    assert.equal(statYards(r), 125);
-    assert.equal(statTouchdowns(r), 6);
-  });
-
-  test("descending, with points as the tiebreaker", () => {
-    const rows = [
-      stat({ player_id: "few", rush_yd: 10, points: 9 }),
-      stat({ player_id: "many", rec_yd: 100, points: 1 }),
-      stat({ player_id: "tie", rush_yd: 10, points: 2 }),
-    ];
-    assert.deepEqual(
-      rankStatRows(rows, "yds").map((r) => r.player_id),
-      ["many", "few", "tie"],
-    );
-  });
-
-  test("the rank renumbers from 1 on every view", () => {
-    const rows = [stat({ player_id: "a", rec_td: 2 }), stat({ player_id: "b", rec_td: 1 })];
-    assert.deepEqual(rankStatRows(rows, "td").map((r) => r.rank), [1, 2]);
-    assert.deepEqual(rankStatRows([rows[1]], "td").map((r) => r.rank), [1]);
   });
 });
 

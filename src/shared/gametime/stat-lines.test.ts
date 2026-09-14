@@ -31,7 +31,7 @@ function week(
   return board;
 }
 
-const CHASE: Line = { rec: 11, rec_yd: 148, rec_td: 2 };
+const CHASE: Line = { rec_tgt: 14, rec: 11, rec_yd: 148, rec_td: 2 };
 
 describe("statBoardLines", () => {
   test("a published line becomes a row, with every figure filled in", () => {
@@ -41,16 +41,37 @@ describe("statBoardLines", () => {
       name: "Player 1",
       position: "WR",
       team: "CIN",
+      pass_cmp: 0,
+      pass_att: 0,
       pass_yd: 0,
       pass_td: 0,
       pass_int: 0,
+      rush_att: 0,
       rush_yd: 0,
       rush_td: 0,
+      targets: 14,
       rec: 11,
       rec_yd: 148,
       rec_td: 2,
       fumbles_lost: 0,
     });
+  });
+
+  test("targets are `rec_tgt` on the wire and `targets` on the row", () => {
+    // The one pairing in `STAT_FIELDS` that is not a name restated. Read off
+    // the wrong key the column is silently always empty, which is the failure
+    // that table exists to make impossible.
+    const board = statBoardLines(week([["1", { rec_tgt: 9, rec: 6 }, ["WR"], "CIN"]]));
+    assert.equal(board["1"]?.targets, 9);
+  });
+
+  test("the three volume keys Sleeper names for itself land on their own fields", () => {
+    const board = statBoardLines(
+      week([["1", { pass_cmp: 24, pass_att: 35, rush_att: 4 }, ["QB"], "BUF"]]),
+    );
+    assert.equal(board["1"]?.pass_cmp, 24);
+    assert.equal(board["1"]?.pass_att, 35);
+    assert.equal(board["1"]?.rush_att, 4);
   });
 
   test("a feed nobody could read is an empty board, never a board of zeroes", () => {
@@ -68,11 +89,24 @@ describe("statBoardLines", () => {
   });
 
   test("a player who did nothing at all has no row", () => {
-    // Nine em dashes and a 0.0 is a row with no reading on it — and, worse,
-    // a few hundred of them drag `sharePercentile`'s mean to the floor and
-    // paint every ordinary afternoon as a career day.
-    const board = statBoardLines(week([["1", { rec_tgt: 3, off_snp: 40 }, ["WR"], "CIN"]]));
+    // Thirteen em dashes and a 0.0 is a row with no reading on it — and,
+    // worse, a few hundred of them drag `sharePercentile`'s mean to the floor
+    // and paint every ordinary afternoon as a career day. Snaps are not one of
+    // the thirteen, so a line carrying only those says nothing the board can
+    // print.
+    const board = statBoardLines(week([["1", { off_snp: 40, tm_off_snp: 62 }, ["WR"], "CIN"]]));
     assert.deepEqual(board, {});
+  });
+
+  test("a target and no catch is a week, where it used to be nothing", () => {
+    // The volume figures count toward "something to show", which is what the
+    // columns are for: a receiver targeted five times who caught none of them
+    // has a line worth reading and scores nothing, and reading the rule as
+    // "did he score" would drop him for the same reason it would drop the
+    // fumble below.
+    const board = statBoardLines(week([["1", { rec_tgt: 5 }, ["WR"], "CIN"]]));
+    assert.equal(board["1"]?.targets, 5);
+    assert.equal(board["1"]?.rec, 0);
   });
 
   test("a lost fumble and nothing else is still a week", () => {

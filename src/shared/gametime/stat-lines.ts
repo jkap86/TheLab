@@ -37,19 +37,30 @@ export const STAT_BOARD_POSITIONS: readonly StatBoardPosition[] = ["QB", "RB", "
 const BOARD_POSITION = new Set<string>(STAT_BOARD_POSITIONS);
 
 /**
- * The nine Sleeper stat keys a row is built from, in the board's own column
- * order, paired with the field each fills.
+ * The thirteen Sleeper stat keys a row is built from, in the board's own
+ * column order, paired with the field each fills.
  *
- * Named once rather than nine times: the fold reads them, the "did he do
+ * Named once rather than thirteen times: the fold reads them, the "did he do
  * anything" test walks them, and a key misspelled in one place and not the
  * other is a column that is silently always empty.
+ *
+ * **Four of them are volume and their wire names are not all their field
+ * names.** `pass_cmp`, `pass_att` and `rush_att` are Sleeper's own spellings;
+ * targets are `rec_tgt` there and `targets` here, which is the one pairing in
+ * this table that is doing real work rather than restating a name. The comps
+ * loader reads `rec_tgt` off the same feed, so the spelling is one this repo
+ * has already seen answer.
  */
 const STAT_FIELDS = [
+  ["pass_cmp", "pass_cmp"],
+  ["pass_att", "pass_att"],
   ["pass_yd", "pass_yd"],
   ["pass_td", "pass_td"],
   ["pass_int", "pass_int"],
+  ["rush_att", "rush_att"],
   ["rush_yd", "rush_yd"],
   ["rush_td", "rush_td"],
+  ["rec_tgt", "targets"],
   ["rec", "rec"],
   ["rec_yd", "rec_yd"],
   ["rec_td", "rec_td"],
@@ -87,7 +98,15 @@ const STAT_FIELDS = [
  * only worth printing against an honest middle.
  *
  * Note what that rule is *not*: it is not "he scored points". A fumble lost
- * and nothing else is a real, and negative, week, and it keeps its row.
+ * and nothing else is a real, and negative, week, and it keeps its row — and
+ * **the four volume figures count toward it too**, which is the one thing the
+ * volume columns changed about which rows exist. A receiver targeted five
+ * times who caught none of them has a line worth reading and scores nothing;
+ * read as "did he score" he would be dropped, which is the same fault as
+ * dropping the fumble. What it costs is a handful of extra 0.0s in the ramp's
+ * population per week — a receiver with a target and no catch, a quarterback
+ * with attempts and no completions — against the hundreds of active rosters
+ * the rule above is actually there to keep off the board.
  */
 export function statBoardLines(
   stats: WeekProjections | null,
@@ -107,11 +126,15 @@ export function statBoardLines(
       name: player.name,
       position,
       team: player.team,
+      pass_cmp: 0,
+      pass_att: 0,
       pass_yd: 0,
       pass_td: 0,
       pass_int: 0,
+      rush_att: 0,
       rush_yd: 0,
       rush_td: 0,
+      targets: 0,
       rec: 0,
       rec_yd: 0,
       rec_td: 0,

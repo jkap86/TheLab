@@ -19579,3 +19579,237 @@ which case the window could be shortened for a board that was already final
 when the room opened; and whether the open-then-terminal-fault cycle the
 backoff now survives is reached in production at all, since it needs the
 reader's Postgres read to fail on every attempt.
+
+### The board's ledge took the manager tray, and its volume came onto the wire
+
+Two passes ago the box score came back pinned and the four usage readings became
+columns; this finishes the part on the manager shares console's own grammar. The
+ledge's single-select `Sort` rail is gone and **every column head is the sort**;
+the search, the result count and a **Filters tray** — position chips, a Team
+menu that adds, and a clock span — replace the two cap rails that narrowed it;
+the four usage readings join that tray as its one facet about the reader's own
+week; and the line itself gained the **volume** behind every figure, so a
+passing yardage sits beside the attempts that earned it. Applied from a design
+handoff. **One contract change and no migration**: `GametimeStatLine` gained
+`pass_cmp`, `pass_att`, `rush_att` and `targets`, all of them keys the stats
+feed already publishes.
+
+**The volume is four keys on a table that already names thirteen.** `STAT_FIELDS`
+is the wire-key-to-field pairing, one list the fold reads and the "did he do
+anything" test walks, and three of the four are Sleeper's own spellings;
+**targets are `rec_tgt` there and `targets` here**, which is the one pairing in
+that table doing real work rather than restating a name. The comps loader reads
+the same key off the same feed, so it is a spelling this repo has seen answer.
+
+**And they count toward which rows exist**, which is the one thing the columns
+changed about the board's population. The rule has always been "something to
+show" rather than "he scored points" — a lost fumble and nothing else is a real,
+and negative, week — and a **receiver targeted five times who caught none of
+them** is the same argument one column over: he has a line worth reading and
+scores nothing, so reading the rule as "did he score" would drop him for exactly
+the reason it would drop the fumble. What it costs is a handful of extra `0.0`s
+in `sharePercentile`'s population per week, against the hundreds of active
+rosters that rule is actually there to keep off the board.
+
+**`pass_int` is −1, where it was −2.** The board is stated half-PPR and the
+handoff's scoring table is the one this app is answering to; the term is named
+once in `scoringTerms`, which `statPoints` sums and `statScoring` itemises, so
+the change is one number and the pane's `How 32.9 adds up` cannot come to
+disagree with the column it explains.
+
+**Every term carries a unit now** (`0.1 / yd`, `6.0 each`, `−1.0 each`), because
+the pane prints the rate beside the count — and the four volume figures
+deliberately carry **no term at all**, which is why `StatLineRow.rate` is
+nullable: a family row states `35 att` with nothing in the rate column, since an
+attempt is not scored and a rate there would be a claim.
+
+#### The span rules and the tray are one part now
+
+`features/manager/components/player-filters.tsx` held a Filters key, a labelled
+facet row, a milled cut, a counting chip and a two-handle span over a track, and
+the gametime board's ledge wanted all five. They are `features/shared/ui/
+filter-tray.tsx` — the line `CONSOLE_KEY`, `ManagerPlate`, `CollapseTray` and
+`DetailLedge` all moved on — and `Span`, `spanActive`, `insideSpan` and
+`toggleFacet` went to `features/shared/facet-span.ts` beside them, pure and
+import-free so both trays' rules resolve under Node's own runner.
+`player-filters.ts` re-exports all four, so **no manager caller moved**.
+
+**Sharing them is the point rather than a saving.** The two trays narrow two
+different lists and a reader walks between the pages one press apart, so a chip
+that counted differently, a badge that counted *values* rather than facets, or a
+span readout that lit on a different rule would be the drift the console's
+convergence passes exist to remove — and none of those three has a symptom. The
+measurements are identical to the pixel because they were one part already.
+
+**`RangeRow` took a `format`, and that is the one thing the second reader
+needed.** An age and a draft class are their own labels; the board's clock scale
+is an **ordinal** over `Pre Q1 Q2 Q3 Q4 F`, and a readout printing `1–5` there
+would be a control whose two ends name nothing on the board it narrows. It is a
+prop rather than a second component because the *rule* — the window lights only
+once the span is a filter — is the same either way, and it feeds `aria-valuetext`
+as well as the readout, so a keyboard reader hears `Q1` rather than `1`.
+
+**The clock stage is derived from `GametimeGame`, never parsed back out of the
+label.** The prototype reads its own printed string; this reads `phase`,
+`quarter` and `overtime` — pre is 0, a quarter is its own number, overtime is 4
+(regulation is what the scale is a scale *of*) and final is 5 — and a quarter
+nobody could read is **null**, which is outside every span, on the same rule an
+absent age already lives by. Six stops rather than the prototype's five, because
+a pre-kickoff game filed under `Final` is a row the reader would never find.
+
+#### Four departures, each argued
+
+**The usage readings stayed as a narrowing, and the handoff contradicts
+itself about them.** Its tray prose does not list them; its own prototype
+carries `usageCaps`, counts them in `facetCount` and empties them in
+`clearFilters`. They are a fourth `Used` row in the tray and they are **named in
+the foot**, which is what makes the two honest: a foot reading `Nothing
+narrowed` under a badge reading `1` is a contradiction on one row of one tray.
+
+**The usage columns are 72px, where the design's table says 56.** `Started` at
+`--fs-10` with the heads' own `0.12em` measures **58.5px**, so at 56 the head
+stretched its own column — a flex item's `min-width` is `auto` — and took every
+column after it out from under its own head, with every figure on the board
+correct and every one of them under the wrong word. It is fixed twice over:
+`min-w-0` on the `columnheader`, so a head can never stretch a column again, and
+72px, which leaves 60 of content after the cell's padding. Shortening the words
+was the alternative and is worse — the only abbreviations that fit (`Vs` beside
+`Opp`) stop saying which of the opposing pair is a start and which a bench.
+
+**The `Game` column is 100px, where the design's table says 88.** That column is
+drawn against a clock and the design measures it against one (`Q3 11:02` is
+59.4px here); what it is not measured against is the **kickoff**, which this app
+prints in the reader's own locale — so an en-US afternoon game is `Sun 12:00 PM`,
+**89px tracked and 83.5 untracked** against the 78 an 88px cell leaves after its
+padding. It overflowed to the *left*, under the pinned `Player` cell, and a
+render is what caught it: four pixels of the day simply were not there.
+Letter-spacing is the first thing to spend — the rule this repo already keeps for
+the lineup checker's own `Kick` column, which made the identical measurement
+against the identical string — and it buys 5.5px where 11 are wanted, so the
+track took the rest.
+
+**Every cap keeps `touch:min-h-11`.** The handoff names this as a decision: its
+compacted phone caps are 36px, under this app's 44px floor, and it offers keeping
+them as a documented exception. The floor wins — it is the rule every other cap,
+key and menu on this page already keeps, and spending it here would make this
+ledge the only place in the app where a touch target is short, to buy one list
+row on a panel that scrolls.
+
+#### Three things a render found, and one the design could not see
+
+**The phone lost its sort, and nothing in the handoff mentions it.** Its change 2
+says the `Sort` cap rail is gone and its prototype is desktop-only with no
+responsive arms at all — but the heads only exist above `lg`, and that rail was
+drawn at *every* width. Taken at face value it left a phone reader with a list
+they could not reorder, which is the failure the lineup checker's own header pass
+already records in as many words: *"it is a control now, and a phone that lost it
+would lose the sort."* Below `lg` the ledge carries a native `<select>` over
+**exactly the readings the heads name**, in their **long** forms — three columns
+are headed `Yd` and three `TD`, and a flat list of those names nothing — with the
+direction on a key beside it, which is where a head carries its arrow. A menu
+rather than caps for the reason the `Team` menu two rows down is one: twenty keys
+is a rail no phone row can hold.
+
+**A sort whose column the rail dropped fell back to nothing.** The heads *are*
+the sort and the `Splits` rail can take one off the board, so a reader who
+ordered by `Passing yards` and then dropped the passing family was left with a
+list ordered by a column nothing on screen named, no head lit, and no way back to
+that order — the one thing about head-as-sort the six-cap rail it replaced could
+not do wrong, its six keys having been fixed. `statSortFor` is the rule,
+`sharesColumns`' own one panel over, with this board's fallback: points, which no
+rail can remove and which is the resting order anyway. It returns a still-answerable
+sort **by identity**, so the ordinary press re-renders nothing.
+
+**A phone family wraps inside itself rather than clipping.** The strip's well is
+`flex-wrap`, so a group that does not fit takes a line of its own — and a
+dual-threat quarterback's passing group is wider than the *whole well* at 390
+now that the volume figures are in it (`24 cmp · 35 att · 288 yd · 3 td · 1
+int`), so a line of its own is not enough. Left `shrink-0` it overflowed the
+well's `overflow-hidden` by ~23px and the interception was simply not there.
+Wrapped it costs a line on the handful of lines long enough to need one, and the
+separators make the break read as a break: a truncation loses the clause, a wrap
+loses only the space.
+
+**And a lit usage well is derived, never stored.** The handoff's state sketch
+carries a `cellPick: { id, key }` beside the pane's `reading`; two spellings of
+one fact is a well lit on a row whose pane says something else, so the well is
+`picked === row.player_id && reading === key` and a press writes the pane's
+reading. Driven: pressing the pane's own `Sat` key moves the lit well down the
+row and the grid follows it.
+
+#### Verified
+
+Driven over CDP against `next dev` with no `DATABASE_URL` — the boot hook skips
+migrations and the loops log their refusals, which is the server coming up
+healthy against nothing — through a temporary `/preview` route mounting the
+**real** `StatBoard` over nine fixture lines, a seven-team board carrying a live
+game, a final, a pre-kickoff and an overtime, and a three-player fold, with a
+`#scope` readout printing the published league scope; then deleted. The mechanics
+are the ones this file records: `--no-proxy-server`, `localhost` rather than
+`127.0.0.1`, a phone viewport from `Emulation.setDeviceMetricsOverride` with
+`mobile: true`, `data-theme` **and** `localStorage`,
+`--disable-features=OverlayScrollbar`, the
+`--blink-settings=availablePointerTypes=4,…` flags built as a **template
+literal**, a client-component harness, a CDP client over Node's own `WebSocket`,
+and a fresh `--remote-debugging-port` per run. Two are this pass's own and each
+cost a run: `pkill -f <pattern>` matching the running command's own line kills
+the shell (exit 144), which is a trap this file already records and which was
+walked into twice; and the ledge's Filters key is **caret-prefixed** (`▶Filters`)
+while its chips print `WR3` rather than `WR 3`, so every probe matches what the
+DOM holds and every one of them is **scoped inside the tray** — the detail pane's
+own mode track draws the same four words with the same counts beside them, so an
+unscoped `querySelectorAll` counts eight usage chips and presses the wrong one.
+
+**Four drives, all clean.** Geometry at 1280 and 390 in both schemes: the bar
+**52/48px** shut with **zero rows mounted** and the section clicking through, 20
+heads over a **1330px** track, rows at 38px with four usage wells apiece, the
+head widths summing to the track, **no head stretching its own column**, and the
+head cells lining up with the row cells beneath. Behaviour at 1280 — 45 checks:
+the board opening on points descending, a fresh press on `Player` opening
+ascending and the lit head reversing, exactly one `aria-sort` naming the press,
+a split column ordering on its own figure; the usage press lighting one well and
+no other on the row, narrowing the grid to `[L1 L2]`, the key reading
+`Narrowing`, the pane's track following, a press on that track moving the lit
+well *down the row* with the grid behind it, a press on the lit well clearing the
+narrowing and leaving the row picked, and a player nobody holds printing an em
+dash and refusing his own press; the tray inert shut and reachable open, two
+range handles, chips counted over the unfiltered population (`All9 QB1 RB3 WR3
+TE2`), four facet rows in the design's order, a badge counting **facets**, the
+count window showing its denominator only while narrowed, the clock readout and
+`aria-valuetext` naming the **stops** rather than their indices, and `Clear all`
+emptying every facet; the splits rail dropping a family's columns and narrowing
+the track with them, the last lit cap refusing its own press, and a dark cap
+still lighting; Escape collapsing the panel and the collapse being what the
+device remembers. Phone at 390 — 19 checks: the wide table `display: none` and
+the list drawn, no splits rail, the sort menu offering **20 readings in their
+long forms** and opening on the board's own order, the menu reordering the list,
+the key reversing it and saying so, a row press replacing the list, `‹ List`
+returning. And the sort fallback: a split column taking the sort, dropping its
+family taking its head off the board and the sort falling back to `Pts▼`, and a
+usage head surviving the rail.
+
+At every width and in both schemes: `document.documentElement.scrollWidth` within
+the viewport, **zero unclipped elements past it**, nothing clipped inside the
+panel but `sr-only` text, exactly one `<h1>`, and **no console output of any
+kind**. The `Game` column was re-measured after the widening: `Sun 5:00 PM` runs
+341→418 inside a cell of 328→428, where it had overflowed its left edge.
+
+2,874 unit tests pass (23 more — the four volume pairings, a target and no catch
+being a week, the clock facet's six stops and its three absences, the Filters
+badge and the tray's foot, the head derived from its own width table, the sort's
+direction model, and `statSortFor`'s three arms); `lint`, `typecheck` and
+`check:full` from a cleared `.next` are clean. **The suite caught the preview
+route** on the way — `loggedRoute` walks `app/` and asserts every page has a
+recorded shape, so a temporary route is a failing test rather than something to
+remember to delete.
+
+**Not verified against real data**, which is the gap to close first: every number
+above is a fixture and no database was reachable from here. Four things a render
+cannot check — whether Sleeper publishes `pass_cmp`, `pass_att` and `rush_att` as
+reliably as it publishes the yardage, which is the one thing the new columns rest
+on and only a live Sunday can say; what a real week's board costs with twenty
+columns across four hundred rows on a page where a frame lands every twenty
+seconds; whether the tray's `Used` facet is *asked* often enough to be worth the
+row it takes, which is the judgement this pass makes on the handoff's behalf; and
+whether the 100px `Game` column holds in a locale this build has not been run in,
+since the worst case it is set against is an en-US afternoon kickoff.

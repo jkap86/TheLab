@@ -212,6 +212,22 @@ export type {
   WeekReading,
 } from "./league-subjects";
 export { CollapseTray } from "./ui/collapse-tray";
+// The Filters tray's own grammar — the key, a labelled facet row, the cut, a
+// counting chip, a two-handle span and the foot — on the line `CONSOLE_KEY`
+// and `CollapseTray` moved on: the gametime board's tray is a second reader of
+// the manager players drawer's. The pure half of it (`Span`, `spanActive`,
+// `insideSpan`, `toggleFacet`) is `facet-span.ts`, which both features' own
+// helpers reach relatively so they go on resolving under Node's runner.
+export {
+  FacetChip,
+  FacetFoot,
+  FacetGroove,
+  FacetRow,
+  FiltersKey,
+  RangeRow,
+} from "./ui/filter-tray";
+export { insideSpan, spanActive, toggleFacet } from "./facet-span";
+export type { Span } from "./facet-span";
 export { SharesDrawer } from "./ui/shares-drawer";
 export type {
   SharesDrawerDisclosure,

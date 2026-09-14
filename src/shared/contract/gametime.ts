@@ -241,11 +241,29 @@ export type GametimeStatLine = {
    * figures, with its opponent and its clock left as dashes.
    */
   team: string | null;
+  /**
+   * The four volume figures, which **lead their families** on the board and in
+   * the pane: volume is what the yardage behind it is earned from, and 8 of 11
+   * is a different week from 8 of 8 with the same three columns either side.
+   *
+   * They are folded off Sleeper's own `pass_cmp` / `pass_att` / `rush_att` /
+   * `rec_tgt` — the last is the one key whose wire name and field name differ,
+   * and it is named here in this type's own style rather than the feed's.
+   *
+   * They carry **no scoring term**, which is the one thing about them that
+   * decides how the pane draws a family: a completion is not worth nothing, it
+   * is not worth *anything*, so the pane's family rows print a count with no
+   * rate beside it and the rates live in `How 25.2 adds up` alone.
+   */
+  pass_cmp: number;
+  pass_att: number;
   pass_yd: number;
   pass_td: number;
   pass_int: number;
+  rush_att: number;
   rush_yd: number;
   rush_td: number;
+  targets: number;
   rec: number;
   rec_yd: number;
   rec_td: number;

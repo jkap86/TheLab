@@ -37,6 +37,12 @@
 
 import type { GametimeGame, GametimeStatLine, StatBoardPosition } from "@/shared/contract";
 
+import {
+  insideSpan,
+  spanActive,
+  toggleFacet,
+  type Span,
+} from "../../shared/facet-span.ts";
 import { WEEK_READINGS, type WeekReading } from "../../shared/league-subjects.ts";
 import { gameClockLabel } from "./live-record.ts";
 
@@ -90,13 +96,37 @@ export type ScoringTerm = {
   count: number;
   /** What one is worth on this basis. */
   per: number;
+  /**
+   * The rate as the pane states it — `0.1 / yd`, `6.0 each`.
+   *
+   * A word rather than a bare multiplier, because the two kinds of term read
+   * differently: a yardage rate is a figure *per unit* and a touchdown is a
+   * flat price, and `× 0.1` beside `× 6` makes the reader supply the
+   * distinction the design spells out.
+   */
+  unit: string;
 };
 
 /**
  * Standard fantasy scoring, spelled once: a passing yard is a twenty-fifth of
- * a point, a passing touchdown four, an interception minus two, a rushing or
+ * a point, a passing touchdown four, an interception minus one, a rushing or
  * receiving yard a tenth, those touchdowns six, a lost fumble minus two, and a
  * reception whatever the basis says.
+ *
+ * **The interception is `−1` and used to be `−2`**, which is the one figure on
+ * this board a redesign moved. The handoff states the rate table it draws and
+ * names `pass_int −1`; it is also Sleeper's own default, where `−2` is ESPN's,
+ * and this board prices a whole account rather than any one league — so the
+ * scale it picks should be the one the leagues under it mostly run. What it
+ * costs is that every quarterback who threw one reads a point higher than he
+ * did yesterday, which is a visible change to a live page and is why it is
+ * written down here rather than left in the diff.
+ *
+ * **The volume figures carry no term at all**, which is the thing about them
+ * that decides how the pane draws a family: a completion is not worth nothing,
+ * it is not worth *anything*. So they are absent from this table, `statPoints`
+ * cannot accidentally price them, and the pane's family rows print a count
+ * with no rate beside it — see {@link statFamilies}.
  *
  * Every term is emitted, zero or not; the readers drop their own empties —
  * {@link statScoring} because a row reading `0 touchdowns × 6 = 0.0` is a line
@@ -106,16 +136,18 @@ export type ScoringTerm = {
 function scoringTerms(line: GametimeStatLine, basis: StatBasis): ScoringTerm[] {
   const plural = (n: number, one: string, many: string) =>
     `${n} ${n === 1 ? one : many}`;
+  const each = (per: number) => `${signedFixed(per)} each`;
+  const perYard = (per: number) => `${signed(per)} / yd`;
   return [
-    { key: "pass_yd", family: "pass", label: plural(line.pass_yd, "passing yard", "passing yards"), count: line.pass_yd, per: 0.04 },
-    { key: "pass_td", family: "pass", label: plural(line.pass_td, "passing touchdown", "passing touchdowns"), count: line.pass_td, per: 4 },
-    { key: "pass_int", family: "pass", label: plural(line.pass_int, "interception", "interceptions"), count: line.pass_int, per: -2 },
-    { key: "rush_yd", family: "rush", label: plural(line.rush_yd, "rushing yard", "rushing yards"), count: line.rush_yd, per: 0.1 },
-    { key: "rush_td", family: "rush", label: plural(line.rush_td, "rushing touchdown", "rushing touchdowns"), count: line.rush_td, per: 6 },
-    { key: "rec", family: "rec", label: plural(line.rec, "reception", "receptions"), count: line.rec, per: PER_RECEPTION[basis] },
-    { key: "rec_yd", family: "rec", label: plural(line.rec_yd, "receiving yard", "receiving yards"), count: line.rec_yd, per: 0.1 },
-    { key: "rec_td", family: "rec", label: plural(line.rec_td, "receiving touchdown", "receiving touchdowns"), count: line.rec_td, per: 6 },
-    { key: "fumbles_lost", family: "fum", label: plural(line.fumbles_lost, "fumble lost", "fumbles lost"), count: line.fumbles_lost, per: -2 },
+    { key: "pass_yd", family: "pass", label: plural(line.pass_yd, "passing yard", "passing yards"), count: line.pass_yd, per: 0.04, unit: perYard(0.04) },
+    { key: "pass_td", family: "pass", label: plural(line.pass_td, "passing touchdown", "passing touchdowns"), count: line.pass_td, per: 4, unit: each(4) },
+    { key: "pass_int", family: "pass", label: plural(line.pass_int, "interception", "interceptions"), count: line.pass_int, per: -1, unit: each(-1) },
+    { key: "rush_yd", family: "rush", label: plural(line.rush_yd, "rushing yard", "rushing yards"), count: line.rush_yd, per: 0.1, unit: perYard(0.1) },
+    { key: "rush_td", family: "rush", label: plural(line.rush_td, "rushing touchdown", "rushing touchdowns"), count: line.rush_td, per: 6, unit: each(6) },
+    { key: "rec", family: "rec", label: plural(line.rec, "reception", "receptions"), count: line.rec, per: PER_RECEPTION[basis], unit: each(PER_RECEPTION[basis]) },
+    { key: "rec_yd", family: "rec", label: plural(line.rec_yd, "receiving yard", "receiving yards"), count: line.rec_yd, per: 0.1, unit: perYard(0.1) },
+    { key: "rec_td", family: "rec", label: plural(line.rec_td, "receiving touchdown", "receiving touchdowns"), count: line.rec_td, per: 6, unit: each(6) },
+    { key: "fumbles_lost", family: "fum", label: plural(line.fumbles_lost, "fumble lost", "fumbles lost"), count: line.fumbles_lost, per: -2, unit: each(-2) },
   ];
 }
 
@@ -169,6 +201,18 @@ export type StatRow = GametimeStatLine & {
   opponent: string | null;
   /** What the Game column reads, and whether his game is running. */
   clock: { text: string; live: boolean };
+  /**
+   * How far through his game is, as an index into {@link STAT_STAGES}, or
+   * **null where the board has no game for him** — a bye, or a scoreboard
+   * nobody could read.
+   *
+   * It is derived from the game rather than parsed back out of the clock's own
+   * label, which is the difference between a fact and a guess: `gameClockLabel`
+   * answers `Sun 1:00 PM` before kickoff and `Half` at the interval, and a
+   * reading that took the first two characters of either would file a four
+   * o'clock game under `Final`.
+   */
+  stage: number | null;
   points: number;
   /**
    * Whether anybody in the reader's leagues has him — what the `Your leagues`
@@ -252,6 +296,7 @@ export function statRows(
       ...line,
       opponent: game?.opponent ? (game.home ? game.opponent : `@${game.opponent}`) : null,
       clock: gameClockLabel(game),
+      stage: gameStage(game),
       points: statPoints(line, basis),
       held: share !== undefined,
       start: share ? share.started : null,
@@ -261,6 +306,45 @@ export function statRows(
       against: share ? share.oppStarted + share.oppBenched : null,
     };
   });
+}
+
+/**
+ * How far through a game is, as the `Clock` facet's own scale.
+ *
+ * **Six stops where the design draws five**, and the extra one is `Pre`. Its
+ * five are `Q1 Q2 Q3 Q4 F`, which its fixture week could afford because every
+ * game in it had kicked off; a real Sunday morning is mostly games that have
+ * not, and a five-stop scale has nowhere to put one but `F`. A facet that
+ * filed a four o'clock kickoff under `Final` is a filter that lies, which is
+ * the class of fault this module is written against — and "yet to start" is a
+ * question a reader actually asks on the morning this board is busiest.
+ */
+export const STAT_STAGES: readonly string[] = ["Pre", "Q1", "Q2", "Q3", "Q4", "F"];
+
+/** The span's own ends, which the facet's two handles run between. */
+export const STAT_STAGE_BOUNDS = { lo: 0, hi: STAT_STAGES.length - 1 } as const;
+
+/**
+ * A game's stop on that scale.
+ *
+ * **Overtime reads as `Q4`**, which is the one mapping that is a judgement.
+ * It is past the fourth quarter and it is not over, and the distinction the
+ * facet is actually asked about is *running against finished* — so the last
+ * running stop is the honest one, where `F` would file a game still being
+ * played with the ones that are done.
+ *
+ * **A live game whose quarter the scoreboard did not say is null**, not a
+ * guess at the middle: `gameClockLabel` prints a bare `Live` for exactly that
+ * row, and an unknown stop is outside every narrowing span on
+ * `insideSpan`'s own rule rather than inside a fabricated one.
+ */
+function gameStage(game: GametimeGame | null): number | null {
+  if (!game) return null;
+  if (game.phase === "pre") return 0;
+  if (game.phase === "final") return 5;
+  if (game.overtime) return 4;
+  if (game.quarter === null) return null;
+  return Math.min(Math.max(game.quarter, 1), 4);
 }
 
 /** Nothing folded yet — a module-level identity, so a memo sees one object. */
@@ -329,24 +413,51 @@ export function toggleSplit(
  * numbers, so the two cannot drift.
  */
 export type StatColumn = {
-  key: "pass_yd" | "pass_td" | "pass_int" | "rush_yd" | "rush_td" | "rec" | "rec_yd" | "rec_td" | "fumbles_lost";
+  key:
+    | "pass_cmp"
+    | "pass_att"
+    | "pass_yd"
+    | "pass_td"
+    | "pass_int"
+    | "rush_att"
+    | "rush_yd"
+    | "rush_td"
+    | "targets"
+    | "rec"
+    | "rec_yd"
+    | "rec_td"
+    | "fumbles_lost";
   family: StatFamilyKey;
   /** The lower tier's own word — `Yd` three times, under three families. */
   label: string;
+  /** What a screen reader hears instead — `Passing Yd`, since `Yd` is three. */
+  hint: string;
   width: number;
 };
 
-/** Every split column, in the order the board draws them. */
+/**
+ * Every split column, in the order the board draws them.
+ *
+ * **Volume leads each family**, which is the one thing about the order that is
+ * a decision rather than a habit: the yardage behind a line is *earned from*
+ * the attempts in front of it, and 8 of 11 is a different week from 8 of 8
+ * with the same three columns either side. A reader travelling left to right
+ * meets the denominator before the numerator.
+ */
 export const STAT_COLUMNS: readonly StatColumn[] = [
-  { key: "pass_yd", family: "pass", label: "Yd", width: 56 },
-  { key: "pass_td", family: "pass", label: "TD", width: 44 },
-  { key: "pass_int", family: "pass", label: "Int", width: 44 },
-  { key: "rush_yd", family: "rush", label: "Yd", width: 56 },
-  { key: "rush_td", family: "rush", label: "TD", width: 44 },
-  { key: "rec", family: "rec", label: "Rec", width: 44 },
-  { key: "rec_yd", family: "rec", label: "Yd", width: 56 },
-  { key: "rec_td", family: "rec", label: "TD", width: 44 },
-  { key: "fumbles_lost", family: "fum", label: "FL", width: 36 },
+  { key: "pass_cmp", family: "pass", label: "Cmp", hint: "Passing completions", width: 44 },
+  { key: "pass_att", family: "pass", label: "Att", hint: "Passing attempts", width: 44 },
+  { key: "pass_yd", family: "pass", label: "Yd", hint: "Passing yards", width: 56 },
+  { key: "pass_td", family: "pass", label: "TD", hint: "Passing touchdowns", width: 44 },
+  { key: "pass_int", family: "pass", label: "Int", hint: "Interceptions", width: 44 },
+  { key: "rush_att", family: "rush", label: "Car", hint: "Carries", width: 44 },
+  { key: "rush_yd", family: "rush", label: "Yd", hint: "Rushing yards", width: 56 },
+  { key: "rush_td", family: "rush", label: "TD", hint: "Rushing touchdowns", width: 44 },
+  { key: "targets", family: "rec", label: "Tgt", hint: "Targets", width: 44 },
+  { key: "rec", family: "rec", label: "Rec", hint: "Receptions", width: 44 },
+  { key: "rec_yd", family: "rec", label: "Yd", hint: "Receiving yards", width: 56 },
+  { key: "rec_td", family: "rec", label: "TD", hint: "Receiving touchdowns", width: 44 },
+  { key: "fumbles_lost", family: "fum", label: "FL", hint: "Fumbles lost", width: 36 },
 ];
 
 /** What each family's upper-tier span is called. `fum` labels nothing. */
@@ -357,13 +468,67 @@ export const FAMILY_TITLE: Record<StatFamilyKey, string> = {
   fum: "",
 };
 
-/** The two fixed tracks either side of the splits, and the two between them. */
+/**
+ * The two pinned tracks and the two that scroll between them and the splits.
+ *
+ * `count` is **one** of the four usage columns rather than the block: they are
+ * four cells on the row and four heads over them, and the head's own family
+ * span is `4 × count` — derived rather than written down, for the reason
+ * {@link statGroupSpans} exists at all.
+ *
+ * The player track grew (228 → 258) and the game track with it (76 → 88),
+ * because both carry a reading they did not: the player cell has a 22px badge
+ * and his NFL team beside the position, and the game cell is two lines, the
+ * wider of which is the clock.
+ *
+ * **`count` is 72 where the design draws 56, and that is a measurement.** The
+ * four usage columns are the only ones whose *head* is wider than its figures:
+ * a count is one or two digits and `Started` is seven characters, which at
+ * this board's own `--fs-10` and `0.12em` measures **58.5px** — so a 56px
+ * column with 12px of padding left it 44 and the head stretched its own track
+ * by 14px, taking every column after it out from under its head. (That is the
+ * failure rather than the fix: the head cell is `min-w-0` now, so it can never
+ * stretch a column again whatever it carries.)
+ *
+ * The two ways out were a wider column and a shorter word, and the word is
+ * what this board would usually spend — `Cmp`, `Tgt`, `Car` and `FL` are all
+ * abbreviations with the full reading in their accessible names. It is not
+ * spent here because the two that overflow are the *opposing* pair, and every
+ * abbreviation short enough to fit (`Vs` beside `Opp`) stops saying which of
+ * them is a start and which is a bench — which is the one distinction these
+ * four columns exist to draw. 72px leaves 60 for a 58.5px word, and what it
+ * costs is 64px on a track that is built to scroll.
+ */
 export const STAT_FIXED = {
-  player: 228,
-  game: 76,
-  leagues: 300,
+  player: 258,
+  /**
+   * The `Game` column, at **100px where the design's own table says 88** —
+   * and the 12 are a measurement rather than a preference.
+   *
+   * That column is drawn against a clock, and the design measures it against
+   * one: `Q3 11:02` is 59.4px here. What it is not measured against is the
+   * *kickoff*, which this app prints in the **reader's own locale** — so an
+   * en-US afternoon game is `Sun 12:00 PM`, which measures **89px tracked and
+   * 83.5 untracked** in this build's own IBM Plex Mono, against the 78 an
+   * 88px cell leaves after its 10px of right padding. It overflowed to the
+   * *left*, under the pinned `Player` cell, and a render is what caught it:
+   * four pixels of the day simply were not there, with nothing on screen
+   * saying so.
+   *
+   * Letter-spacing is the first thing to spend — the rule this repo already
+   * keeps for the lineup checker's own `Kick` column, which made the identical
+   * measurement against the identical string — and it buys 5.5px where 11 are
+   * wanted, so the track takes the rest. 100 leaves 90 against an untracked
+   * 83.5, which is margin for a locale whose day is longer than three
+   * characters rather than slack.
+   */
+  game: 100,
+  count: 72,
   points: 84,
 } as const;
+
+/** The four usage columns' block, which the head's own span is the width of. */
+export const STAT_USAGE_WIDTH = STAT_FIXED.count * WEEK_READINGS.length;
 
 /**
  * The split columns a selection carries — **empty is all of them**, which is
@@ -386,7 +551,8 @@ export function statColumns(
 
 /** The row's own track, which is what the scroller is that wide for. */
 export function statTrackWidth(columns: readonly StatColumn[]): number {
-  let width = STAT_FIXED.player + STAT_FIXED.game + STAT_FIXED.leagues + STAT_FIXED.points;
+  let width =
+    STAT_FIXED.player + STAT_FIXED.game + STAT_USAGE_WIDTH + STAT_FIXED.points;
   for (const column of columns) width += column.width;
   return width;
 }
@@ -447,7 +613,11 @@ export function statGroupSpans(
       });
   }
   spans.push(
-    { key: "leagues", label: "", width: STAT_FIXED.leagues, cut: true, pin: null },
+    /* The four usage columns under one word, which is the only span in the
+       upper tier that *labels* anything the lower tier does not already say:
+       `Started` / `Sat` / `Vs` / `Opp sat` are four readings of one question,
+       and the question is whose leagues they are about. */
+    { key: "leagues", label: "Your leagues", width: STAT_USAGE_WIDTH, cut: true, pin: null },
     { key: "points", label: "", width: STAT_FIXED.points, cut: false, pin: "right" },
   );
   return spans;
@@ -477,8 +647,19 @@ export type StatFamily = {
 /** One row of the pane's line: what it counts, the rate, and how many. */
 export type StatLineRow = {
   label: string;
-  /** `0.1 each`, `× 6` — the pane's two readings of one number. */
-  rate: string;
+  /**
+   * `0.1 / yd`, `6.0 each` — what one of them is worth, or **null where the
+   * figure is not a scoring one at all**.
+   *
+   * The family groups carry null on every row and the sum group carries a rate
+   * on all of them, and that split is the design's rather than an accident of
+   * the volume columns arriving. A family says *what he did* and `How 25.2
+   * adds up` says *what it was worth*, so a rate printed twice would be the
+   * second group explaining a figure the first had already priced — and the
+   * volume figures made it more than untidy: a completion has no price, so
+   * `0 each` beside one is a claim.
+   */
+  rate: string | null;
   value: string;
   /** Whether the value is a nought, which the pane inks quietly. */
   zero: boolean;
@@ -486,6 +667,10 @@ export type StatLineRow = {
 
 /** The short word each figure takes on the phone's strip. */
 const SHORT: Record<StatColumn["key"], string> = {
+  pass_cmp: "cmp",
+  pass_att: "att",
+  rush_att: "car",
+  targets: "tgt",
   pass_yd: "yd",
   pass_td: "td",
   pass_int: "int",
@@ -507,6 +692,10 @@ const FAMILY_HEAD: Record<StatFamilyKey, string> = {
 /**
  * A player's line, folded into the families he actually has one in.
  *
+ * **It takes no basis**, which it did until the rates came off the family
+ * rows: what a figure is worth is `How 25.2 adds up`'s business, and a fold of
+ * *what he did* is the same fold on all three scales.
+ *
  * **An empty family is dropped and a zero inside a live one is kept**, which
  * is the distinction that makes the strip readable: a quarterback who threw
  * for three touchdowns and no interceptions reads `PASS 288 yd · 3 td` — the
@@ -515,13 +704,7 @@ const FAMILY_HEAD: Record<StatFamilyKey, string> = {
  * The pane's rows keep every figure of a family it draws, nought included,
  * because there the rate beside it is the point.
  */
-export function statFamilies(
-  line: GametimeStatLine,
-  basis: StatBasis,
-): StatFamily[] {
-  const per = new Map<string, number>();
-  for (const term of scoringTerms(line, basis)) per.set(term.key, term.per);
-
+export function statFamilies(line: GametimeStatLine): StatFamily[] {
   const families: StatFamily[] = [];
   for (const key of ["pass", "rush", "rec", "fum"] as const) {
     const columns = STAT_COLUMNS.filter((c) => c.family === key);
@@ -536,7 +719,9 @@ export function statFamilies(
         .join(" · "),
       rows: figures.map((f) => ({
         label: COLUMN_NOUN[f.column.key],
-        rate: `${signed(per.get(f.column.key) ?? 0)} each`,
+        /* No rate: a family states the line and the sum below it states what
+           the line was worth — see `StatLineRow.rate`. */
+        rate: null,
         value: String(f.count),
         zero: f.count === 0,
       })),
@@ -547,6 +732,10 @@ export function statFamilies(
 
 /** What the pane calls each figure, where the column head has two letters. */
 const COLUMN_NOUN: Record<StatColumn["key"], string> = {
+  pass_cmp: "Completions",
+  pass_att: "Attempts",
+  rush_att: "Carries",
+  targets: "Targets",
   pass_yd: "Yards",
   pass_td: "Touchdowns",
   pass_int: "Interceptions",
@@ -600,13 +789,24 @@ export function statScoring(
     .filter((term) => term.count !== 0)
     .map((term) => ({
       label: term.label,
-      rate: `× ${signed(term.per)}`,
+      rate: term.unit,
       value: signedFixed(term.count * term.per),
       zero: term.count * term.per === 0,
     }));
 }
 
-/** The four positions the Pos menu offers, in the order it draws them. */
+/**
+ * Add or drop one value of a multi-select facet.
+ *
+ * **Re-exported rather than spelled again**: this was a second copy of
+ * `toggleFacet` until the two trays became one grammar, and one menu that
+ * stopped agreeing with the other about what a second press means is the drift
+ * a shared rule exists to prevent. Every caller in this feature reaches it
+ * under this name, which is what kept the move to one line.
+ */
+export { toggleFacet };
+
+/** The four positions the Pos row offers, in the order it draws them. */
 export const STAT_POSITIONS: readonly StatBoardPosition[] = ["QB", "RB", "WR", "TE"];
 
 /**
@@ -663,6 +863,15 @@ export type StatBoardFilters = {
   positions: readonly StatBoardPosition[];
   teams: readonly string[];
   /**
+   * How far through a player's game must be — null until a handle moves.
+   *
+   * A span rather than a set of stops, because what a reader asks of a clock
+   * is a range: *still early*, *nearly over*. A full-width span is not a
+   * filter at all ({@link spanActive}), which is what keeps an untouched
+   * control from quietly excluding every row on a bye.
+   */
+  clock: Span;
+  /**
    * Which readings a row must have **somewhere**, ANDed.
    *
    * **The AND is over the reader's leagues, not over one of them**, and that
@@ -688,47 +897,78 @@ export const NO_STAT_FILTERS: StatBoardFilters = {
   query: "",
   positions: [],
   teams: [],
+  clock: null,
   usage: [],
 };
 
 /** Whether anything is narrowing — what lights the Reset key. */
 export function statFiltersActive(filters: StatBoardFilters): boolean {
+  return filters.query.trim() !== "" || statFacetCount(filters) > 0;
+}
+
+/**
+ * How many of the tray's four facets are answered, for the Filters key's
+ * badge.
+ *
+ * **Counted per facet rather than per value** — "3" beside the key means three
+ * questions have been answered, which is what a reader can act on; the number
+ * of chips inside them is the tray's own business. It is `activeFilterCount`'s
+ * own rule one panel over, and it deliberately leaves the **search** out: the
+ * field is on the ledge with its own text in it, so a badge counting it would
+ * be the same narrowing stated twice on one row.
+ */
+export function statFacetCount(filters: StatBoardFilters): number {
   return (
-    filters.query.trim() !== "" ||
-    filters.positions.length > 0 ||
-    filters.teams.length > 0 ||
-    filters.usage.length > 0
+    (filters.positions.length > 0 ? 1 : 0) +
+    (filters.teams.length > 0 ? 1 : 0) +
+    (spanActive(filters.clock, STAT_STAGE_BOUNDS) ? 1 : 0) +
+    (filters.usage.length > 0 ? 1 : 0)
   );
 }
 
 /**
- * Add or drop one value of a multi-select set.
+ * What the tray's foot says it has narrowed to.
  *
- * Here rather than in the component because it is the edit both menus make and
- * a second spelling is one menu that stops agreeing with the other about what
- * a second press means. Order is the press order, which is what the trigger's
- * `CIN · LAR` summary reads.
+ * **Every facet the badge counts is named here**, including the usage
+ * readings, which is a departure from the design's own footer and is the
+ * reading that makes the two honest: a foot saying `Nothing narrowed` under a
+ * badge reading `1` is a contradiction on one row of one tray.
  */
-export function toggleFilterValue<T extends string>(
-  held: readonly T[],
-  value: T,
-): T[] {
-  return held.includes(value) ? held.filter((v) => v !== value) : [...held, value];
+export function statFilterSummary(filters: StatBoardFilters): string | null {
+  const parts: string[] = [];
+  if (filters.positions.length) parts.push(`Pos ${filters.positions.join(" · ")}`);
+  if (filters.teams.length) parts.push(`Team ${filters.teams.join(" · ")}`);
+  const { clock } = filters;
+  if (clock && spanActive(clock, STAT_STAGE_BOUNDS)) {
+    parts.push(`Clock ${STAT_STAGES[clock.lo]}–${STAT_STAGES[clock.hi]}`);
+  }
+  if (filters.usage.length) parts.push(usageSummary(filters.usage));
+  return parts.length ? parts.join(" · ") : null;
 }
 
 /**
- * What a multi-select trigger says it is narrowed to.
+ * A facet's values and how many rows carry each — **over the unfiltered
+ * population**, which is the rule both trays' chips live by: a facet says how
+ * many it *would leave*, not how many are left, so a chip that reads zero the
+ * moment you press it cannot happen and a reader can widen without clearing
+ * first.
  *
- * Three readings rather than a list that grows without bound: `All` when
- * nothing is picked, the values themselves while there are few enough to read
- * on a pill, and a count past that. The noun is the caller's, because `3
- * positions` and `3 teams` are the only thing that differs between the two
- * menus.
+ * A row with no answer contributes to nothing rather than to a bucket of its
+ * own: the board's two string facets are a position (which every row has, by
+ * `boardPosition`) and a team (which the `Team` menu simply does not offer for
+ * a row the feed named none for).
  */
-export function menuSummary(held: readonly string[], noun: string): string {
-  if (held.length === 0) return "All";
-  if (held.length <= 2) return held.join(" · ");
-  return `${held.length} ${noun}`;
+export function statFacetCounts(
+  rows: readonly StatRow[],
+  read: (row: StatRow) => string | null,
+): Map<string, number> {
+  const counts = new Map<string, number>();
+  for (const row of rows) {
+    const key = read(row);
+    if (key === null) continue;
+    counts.set(key, (counts.get(key) ?? 0) + 1);
+  }
+  return counts;
 }
 
 /**
@@ -750,6 +990,7 @@ export function narrowStatRows(
         filters.positions.includes(row.position)) &&
       (filters.teams.length === 0 ||
         (row.team !== null && filters.teams.includes(row.team))) &&
+      insideSpan(row.stage, filters.clock, STAT_STAGE_BOUNDS) &&
       (query === "" || (row.name ?? "").toLowerCase().includes(query)) &&
       // Every picked reading, somewhere — see `StatBoardFilters.usage`. A null
       // is a player the question is not about and fails on the first cap.
@@ -758,99 +999,123 @@ export function narrowStatRows(
 }
 
 /**
- * Which of the four the list is ordered by.
+ * Which column the list is ordered by — **every head on the board, and only
+ * a head**.
  *
- * Every one of them is a figure the row already prints, which is what keeps
- * the Sort caps, the lit tag and the header arrow one vocabulary: a key naming
- * an ordering the row could not show would be a list whose order nothing on it
- * explained.
+ * The board had a `Sort` cap rail of six keys and the heads were not
+ * pressable; the rail is gone and the heads are the control, which is the
+ * design's own call and is the one that makes the vocabulary honest by
+ * construction: a key naming an ordering nothing on the row could show was
+ * always possible with a rail beside the table, and is now unreachable.
+ *
+ * **What went with the rail is the two summed sorts.** `Yds` and `TD` ordered
+ * a board by the sum across all three families — the question "who moved the
+ * ball furthest" asked of quarterbacks, backs and receivers at once — and no
+ * head can carry them, because the sum is no single column's own figure and an
+ * arrow on three heads would claim three orderings. It is a real capability
+ * lost rather than a tidy-up, and what is left in its place is narrowing the
+ * `Splits` rail to one family and pressing that family's `Yd`, which answers
+ * the same question of the players a reader has narrowed to.
  */
 export type StatSortKey =
-  | "points"
-  | "yds"
-  | "td"
-  | "start"
-  | "bench"
-  | "against";
-
-/**
- * The two summed figures the rail offers, which no single column prints.
- *
- * **A sum across the three families rather than one of them**, which is what a
- * reader pressing `Yds` on a board holding quarterbacks, backs and receivers
- * means: the question is who moved the ball furthest, and a rail that asked it
- * three times would be three caps saying the same word. The column head is
- * therefore not lit by either — see `Head`, where the arrow stays on the
- * figure a column can show.
- */
-export function statYards(row: StatRow): number {
-  return row.pass_yd + row.rush_yd + row.rec_yd;
-}
-
-export function statTouchdowns(row: StatRow): number {
-  return row.pass_td + row.rush_td + row.rec_td;
-}
-
-/** The caps, in the order the ledge draws them. */
-export const STAT_SORTS: readonly { key: StatSortKey; label: string }[] = [
-  { key: "points", label: "Pts" },
-  { key: "yds", label: "Yds" },
-  { key: "td", label: "TD" },
-  { key: "start", label: "Started" },
-  { key: "bench", label: "Sat" },
-  { key: "against", label: "Against" },
-];
+  | "name"
+  | "clock"
+  | StatColumn["key"]
+  | UsageKey
+  | "points";
 
 /** The list's default order: the week's best first. */
 export const DEFAULT_STAT_SORT: StatSortKey = "points";
 
+/**
+ * Which way a key is read the *first* time it is pressed.
+ *
+ * Descending everywhere but the name, because every figure on this board is a
+ * superlative question — who scored most, who I started most, whose game is
+ * furthest along — and a name is a list a reader looks somebody up in.
+ */
+export function defaultStatAscending(key: StatSortKey): boolean {
+  return key === "name";
+}
+
+/** The ordering a press on one head leaves, given the one in force. */
+export type StatSort = { key: StatSortKey; asc: boolean };
+
+export const DEFAULT_STAT_SORT_STATE: StatSort = {
+  key: DEFAULT_STAT_SORT,
+  asc: false,
+};
+
+/**
+ * A press on a head: **a new key sorts by it, the lit key reverses**.
+ *
+ * One function rather than a ternary at the call site, because the two arms
+ * are not symmetrical — a fresh press takes the key's own natural direction
+ * and a repeat takes the opposite of whatever is in force — and a component
+ * that got that backwards would be a board whose first press on `Name` opened
+ * at Z.
+ */
+export function nextStatSort(held: StatSort, key: StatSortKey): StatSort {
+  if (held.key === key) return { key, asc: !held.asc };
+  return { key, asc: defaultStatAscending(key) };
+}
+
 /** Ordered, and given the place each row holds **in this view**. */
 export function rankStatRows(
   rows: readonly StatRow[],
-  key: StatSortKey,
+  sort: StatSort,
 ): RankedStatRow[] {
-  const sorted = [...rows].sort((a, b) => compare(a, b, key));
+  const sorted = [...rows].sort((a, b) => compare(a, b, sort));
   return sorted.map((row, i) => ({ ...row, rank: i + 1 }));
 }
 
 /**
- * Two rows on one key — **descending, always**.
+ * What one row weighs on one key — a number, a name, or **null for a question
+ * it is not in**.
  *
- * There is no direction here and that is the design rather than an omission:
- * sorting lives in the ledge's four caps, and every one of them asks a
- * superlative question — who scored most, who I started most. A toggle would
- * be a second state those caps cannot show, so the one control would stop
- * describing the order.
- *
- * **Points are the tiebreaker on the three counts**, because a count is a
- * small integer over a four-hundred-row board: ordering by `Started` without
- * one would leave every player started in three leagues in whatever order the
- * ids arrived in, which is a list that reshuffles between frames with nothing
- * on screen having changed. **Then the name, ascending**, for the same reason
- * one layer down.
- *
- * **An absent count sorts last, and a zero sorts as a zero.** A player nobody
- * in the reader's leagues has is not the least-started player of the week —
- * he is not in the question at all — where a player they hold and never
- * started is a real nought. It is the distinction {@link StatRow.start}
- * carries, and it is what makes `Started` a "mine first" ordering.
+ * The three kinds are three different absences and only one of them is null: a
+ * split figure is always a figure (every line ships all thirteen), a name is
+ * always a string (the id stands in where the feed published none), and a
+ * usage count or a clock stage can genuinely be unknown.
  */
-function compare(a: StatRow, b: StatRow, key: StatSortKey): number {
-  if (key === "yds" || key === "td") {
-    // A sum is always a figure — every line ships all nine — so there is no
-    // null arm here and the points tiebreak below does the rest.
-    const of = key === "yds" ? statYards : statTouchdowns;
-    const left = of(a);
-    const right = of(b);
-    if (left !== right) return right - left;
-  } else if (key !== "points") {
-    const left = a[key];
-    const right = b[key];
-    if (left === null || right === null) {
-      if (left !== right) return left === null ? 1 : -1;
-    } else if (left !== right) {
-      return right - left;
-    }
+function weigh(row: StatRow, key: StatSortKey): number | string | null {
+  if (key === "name") return row.name ?? row.player_id;
+  if (key === "points") return row.points;
+  if (key === "clock") return row.stage;
+  if (key in USAGE_COUNT) return USAGE_COUNT[key as UsageKey](row);
+  return row[key as StatColumn["key"]];
+}
+
+/**
+ * Two rows on one ordering.
+ *
+ * **An absent value sorts last in either direction, and a zero sorts as a
+ * zero.** A player nobody in the reader's leagues has is not the least-started
+ * player of the week — he is not in the question at all — where a player they
+ * hold and never started is a real nought; and a row whose game the board
+ * could not read is not the earliest kickoff of the afternoon. It is the
+ * distinction {@link StatRow.start} and {@link StatRow.stage} both carry, and
+ * it is the one thing about a *reversible* sort that is silent when wrong:
+ * folded into the comparison, flipping the arrow would float every row the
+ * question is not about to the top of the board.
+ *
+ * **Points are the tiebreaker, then the name, and neither reverses.** A count
+ * is a small integer over a four-hundred-row board, so ordering by `Started`
+ * without one would leave every player started in three leagues in whatever
+ * order the ids arrived in — a list that reshuffles between frames with
+ * nothing on screen having changed. A tiebreak that flipped with the arrow
+ * would do the same thing on every press.
+ */
+function compare(a: StatRow, b: StatRow, sort: StatSort): number {
+  const left = weigh(a, sort.key);
+  const right = weigh(b, sort.key);
+  if (left === null || right === null) {
+    if (left !== right) return left === null ? 1 : -1;
+  } else if (typeof left === "string" || typeof right === "string") {
+    const cmp = String(left).localeCompare(String(right));
+    if (cmp !== 0) return sort.asc ? cmp : -cmp;
+  } else if (left !== right) {
+    return sort.asc ? left - right : right - left;
   }
   if (a.points !== b.points) return b.points - a.points;
   return byName(a, b);
@@ -860,11 +1125,78 @@ function byName(a: StatRow, b: StatRow): number {
   return (a.name ?? a.player_id).localeCompare(b.name ?? b.player_id);
 }
 
-/** Every team on the list, for the Team menu. A row with none offers none. */
-export function statTeams(rows: readonly StatRow[]): string[] {
-  const teams = new Set<string>();
-  for (const row of rows) if (row.team) teams.add(row.team);
-  return [...teams].sort();
+/**
+ * One head of the lower tier: what it says, what it orders by and how wide.
+ *
+ * **Derived from the same width table the row and the group spans are**, which
+ * is the mismatch this whole module is arranged against: a head list written
+ * out by hand is one that files `Rushing TD` over a passing touchdown the
+ * first time a column moves, with every number on the board correct and every
+ * one of them labelled wrong.
+ */
+export type StatHead = {
+  key: StatSortKey;
+  label: string;
+  /** What it is called in full, for the press's own accessible name. */
+  hint: string;
+  width: number;
+  /** `Player` reads left; every figure reads right, under its own column. */
+  align: "left" | "right";
+  pin: "left" | "right" | null;
+};
+
+/** Every head, in the order the tier draws them. */
+export function statHeads(columns: readonly StatColumn[]): StatHead[] {
+  return [
+    { key: "name", label: "Player", hint: "Name", width: STAT_FIXED.player, align: "left", pin: "left" },
+    { key: "clock", label: "Game", hint: "Game clock", width: STAT_FIXED.game, align: "right", pin: null },
+    ...columns.map(
+      (column): StatHead => ({
+        key: column.key,
+        label: column.label,
+        hint: column.hint,
+        width: column.width,
+        align: "right",
+        pin: null,
+      }),
+    ),
+    ...USAGE_KEYS.map(
+      (key): StatHead => ({
+        key,
+        label: USAGE_CHIP[key],
+        hint: USAGE_LABEL[key],
+        width: STAT_FIXED.count,
+        align: "right",
+        pin: null,
+      }),
+    ),
+    { key: "points", label: "Pts", hint: "Points", width: STAT_FIXED.points, align: "right", pin: "right" },
+  ];
+}
+
+/**
+ * The sort a given set of columns can still answer.
+ *
+ * **The heads *are* the sort, and the `Splits` rail can take a head off the
+ * board.** So a reader who ordered by `Passing yards` and then dropped the
+ * passing family was left with a list ordered by a column nothing on screen
+ * names, no head lit, and no way back to that order — which is the one thing
+ * about the head-as-sort model that the six-cap rail it replaced could not do
+ * wrong, its six keys having been fixed. It is `sharesColumns`' own rule one
+ * panel over — a sort names a column on screen, and a dropped column falls
+ * back — with this board's own fallback: the points column, which no rail can
+ * remove and which is the resting order anyway.
+ *
+ * A sort the columns still carry is returned **by identity**, so a caller may
+ * hand it straight back to `setState` and re-render nothing.
+ */
+export function statSortFor(
+  held: StatSort,
+  columns: readonly StatColumn[],
+): StatSort {
+  return statHeads(columns).some((head) => head.key === held.key)
+    ? held
+    : DEFAULT_STAT_SORT_STATE;
 }
 
 /** The list's best week, for the bar's readout. */

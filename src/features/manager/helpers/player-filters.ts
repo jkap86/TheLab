@@ -1,3 +1,4 @@
+import { insideSpan, spanActive, toggleFacet, type Span } from "../../shared/facet-span.ts";
 import type { PlayerShare } from "./shares";
 
 /*
@@ -8,7 +9,16 @@ import type { PlayerShare } from "./shares";
  * absent age quietly counting as young, a full-width range counting as a filter
  * — so they have to resolve under Node's own test runner, which resolves the
  * file it is given and knows nothing of the `@/*` aliases.
+ *
+ * **The span arithmetic moved out and is re-exported**, so no caller of this
+ * file moved with it: `Span`, `spanActive` and `toggleFacet` are
+ * `features/shared/facet-span.ts`'s since the gametime board's Filters tray
+ * became a second reader of the same two rules. That module is reached
+ * relatively with `.ts` for this file's own reason, one folder over.
  */
+
+export { spanActive, toggleFacet };
+export type { Span };
 
 /**
  * The bucket an absent answer falls in, in both string facets.
@@ -27,9 +37,6 @@ export function positionRank(position: string): number {
   const i = POSITION_ORDER.indexOf(position);
   return i === -1 ? POSITION_ORDER.length : i;
 }
-
-/** An inclusive numeric span, or null where the facet has nothing to bound. */
-export type Span = { lo: number; hi: number } | null;
 
 export type PlayerFilterState = {
   /**
@@ -77,17 +84,6 @@ export function playerFilterBounds(
 }
 
 /**
- * Whether a span is a filter at all. A range sitting on both bounds is the
- * reader not having asked, and counting it would light the Filters key, print a
- * summary and exclude every player whose age is unknown — all for a control
- * nobody has touched.
- */
-export function spanActive(span: Span, bounds: Span): boolean {
-  if (!span || !bounds) return false;
-  return span.lo !== bounds.lo || span.hi !== bounds.hi;
-}
-
-/**
  * How many of the four facets are narrowing, for the Filters key's badge.
  * Counted per facet rather than per value — "3" beside the key means three
  * questions have been answered, which is what a reader can act on; the number
@@ -104,14 +100,6 @@ export function activeFilterCount(
     (spanActive(filters.age, ageBounds) ? 1 : 0) +
     (spanActive(filters.draftClass, classBounds) ? 1 : 0)
   );
-}
-
-/** Whether one number is inside a span that is actually narrowing. */
-function insideSpan(value: number | null, span: Span, bounds: Span): boolean {
-  if (!span || !spanActive(span, bounds)) return true;
-  // **A null answer is outside every span**, never inside one — see below.
-  if (value == null) return false;
-  return value >= span.lo && value <= span.hi;
 }
 
 /**
@@ -176,14 +164,4 @@ export function playerFilterSummary(
     parts.push(`Class ${draftClass.lo}–${draftClass.hi}`);
   }
   return parts.length ? parts.join(" · ") : null;
-}
-
-/** Add or remove one value from a facet — the chips' only write. */
-export function toggleFacet(
-  values: readonly string[],
-  value: string,
-): readonly string[] {
-  return values.includes(value)
-    ? values.filter((v) => v !== value)
-    : [...values, value];
 }
