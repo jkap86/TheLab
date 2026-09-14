@@ -15,7 +15,11 @@ import { isKtcMetric, readsQbBoard } from "@/shared/ktc/columns";
 // Relative rather than through this folder's own barrel — the rule
 // `lineup-columns-dialog.tsx` beside it already lives by: a module inside
 // `features/shared` reaches its siblings directly.
-import { CONSOLE_GLASS } from "../console-chrome";
+import {
+  CONSOLE_GLASS,
+  CONSOLE_PART_HOUSING,
+  CONSOLE_PART_HOUSING_LIT,
+} from "../console-chrome";
 import {
   adpBoardLabel,
   cellGapReason,
@@ -512,7 +516,10 @@ export function ColumnAxes({
    * disagree about either.
    */
   const candidate = (patch: Patch): LineupColumn | null => {
-    const metric = metricAt(patch.value ?? axes.value, patch.scope ?? axes.scope);
+    const metric = metricAt(
+      patch.value ?? axes.value,
+      patch.scope ?? axes.scope,
+    );
     return metric
       ? column(
           metric,
@@ -624,24 +631,22 @@ export function ColumnAxes({
   const slotsOff = slotGapReason(axes.scope) ?? undefined;
 
   return (
-    // **The accent is a hairline ring inside the shadow list rather than a
-    // `border`**, so the four chamfer insets and the accent cannot fight over
-    // one border colour — the emit-order flip this console's constants are
-    // split apart to avoid, one property over.
+    // **The housing is {@link CONSOLE_PART_HOUSING}**, which is where the two
+    // stacks moved when the league filters panel's three rule bays and its
+    // match housing became the same part. Four readers of one eight-shadow
+    // list is the drift `console-chrome` exists to prevent, and the arms are
+    // worth reading against each other rather than at four call sites: what
+    // separates them is the ring's alpha and the halo's spread, which is one
+    // line of difference nobody would find spread across two files.
     //
     // **It comes up while a draft is in hand**, which is the part of `Save`
     // that survived the key: the ring and the caller's `· Edit` chip are the
     // whole of what says an edit is live, so the housing itself has to carry
-    // one of them. Two whole lists rather than a lit `shadow-[…]` appended to
-    // a resting one — a shadow list is atomic, so the second would replace the
-    // four chamfer insets rather than raise the ring inside them.
+    // one of them. Two whole constants rather than a lit `shadow-[…]` appended
+    // to a resting one — a shadow list is atomic, so the second would replace
+    // the four chamfer insets rather than raise the ring inside them.
     <div
-      className={
-        "relative mt-3.5 overflow-hidden rounded-[1.0625rem] " +
-        (dirty
-          ? "shadow-[inset_0_1.5px_0_rgba(255,255,255,0.2),inset_0_-1.5px_0_rgba(0,0,0,0.8),inset_1px_0_0_rgba(255,255,255,0.05),inset_-1px_0_0_rgba(0,0,0,0.5),0_0_0_1px_rgba(0,255,229,0.35),0_3px_0_rgba(0,0,0,0.55),0_14px_26px_-12px_rgba(0,0,0,0.9),0_0_34px_-12px_var(--accent-glow)]"
-          : "shadow-[inset_0_1.5px_0_rgba(255,255,255,0.2),inset_0_-1.5px_0_rgba(0,0,0,0.8),inset_1px_0_0_rgba(255,255,255,0.05),inset_-1px_0_0_rgba(0,0,0,0.5),0_0_0_1px_rgba(0,255,229,0.2),0_3px_0_rgba(0,0,0,0.55),0_14px_26px_-12px_rgba(0,0,0,0.9),0_0_34px_-18px_var(--accent-glow)]")
-      }
+      className={`mt-3.5 ${dirty ? CONSOLE_PART_HOUSING_LIT : CONSOLE_PART_HOUSING}`}
     >
       {/* The housing's own header ledge, above its body in stacking order so
           its cast lands on it — the header band's argument one grain smaller. */}

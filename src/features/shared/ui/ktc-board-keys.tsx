@@ -1,6 +1,6 @@
 "use client";
 
-import { Fragment } from "react";
+import { Fragment, type ReactNode } from "react";
 
 import type { KtcBoardChoice, KtcLineupChoice } from "@/shared/contract";
 import {
@@ -8,7 +8,7 @@ import {
   KTC_LINEUP_CHOICES,
 } from "@/shared/ktc/board-choice";
 
-import { CONSOLE_CHANNEL, CONSOLE_TRACK } from "../console-chrome";
+import { CONSOLE_CHANNEL_METAL, CONSOLE_TRACK } from "../console-chrome";
 import { MilledHairline } from "./card-plate";
 
 /**
@@ -206,6 +206,13 @@ export function KtcLineupKeys({
  * the array *is* the switch's position and a boolean beside it would be a second
  * thing to keep in step with it.
  *
+ * **And a fourth since, for the league filters panel's two rails**: {@link
+ * SwitchTrack.badge} draws something after each key's label, which is how an
+ * option carries what picking it would leave. It is the same argument as the
+ * three above one grain smaller — the rails were a hand-written row of keys,
+ * and a row of keys written beside this one is the thing the module note rules
+ * out.
+ *
  * **The caller maps its own state into the track's vocabulary**, which is what
  * lets `All` be a key here and the absence of a narrowing everywhere else: the
  * track lights what it is handed and the caller owns the toggle, exactly as the
@@ -224,6 +231,7 @@ export function SwitchTrack<T extends string>({
   offReason,
   unavailable,
   divider,
+  badge,
   wrap = false,
 }: {
   label: string;
@@ -291,6 +299,27 @@ export function SwitchTrack<T extends string>({
    */
   divider?: (option: T) => boolean;
   /**
+   * What is drawn after the label **inside** each key.
+   *
+   * The league filters panel's two rails are what want it: each of their
+   * options carries what picking it would leave, and that count belongs on the
+   * key rather than beside the track, because it is a fact about the option
+   * rather than about the switch. Rendered inside, it also inherits the key's
+   * own lit ink — which is the whole reason it is a slot here and not a second
+   * element the caller stands alongside.
+   *
+   * **A slot rather than a fork.** A rail of keys each carrying a count was a
+   * hand-written row until this, and hand-writing a second track beside this
+   * one is the failure the module note above rules out: a switch that stopped
+   * travelling in one of two spellings is a panel nobody can see is broken. The
+   * smallest thing that fits the existing API is a render prop, so the track
+   * still owns the key and the caller still owns what is in it.
+   *
+   * It must not be a control. The key is the button; anything focusable in here
+   * would be a second target inside one, which is invalid and unreachable.
+   */
+  badge?: (option: T) => ReactNode;
+  /**
    * Let the keys wrap onto a second line, sizing each to its own label.
    *
    * **A board of keys rather than a switch**, which is what a multi-select track
@@ -330,10 +359,23 @@ export function SwitchTrack<T extends string>({
         // `CONSOLE_TRACK`'s key is flush enough for `--key-shadow`. A raised
         // face in a shallow channel reads as a key sitting *on* the track
         // rather than travelling in it.
-        row ? CONSOLE_CHANNEL : CONSOLE_TRACK
-      } ${
-        small ? "flex p-[0.1875rem]" : "inline-flex gap-1 p-1"
-      } ${
+        //
+        // **It is the *metal* channel, and that is a light-mode fix rather than
+        // a choice.** `CONSOLE_CHANNEL` is a black alpha, safe only where the
+        // stock it is cut into is dark in both themes — and every caller of
+        // this arm cuts into stock that is **pale in light**: the columns
+        // picker's body is `--key-bg`, which is white-to-`#e3eaed` there, and
+        // the league filters panel's rails sit in a tray over a near-white
+        // well. 52% black on either is not a channel but a hole punched through
+        // the part, with near-black key labels lying in it. Measured before the
+        // swap: the columns picker's own unlit keys read **2.5:1** in light and
+        // the filters rails **1.75:1**, against 6.3:1 for the pill keys those
+        // rails replaced. `--rack-channel-bg` and `--rack-channel-shadow` are
+        // byte-identical to the values below in dark, so this moves nothing
+        // there; in light they are a slate tint and a lit lower lip, which is
+        // what a cut in a pale face is.
+        row ? CONSOLE_CHANNEL_METAL : CONSOLE_TRACK
+      } ${small ? "flex p-[0.1875rem]" : "inline-flex gap-1 p-1"} ${
         row
           ? // The gap tightens below `sm` with the key's own gutter — see the
             // measurement on the key's padding, which is one arithmetic and
@@ -438,10 +480,11 @@ export function SwitchTrack<T extends string>({
                     : "border-active/45 bg-[image:var(--key-bg)] text-readout shadow-[var(--key-shadow)] [text-shadow:var(--readout-text-glow)]"
                   : why !== null
                     ? `cursor-not-allowed border-transparent ${row ? "text-foreground/26" : "text-foreground/25"}`
-                    : `border-transparent ${row ? "text-foreground/60" : "text-foreground/58"} hover:text-readout`)
+                    : `border-transparent ${row ? "text-[color:var(--billet-label)]" : "text-foreground/58"} hover:text-readout`)
               }
             >
               {labels[option]}
+              {badge?.(option)}
             </button>
           </Fragment>
         );

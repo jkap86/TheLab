@@ -22,7 +22,12 @@ import {
   TYPE_OPTIONS,
 } from "../league-filters";
 
-import { CONSOLE_KEY_BLOCK, CONSOLE_KEY_PILL, CONSOLE_WELL } from "../console-chrome";
+import {
+  CONSOLE_GLASS,
+  CONSOLE_KEY_PILL,
+  CONSOLE_WELL,
+} from "../console-chrome";
+import { BilletFinish, Scanlines } from "../ui/card-plate";
 import { FilterRail } from "./filter-rail";
 import {
   SCORING_PRESETS,
@@ -165,6 +170,14 @@ export const LeagueFiltersDialog = memo(function LeagueFiltersDialog({
     () => leagues.filter((league) => matchesFilters(league, draft)),
     [leagues, draft],
   );
+  // 0 of 0 is not 0%: an account with no leagues has no share to report. The
+  // same reading the match rail states at length, which is why the two are one
+  // arithmetic rather than two.
+  const share = leagues.length > 0 ? matched.length / leagues.length : null;
+  // The foot's second reading counts the *draft* where the trigger's badge
+  // counts what is committed: one says what this sitting has built and the
+  // other what the page behind the panel is on.
+  const narrowing = activeFilterCount(draft);
 
   return (
     <>
@@ -218,43 +231,156 @@ export const LeagueFiltersDialog = memo(function LeagueFiltersDialog({
         // the margin `m-auto` spends this 12% on. Written this way the
         // unset case is `min(88vh,46rem)` to the pixel and the keyboard case
         // keeps the same proportion of what is left visible.
-        className="m-auto max-h-[min(calc(var(--vvh,100vh)*0.88),46rem)] w-[min(64rem,calc(100vw-2rem))] overflow-hidden rounded-3xl border border-foreground/12 bg-background bg-[image:var(--panel-bg)] p-0 text-foreground shadow-[var(--panel-shadow),0_24px_60px_-34px_var(--surface-shadow)] backdrop:bg-black/60"
+        // **The case is billet stock, not `--panel-bg`.** That token is the
+        // page — `ConsoleGround` paints the same radial — so a dialog wearing
+        // it bottoms out on the ground's own `#08090a` and the lower two thirds
+        // of its edge disappear. No backdrop alpha separates two identical
+        // gradients; a case that is a *part* does, and `--panel-case-shadow` is
+        // that part's chamfer read at case scale over a two-stage cast. It is
+        // one list because a shadow list is atomic, and the backdrop goes to
+        // `/80` with it because the case is lighter than what it replaced.
+        //
+        // The colour under the image is a fallback nothing paints over — the
+        // gradient covers the border box — and it is a *case* colour rather
+        // than `--background` on purpose: if it ever showed, a flat case is a
+        // worse drawing and a page-coloured one is the bug this replaced.
+        className="m-auto max-h-[min(calc(var(--vvh,100vh)*0.88),46rem)] w-[min(64rem,calc(100vw-2rem))] overflow-hidden rounded-[1.75rem] bg-[#2e3f45] bg-[image:var(--panel-case-bg)] p-0 text-foreground shadow-[var(--panel-case-shadow)] backdrop:bg-black/80"
       >
-        <span
-          aria-hidden
-          className="pointer-events-none absolute inset-0 bg-[image:var(--panel-grain)]"
-        />
         {/* The container the layout is queried against, and the flex column that
             lets the body scroll under a footer that stays put. `min-h-0` is what
-            allows the scroll box to shrink below its content. */}
+            allows the scroll box to shrink below its content.
+
+            **The finish wraps the content rather than the dialog's own box**,
+            which is the call the panel grain it replaces already made: an
+            `inset` overlay on a scroll container is positioned against the
+            padding box at its unscrolled origin, so on a scrolled panel it
+            would end at the fold. Here the case does not scroll — the well
+            inside it does — but the rule is the same one and the grain and the
+            raking specular are what make a pale face read as *milled* rather
+            than as a flat fill, which at case scale is the difference between
+            a part and a panel. */}
         <div className="@container relative flex max-h-[inherit] flex-col">
-          {/* The panel had no title bar and leaned on `aria-label` alone. The
-              bar is what makes it legible as an instrument rather than a sheet,
-              and it gives Esc a visible home — the affordance was always there
-              and nothing on screen said so. The label stays, because the bar's
-              text is decoration for a screen reader that already has one. */}
-          <div className="flex shrink-0 items-center gap-3 border-b border-foreground/9 px-5 py-3.5">
-            <span className="font-mono text-[length:var(--fs-10)] uppercase tracking-[0.16em] text-active">
+          <BilletFinish />
+          {/* **The title bar is gone and the heading sits on the case itself.**
+              A billet bolted to a billet says nothing — the case *is* the part
+              now, so what was a band standing proud of a dark body is a heading
+              stamped into the face it stands on, and the milled cut below is
+              the only cut it needs.
+
+              **The `Esc` key went with the border it stood against.** Esc still
+              closes, because `showModal()` brings it; what it loses is the one
+              affordance on the panel that said so, which is the trade the
+              columns picker already ships. It is the one deletion here a reader
+              could see, and the one to put back first if it is missed.
+
+              **The row is one line at every width, and both halves of that are
+              load-bearing.** The heading never wraps and never shrinks; the
+              reading takes what is left and truncates into it. The alternative
+              is a row that wraps under the press that lengthens its reading —
+              and a case that grows past its own height cap while a reader is
+              pressing into it, which is the one thing this panel must not do. */}
+          <div className="relative flex shrink-0 items-center justify-between gap-3.5 px-5 pb-[0.8125rem] pt-4">
+            {/* Ink on metal, not the readout's mint: a heading stamped into a
+                machined face is the metal's own colour lightened, and drawing it
+                in mint would say the case was a window. */}
+            <h2 className="m-0 shrink-0 whitespace-nowrap font-display text-[length:var(--fs-15)] font-semibold uppercase tracking-[0.13em] text-[color:var(--billet-name)] [text-shadow:var(--billet-name-shadow)]">
               League filters
-            </span>
+            </h2>
+            {/* The one thing in the header that moves under a press, which is
+                why it is on glass and why it is `aria-live`. */}
             <span
-              aria-hidden
-              className="h-px flex-1 bg-gradient-to-r from-active/30 via-foreground/[0.06] to-transparent shadow-[0_1px_0_rgba(0,0,0,0.6)]"
-            />
-            <button
-              type="button"
-              aria-label="Close"
-              onClick={() => ref.current?.close()}
-              className={`${CONSOLE_KEY_PILL} border-foreground/10 bg-[image:var(--key-bg)] px-2.5 py-[0.3125rem] normal-case tracking-normal text-foreground/80 shadow-[var(--key-shadow)] hover:text-readout`}
+              className={`${CONSOLE_GLASS} inline-flex min-w-0 items-center gap-[0.4375rem] rounded-lg border border-black/70 px-2.5 py-[0.3125rem]`}
             >
-              Esc
-            </button>
+              <Scanlines />
+              <span
+                aria-hidden
+                className="relative size-[0.3125rem] shrink-0 rounded-full bg-active shadow-[0_0_6px_var(--accent-glow)]"
+              />
+              <span
+                aria-live="polite"
+                className="relative truncate font-mono text-[length:var(--fs-10)] uppercase tracking-[0.16em] tabular-nums text-readout [text-shadow:var(--readout-text-glow)]"
+              >
+                {matched.length} / {leagues.length}
+                {/* The share is dropped below `sm` rather than left to the
+                    truncation above: at 390 the heading takes most of the row
+                    and what the ellipsis eats is exactly this clause, so a
+                    reading that ends mid-percentage is a worse answer than one
+                    that does not claim to give a share. The `aria-live` text is
+                    whole either way, and the panel states the share twice more
+                    — on the match housing's own figure and in its meter. */}
+                {share !== null && (
+                  <span className="hidden sm:inline">
+                    {` · ${Math.round(share * 100)}%`}
+                  </span>
+                )}
+              </span>
+            </span>
           </div>
 
-          <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain p-4 sm:p-5">
-            <div className="grid gap-4 @4xl:grid-cols-[minmax(0,1fr)_15rem]">
+          {/* The cut under the heading: a milled line with the light catching
+              its far lip, inset from both edges so it reads as a cut in the face
+              rather than as a rule drawn across the panel. */}
+          <span
+            aria-hidden
+            className="relative mx-4 block h-px shrink-0 bg-[image:linear-gradient(to_right,transparent,var(--milled-hairline),transparent)] shadow-[0_1px_0_rgba(255,255,255,0.10)]"
+          />
+
+          {/* **The well: one hole cut in the case, holding everything a reader
+              touches** — `CONSOLE_PART_TRAY`'s part-and-hole distinction at case
+              scale, and what says the panel is on top of the page without
+              spending a shadow on saying so.
+
+              **The 18px rule.** `mx-2` of margin plus `px-2.5` of padding is
+              18px a side, which is exactly what the body's own `px-[1.125rem]`
+              spent. It is not adjustable on its own: the rails' keys size to
+              their labels and grow into what is left, so the tracks lose width
+              one for one with this. Change either number and change the other
+              to keep the sum.
+
+              **It is the scroller**, which the body used to be, and that is what
+              the pinned match housing needs — a sticky element travels in the
+              nearest scrollport, and a second scroller nested in this one would
+              pin it to the wrong box. Its bottom padding moves onto that
+              housing's own wrapper below `@4xl`, so the part sits on the well's
+              floor rather than 17px above it. */}
+          <div className="lab-scroll relative mx-2 mt-3.5 min-h-0 flex-1 overflow-y-auto overscroll-contain rounded-[1.25rem] bg-[color:var(--case-well-bg)] px-2.5 pb-0 pt-[0.9375rem] shadow-[var(--case-well-shadow)] @4xl:pb-[1.0625rem]">
+            <p className="m-0 font-mono text-[length:var(--fs-11)] leading-[1.5] text-foreground/70">
+              Two fixed rails over what a league is, then rules over how it is
+              set up.
+              <span className="hidden sm:inline">
+                {" "}
+                Apply seats the selection — everything else moves only this
+                panel&rsquo;s own numbers.
+              </span>
+            </p>
+
+            {/* **A flex column below `@4xl` and a grid above it**, which is what
+                the pinned match housing costs. A grid item's containing block is
+                its *grid area*, and in one column that area is the item's own
+                box — so `sticky bottom-0` there has nowhere to travel and does
+                nothing at all. A flex item's containing block is the flex
+                container's content box, which spans every row above it. Above
+                `@4xl` it is a grid again and the match rail is a short item in a
+                tall area, which is what `self-start` has always bought it. */}
+            <div className="mt-3.5 flex flex-col @4xl:grid @4xl:grid-cols-[minmax(0,1fr)_15rem] @4xl:gap-4">
               <div className="flex min-w-0 flex-col gap-3">
-                <div className={`${CONSOLE_WELL} flex flex-col gap-0.5 p-1.5`}>
+                {/* **A well rather than the part tray the handoff asks for, and
+                    the reason is a measurement in light mode.**
+                    `CONSOLE_PART_TRAY` is a black alpha — safe where it is
+                    shipped, the columns picker's bay rack, because the parts it
+                    holds are opaque and cover it. What it holds here is two
+                    tracks with text lying directly on them, and over a
+                    near-white well a 42% black tray under a channel is a hole
+                    punched through the case with near-black labels in it: the
+                    unlit keys measured **1.75:1** there, against 6.3:1 for the
+                    pill keys they replace. On `--key-bg` — which is what a tray
+                    holding *controls* is made of, and what these rails sat on
+                    before — the same keys measure 6.9:1, with dark unmoved.
+                    It is also the distinction this file's own constants draw:
+                    a tray holding controls is a surface, and a tray holding
+                    parts is the absence of one. Two switch tracks are
+                    controls. */}
+                <div className={`${CONSOLE_WELL} flex flex-col gap-2 p-2`}>
                   <FilterRail
                     label="Type"
                     options={TYPE_OPTIONS}
@@ -322,11 +448,19 @@ export const LeagueFiltersDialog = memo(function LeagueFiltersDialog({
                 </div>
               </div>
 
-              {/* `sticky` and `self-start` are facts about being a grid item
-                  *beside* the controls, which it only is above `@4xl`. Stacked
-                  below that they would pin the readout to the top of the scroll
-                  box and take the controls' room with it. */}
-              <div className="@4xl:sticky @4xl:top-0 @4xl:self-start">
+              {/* **Pinned to the foot of the well below `@4xl`, and sticky at
+                  the top of its own column above it** — the same part, two
+                  positions, because what it is *beside* changes. Stacked under
+                  the controls, a reading pinned to the top would take the
+                  controls' room with it; pinned to the foot it takes only its
+                  own ledge, and the body is a press away.
+
+                  The wrapper carries the well's own floor colour and the
+                  padding the well gave up, so the rules slide **under** a part
+                  that never touches the well's rounded edge. Above `@4xl` both
+                  go: there is nothing sliding under it there, and the grid's
+                  own gap is the spacing. */}
+              <div className="sticky bottom-0 z-[4] bg-[color:var(--case-well-bg)] pb-[1.0625rem] pt-3.5 @4xl:top-0 @4xl:bottom-auto @4xl:self-start @4xl:bg-transparent @4xl:p-0">
                 <MatchRail
                   matched={matched}
                   total={leagues.length}
@@ -337,25 +471,36 @@ export const LeagueFiltersDialog = memo(function LeagueFiltersDialog({
             </div>
           </div>
 
-          <div className="flex shrink-0 items-center justify-between gap-3 border-t border-foreground/9 px-5 py-3.5">
-            <p className="m-0 font-mono text-[length:var(--fs-11)] text-foreground/60">
-              {matched.length} of {leagues.length} leagues
+          {/* **The foot leaves the well and stands on the case's own face.**
+              What it holds is a reading and the two controls that end the
+              sitting, and neither is something a reader touches on the way to
+              narrowing a list. */}
+          <div className="relative flex shrink-0 flex-wrap items-center justify-between gap-x-3 gap-y-2.5 px-5 pb-4 pt-3.5">
+            <p className="m-0 font-mono text-[length:var(--fs-10)] uppercase tracking-[0.16em] text-[color:var(--billet-label)] [text-shadow:var(--standing-label-shadow)]">
+              {matched.length} of {leagues.length}
+              <span className="hidden sm:inline"> leagues</span>
+              {narrowing > 0 && ` · ${narrowing} narrowing`}
             </p>
-            <div className="flex gap-2">
+            <div className="ml-auto flex shrink-0 gap-2">
+              {/* Milled from the case's own stock, which is what a key that
+                  undoes rather than commits is made of here. */}
               <button
                 type="button"
                 onClick={() => setDraft(DEFAULT_LEAGUE_FILTERS)}
-                className={`${CONSOLE_KEY_BLOCK} border-foreground/10 bg-[image:var(--key-bg)] px-4 text-[length:var(--fs-10)] text-foreground/80 shadow-[var(--key-shadow)] hover:text-readout`}
+                className="lab-anim inline-flex shrink-0 items-center rounded-xl border border-black/35 bg-[image:var(--key-metal)] px-5 py-2.5 font-mono text-[length:var(--fs-10)] uppercase tracking-[0.16em] text-[color:var(--billet-name)] shadow-[var(--key-metal-shadow)] transition-[transform,box-shadow] duration-150 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-active/60 motion-safe:active:translate-y-0.5"
               >
                 Reset
               </button>
-              {/* Apply is the lit key: it is the one press that changes the
-                  page behind the panel, where everything else changes only
-                  the panel's own numbers. */}
+              {/* **Apply is the accent cap** — the app's one filled object, and
+                  the rack's own rule for a control that acts on the page. It is
+                  the one press in here that does: everything else moves only
+                  this panel's own numbers. The shadow is composed whole in one
+                  utility, since a shadow list is atomic and a cap that lost its
+                  dome is its visible half. */}
               <button
                 type="button"
                 onClick={apply}
-                className={`${CONSOLE_KEY_BLOCK} border-active/50 bg-[image:var(--key-bg)] px-5 text-[length:var(--fs-10)] text-readout shadow-[var(--key-shadow),0_0_22px_-8px_var(--accent-glow)] [text-shadow:var(--readout-text-glow)]`}
+                className="lab-anim inline-flex shrink-0 items-center rounded-xl border border-[var(--cap-accent-border)] bg-[image:var(--cap-accent-bg)] px-[1.625rem] py-2.5 font-mono text-[length:var(--fs-10)] uppercase tracking-[0.16em] text-[var(--cap-accent-ink)] [text-shadow:var(--cap-ink-emboss)] shadow-[var(--cap-accent-shadow)] transition-[transform,box-shadow] duration-150 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-active/60 motion-safe:active:translate-y-0.5"
               >
                 Apply
               </button>
