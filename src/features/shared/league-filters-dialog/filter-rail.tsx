@@ -5,15 +5,25 @@ import { useMemo } from "react";
 import type { ManagerLeague } from "@/shared/contract";
 import { type LeagueFilters, matchesFilters } from "../league-filters";
 
+import { SwitchTrack } from "../ui/ktc-board-keys";
+
 /**
- * One fixed filter: a label and a row of option chips, each carrying what
- * picking it would leave.
+ * One fixed filter: a labelled track of option keys, each carrying what picking
+ * it would leave.
  *
  * **The counts are a cross-tab, not a tally.** `probe` closes over the whole
  * draft and substitutes one field, so each number says what *this* selection
  * with that option would leave — the question the dialog is opened to answer.
  * Lighting Dynasty therefore moves the Format row's numbers underneath it,
  * which a per-filter-in-isolation count could not show.
+ *
+ * **It is a `SwitchTrack`, where it used to be a row of keys written here.**
+ * The two are the same control — one detent lit, the rest flush, in a channel —
+ * and a switch that stopped travelling in one of two spellings is the failure
+ * `console-chrome`'s constants exist to prevent. What the rails needed that the
+ * track did not have is the count, which is {@link SwitchTrack.badge}: a slot
+ * inside the key, so it inherits the lit ink rather than being a second element
+ * standing beside one.
  *
  * Generic over the option value so the two rails keep their own unions: a
  * `LeagueFilters["type"]` cannot be handed to the Format row by mistake.
@@ -37,59 +47,111 @@ export function FilterRail<T extends string>({
 }) {
   const counts = useMemo(
     () =>
-      options.map(
-        (option) =>
-          leagues.filter((league) => matchesFilters(league, probe(option.value)))
-            .length,
+      new Map(
+        options.map((option) => [
+          option.value,
+          leagues.filter((league) =>
+            matchesFilters(league, probe(option.value)),
+          ).length,
+        ]),
       ),
     [options, leagues, probe],
   );
 
+  const values = useMemo(
+    () => options.map((option) => option.value),
+    [options],
+  );
+
+  /**
+   * The track's own vocabulary, which is the shipped labels with one shortened.
+   *
+   * **The neutral option is `All`, not `All types` / `All formats`**, and that
+   * is a fact about where it is drawn rather than a second name for it. A
+   * `SwitchTrack`'s keys are `flex-1` from `sm` up, so five keys carrying counts
+   * share the track equally and the longest legend is what clips; and the axis
+   * this option is neutral *on* is named by the legend three characters to its
+   * left, so the full label is the one thing on the row that says something
+   * twice. The shipped labels are untouched, because they have three other
+   * readers — the summary sentence, the trigger's count and the config window —
+   * where there is no legend beside them and the noun is the whole reading.
+   *
+   * `all` is the neutral value on both fixed fields by construction; see
+   * `FIXED_FILTERS`, which walks the two of them generically for that reason.
+   */
+  const labels = useMemo(
+    () =>
+      Object.fromEntries(
+        options.map((option) => [
+          option.value,
+          option.value === "all" ? "All" : option.label,
+        ]),
+      ) as Record<T, string>,
+    [options],
+  );
+
   return (
-    <div
-      role="group"
-      aria-label={label}
-      className="flex flex-wrap items-center gap-x-3 gap-y-1.5 px-2 py-1.5"
-    >
-      <span className="w-13 shrink-0 font-mono text-[length:var(--fs-10)] uppercase tracking-[0.16em] text-foreground/45">
-        {label}
-      </span>
-      <div className="flex min-w-0 flex-wrap gap-1.5">
-        {options.map((option, i) => {
-          const selected = option.value === value;
-          return (
-            <button
-              key={option.value}
-              type="button"
-              aria-pressed={selected}
-              onClick={() => onPick(option.value)}
-              // Every chip is a key — raised, and it travels when pressed.
-              // What picking one changes is its border and its legend, not
-              // whether it is a key: they are one row of the same control.
-              className={`inline-flex items-baseline gap-1.5 whitespace-nowrap rounded-full border bg-[image:var(--key-bg)] px-[0.6875rem] py-[0.3125rem] font-mono text-[length:var(--fs-11)] shadow-[var(--key-shadow)] transition-[transform,box-shadow,color] duration-150 active:translate-y-0.5 active:shadow-[var(--key-shadow-pressed)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-active/60 ${
-                selected
-                  ? "border-active/45 text-readout [text-shadow:var(--readout-text-glow)]"
-                  : "border-foreground/10 text-foreground/70 hover:text-readout"
-              }`}
-            >
-              {option.label}
-              {/* The lit chip's count takes the readout colour at *full*
-                  opacity and is held apart by size alone: light mode's teal is
-                  only ~5:1 against the page, so an alpha on it drops below AA
-                  — the rule the account heading is written to as well. (The
-                  handoff spells this one at 75%; the rule wins, since it is
-                  the same colour and the same failure.) */}
-              <span
-                className={`font-mono text-[length:var(--fs-10)] tabular-nums ${
-                  selected ? "text-readout" : "text-foreground/45"
-                }`}
-              >
-                {counts[i]}
-              </span>
-            </button>
-          );
-        })}
-      </div>
-    </div>
+    <SwitchTrack
+      label={label}
+      legend
+      options={values}
+      value={value}
+      onChange={onPick}
+      labels={labels}
+      className=""
+      size="row"
+      /**
+       * An option this selection leaves nothing on cannot be pressed, and the
+       * title says so in the cross-tab's own terms rather than the option's.
+       *
+       * The distinction is the whole reason the wording is not "no league in
+       * hand is chopped": the number is what picking it *with the rest of the
+       * draft* would leave, so a zero on `Chopped` beside a `teams = 12` rule
+       * means there is no twelve-team chopped league, not that the account
+       * holds no chopped one. A title that named the option alone would be a
+       * claim about the data made by a number that is about the selection.
+       *
+       * `SwitchTrack` skips this for the lit key on a single-select track,
+       * which is what keeps the current option pressable when a rule has
+       * narrowed it to nothing — the one press that would undo the narrowing is
+       * never the one taken away.
+       */
+      unavailable={(option) =>
+        counts.get(option) === 0
+          ? `${labels[option]} leaves nothing on this selection`
+          : null
+      }
+      badge={(option) => (
+        // Inside the key, so it takes the key's own ink with the label rather
+        // than being held apart from it — lit at full opacity, because light
+        // mode's teal is only ~5:1 against the page and an alpha on it drops
+        // below AA, and dimmed with the key where the key is dim. Size is what
+        // separates the count from the name, on all three.
+        <span
+          className={`ml-1.5 font-mono text-[length:var(--fs-8-5)] tabular-nums ${
+            option === value || counts.get(option) === 0
+              ? ""
+              : "text-foreground/40"
+          }`}
+        >
+          {counts.get(option)}
+        </span>
+      )}
+      /**
+       * The keys size to their own labels and break onto a second line rather
+       * than sharing the track equally, which is what five of them carrying
+       * counts need at a phone's width.
+       *
+       * An equal share is `flex-1`, a basis of zero: at 390 the Type track is
+       * ~292px, so five keys would take ~58px each against the ~62 `REDRAFT`
+       * and its count set at — every key truncated, on a rail whose whole
+       * reading is which option and how many. `flex-auto` sizes each to its
+       * label and grows it into what is left, and the line breaks where the
+       * labels genuinely run out of room. It cannot fluctuate under a press:
+       * the vocabulary is a prop and the counts change no label's width by
+       * more than a digit.
+       */
+      wrap
+    />
   );
 }

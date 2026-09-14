@@ -45,8 +45,7 @@ const KEY_PRESS =
  * Tailwind happened to emit them in, not by the order they appear in the class
  * attribute. A shape that names no colour cannot lose that flip.
  */
-export const CONSOLE_KEY_PILL_BARE =
-  `shrink-0 rounded-full border font-mono uppercase ${KEY_PRESS}`;
+export const CONSOLE_KEY_PILL_BARE = `shrink-0 rounded-full border font-mono uppercase ${KEY_PRESS}`;
 
 /**
  * The pill above at the standard type size, and it is split off
@@ -59,8 +58,7 @@ export const CONSOLE_KEY_PILL_BARE =
  * ledge rather than standing on a panel) therefore needs the bare shape, not a
  * size bolted onto this one.
  */
-export const CONSOLE_KEY_PILL_SHELL =
-  `${CONSOLE_KEY_PILL_BARE} text-[length:var(--fs-11)] tracking-[0.16em]`;
+export const CONSOLE_KEY_PILL_SHELL = `${CONSOLE_KEY_PILL_BARE} text-[length:var(--fs-11)] tracking-[0.16em]`;
 
 /**
  * The pill above, at the standard gutter.
@@ -175,6 +173,75 @@ export const CONSOLE_CHANNEL_METAL =
 export const CONSOLE_PART_TRAY =
   "bg-black/42 " +
   "shadow-[inset_0_7px_16px_rgba(0,0,0,0.85),inset_0_1px_0_rgba(0,0,0,0.85),inset_0_-1px_0_rgba(255,255,255,0.08)]";
+
+/**
+ * A **machined part**: a header ledge over a key-stock body, chamfered on all
+ * four edges and standing in a hole.
+ *
+ * It is what {@link CONSOLE_PART_TRAY} is a tray *of*, and the two are the same
+ * distinction one grain apart — a tray holding parts is the absence of a
+ * surface, and this is the part seated in it. The columns picker's axes housing
+ * is one, and so is each of the league filters panel's three rule bays and its
+ * match housing.
+ *
+ * **The accent is a hairline ring inside the shadow list rather than a
+ * `border`**, so the four chamfer insets and the accent cannot fight over one
+ * border colour — the emit-order flip this file's constants are split apart to
+ * avoid, one property over.
+ *
+ * It carries its radius and its clip, which is where it parts company with
+ * {@link CONSOLE_BILLET}: those are not a caller's choice here but what makes
+ * the ledge's cast land on the body rather than on the page, and every reader
+ * is the same part at the same size. What a caller states is where it sits.
+ *
+ * **Three whole stacks rather than one and two overrides.** A shadow list is
+ * atomic: a second `shadow-[…]` beside one of these replaces the four chamfer
+ * insets rather than raising the ring inside them, and which wins is Tailwind's
+ * emit order. They live together so the one thing that differs between them —
+ * the ring's alpha, the halo's spread, the cast's direction — can be read off
+ * three adjacent lines rather than reconstructed from three call sites.
+ */
+export const CONSOLE_PART_HOUSING =
+  "relative overflow-hidden rounded-[1.0625rem] " +
+  "shadow-[inset_0_1.5px_0_rgba(255,255,255,0.2),inset_0_-1.5px_0_rgba(0,0,0,0.8),inset_1px_0_0_rgba(255,255,255,0.05),inset_-1px_0_0_rgba(0,0,0,0.5),0_0_0_1px_rgba(0,255,229,0.2),0_3px_0_rgba(0,0,0,0.55),0_14px_26px_-12px_rgba(0,0,0,0.9),0_0_34px_-18px_var(--accent-glow)]";
+
+/**
+ * The same part with its reading **live**: the accent ring up from 0.2 to 0.35
+ * and the halo in from -18px to -12px.
+ *
+ * What "live" means is the caller's. The columns picker lights it while a draft
+ * is in hand; the filters panel lights its match housing permanently, because
+ * that part's figure is an *answer* where the three bays beside it are
+ * controls, and it is the only thing on the panel that is.
+ */
+export const CONSOLE_PART_HOUSING_LIT =
+  "relative overflow-hidden rounded-[1.0625rem] " +
+  "shadow-[inset_0_1.5px_0_rgba(255,255,255,0.2),inset_0_-1.5px_0_rgba(0,0,0,0.8),inset_1px_0_0_rgba(255,255,255,0.05),inset_-1px_0_0_rgba(0,0,0,0.5),0_0_0_1px_rgba(0,255,229,0.35),0_3px_0_rgba(0,0,0,0.55),0_14px_26px_-12px_rgba(0,0,0,0.9),0_0_34px_-12px_var(--accent-glow)]";
+
+/**
+ * {@link CONSOLE_PART_HOUSING_LIT} for a part **pinned to the foot of a
+ * scroller**, where the cast goes up.
+ *
+ * A shadow says which way the light falls and therefore what is behind the
+ * part. Sticky at the *top* of a column, content scrolls up and passes beneath,
+ * so the cast falls downward onto it; pinned at the *bottom*, the content
+ * passing under it is above, and a downward cast lands on the well's own floor
+ * two paddings below — a part throwing a shadow onto nothing while the rows
+ * sliding under it get none.
+ *
+ * **It carries its own `@4xl:` arm**, which is the one thing in this family a
+ * caller would otherwise have to spell. Tailwind scans class strings
+ * statically, so a variant cannot be applied to a constant — `@4xl:${CONST}`
+ * generates no CSS at all — and the alternative is a fourth hand-copied
+ * eight-shadow stack at the call site. The arm is the filters panel's own
+ * breakpoint because that panel is the only place a part is pinned: above it
+ * the match housing is a grid item sticky at the top of its own column, which
+ * is {@link CONSOLE_PART_HOUSING_LIT} exactly.
+ */
+export const CONSOLE_PART_HOUSING_LIT_PINNED =
+  "relative overflow-hidden rounded-[1.0625rem] " +
+  "shadow-[inset_0_1.5px_0_rgba(255,255,255,0.2),inset_0_-1.5px_0_rgba(0,0,0,0.8),inset_1px_0_0_rgba(255,255,255,0.05),inset_-1px_0_0_rgba(0,0,0,0.5),0_0_0_1px_rgba(0,255,229,0.35),0_3px_0_rgba(0,0,0,0.55),0_-10px_26px_-12px_rgba(0,0,0,0.9),0_0_34px_-12px_var(--accent-glow)] " +
+  "@4xl:shadow-[inset_0_1.5px_0_rgba(255,255,255,0.2),inset_0_-1.5px_0_rgba(0,0,0,0.8),inset_1px_0_0_rgba(255,255,255,0.05),inset_-1px_0_0_rgba(0,0,0,0.5),0_0_0_1px_rgba(0,255,229,0.35),0_3px_0_rgba(0,0,0,0.55),0_14px_26px_-12px_rgba(0,0,0,0.9),0_0_34px_-12px_var(--accent-glow)]";
 
 /**
  * The same channel, from `sm` up only.
@@ -302,8 +369,7 @@ export const CONSOLE_CARD_SHELL =
  * A card that wants its own gutter composes the shell with it; everything else
  * takes this and is unchanged.
  */
-export const CONSOLE_CARD =
-  `${CONSOLE_CARD_SHELL} px-[1.125rem] pb-[1.125rem] pt-[1.875rem]`;
+export const CONSOLE_CARD = `${CONSOLE_CARD_SHELL} px-[1.125rem] pb-[1.125rem] pt-[1.875rem]`;
 
 /**
  * A readout set *into* a housing, as opposed to sitting on a panel.

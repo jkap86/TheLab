@@ -3027,6 +3027,220 @@ honest empty grid or as a fault, which is the case the carried selection makes
 newly reachable; and whether two keys is the split a reader expects, since
 nothing on either page says the trades board narrows separately.
 
+### The panel became a case, and a switch stopped being unreadable in light
+
+`LeagueFiltersDialog` and `LineupColumnsDialog` are the two modal panels on
+`/manager`, and they read as two different objects: the columns picker is a
+**milled billet case with one hole cut in it**, and the filters panel was a
+bordered sheet painted in `--panel-bg` — which is the page, since
+`ConsoleGround` paints the same radial. The filters panel takes the columns
+panel's grammar. Applied from a design handoff, its `1c` and `2b`. **Nothing
+about what it filters, what it counts or when it commits moved**: the draft is
+still seeded on open and committed on `Apply`, every count is still the same
+cross-tab walk, and the control inventory is identical.
+
+**No migration, nothing on the wire, and no new token** — every value used
+already had a light counterpart. The two panel-scale surfaces are the case
+(`--panel-case-*`) and the one hole cut in it (`--case-well-*`), and the 18px
+rule comes with them: `mx-2` of margin plus `px-2.5` of padding is what the
+body's own `px-[1.125rem]` spent, and it is not adjustable alone — the rails'
+keys size to their labels and grow into what is left, so the tracks lose width
+one for one with it.
+
+**Three parts, one constant.** The three rule bays and the match housing are the
+columns picker's own axes housing — a header ledge over a key-stock body,
+chamfered on four edges with the accent as a hairline ring *inside* the shadow
+list rather than a border. `CONSOLE_PART_HOUSING` and
+`CONSOLE_PART_HOUSING_LIT` are those two eight-shadow stacks, and `ColumnAxes`
+reads them too: four readers of one list spelled at four call sites is the drift
+`console-chrome` exists to prevent. The match housing is the **lit** one and the
+bays are resting, which is the whole of what says which is an answer and which
+are controls.
+
+**The rule count never leaves a bay's ledge.** It was a bare figure that appeared
+once a bay had a rule, so adding the first one resized the part under the press
+that added it. The chip is always there and only its lamp and its ink move: lit
+and counting, or unlit and reading `Any`, which is the honest name for a bay
+narrowing nothing.
+
+**Below `@4xl` the match housing pins to the foot of the well and collapses**,
+which is the one place the panel's *nothing appears or disappears under a press*
+rule is deliberately broken — and the ledge is why it survives: the press **is**
+the reader asking for the space, and the count they were given does not move
+when they get it. Collapsed is where it opens, because the reading a reader
+needs while building rules is the count and the count is on the ledge in both
+states. Its cast reverses with its position (`CONSOLE_PART_HOUSING_LIT_PINNED`,
+which carries its own `@4xl:` arm because Tailwind scans class strings
+statically and a variant cannot be applied to a constant): pinned at the foot,
+the content passing under it is *above*, and a downward cast lands on the well's
+floor two paddings below rather than on the rows sliding beneath.
+
+**Which forced a flex column below `@4xl` where the grid stays above it.** A
+grid item's containing block is its *grid area*, and in one column that area is
+the item's own box — so `sticky bottom-0` there has nowhere to travel and does
+nothing at all. A flex item's containing block is the flex container's content
+box, which spans every row above it.
+
+**The ledge is written twice and exactly one is ever rendered** — a `<div>` from
+`@4xl`, a `<button>` below — which is `WeekStepper`'s rule and its two
+conditions: neither copy holds state, and both gates are `display: none`, which
+takes the arm that is not on screen out of the accessibility tree as well as out
+of the flow. A `<button>` at every width that only acted at some of them would
+be a control that does nothing, which is what this panel greys keys to avoid.
+
+**The rule row breaks onto two lines below `@md`, and the query is the *bay*'s
+width rather than the viewport's.** The Settings bay runs the panel's full width
+and the other two sit side by side from `@2xl`, so a desktop already holds
+~336px bays — where a single flex row squeezes the measure `<select>` to ~110px,
+the one control on the row whose name has to survive, on a viewport no `sm:` arm
+would have caught. `@md:contents` is what makes that one DOM rather than two.
+
+### The rails moved into a switch, and the switch was broken in light
+
+The two fixed rails are a `SwitchTrack` now — the same control the columns
+picker's six axes are, with the cross-tab count as a new `badge` slot **inside**
+each key, so it takes the key's own lit ink rather than standing beside it. A
+row of keys written beside that component is the failure its own note rules out.
+An option this selection leaves nothing on cannot be pressed, and the title says
+so in the cross-tab's own terms — `Chopped leaves nothing on this selection`,
+not "no league in hand is chopped", because the number is what picking it *with
+the rest of the draft* would leave.
+
+**And moving them there is what found a contrast bug in the switch itself.**
+Measured over rendered pixels at DPR 2, an unlit key's label against the floor it
+sits on:
+
+| | before | after |
+| --- | --- | --- |
+| filters rails, light | **1.75:1** (6.33 as pill keys) | **6.64:1** |
+| columns picker, light | **2.48:1** (shipped) | **6.97:1** |
+| filters rails, dark | 6.36:1 | 9.31:1 |
+| columns picker, dark | 6.17:1 | 9.19:1 |
+
+Two things were wrong and both are the same rule read from the other side.
+**`CONSOLE_CHANNEL` is a black alpha**, safe only where the stock it is cut into
+is dark in both themes — and *every* caller of the row arm cuts into stock that
+is pale in light: the columns picker's body is `--key-bg`, which is
+white-to-`#e3eaed` there. 52% black on it is not a channel but a hole punched
+through the part, with near-black key labels lying in it. The row arm takes
+`CONSOLE_CHANNEL_METAL`, which is **byte-identical in dark** —
+`--rack-channel-bg` is `rgba(0,0,0,0.52)` and its shadow is the same three
+insets — and a slate tint over a lit lower lip in light. And the unlit ink goes
+from `text-foreground/60`, which is near-black at 60% in light, to
+`--billet-label`: ink stamped on key stock, which is what the legend beside it
+already draws in.
+
+**The rails sit in a well rather than the part tray the handoff asks for**, and
+that is the same measurement one layer out. `CONSOLE_PART_TRAY` is a black alpha
+too, safe in the columns picker because the parts it holds are opaque and cover
+it; what it holds here is two tracks with text lying directly on them, and over
+a near-white well it kept the rails at 2.03:1 even after the channel was fixed.
+On `--key-bg` they measure 6.64:1 with dark unmoved. It is also the distinction
+this file's own constants draw — a tray holding *controls* is a surface and a
+tray holding *parts* is the absence of one, and two switch tracks are controls.
+The cost is that the rails read as standing on key stock rather than seated in a
+hole, which is the one place the drawing is not followed.
+
+#### The three open questions, answered as the prototype draws them
+
+Each is reversible in one edit and none is settled here.
+
+- **The `Esc` key is dropped.** The case has no border for it to sit against and
+  Esc still closes through `showModal()`; the columns picker ships without one.
+  It is the only deletion a reader could see.
+- **The rails read `All` rather than `All types` / `All formats`**, with the
+  count beside it. The legend three characters to the left already names the
+  axis, so the full label is the one thing on the row that says something twice.
+  The shipped labels are untouched — they have three other readers where there
+  is no legend and the noun is the whole reading.
+- **The match housing opens collapsed** on a phone, which is the prototype's own
+  default.
+
+Two smaller ones were taken against the handoff's prose and with its drawing.
+The `Quick add` legend stacks above its chips rather than taking the panel's
+`4.875rem` legend column: a track holds a fixed row of keys where this holds
+nine chips that wrap, so a legend beside them would be one word against a block
+three lines deep. And the header's share is **dropped** below `sm` rather than
+left to the row's truncation — what the ellipsis eats is exactly that clause, so
+a reading ending mid-percentage is a worse answer than one that does not claim a
+share; the `aria-live` text is whole either way.
+
+#### Verified
+
+Driven over CDP against `next dev` with no `DATABASE_URL` — the boot hook skips
+migrations and the loops log their refusals, which is the server coming up
+healthy against nothing — through a temporary `/preview` route mounting the
+**real** `LeagueFiltersDialog` and, beside it, the **real** `LineupColumnsDialog`
+to measure this change against; then deleted. The mechanics are the ones this
+file records: `--no-proxy-server`, `localhost` rather than `127.0.0.1`, a phone
+viewport from `Emulation.setDeviceMetricsOverride` with `mobile: true`,
+`data-theme` **and** `localStorage` cleared before hydration,
+`--disable-features=OverlayScrollbar`, the
+`--blink-settings=availablePointerTypes=4,…` flags built as a **template
+literal**, `--no-sandbox`, a **client-component** harness, a CDP client over
+Node's own `WebSocket`, and a fresh `--remote-debugging-port` per run. Two are
+this pass's own: a `pkill -f` matching the running command's own line kills the
+shell (exit 144, no output), and **contrast was measured off rendered pixels**
+rather than from computed styles — a 120-line PNG decoder over
+`Page.captureScreenshot` at DPR 2, taking each element's median pixel as its
+surface and the extreme as its ink, because every surface here is a gradient or
+an alpha over one and no `getComputedStyle` answers what a label actually lands
+on.
+
+**Nine widths — 1440, 1280, 1024, 900, 768, 640, 430, 390 and 375 — in both
+schemes, all clean**: nothing clipped that does not declare `truncate` or
+`sr-only`, `document.documentElement.scrollWidth` within the viewport, exactly
+one `<h1>`, no `Esc` key, and the well's gutter **8px of margin over 10px of
+padding at every one of them**. The `@4xl` crossover lands on the case rather
+than the viewport, which is what a container query is for: at 1024 the case is
+971px and the match housing is a plain ledge over an open body casting
+downward; at 900 the case is 847 and it is a toggle over a shut body casting up,
+with the well's bottom padding moved onto its wrapper.
+
+**28 behaviour checks pass.** A rail press moves the header reading to
+`15 / 24 · 63%` and re-cross-tabs the *other* rail (`All15|Best ball2|Lineup13`),
+which is the one thing a per-filter tally could not do; nothing commits until
+`Apply`, which closes and moves the trigger's badge to 2; re-opening seeds the
+draft from what was committed; `Reset` clears the draft and commits nothing;
+Esc closes and commits nothing. On the phone the housing is collapsed with its
+body **not rendered**, a press takes it 49px → 305px with the ledge's own count
+unmoved, and at `scrollTop: 500` it sits on the well's floor with the rules
+scrolled under it. Under a **coarse** pointer — the inverted
+`availablePointerTypes=2,…` flags — all three form controls take the 17px floor
+from `globals.css` rather than re-spelling it, and the remove target is 32×32.
+
+Every ink in the panel clears 4.5:1 in both schemes on the measured surface it
+lands on, the lowest being the bay's lit chip at 4.85 and the breakdown's figure
+well at 4.86 in light. The handoff's three named light-mode risks all clear:
+`Reset`'s `--billet-name` on light `--key-metal` at **14.38:1**, the `Quick add`
+chips' `--billet-label` on light `--chip-bg` at **7.84:1**, and the milled
+hairline staying a *cut* — a light grey line on near-white (1.58) with the same
+character it has in dark (1.65) rather than becoming a black line on a pale
+face.
+
+`check:full` — the production build, then lint, typecheck and the suite — is
+clean, and 2,851 unit tests pass.
+
+**One pre-existing finding, reported rather than patched.** The accent cap's ink
+measures **2.98:1 in light** and 9.90 in dark — and `Apply` and the columns
+picker's shipped `Done` measure *identically*, to the hundredth, because they
+are the same class string over the same `--cap-accent-*` tokens. The handoff
+quotes 6.8:1 for it; what renders is 2.98. It is the rack's cap, the browse
+dock's and the columns picker's as much as this panel's, so moving the token is
+a decision about every filled object in the app rather than about this change.
+
+**Not verified against real data**, which is the gap to close first: the fixture
+is 24 invented leagues and no database was reachable from here. Four things a
+render cannot check — whether the rails' keys still hold their labels on a real
+account, where the counts run to three digits and `All types` was shortened on
+the strength of a 24-league fixture; whether a reader finds the pinned housing's
+body at all, since collapsing it is the one thing this change asks them to
+discover; what the panel costs on a 113-league account, where every count in it
+is a walk over the whole list and the rails now cross-tab five options rather
+than rendering five chips; and whether the rails reading as a well rather than a
+hole is a trade the designer accepts, which is the one place the drawing is not
+followed and only they settle.
+
 ## Shares and leaguemates
 
 Two drawers on the manager page answer the question the league grid cannot:

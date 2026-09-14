@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 
+import { CONSOLE_CHIP, CONSOLE_FIGURE_WELL_SHELL } from "../console-chrome";
 import {
   COMPARE_OPS,
   type FilterRule,
@@ -109,27 +110,51 @@ export function RuleRow({
   const ops = named || onSentinel ? NAMED_OPS : COMPARE_OPS;
 
   // One string for both menus, so the row cannot drift into two heights. The
-  // size is the design's at every width — a touch device floors it at 16px in
+  // size is the design's at every width — a touch device floors it at 17px in
   // `globals.css`, which is where the reason for that lives now: it used to be
   // spelled here as a 16px base stepped down at `@md`, and a width cannot see
   // the device the zoom belongs to.
+  //
+  // **A recess cut in metal, where it used to be key stock.** The row stands on
+  // the bay's own body now, and a raised slab on a raised body is two faces
+  // catching one light: what selects a value is a hole with a name stamped in
+  // it, and the one raised thing on the row is the number. `--recess-bg` rather
+  // than a `bg-black/N` is that stamp's doing — see the token: the label here is
+  // ink on metal, and 34% black under a near-white light-mode body takes it to
+  // 3.4:1.
   const slot =
-    "min-w-0 cursor-pointer appearance-none rounded-lg bg-[image:var(--key-bg)] py-1.5 pl-2 pr-5 " +
-    "font-mono text-[length:var(--fs-11)] text-foreground/88 shadow-[var(--well-shadow)] outline-none " +
+    "min-w-0 cursor-pointer appearance-none rounded-full bg-[color:var(--recess-bg)] py-1.5 pl-3 pr-[1.375rem] " +
+    "font-mono text-[length:var(--fs-10)] uppercase tracking-[0.04em] text-[color:var(--billet-label)] " +
+    "shadow-[var(--track-shadow)] outline-none " +
     "focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-active/60";
   /** `appearance-none` takes the native caret with it; this draws one back. */
   const caret = (
     <span
       aria-hidden
-      className="pointer-events-none absolute right-2 text-[length:var(--fs-8)] leading-none text-foreground/45"
+      className="pointer-events-none absolute right-2.5 text-[length:var(--fs-8)] leading-none text-foreground/45"
     >
       ▼
     </span>
   );
 
   return (
-    <div className="flex items-center gap-1.5">
-      <span className="relative inline-flex min-w-0 max-w-56 flex-1 items-center">
+    // **Two lines below `@md`, one above**, and the query is the *bay*'s width
+    // rather than the viewport's — which is the whole reason it is a container
+    // one. The Settings bay runs the panel's full width and the other two sit
+    // side by side from `@2xl`, so a desktop already holds ~336px bays: at that
+    // width a single flex row squeezes the measure `<select>` to ~110px, which
+    // is the one control on the row whose name has to survive, and it does so
+    // on a viewport no `sm:` arm would ever have caught.
+    //
+    // Broken, the measure takes a line of its own and everything that only
+    // *qualifies* it — the comparison, the value, the sentinel, the count and
+    // the remove — sits on a second. `@md:contents` is what makes that one DOM
+    // rather than two: above the query the two wrappers stop generating a box
+    // and their children become items of the row again, which is the trick the
+    // app rack's brand row and `DrawerRow` both turn. Rendering both shapes
+    // would put every rule in the tree twice.
+    <div className="flex flex-col gap-1.5 @md:flex-row @md:items-center">
+      <span className="relative inline-flex min-w-0 items-center @md:max-w-56 @md:flex-1">
         <select
           value={rule.key}
           aria-label="Measure"
@@ -156,107 +181,130 @@ export function RuleRow({
         {caret}
       </span>
 
-      <span className="relative inline-flex shrink-0 items-center">
-        <select
-          value={rule.op}
-          aria-label="Comparison"
-          onChange={(e) =>
-            onChange({ ...rule, op: e.target.value as FilterRule["op"] })
-          }
-          className={slot}
-        >
-          {ops.map((op) => (
-            <option key={op.value} value={op.value} aria-label={op.label}>
-              {op.symbol}
-            </option>
-          ))}
-        </select>
-        {caret}
-      </span>
-
-      {named ? (
+      {/* The second line, and one flex item above the query. `@md:contents`
+          takes its box away there, so the five controls below become items of
+          the row itself and the layout is the one this row has always had. */}
+      <div className="flex items-center gap-1.5 @md:contents">
         <span className="relative inline-flex shrink-0 items-center">
           <select
-            value={String(rule.value)}
-            aria-label="Value"
+            value={rule.op}
+            aria-label="Comparison"
             onChange={(e) =>
-              onChange({ ...rule, value: Number(e.target.value) })
+              onChange({ ...rule, op: e.target.value as FilterRule["op"] })
             }
             className={slot}
           >
-            {named.map((option) => (
-              <option key={option.value} value={option.value}>
-                {option.label}
+            {ops.map((op) => (
+              <option key={op.value} value={op.value} aria-label={op.label}>
+                {op.symbol}
               </option>
             ))}
           </select>
           {caret}
         </span>
-      ) : (
-        // Lit glass rather than a slot: this is the number, and the two menus
-        // beside it only say which number it is.
-        <span className="relative inline-flex w-14 shrink-0 items-center overflow-hidden rounded-lg border border-black/85 bg-[image:var(--readout-bg)] shadow-[var(--readout-shadow)] focus-within:border-active/60">
-          <span
-            aria-hidden
-            className="pointer-events-none absolute inset-0 bg-[image:var(--readout-scanlines)]"
-          />
-          <input
-            type="number"
-            inputMode="decimal"
-            step={step}
-            value={onSentinel ? "" : text}
-            disabled={onSentinel}
-            aria-label="Value"
-            onChange={(e) => {
-              setEdit(e.target.value);
-              onChange({
-                ...rule,
-                value: parseRuleValue(e.target.value, rule.value),
-              });
-            }}
-            onBlur={() => setEdit(null)}
-            className="relative w-full min-w-0 bg-transparent px-2 py-1.5 text-right font-mono text-[length:var(--fs-11)] tabular-nums text-readout outline-none [text-shadow:var(--readout-text-glow)] disabled:opacity-40"
-          />
-        </span>
-      )}
 
-      {sentinel && (
+        {named ? (
+          <span className="relative inline-flex shrink-0 items-center">
+            <select
+              value={String(rule.value)}
+              aria-label="Value"
+              onChange={(e) =>
+                onChange({ ...rule, value: Number(e.target.value) })
+              }
+              className={slot}
+            >
+              {named.map((option) => (
+                <option key={option.value} value={option.value}>
+                  {option.label}
+                </option>
+              ))}
+            </select>
+            {caret}
+          </span>
+        ) : (
+          // Lit glass rather than a slot: this is the number, and the two menus
+          // beside it only say which number it is. One grade up with the panel —
+          // `--glass-shadow` and a `/70` ring where it was `--readout-shadow` and
+          // `/85` — because the body it now stands on is key stock rather than a
+          // well, and the deeper ring read as a hole punched in it.
+          <span className="relative inline-flex w-16 shrink-0 items-center overflow-hidden rounded-[0.625rem] border border-black/70 bg-[image:var(--readout-bg)] shadow-[var(--glass-shadow)] focus-within:border-active/60">
+            <span
+              aria-hidden
+              className="pointer-events-none absolute inset-0 bg-[image:var(--readout-scanlines)]"
+            />
+            <input
+              type="number"
+              inputMode="decimal"
+              step={step}
+              value={onSentinel ? "" : text}
+              disabled={onSentinel}
+              aria-label="Value"
+              onChange={(e) => {
+                setEdit(e.target.value);
+                onChange({
+                  ...rule,
+                  value: parseRuleValue(e.target.value, rule.value),
+                });
+              }}
+              onBlur={() => setEdit(null)}
+              className="relative w-full min-w-0 bg-transparent px-2 py-1.5 text-right font-mono text-[length:var(--fs-11)] tabular-nums text-readout outline-none [text-shadow:var(--readout-text-glow)] disabled:opacity-40"
+            />
+          </span>
+        )}
+
+        {sentinel && (
+          <button
+            type="button"
+            aria-pressed={onSentinel}
+            title={`${sentinel.label} — not a value on this scale`}
+            onClick={() =>
+              onChange(
+                onSentinel
+                  ? { ...rule, value: fallback }
+                  : { ...rule, op: "eq", value: sentinel.value },
+              )
+            }
+            // Chip stock unpressed, as the bay's presets are — an unpressed
+            // sentinel is an *offer* rather than a control in force — and a key
+            // of the track's own grade once it is the value: raised, lit and
+            // carrying the riser, because pressed it is what the number field
+            // beside it has stood down for. The riser is composed whole in one
+            // utility, since a shadow list is atomic and a second `shadow-[…]`
+            // would replace the chip's chamfer rather than raising it.
+            className={`shrink-0 whitespace-nowrap rounded-full px-[0.5625rem] py-1.5 font-mono text-[length:var(--fs-10)] uppercase tracking-[0.04em] transition-[color,box-shadow,transform] duration-150 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-active/60 ${
+              onSentinel
+                ? "border border-active/50 bg-[image:var(--key-metal)] text-readout [text-shadow:var(--readout-text-glow)] shadow-[inset_0_1px_0_rgba(255,255,255,0.4),0_3px_0_rgba(0,0,0,0.65),0_7px_12px_-6px_rgba(0,0,0,0.95),0_0_20px_-5px_var(--accent-glow)]"
+                : `${CONSOLE_CHIP} border border-transparent text-[color:var(--billet-label)] hover:text-readout`
+            }`}
+          >
+            {sentinel.label}
+          </button>
+        )}
+
+        {/* The count moves into a figure well — the same cut every other figure
+          on this console is read out of, and the thing that separates what this
+          rule leaves from the controls that set it. Deeper than the standard
+          one, because it is cut into key stock rather than into a billet's
+          face. */}
+        <span
+          title="Leagues matching this rule on its own"
+          className={`${CONSOLE_FIGURE_WELL_SHELL} ml-auto shrink-0 px-2 py-[0.1875rem] font-mono text-[length:var(--fs-10)] tabular-nums text-readout-label shadow-[inset_0_2px_5px_rgba(0,0,0,0.8)]`}
+        >
+          {count}
+        </span>
+
+        {/* 32px square below `@md`, where a finger is the input and the row has
+          already given the measure a line of its own; the tighter target above
+          it, where the row is one line and every control on it is a mouse's. */}
         <button
           type="button"
-          aria-pressed={onSentinel}
-          title={`${sentinel.label} — not a value on this scale`}
-          onClick={() =>
-            onChange(
-              onSentinel
-                ? { ...rule, value: fallback }
-                : { ...rule, op: "eq", value: sentinel.value },
-            )
-          }
-          className={`shrink-0 whitespace-nowrap rounded-lg border px-2 py-1.5 font-mono text-[length:var(--fs-11)] transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-active/60 ${
-            onSentinel
-              ? "border-active/45 bg-active/14 text-readout"
-              : "border-foreground/12 text-foreground/55 hover:text-readout"
-          }`}
+          aria-label="Remove rule"
+          onClick={onRemove}
+          className="inline-flex size-8 shrink-0 items-center justify-center rounded-md font-mono text-[length:var(--fs-14)] leading-none text-foreground/50 transition-colors hover:bg-foreground/[0.06] hover:text-error focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-active/60 @md:size-auto @md:px-1.5 @md:py-1"
         >
-          {sentinel.label}
+          ×
         </button>
-      )}
-
-      <span
-        title="Leagues matching this rule on its own"
-        className="ml-auto shrink-0 font-mono text-[length:var(--fs-11)] tabular-nums text-foreground/45"
-      >
-        {count}
-      </span>
-
-      <button
-        type="button"
-        aria-label="Remove rule"
-        onClick={onRemove}
-        className="shrink-0 rounded-md px-1.5 py-1 font-mono text-[length:var(--fs-14)] leading-none text-foreground/45 transition-colors hover:bg-foreground/[0.06] hover:text-error focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-active/60"
-      >
-        ×
-      </button>
+      </div>
     </div>
   );
 }
