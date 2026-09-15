@@ -54,6 +54,16 @@ nothing about the code. `check` still runs after the build, because `tsc` covers
 `scripts/` and the test files the bundler never sees. A green `tsc` and a green
 suite have never implied a build; this is what closes that.
 
+**`.claude/**` is in ESLint's global ignores, and `npm run lint` is why it has to
+be.** The script is a bare `eslint` with no paths, so the flat config's ignores
+are the whole of what it skips — and other Claude sessions keep git-ignored
+worktrees under `.claude/worktrees/`, each with its own copy of `src/` and its
+own generated `.next/`, whose route validators carry `@ts-ignore` and unused
+`handler` / `__Unused` bindings. `.next/**` matches the root build only, not a
+nested one. Without the entry, `check` on the main checkout stopped at lint on
+1,204 errors from three worktrees, none of them in this app's source — which
+read as a broken tree to every session that ran it there.
+
 ## Reaching Sleeper
 
 Four `shared/` concerns stack, and the order is the whole design:

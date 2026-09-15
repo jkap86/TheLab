@@ -12,6 +12,9 @@ const eslintConfig = defineConfig([
     "out/**",
     "build/**",
     "next-env.d.ts",
+    // Other sessions' git-ignored worktrees live here, each with its own copy
+    // of src and its own generated .next/ — which `.next/**` does not reach.
+    ".claude/**",
   ]),
 ]);
 
