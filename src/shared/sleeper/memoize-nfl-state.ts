@@ -53,3 +53,66 @@ export function memoizeNflState(
   };
   return memoized;
 }
+
+/**
+ * The read, holding on to the last state this process actually read.
+ *
+ * **A week the app cannot read must not become week 1**, and until this existed
+ * it did. `projections/weeks`' `currentWeek` catches a failed state read and
+ * answers 1 — the widest honest window, which is exactly right in the abstract
+ * and indistinguishable from the truth for one week a year. From week 2 on, a
+ * Sleeper outage, a shed permit or a spent request budget renders as a page
+ * confidently headed `Week 1`, with nothing in the payload, the log or the UI
+ * able to say the number was invented. It is the same class of claim a
+ * `DEFAULT now()` on a row nothing has read makes, and the same reason
+ * `parseRequestedWeek` refuses to fold an invalid week into the current one.
+ *
+ * The season already had the answer: `shared/season` serves the last value it
+ * resolved through an outage and only then reaches for the compiled-in
+ * constant, on the rule that a *stale* answer beats none. The week had no such
+ * ladder — it fell from Sleeper straight to a literal — and that asymmetry is
+ * the whole of the bug. So the same ladder, one rung: what Sleeper says now,
+ * else what it last said, else nothing (and *then* the caller's fallback).
+ *
+ * **A stale state is served indefinitely**, which is the season resolver's own
+ * trade and made for its reason: a TTL says when to try again, not when to stop
+ * trusting what we have. A week changes once a week, so the freeze this can
+ * cause is bounded by how long Sleeper is down, and every alternative to it is
+ * a number nobody measured.
+ *
+ * **A null body counts as a failure here, not an answer.** `sleeperGet` folds a
+ * missing body to the caller's fallback, so `state/nfl` answering nothing and
+ * `state/nfl` being unreachable arrive spelled identically — and neither is
+ * Sleeper telling us the season has no state, which it spells with a real
+ * object whose `week` is 0. Where we hold a good one, that is the better answer.
+ *
+ * Pure, with the read as an argument, so the ladder tests without a network:
+ * it wraps whatever `state.ts` composes — the memo *and* the bounded wait —
+ * rather than sitting inside the memo, because a wait shed by the reader's own
+ * budget is one of the three failures this exists to catch.
+ */
+export function holdLastGood(
+  read: NflStateFetch,
+): NflStateFetch & { lastGood: () => SleeperNflState | null } {
+  let held: SleeperNflState | null = null;
+
+  const holding = async (): Promise<SleeperNflState | null> => {
+    try {
+      const state = await read();
+      if (state) {
+        held = state;
+        return state;
+      }
+      return held;
+    } catch (error) {
+      if (held) return held;
+      // Nothing to fall back to: a cold process whose first read failed has no
+      // week, and saying so is what lets the caller answer honestly rather than
+      // inheriting a stale claim it never made.
+      throw error;
+    }
+  };
+
+  holding.lastGood = () => held;
+  return holding;
+}

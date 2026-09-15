@@ -1,7 +1,11 @@
 import assert from "node:assert/strict";
 import { describe, test } from "node:test";
 
-import { memoizeNflState, NFL_STATE_TTL_MS } from "./memoize-nfl-state.ts";
+import {
+  holdLastGood,
+  memoizeNflState,
+  NFL_STATE_TTL_MS,
+} from "./memoize-nfl-state.ts";
 import type { SleeperNflState } from "./types/sleeper.types.ts";
 
 const state = (week: number): SleeperNflState => ({
@@ -114,5 +118,76 @@ describe("memoizeNflState", () => {
     assert.equal((await memo())?.week, 1);
     memo.clear();
     assert.equal((await memo())?.week, 2);
+  });
+});
+
+describe("holdLastGood", () => {
+  test("serves the last state it read when a later read fails", async () => {
+    let fail = false;
+    const held = holdLastGood(() =>
+      fail ? Promise.reject(new Error("503")) : Promise.resolve(state(2)),
+    );
+
+    assert.equal((await held())?.week, 2);
+    fail = true;
+    // The whole point: week 2, not the caller's fallback to week 1.
+    assert.equal((await held())?.week, 2);
+    assert.equal(held.lastGood()?.week, 2);
+  });
+
+  test("throws when it has never read one — a cold process has no week", async () => {
+    const held = holdLastGood(() => Promise.reject(new Error("503")));
+
+    await assert.rejects(held(), /503/);
+    assert.equal(held.lastGood(), null);
+  });
+
+  test("a null body falls back where a good state is held", async () => {
+    let body: SleeperNflState | null = state(3);
+    const held = holdLastGood(() => Promise.resolve(body));
+
+    assert.equal((await held())?.week, 3);
+    // `sleeperGet` folds a missing body to null, so an unreachable state and an
+    // empty one arrive spelled identically. Neither is Sleeper saying "no week".
+    body = null;
+    assert.equal((await held())?.week, 3);
+  });
+
+  test("a null body is answered as null when nothing is held", async () => {
+    const held = holdLastGood(() => Promise.resolve(null));
+
+    assert.equal(await held(), null);
+    assert.equal(held.lastGood(), null);
+  });
+
+  test("a recovered read replaces the held one", async () => {
+    let answer: () => Promise<SleeperNflState | null> = () =>
+      Promise.resolve(state(2));
+    const held = holdLastGood(() => answer());
+
+    assert.equal((await held())?.week, 2);
+    answer = () => Promise.reject(new Error("503"));
+    assert.equal((await held())?.week, 2);
+    answer = () => Promise.resolve(state(3));
+    assert.equal((await held())?.week, 3);
+    assert.equal(held.lastGood()?.week, 3);
+  });
+
+  test("holds across a shed wait, which fails outside the memo", async () => {
+    // The order `state.ts` composes: the hold is outside the bounded wait, so a
+    // reader whose own budget ran out still gets the week rather than a 1.
+    let shed = false;
+    const memo = memoizeNflState(() => Promise.resolve(state(4)), {
+      ttlMs: 0,
+    });
+    const held = holdLastGood(async () => {
+      const value = await memo();
+      if (shed) throw new Error("SleeperBudgetExhausted");
+      return value;
+    });
+
+    assert.equal((await held())?.week, 4);
+    shed = true;
+    assert.equal((await held())?.week, 4);
   });
 });

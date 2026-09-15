@@ -402,6 +402,79 @@ held on a busy dyno; and whether the manager lookup's exception — the one cach
 that keeps its producer under the caller's class — is the right call against a
 real burst of distinct usernames.
 
+### A week the app cannot read is not week 1
+
+Reported as the app showing week 1 in week 2. `currentWeek` resolves the week a
+page shows when the caller named none, and it answered **1** in three unrelated
+cases: the `state/nfl` read failed, Sleeper answered a null body, or the state's
+season was not the page's and was not older than it. Each is the honest widest
+window in the abstract, and for one week a year each is indistinguishable from
+the truth — so the fallback shipped invisible and came due in week 2, as a page
+confidently headed `Week 1` with nothing in the payload, the log or the UI able
+to say the number was invented.
+
+**The season already had the ladder and the week had none**, and that asymmetry
+is the whole of the bug. `shared/season` serves the last value it resolved
+through an outage and only then reaches for the compiled-in constant, on the
+rule that a stale answer beats none; the week fell from Sleeper straight to a
+literal. `holdLastGood` in `sleeper/memoize-nfl-state.ts` is the missing rung —
+what Sleeper says now, else what it last said, else nothing, and *then* the
+caller's fallback — so `currentWeek`'s `1` answers a cold process rather than a
+busy minute.
+
+**It wraps the bounded wait, not just the fetch**, and that order is the
+load-bearing half: a read shed by an interactive budget fails *after* the memo
+(`awaitShared`), and a reader whose own twelve seconds ran out is the failure
+most likely to be live on a page somebody is waiting on. Wrapped inside the memo
+it would have covered a broken upstream and missed a busy one. It is cached on
+`globalThis` beside the memo for that module's reason: a per-bundle copy holds a
+per-bundle last-good state, so the one route that happened to read Sleeper would
+be the only one able to survive the next outage.
+
+**A null body counts as a failure here rather than an answer.** `sleeperGet`
+folds a missing body to the caller's fallback, so an unreachable `state/nfl` and
+an empty one arrive spelled identically — and neither is Sleeper saying the
+season has no state, which it spells with a real object whose `week` is 0.
+**A stale state is served indefinitely**, which is the season resolver's own
+trade: a TTL says when to try again, not when to stop trusting what we have.
+
+**`npm run week:doctor` is what names the cause**, in `ktc:doctor`'s idiom and
+for its reason — four faults, one symptom, and only two of them leave a trace.
+It reads the raw state *past* the hold (so stage 1 is what Sleeper publishes and
+stage 3 is what the app will serve, and the difference is the diagnosis), prints
+which branch of `currentWeek` decided and whether that was a reading or a
+fallback, and asks the scoreboard whether the week being shown has already been
+played — the one case where the app is faithfully reporting a `display_week`
+Sleeper has not advanced. Read-only, and it needs no database: the week chain is
+Sleeper and arithmetic, so it is safe to point at production. It deep-imports
+`projections/weeks` rather than the barrel, which reaches `@/shared/db`.
+
+#### Verified
+
+Under Node's own runner: 2,880 tests pass (six more — the held state through a
+failed read, a cold process still throwing, a null body falling back where a
+good state is held and answering null where none is, a recovered read replacing
+the held one, and the hold surviving a wait shed outside the memo). `build`,
+`typecheck` and `lint` are clean.
+
+The doctor was driven against this sandbox, where the proxy refuses
+`api.sleeper.app` — which reproduces the fault exactly and is the one arm a test
+cannot reach: stage 1 `UNREACHABLE`, stage 3 `week 1 … FELL BACK`, verdict *the
+week is a fallback*.
+
+**Not verified against real traffic**, which is the gap to close first: Sleeper
+is unreachable from where this was built, so **which** of the two causes is live
+on the deployment is unknown — a failed state read, or a `display_week` Sleeper
+has genuinely not rolled past a finished week 1. The doctor answers that in one
+command and the fix is correct under either, but only under the first does it
+change what the page shows. Three things a test cannot say: whether the held
+state is ever actually served in production, which a live `week:doctor` would
+show as stage 1 failing while stage 3 answers; how long Sleeper takes to advance
+`display_week` after a week's last game, which is what decides whether the app
+should derive the week from the scoreboard rather than trust that field; and
+whether a frozen week during a long outage reads better than a wrong one, which
+is the trade this takes on the season resolver's authority rather than its own.
+
 ### Known drift
 
 `sleeper/limiter.ts` is now the whole file, admission half included — the

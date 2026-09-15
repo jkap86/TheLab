@@ -77,7 +77,7 @@ export type { UserLeaguesEnumeration } from "./enumeration";
 export { isMissingResource } from "./missing";
 export { getAllPlayers } from "./players";
 export { getNflWeekScores } from "./scores";
-export { getNflState, DEFAULT_SEASON } from "./state";
+export { getNflState, lastGoodNflState, DEFAULT_SEASON } from "./state";
 export type {
   SleeperUser,
   SleeperLeague,
