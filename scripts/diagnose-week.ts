@@ -16,6 +16,12 @@
  * nothing on the page and nothing in the payload able to tell you which — the
  * page says `Week 1` exactly as confidently as it would if Sleeper had said so.
  *
+ * A fourth cause was the *field*: the resolver preferred Sleeper's
+ * `display_week`, which lags the roll-over by a day, so a Tuesday in week 2
+ * rendered as a perfectly trustworthy `Week 1`. It reads `leg` now — stage 1
+ * prints all three so the difference stays visible, and a run whose verdict is
+ * "this is what Sleeper publishes" is now a claim about `leg`.
+ *
  * So this walks the chain and names the link that decided:
  *
  *   1. the raw state — what Sleeper actually publishes right now
@@ -49,6 +55,7 @@ import {
   currentWeek,
   LAST_REGULAR_WEEK,
   restOfSeasonStart,
+  stateWeek,
 } from "@/shared/projections/weeks";
 import type { SleeperNflState } from "@/shared/sleeper";
 
@@ -84,10 +91,13 @@ function branchOf(
     };
   }
   if (state.season === season) {
-    const raw = state.display_week || state.week;
+    const field = typeof state.leg === "number" ? "leg" : "week";
+    const raw = stateWeek(state);
     return {
       week: Math.min(Math.max(Math.trunc(raw), 1), LAST_REGULAR_WEEK),
-      why: `Sleeper said so (display_week=${state.display_week}, week=${state.week})`,
+      why:
+        `Sleeper said so — took \`${field}\` = ${raw} ` +
+        `(leg=${state.leg}, week=${state.week}, display_week=${state.display_week})`,
       trusted: true,
     };
   }
@@ -138,9 +148,13 @@ async function main(): Promise<void> {
   } else {
     say(`   season          ${state.season}`);
     say(`   season_type     ${state.season_type}`);
-    say(`   week            ${state.week}`);
-    say(`   leg             ${state.leg}`);
-    say(`   display_week    ${state.display_week}   <- what a page shows`);
+    say(`   week            ${state.week}   (week of \`season_type\`)`);
+    say(`   leg             ${state.leg}   <- what a page shows`);
+    say(`   display_week    ${state.display_week}   (Sleeper's UI hint — not read)`);
+    if (state.leg !== state.display_week) {
+      say("   NOTE — `leg` and `display_week` disagree. That is the ordinary");
+      say("   Tuesday state: Sleeper rolls `leg` first. The app reads `leg`.");
+    }
     say(`   season_start    ${state.season_start_date ?? "(absent)"}`);
   }
 
@@ -152,7 +166,7 @@ async function main(): Promise<void> {
   if (holdingStale) {
     say();
     say(holdingStale);
-    say(`   held: season ${served?.season} display_week ${served?.display_week}`);
+    say(`   held: season ${served?.season} leg ${served?.leg}`);
   }
   // Past here the chain is judged on what the app can actually get, which is
   // the fresh read where there is one and the held one otherwise.
@@ -177,10 +191,11 @@ async function main(): Promise<void> {
   }
 
   const ros = await restOfSeasonStart(season, getNflState).catch(() => null);
-  say(`   rest-of-season starts at week ${ros ?? "null"}   (reads \`week\`, not \`display_week\`)`);
+  say(`   rest-of-season starts at week ${ros ?? "null"}   (same field, same clamp)`);
   if (state && resolved !== null && ros !== null && ros !== resolved) {
-    say(`   NOTE — the page's week (${resolved}) and the ROS span's start (${ros}) disagree,`);
-    say("   because Sleeper rolls `week` and `display_week` at different moments.");
+    say(`   NOTE — the page's week (${resolved}) and the ROS span's start (${ros}) disagree.`);
+    say("   They read one field through one clamp, so this means the state");
+    say("   moved between the two reads — re-run to confirm it settles.");
   }
 
   head(4, "The scoreboard — is the shown week already over?");
@@ -203,7 +218,7 @@ async function main(): Promise<void> {
       );
       if (week === resolved && total > 0 && counts.final === total) {
         say("   *** Every game of the week the app is showing has been played.");
-        say("   *** Sleeper has not advanced `display_week` past it yet.");
+        say("   *** Sleeper has not advanced `leg` past it yet.");
       }
     }
   }
@@ -217,7 +232,7 @@ async function main(): Promise<void> {
   } else {
     say(`   The app is showing week ${resolved}, which is what Sleeper publishes.`);
     say("   If that is not the week you expect, the disagreement is with");
-    say("   Sleeper's `display_week`, not with this app's reading of it.");
+    say("   Sleeper's `leg`, not with this app's reading of it.");
   }
 }
 
