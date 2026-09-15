@@ -6898,7 +6898,9 @@ channel; start/sit is one population over one week, so the channel has nothing
 to switch between and a channel holding one cap is a control that cannot be
 pressed. The bar carries the title, the readout, the `Held` count and the caret.
 
-**`Fielded` is the sixth sort cap and it is no column at all** — the sum of the
+**Superseded — the rail is gone and `Fielded` with it; see The start/sit heads
+are the sort, below.** **`Fielded` was the sixth sort cap and it is no column at
+all** — the sum of the
 four counts, and therefore exactly what a press on a row narrows to, which is
 what an unrefined `week` subject means. So the rail can order the list by the
 thing the row's own press is about. `Start` stays the default, because the
@@ -7056,7 +7058,8 @@ rendering at exactly it, which is the one-spelling claim end to end.
 2,645 unit tests pass (one more, the store's parser); `check:full` from a cleared
 `.next` — the production build, then lint, typecheck and the suite — is clean.
 
-**One real defect was found by the render and fixed.** The Sort rail took
+**One real defect was found by the render and fixed** — and has since gone with
+the rail it was in; see The start/sit heads are the sort. The Sort rail took
 `lg:flex-none lg:rounded-full`, copied from `SharesConsole`'s — which offers at
 most four caps and fits its ledge on one line. Six caps and a legend are ~540px
 against the 531 a 1024-wide list column leaves, and at `flex-none` a rail cannot
@@ -7242,6 +7245,84 @@ reading this pass moves and only a reader settles; and whether the wrapped
 counterpart name reads as intended beside its own wrapped caption, which is the
 two-line-over-two-line case the drawer's note already flagged as the visually
 worst combination.
+
+### The start/sit heads are the sort
+
+The start/sit console's Sort rail is gone and its column heads sort it — the
+move `SharesConsole` and the gametime stat board both made first, and for their
+reason: the rail was six caps restating the columns under it, and a head *is*
+its column. Asked for by the user, "like on gametime". Nothing on the wire
+moved — no route, no query, no contract type, no payload field, no migration.
+
+**A press sorts by that column in its natural direction; a press on the lit head
+reverses it.** `nextStartSitSort` in `helpers/start-sit-sort.ts`, pure and under
+Node's runner beside its tests: `Name` A–Z on a first press, every count and the
+figure most first, and the reverse one press later in the same place — which the
+rail could not offer, its directions having been fixed. **Name is sortable**,
+being a head. An absent figure still sorts last in either direction and a zero
+as a zero, and ties break on the name A–Z without reversing: the two rules a
+reversible sort gets wrong without a symptom, pinned in the helper rather than
+left in the component's `useMemo`.
+
+**`Fielded` went with the rail.** It was the sum of the four counts — what a
+press on a row narrows to — and no column, so it has no head to be pressed.
+
+**The phone gets a menu in the heads' own slot.** Below `@md` the rows are two
+captioned bays and there is no strip for a head to be in, so `PhoneSort` is the
+stat board's phone arm — a native `<select>` over exactly the orders the heads
+name, in their long forms, with the direction on a key beside it. It stands
+where the head strip stands and is gated by the same container query, where the
+stat board's sits in its ledge: this ledge is outside the list's container, and
+a viewport breakpoint stops tracking the list's width the moment a picked row
+puts the decisions pane beside it.
+
+**Three widths had to be measured, and two were already wrong.**
+
+- At the old `px-2` and `0.1em`, `Opp St` and `Opp Bn` wanted 44px of the 40 a
+  `3.5rem` head left and rendered `OPP S…` — on the caption strip, before the
+  heads were keys, and silently, since the text was all in the DOM.
+- `▲`/`▼` are not in IBM Plex Mono, and macOS Chrome draws them from a fallback
+  12.4px wide at `--fs-8`, which squeezed a lit `Start ▼` to `ST…`. The arrow is
+  a drawn 7×5 triangle now (`SortArrow`), one width on every platform.
+- So a column head's label starts on the cell's own `0.375rem` gutter and keeps
+  2px on its right, and the column heads spend their letter-spacing — this
+  repo's first thing to spend where width is short. `Opp St` is 38px untracked,
+  and lit it is 38 + 2 + 7 = 47 of 48.
+
+**Every head sat 11px right of its column**, which predates this too and mattered
+more once the heads were pressed: the strip is outside the scroller, so the rows
+lost the scrollbar's width and the strip did not. The strip now takes
+`.lab-scroll-glass` and `scrollbar-gutter: stable` under `overflow: hidden`, and
+the list reserves its gutter from `@md` up, so the two reserve the same width on
+every platform — 11px beside a classic bar, nothing beside an overlay one — with
+no number to keep in step (`.lab-scroll`'s answer to the same problem is a
+hard-coded `+11px`). Below `@md` the list reserves nothing, on the decision
+`league-teams.tsx` records against spending 11px of a narrow pane.
+
+#### Verified
+
+In the Browser pane against the running dev server and the live database, on
+`/lineupchecker/jkap86` — 581 rows over 81 of 116 leagues. The ledge is the
+search and the count on one row, and the heads read
+`Name · Start ▼ · Bench · Opp St · Opp Bn · Proj`. Each of the six heads lit in
+both directions left **zero** labels clipped, with the arrow at 7px, and every
+head's label starts on **the same pixel** as the figure under it where it was
+11px right, the strip and the list each reserving 11px. A first press on
+`Opp start` ordered by it most first (`Jaxon Smith-Njigba 12`) and a second
+fewest first; `Name` read A–Z then Z–A; `Proj` most first, and fewest first with
+the no-figure rows still at the tail.
+
+At 375 on a coarse pointer the strip is `display: none` and `PhoneSort` is up:
+six options in head order, the select at 17px type and 44px tall (the touch
+floor), the direction key 44×44, nothing clipped, no page overflow, and the list
+reserving no gutter. Choosing `Opp bench` sorted most first, the arrow reversed
+it, and `Name` gave A–Z. Light scheme at both widths: the lit head and its arrow
+in `--billet-accent` (`#08554d`), the unlit heads in `--billet-label`. 2,883 unit
+tests pass, nine of them `start-sit-sort`'s; `lint` and `typecheck` are clean.
+
+**Not checked**: `check:full`'s production build, and any browser but Chrome —
+the arrow's width is fixed now, but the labels' are Plex Mono's and were
+measured here only.
 
 ### IR, on the league's own rules
 
