@@ -20084,3 +20084,174 @@ seconds; whether the tray's `Used` facet is *asked* often enough to be worth the
 row it takes, which is the judgement this pass makes on the handoff's behalf; and
 whether the 100px `Game` column holds in a locale this build has not been run in,
 since the worst case it is set against is an en-US afternoon kickoff.
+
+### The board became a part standing over the page
+
+A finish pass over the Player Scores board, from a design handoff: the case
+becomes a polished cyan-ice billet lifted off the bottom edge and framed in 7px
+of its own face, its bar a frosted ice plate with the ink inverted, and the list
+rows stop being channels cut into teal glass and become **raised ice tiles**.
+The structure is untouched — same bar, same ledge, same two panes, same 1330px
+track, same pinned `Player` and `Pts`, same sorts and narrowings and state. Two
+constants and a token block are nearly the whole of it.
+
+**It is `CONSOLE_METAL`'s pattern at panel scale**, which is what makes a
+re-skin this wide a *finish* rather than a rewrite: every surface inside the
+board already names one of these tokens, so `CONSOLE_ICE` overriding them on the
+case is the whole of the application and the cascade does the rest. Nothing in
+it names a radius, a padding or a size; the lift, the bezel gutter and the
+window bezels are class changes at their own call sites, because those are
+shape. `BILLET_ICE_INK` is the second constant and it is second because **it
+inverts ink**, which no finish in that file did before: the plate is near-white
+and the billet family is near-white, so the bar states a dark family of its own.
+
+**The rows change vocabulary rather than colour.** `CONSOLE_ROW_WELL`'s note
+defends the channel on the grounds that these rows "genuinely are a table on one
+sheet of glass rather than a list of subjects" — still true of the table, and it
+stopped being the whole of it once the row became the thing a reader presses to
+open a breakdown. A pressable row is a subject, and a subject is a part.
+
+#### Three things the handoff did not carry, each silent
+
+- **`CONSOLE_ROW_WELL` read its token with a `color:` hint.** The finish
+  overrides `--row-well-bg` with a gradient, and an arbitrary background takes
+  whichever property its hint names — so a gradient under `bg-[color:…]` is an
+  invalid declaration, dropped without a word, and **every row on the board
+  renders transparent**. The bundle spotted the matching half of this on
+  `PIN_ROW` ("`--row-well-bg` is a flat alpha today and `bg-[image:…]` would not
+  take it") and not the constant itself. It is `--pip-lit-bg`'s own trap, which
+  this file has recorded twice before. Both ends land together: the token is two
+  flat stops rather than a colour, which renders identically, and the constant
+  takes the `image:` hint. Its three readers are all on this one page, which is
+  what makes the hint safe to state once.
+- **The tile stock was too pale for its own ink**, and not marginally: at the
+  top of the specified ramp (`#5f8c9b`) *no* ink clears 4.5:1 — pure white
+  measures 3.68 — so the three neutral inks it names (4.24 and 3.36 at best, on
+  the most generous band a centred line can occupy) had no value that would have
+  worked. The bundle measured one ink at one band, found the dash at ~3.2 and
+  flagged only that. The ink is the palette the design chose and the stock is the
+  variable its own note treats as movable, so the stock moved: every stop scaled
+  in linear space to hold the hue, until the quietest **word** on a row clears
+  4.5 across the *whole* tile rather than across a band that goes stale when the
+  type does.
+- **`--stat-zero-ink` is not only the dash.** `clockInk` draws a game that is not
+  live in it — `Wed 4:56 PM`, `Final` — which are words where the em dash it is
+  named for is a mark. The shipped token is documented at 4.1 dark; the bundle's
+  0.55 is 3.52 on this tile. It is 0.66 (4.32–6.59) and still the quietest thing
+  on the row.
+
+#### The light half, which the bundle says is undrawn
+
+Its own open work says a light counterpart has not been designed and that
+nothing should reach a theme-toggled build until it is. **`CONSOLE_ICE` is a
+class string**, so it applies in both schemes whatever the token block says —
+left dark-only a light reader gets near-black glass under near-white ink on a
+page that has inverted round it. So it is derived and measured here, on the rule
+the rest of `globals.css` is written by.
+
+**The part goes darker and saturated rather than brighter**, which is the one
+decision the block turns on and is `--cap-accent-*`'s own: light mode's accent is
+a dark teal precisely because a pale object on a dark page has no counterpart —
+there is nothing brighter than a near-white page to make an object out of. The
+brief was that the drawer stand off the page; in dark it does that by being lit,
+and here by being the one saturated, weighty thing on a pale one. Measured
+against the page: 1.15 at the top lip, 2.78 and 3.97 through the middle bands,
+9.38 at the foot.
+
+**The bar is the surface whose counterpart is itself**, and that is what decides
+where the inversion lands. Its job is the same in both schemes — a pale plate
+seated in a darker frame — and every ink `BILLET_ICE_INK` puts on it is measured
+against *that plate*. Inverting the case under it keeps the frame darker than the
+plate, so all four ratios carry over unchanged. The bundle's own suggestion (a
+mid cyan plate, the dark ink kept) was measured first and does not survive:
+`--billet-label` falls to 2.25 and `--billet-accent` to 2.98. So the plate, its
+dark-hairline grain and its casts are deliberately **absent** from the light
+block.
+
+**The binding band inverts with the polarity**, which is the thing to know before
+moving any of it: dark ink on a pale tile is worst where the tile is *darkest*,
+where light ink on a dark one was worst where it was lightest. So the light ramp
+is shallow and the dark one deep, for the same reason. The light tile separates
+from its glass by 1.17 — the light scheme's own figure for a tile on a readout
+(1.11 shipped), and correct: in light a raised part is drawn by its chamfer and
+its cast rather than by its fill.
+
+**And the ledge recess is pale where the dark half's is the deepest hole on the
+part** — a render is what refused the symmetry. A hole is darker than the part it
+is cut into, which cut into a saturated case says near-black; what sits in this
+one is the search field and its placeholder, inked `--billet-name` and
+`--readout-label`, both **dark** in light. A dark well makes the one control on
+the ledge unreadable. It is the bar's own argument one recess down: a surface is
+inked for what it holds. It is also the consistent answer rather than merely the
+legible one — this ledge and the two windows beside it are all lit surfaces set
+into a dark frame, and a dark ledge between two pale ones would be the one hole
+in an instrument whose other openings are all lit.
+
+#### Verified
+
+**Every ink against the band it actually lands on, in both schemes.** Dark: the
+bar's label 5.35 over the 35.6–64.4% band a `--fs-10` line centred in a 52px
+strip occupies, its name 8.45–15.48 and its accent 5.88–8.48 in its own well; on
+a tile, line 7.19–12.60, label 5.92–10.38, muted 4.70–8.23, the QB accent and the
+live clock 6.86–12.02, the unpicked name 5.46–9.05 and the dash 4.32–6.59. Light:
+line 10.86–12.83, label 6.44–7.60, muted 5.30–6.26, the QB accent 7.21–8.52, the
+live clock 5.15–6.09, the name 9.93–11.24, the dash 4.45–5.26 — and 6.13 / 14.02
+for the two inks in the ledge recess the render caught. Nothing fails.
+
+**Driven over CDP** against `next dev` with no `DATABASE_URL` — the boot hook
+skips migrations and the loops log their refusals, which is the server coming up
+healthy against nothing — through a temporary `/preview` route mounting the
+**real** `StatBoard` against nine fixture lines over seven games, then deleted.
+The mechanics are the ones this file records: `--no-proxy-server`, `localhost`
+rather than `127.0.0.1`, a phone viewport from
+`Emulation.setDeviceMetricsOverride` with `mobile: true`, `data-theme` **and**
+`localStorage` seeded *before* hydration, `--disable-features=OverlayScrollbar`,
+the `--blink-settings=availablePointerTypes=4,…` flags built as a template
+literal, a client-component harness, a CDP client over Node's own `WebSocket`,
+and a fresh `--remote-debugging-port` per run.
+
+**84 of 84 checks pass** at 1280×900 and 390×844 in both schemes, open and shut:
+the section lifted 18px off the bottom edge, the case at a 22px radius under 7px
+of its own face with `pointer-events` back on, the bar at its own 14px radius on
+the ice plate, the scrim `fixed` at `z-index: -1` and click-through, the three
+finish overlays and the milled step inset 4px inside the chamfer, rows a gradient
+fill at 38px with **both** pinned cells painting the tile stock, the windows'
+bezel composed into one shadow list, a closed bar mounting **zero** rows at
+`bar + 14px`, no horizontal overflow, zero unclipped elements past the viewport,
+exactly one `<h1>`, and no console output.
+
+`check:full` from a cleared `.next` — the production build, then lint, typecheck
+and the suite — is clean, and 2,874 tests pass. The built CSS was read directly
+for the thing Tailwind drops in silence: every arbitrary property in both
+constants is emitted, `bg-[image:var(--row-well-bg)]` compiles to
+`background-image`, and `-z-[1]` to `calc(1 * -1)`.
+
+**Three mechanics cost a run each and are worth writing down.** A backtick inside
+a comment injected into a driver's template literal closes it, and the syntax
+error points at a line twenty above. `getComputedStyle().color` returns
+`oklab(…)` for **any** alpha-modified Tailwind colour, so a `/[\d.]+/` parse of
+it reads `0.946` as a red channel and every ratio comes back near 1 — paint the
+colour onto a canvas and read it back instead, which also composites its alpha.
+And a *median* pixel is the surface of a padded cell and the **ink** of a tight
+text box, so a whole-page pixel sweep false-positives on every dense or bold run;
+the analytical band measurement above is the method that answers this, and the
+sweep is only good for pointing at things to measure properly.
+
+**Not verified against real data**, which is the gap to close first: the fixtures
+are nine invented lines and no database was reachable from here. Four things a
+render cannot check — how the raised tiles read down a real four-hundred-row
+Sunday rather than nine, which is the whole claim of the row change; whether the
+lifted part reads as standing over a real league grid, since the fixture behind it
+is three cards; whether the saturated light case is the object the brief asked
+for on a real page or merely a dark frame, which is the one judgement this pass
+makes on the bundle's behalf; and whether 7.5rem is enough clearance on a phone
+where the last card's own shadow meets the part's.
+
+**One pre-existing finding, reported rather than patched.** The light rank figure
+(`PointsFigure`'s `rankColor`) measures **3.48** at the green end of its ramp
+inside the figure well, under the 4.5 a figure owes. It is not introduced here
+and the finish *improves* it — the same ramp on today's shipped light board is
+**2.83** — because `--rank-l` / `--rank-c`'s light values are the binding term
+rather than the well beneath them. Moving them is a decision about every rank
+figure in the app (league cards, standings, meters, the trades board), which is a
+designer's call rather than a silent edit inside a re-skin of one drawer.

@@ -648,15 +648,21 @@ function Live({
               {...card.shellProps}
               /* **A margin rather than the padding the handoff names**, and
                  the difference is what the park does to each. The collapsed
-                 bar is 52px of fixed chrome over the foot of the page, so the
-                 last card needs clearance below it — but while a card is
-                 parked `useActiveCard` writes this list's `height` from a
+                 bar is fixed chrome over the foot of the page, so the last
+                 card needs clearance below it — but while a card is parked
+                 `useActiveCard` writes this list's `height` from a
                  measurement, and padding inside a border-box height comes out
                  of the card's own room. The same write zeroes the margin,
                  which is exactly right: a parked card is the screen, the bar
                  stands down with the rest of the page's chrome, and there is
-                 nothing left to clear. */
-              className="relative m-0 mb-[5.5rem] grid list-none grid-cols-1 gap-[1.125rem] p-0 [overflow-anchor:none]"
+                 nothing left to clear.
+
+                 **7.5rem rather than 5.5 since the ice finish**, and the extra
+                 32px is the part's rather than breath: it is lifted 1.125rem
+                 clear of the bottom edge and framed in 7px of its own face top
+                 and bottom. What sits above the bar is unchanged — only what
+                 is under it grew, and the last card has to clear all of it. */
+              className="relative m-0 mb-[7.5rem] grid list-none grid-cols-1 gap-[1.125rem] p-0 [overflow-anchor:none]"
             >
               {visible.map((league) => {
                 const open = card.isOpen(league.league_id);

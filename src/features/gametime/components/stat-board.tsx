@@ -3,12 +3,14 @@
 import { memo, useCallback, useEffect, useId, useMemo, useState } from "react";
 
 import {
+  BILLET_ICE_INK,
   BilletFinish,
   CollapseTray,
   CONSOLE_CHANNEL_METAL,
   CONSOLE_FIGURE_WELL,
   CONSOLE_FIGURE_WELL_SHELL,
   CONSOLE_GLASS,
+  CONSOLE_ICE,
   CONSOLE_KEY_PILL,
   CONSOLE_MILLED_WELL,
   CONSOLE_PANE_TRACK,
@@ -141,6 +143,13 @@ import type {
  * measured against it — see `gametime-home.tsx`, which puts this on the page
  * root so both read the same number. A height written twice is a last card
  * under the bar the first time either moves.
+ *
+ * **It is the bar's height and no longer the part's**, which is the one thing
+ * the ice finish changed about it: the case is lifted 1.125rem off the bottom
+ * edge and frames the bar in 7px of its own face, so what the page has to
+ * clear is this plus 32px. That sum is spelled at the list rather than folded
+ * in here, because this token is read by the section's own `height` too and
+ * the two want the bar alone.
  *
  * Whole class strings rather than a value interpolated into one: Tailwind finds
  * classes by scanning source text, so `[--stat-bar-h:${n}]` would generate
@@ -562,12 +571,45 @@ export function StatBoard({
        hundred cards behind a pane of glass. */
     <section
       aria-label="Player scores"
-      className={`lab-anim pointer-events-none fixed inset-x-0 bottom-0 z-40 flex justify-center px-4 transition-[height] duration-[340ms] ease-[cubic-bezier(0.2,0.8,0.2,1)] ${chromeClass}`}
-      style={{ height: open ? "calc(100dvh - var(--rack-clear))" : "var(--stat-bar-h)" }}
+      className={`lab-anim pointer-events-none fixed inset-x-0 bottom-[1.125rem] z-40 flex justify-center px-4 transition-[height] duration-[340ms] ease-[cubic-bezier(0.2,0.8,0.2,1)] ${chromeClass}`}
+      style={{
+        height: open
+          ? "calc(100dvh - var(--rack-clear) - 1.125rem)"
+          : "calc(var(--stat-bar-h) + 14px)",
+      }}
     >
+      {/* The page darkens under the part standing over it — `fixed` so it is
+          not bounded by the section's own height, behind the case, and
+          `pointer-events-none` like the section around it. It is drawn *here*
+          rather than beside `ConsoleGround` so it is bounded by this section's
+          `z-40`; the day it has to sit under other fixed chrome it moves to
+          the page. */}
+      {open && (
+        <span
+          aria-hidden
+          className="pointer-events-none fixed inset-x-0 bottom-0 top-[34%] -z-[1] bg-[image:var(--panel-case-ice-scrim)]"
+        />
+      )}
       <div
-        className={`pointer-events-auto relative flex w-full max-w-6xl flex-col overflow-hidden rounded-t-[1.125rem] bg-[image:var(--panel-case-bg)] shadow-[var(--panel-case-shadow)] ${STAT_BAR_H}`}
+        className={`${CONSOLE_ICE} pointer-events-auto relative flex w-full max-w-6xl flex-col overflow-hidden rounded-[1.375rem] bg-[image:var(--panel-case-bg)] p-[7px] shadow-[var(--panel-case-shadow)] ${STAT_BAR_H}`}
       >
+        {/* The finish: brushed grain, one raking specular, and the milled step
+            cut round the face inside the chamfer. Children rather than three
+            more background layers, on `BilletFinish`'s own rule — and the step
+            is a *shadow* (an inset lip and an outer hairline), which no
+            gradient can draw. */}
+        <span
+          aria-hidden
+          className="pointer-events-none absolute inset-0 bg-[image:var(--billet-grain)]"
+        />
+        <span
+          aria-hidden
+          className="pointer-events-none absolute inset-0 bg-[image:var(--panel-case-ice-specular)]"
+        />
+        <span
+          aria-hidden
+          className="pointer-events-none absolute inset-[4px] rounded-[1.1875rem] shadow-[var(--panel-case-ice-step)]"
+        />
         <Bar
           open={open}
           week={week}
@@ -579,7 +621,7 @@ export function StatBoard({
         />
         {/* Mounted only while up — see the module note. */}
         {open && (
-          <div className="relative flex min-h-0 flex-1 gap-2 p-2 sm:gap-2.5 sm:p-2.5">
+          <div className="relative flex min-h-0 flex-1 gap-2 px-1.5 pb-1.5 pt-2.5 sm:gap-3 sm:px-2 sm:pb-2 sm:pt-3">
             {/* **Below `lg` the pane replaces the list**, which is the design's
                 own phone arrangement: one pane at a time, and the bar's
                 `‹ List` key is the way back. `display: none` on the hidden
@@ -684,7 +726,9 @@ function Bar({
   // panes are on screen and there is nothing to go back to.
   const back = open && detail !== null;
   return (
-    <div className="relative flex h-[var(--stat-bar-h)] w-full shrink-0 items-center gap-2 overflow-hidden bg-[image:var(--billet-bg)] px-2.5 shadow-[var(--standing-strip-shadow)] sm:gap-3 sm:px-3.5">
+    <div
+      className={`${BILLET_ICE_INK} relative flex h-[var(--stat-bar-h)] w-full shrink-0 items-center gap-2 overflow-hidden rounded-[0.875rem] bg-[image:var(--stat-bar-ice-bg)] px-2.5 shadow-[var(--stat-bar-ice-shadow)] sm:gap-3 sm:px-3.5`}
+    >
       <BilletFinish />
       <button
         type="button"
@@ -1327,7 +1371,9 @@ function List({
   const track = statTrackWidth(columns);
   const empty = rows.length === 0;
   return (
-    <div className={`${CONSOLE_GLASS} flex min-h-0 flex-1 flex-col rounded-xl`}>
+    <div
+      className={`${CONSOLE_GLASS} flex min-h-0 flex-1 flex-col rounded-xl shadow-[var(--glass-shadow),var(--stat-window-bezel)]`}
+    >
       <Scanlines />
       {empty ? (
         <p className="relative z-[1] px-3 py-6 text-center font-mono text-[length:var(--fs-11)] uppercase tracking-[0.12em] text-[color:var(--readout-label)]">
@@ -1550,10 +1596,24 @@ const PIN_HEAD: Record<"left" | "right" | "none", string> = {
   none: "",
 };
 
+/**
+ * **The two pinned cells paint the row's own stock rather than the glass**,
+ * and that is a consequence of the row being a part rather than a channel.
+ *
+ * The fill was `--readout-bg` because a sticky cell with nothing opaque behind
+ * it smears every figure it slides across — which is still the rule, and the
+ * glass was the right fill while the row was a cut into it. With the row
+ * raised, a glass-filled pinned cell is a hole punched in the middle of it.
+ * So both read `--row-well-bg`, which is the same token the row itself draws
+ * and therefore cannot come to disagree with it.
+ *
+ * `PIN_HEAD` deliberately does **not** follow: the head is machined ledge
+ * (`--window-ledge-bg`), which reads correctly over either.
+ */
 const PIN_ROW = {
-  left: "sticky left-0 z-[2] bg-[image:var(--readout-bg)] shadow-[var(--stat-pin-left-shadow)]",
+  left: "sticky left-0 z-[2] bg-[image:var(--row-well-bg)] shadow-[var(--stat-pin-left-shadow)]",
   right:
-    "sticky right-0 z-[2] bg-[image:var(--readout-bg)] shadow-[var(--stat-pin-right-shadow)]",
+    "sticky right-0 z-[2] bg-[image:var(--row-well-bg)] shadow-[var(--stat-pin-right-shadow)]",
 } as const;
 
 /**
@@ -2086,7 +2146,7 @@ function Detail({
 }) {
   return (
     <div
-      className={`${CONSOLE_GLASS} ${className} min-h-0 w-full shrink-0 flex-col rounded-xl lg:w-80 xl:w-[24.5rem]`}
+      className={`${CONSOLE_GLASS} ${className} min-h-0 w-full shrink-0 flex-col rounded-xl shadow-[var(--glass-shadow),var(--stat-window-bezel)] lg:w-80 xl:w-[24.5rem]`}
     >
       <Scanlines />
       {row === null ? (

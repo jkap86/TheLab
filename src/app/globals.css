@@ -1070,7 +1070,18 @@
    * which is the same inversion every bevel here already makes.
    */
   --recess-bg: rgba(0, 0, 0, 0.32);
-  --row-well-bg: rgba(0, 0, 0, 0.22);
+  /*
+   * **A flat fill spelled as a gradient, so that a finish can replace it with
+   * a real one.** `CONSOLE_ROW_WELL` reads this through `bg-[image:…]`, and an
+   * arbitrary background with a bare `var()` takes whichever of
+   * `background-color` / `-image` the hint names — so a colour here under an
+   * `image:` hint would be an invalid declaration, silently dropped, leaving
+   * every row transparent. Two flat stops render exactly as the colour did and
+   * are what let the gametime board's ice finish swap the token for
+   * `--stat-tile-bg`; see `CONSOLE_ICE`, and the constant's own note for why
+   * the hint is `image:` rather than this being a colour.
+   */
+  --row-well-bg: linear-gradient(rgba(0, 0, 0, 0.22), rgba(0, 0, 0, 0.22));
   --row-well-shadow: inset 0 2px 5px rgba(0, 0, 0, 0.68),
     inset 0 -1px 0 rgba(159, 255, 242, 0.1);
 
@@ -1583,6 +1594,210 @@
   /* The halo the page-sized flask breathes, `loud` only — a sibling span behind
      the svg rather than part of it, since a filter cannot pulse on its own. */
   --flask-halo: radial-gradient(circle, rgba(0, 255, 229, 0.22), transparent 68%);
+
+  /* ── The stat board's ice finish ──────────────────────────────────────── */
+  /*
+   * `/gametime`'s Player Scores board, re-finished as a polished cyan-ice part
+   * standing over the page rather than a panel welded to its foot.
+   *
+   * **Every one of these is read through `CONSOLE_ICE`**, which is
+   * `CONSOLE_METAL`'s pattern at panel scale: the board's own case overrides
+   * the tokens every surface inside it already names, and the cascade is the
+   * whole of the application. So the names here are the *finish's* and the
+   * names they are assigned to are the console's — nothing in the board reads
+   * `--stat-tile-bg` directly, and a surface that wants this finish gets it by
+   * being inside the case.
+   */
+  /*
+   * The case: polished cyan-ice billet at case scale, with the rolled banding
+   * and the fine vertical brush `--housing-metal` already wears, in cyan
+   * rather than grey. Brighter than the page at every band *and* than the
+   * billet strips inside it, which is what makes the part read as lit from
+   * outside rather than as another shade of console.
+   */
+  --panel-case-ice-bg: var(--brush-fine),
+    linear-gradient(104deg, transparent 8%, rgba(214, 252, 255, 0.2) 28%, transparent 46%),
+    linear-gradient(258deg, transparent 22%, rgba(214, 252, 255, 0.1) 42%, transparent 58%),
+    linear-gradient(
+      180deg,
+      #d9f9fc 0%,
+      #9bdce5 5%,
+      #66b3c1 19%,
+      #7fcbd6 35%,
+      #4a8d9b 55%,
+      #336876 77%,
+      #20495a 100%
+    );
+  /*
+   * Four 4px chamfer insets, a teal rim inside a black ring, three casts and
+   * two halos. One atomic list, on `--panel-case-shadow`'s own terms: a
+   * shadow list cannot be composed, so a caller appending a halo would replace
+   * the chamfer rather than add to it.
+   *
+   * 4px where the flat case spends 3, because this part is lifted off the page
+   * and a chamfer is how much of the part's own edge a reader can see.
+   */
+  --panel-case-ice-shadow: inset 0 4px 0 rgba(224, 253, 255, 0.8),
+    inset 0 -4px 0 rgba(0, 0, 0, 0.8), inset 4px 0 0 rgba(224, 253, 255, 0.28),
+    inset -4px 0 0 rgba(0, 0, 0, 0.52), 0 0 0 1px rgba(0, 255, 229, 0.62),
+    0 0 0 4px rgba(0, 0, 0, 0.78), 0 4px 7px rgba(0, 0, 0, 0.7),
+    0 36px 62px -22px rgba(0, 0, 0, 0.96), 0 96px 150px -40px #000,
+    0 0 60px -14px rgba(0, 255, 229, 0.42), 0 0 150px -20px rgba(0, 255, 229, 0.5);
+  /*
+   * The raking specular across the face, and the milled step cut round it
+   * inside the chamfer. A layer and a ring rather than two more background
+   * stops, because the step is a *shadow* — an inset lip and an outer hairline
+   * — and a gradient cannot draw one.
+   */
+  --panel-case-ice-specular: linear-gradient(
+    104deg,
+    transparent 10%,
+    rgba(224, 253, 255, 0.22) 32%,
+    transparent 52%
+  );
+  --panel-case-ice-step: 0 0 0 1px rgba(0, 40, 44, 0.55),
+    inset 0 1px 0 rgba(224, 253, 255, 0.3);
+  /*
+   * The page under the part. A part standing over a page has to be standing
+   * over something, and the two casts above fall on the card nearest the foot
+   * rather than on the whole of what the part covers.
+   */
+  --panel-case-ice-scrim: linear-gradient(
+    to top,
+    rgba(0, 0, 0, 0.9) 0%,
+    rgba(0, 0, 0, 0.66) 30%,
+    rgba(0, 0, 0, 0.26) 66%,
+    transparent 100%
+  );
+  /*
+   * The bar: a frosted ice plate, and **the one pale surface in the dark
+   * scheme** — see `BILLET_ICE_INK`, which is what makes it legible.
+   *
+   * Its brush is a dark hairline rather than the light one `--brush-fine`
+   * carries here, because the grain on pale stock is a shadow: a white brush
+   * on a near-white plate is not there at all.
+   */
+  --stat-bar-ice-bg: var(--stat-bar-ice-brush),
+    linear-gradient(104deg, transparent 12%, rgba(255, 255, 255, 0.55) 34%, transparent 54%),
+    linear-gradient(180deg, #f4feff 0%, #dcf6fa 20%, #bfeaf2 50%, #9bd8e3 78%, #82c8d5 100%);
+  --stat-bar-ice-brush: repeating-linear-gradient(
+    90deg,
+    rgba(15, 23, 42, 0.05) 0 1px,
+    transparent 1px 4px
+  );
+  --stat-bar-ice-shadow: inset 0 2.5px 0 rgba(255, 255, 255, 0.95),
+    inset 0 -2.5px 0 rgba(15, 23, 42, 0.34), inset 2.5px 0 0 rgba(255, 255, 255, 0.8),
+    inset -2.5px 0 0 rgba(15, 23, 42, 0.22), 0 1px 0 rgba(0, 255, 229, 0.45),
+    0 4px 6px rgba(0, 0, 0, 0.58), 0 16px 26px -10px #000, 0 32px 50px -24px #000;
+  /*
+   * A list row as a raised ice tile: `--tile-shadow`'s chamfer and short cast,
+   * cut from ice-steel instead of `--billet-bg`.
+   *
+   * This is the board taking the *other* half of the codebase's row
+   * vocabulary. `CONSOLE_ROW_WELL`'s note defends the channel on the grounds
+   * that these rows "genuinely are a table on one sheet of glass rather than a
+   * list of subjects" — which is still true of the *table* and stopped being
+   * the whole of it once the row became the thing a reader presses to open a
+   * breakdown. A pressable row is a subject, and a subject is a part.
+   */
+  /*
+   * **The ramp is the handoff's shape at the handoff's hue and not its
+   * lightness**, and that is a measured change rather than a preference. Its
+   * stock ran `#5f8c9b → #264552`, and at the top of that ramp *no ink clears
+   * 4.5:1* — pure white measures 3.68 there, so the three neutral inks it
+   * specifies (4.24 / 3.36 at best, on the most generous band a centred line
+   * can occupy) had no value that would have worked. The bundle measured one
+   * ink at one band, found the dash at ~3.2 and flagged only that.
+   *
+   * The ink is the palette the design chose and the stock is the variable its
+   * own note treats as movable, so the stock moved: every stop scaled in
+   * linear space to hold the hue, until `--readout-muted` — the quietest
+   * *word* on a row, and therefore the one owed 4.5 — clears it across the
+   * **whole** tile rather than across a band that goes stale when the type
+   * does. Measured on the four stops below: line 7.19–12.60, label
+   * 5.92–10.38, muted 4.70–8.23, the QB accent and the live clock 6.86–12.02,
+   * and the dash 3.52–5.06 against the 3:1 a mark owes.
+   */
+  --stat-tile-bg: linear-gradient(180deg, #38555f 0%, #2d4852 26%, #213b45 62%, #182f38 100%);
+  --stat-tile-shadow: inset 0 1.5px 0 rgba(236, 250, 255, 0.6),
+    inset 0 -1.5px 0 rgba(0, 0, 0, 0.62), inset 1px 0 0 rgba(236, 250, 255, 0.16),
+    inset -1px 0 0 rgba(0, 0, 0, 0.42), 0 1px 2px rgba(0, 0, 0, 0.5),
+    0 7px 13px -9px rgba(0, 0, 0, 0.88);
+  /*
+   * The pinned cells: **the tile's own chamfer**, plus the inward cast.
+   *
+   * The pair beside this one (`--stat-pin-*-shadow`) is a lip and a cast,
+   * which is right for a cell cut into the same glass as the row it sits in.
+   * A raised tile's pinned edge has to carry the tile's top and bottom
+   * chamfer too, or the row's own lit lip breaks for the width of the block —
+   * which is the fault `--stat-pin-lip` was written to prevent, one finish
+   * over.
+   */
+  --stat-pin-ice-left-shadow: inset 0 1.5px 0 rgba(236, 250, 255, 0.6),
+    inset 0 -1.5px 0 rgba(0, 0, 0, 0.62), 5px 0 10px -3px rgba(0, 0, 0, 0.8);
+  --stat-pin-ice-right-shadow: inset 0 1.5px 0 rgba(236, 250, 255, 0.6),
+    inset 0 -1.5px 0 rgba(0, 0, 0, 0.62), -5px 0 10px -3px rgba(0, 0, 0, 0.8);
+  /*
+   * The glass behind the tiles, de-greened. `--readout-bg` is a teal-black
+   * with teal scanlines, and under neutral ice tiles it is the one remaining
+   * green surface — which reads as a cast on the tiles rather than as a
+   * colour of its own.
+   */
+  --stat-glass-ice-bg: linear-gradient(180deg, #0a1218, #101a21);
+  --stat-glass-ice-scanlines: repeating-linear-gradient(
+    to bottom,
+    rgba(214, 236, 255, 0.05) 0 1px,
+    transparent 1px 3px
+  );
+  --stat-glass-ice-shadow: inset 0 3px 9px rgba(0, 0, 0, 0.88),
+    inset 0 0 0 1px rgba(0, 0, 0, 0.62), 0 1px 0 rgba(236, 250, 255, 0.12);
+  /*
+   * A window set into the case face: a 1px dark ring, a 2px lit chamfer
+   * outside it, and a cast onto the metal. Composed into one list beside
+   * `--glass-shadow` at the call site rather than appended as a second
+   * `shadow-[…]`, which would replace it.
+   */
+  --stat-window-bezel: 0 0 0 1px rgba(0, 0, 0, 0.78), 0 0 0 2px rgba(236, 250, 255, 0.09),
+    0 9px 18px -6px rgba(0, 0, 0, 0.88);
+  /*
+   * Ink on ice: the readout trio and the zero dash, **neutral**.
+   *
+   * `--readout-line` / `-label` / `-muted` are mint alphas over teal glass, and
+   * on ice-steel they read as a green cast rather than as ink. The teal that
+   * survives the finish is only the signal — the live clock, a picked row's
+   * name, the lit `Started` well and the halo on a lit row.
+   */
+  --stat-ice-line: #eef4f8;
+  --stat-ice-label: #d3e0e8;
+  --stat-ice-muted: #b9c9d4;
+  /*
+   * **0.66 rather than the 0.55 the bundle specifies**, because this token is
+   * not only the dash. `clockInk` draws a game that is not live in it too —
+   * `Wed 4:56 PM`, `Final` — which are words, where the em dash it is named
+   * for is a mark. The shipped token is documented at 4.1 dark against the 3:1
+   * a mark owes, and on this tile 0.55 is 3.52: still clear of the mark's
+   * floor, and a step down from what the board reads today for the run of type
+   * beside it. At 0.66 it is 4.32–6.59 and still the quietest thing on the row
+   * (`--readout-muted` is 4.70), which is the hierarchy the bundle drew.
+   */
+  --stat-ice-zero: rgba(236, 250, 255, 0.66);
+  /* A figure well cut into a tile, and the same well lit. */
+  --stat-figure-well-ice-bg: rgba(8, 15, 22, 0.44);
+  --stat-figure-well-ice-shadow: inset 0 2px 5px rgba(0, 0, 0, 0.66),
+    inset 0 -1px 0 rgba(236, 250, 255, 0.24);
+  --stat-tag-lit-ice-shadow: inset 0 2px 5px rgba(0, 0, 0, 0.66),
+    inset 0 -1px 0 rgba(236, 250, 255, 0.24), 0 0 0 1px rgba(0, 255, 229, 0.45),
+    0 0 18px -6px var(--accent-glow);
+  /* The face mount in a row, cooler and without the teal halo. */
+  --stat-bezel-ice-bg: linear-gradient(180deg, #2c3c4a, #0e161d);
+  --stat-bezel-ice-shadow: inset 0 1px 0 rgba(236, 250, 255, 0.26),
+    inset 0 -2px 4px rgba(0, 0, 0, 0.85), 0 2px 5px -2px rgba(0, 0, 0, 0.82);
+  /* The hole in the case, one step deeper than `--case-well-*` — a hole inside
+     a brighter part has further to go before it reads as one. */
+  --case-well-ice-bg: #0b1319;
+  --case-well-ice-shadow: inset 0 8px 18px rgba(0, 0, 0, 0.92),
+    inset 0 2px 0 rgba(0, 0, 0, 0.85), inset 0 0 0 1px rgba(0, 0, 0, 0.6),
+    inset 0 -1px 0 rgba(236, 250, 255, 0.12);
 }
 
 /*
@@ -2072,7 +2287,8 @@
    * from above, which is what the same geometry means on a pale face.
    */
   --recess-bg: rgba(15, 23, 42, 0.1);
-  --row-well-bg: rgba(15, 23, 42, 0.08);
+  /* Flat, as a gradient — see the dark half. */
+  --row-well-bg: linear-gradient(rgba(15, 23, 42, 0.08), rgba(15, 23, 42, 0.08));
   --row-well-shadow: inset 0 2px 5px rgba(15, 23, 42, 0.2),
     inset 0 -1px 0 rgba(255, 255, 255, 0.85);
   --stat-pin-lip: inset 0 -1px 0 rgba(255, 255, 255, 0.85);
@@ -2304,6 +2520,175 @@
   --flask-cast-quiet: drop-shadow(0 1.5px 2px rgba(15, 23, 42, 0.22))
     drop-shadow(0 0 9px var(--accent-glow));
   --flask-halo: radial-gradient(circle, rgba(13, 148, 136, 0.22), transparent 68%);
+
+  /* ── The stat board's ice finish ──────────────────────────────────────── */
+  /*
+   * **The handoff is dark-only and this is the half it did not draw.** Its own
+   * open work says so and says nothing should reach a theme-toggled build
+   * until it is — and `CONSOLE_ICE` is a *class string*, so it applies in both
+   * schemes whatever this block says. Left out, a light reader would get the
+   * dark board: a near-black glass under near-white ink on a page that has
+   * inverted round it. So it is derived and measured here, on the rule the
+   * rest of this file is written by — **a bevel's light counterpart is a
+   * different stack rather than the same one dimmed**.
+   *
+   * **The part goes darker and saturated rather than brighter**, which is the
+   * one decision the whole block turns on and is `--cap-accent-*`'s own: light
+   * mode's accent is a dark teal precisely because the dark scheme's
+   * pale-object-on-a-dark-page has no light counterpart — there is nothing
+   * brighter than a near-white page to make an object out of. The brief was
+   * that the drawer stand off the page; in dark it does that by being lit, and
+   * here it does it by being the one saturated, weighty thing on a pale one.
+   *
+   * **The bar is the surface whose counterpart is itself**, and it is the
+   * reason the inversion lands where it does. Its job is the same in both
+   * schemes — a pale plate seated in a darker frame — and every ink
+   * `BILLET_ICE_INK` puts on it is measured against that plate. Inverting the
+   * *case* under it keeps the plate's frame darker than the plate, so all four
+   * of those ratios carry over unchanged; the bundle's own suggestion (a mid
+   * cyan plate, the dark ink kept) was measured first and does not survive —
+   * `--billet-label` falls to 2.25 and `--billet-accent` to 2.98 on it. So
+   * `--stat-bar-ice-bg`, `-brush` and `-shadow` are deliberately **absent from
+   * this block**: the plate, its dark-hairline grain (already a shadow rather
+   * than a highlight, which is what a grain on pale stock has to be) and its
+   * casts onto the darker case are correct here as written.
+   */
+  /*
+   * The case: the same ice billet, deepened until it is the weight on the
+   * page rather than the light on it. The rolled banding at 35% and the fine
+   * brush are the dark ramp's, so it is one part seen in two lights.
+   *
+   * Measured against the page (`#f6f7f9`): 1.15 at the top lip, 2.78 and 3.97
+   * through the middle bands, 9.38 at the foot — an object, at every band.
+   */
+  --panel-case-ice-bg: var(--brush-fine),
+    linear-gradient(104deg, transparent 8%, rgba(255, 255, 255, 0.24) 28%, transparent 46%),
+    linear-gradient(258deg, transparent 22%, rgba(255, 255, 255, 0.12) 42%, transparent 58%),
+    linear-gradient(
+      180deg,
+      #c9eef4 0%,
+      #8fcbd8 5%,
+      #55a0b1 19%,
+      #6fbac9 35%,
+      #3d8496 55%,
+      #2b6274 77%,
+      #1c4757 100%
+    );
+  /*
+   * The chamfer keeps its shape — light still comes from above, and the part
+   * is dark enough for a white top lip to read on it. What turns over is
+   * everything *outside* the part: the ring goes slate rather than black and
+   * the casts go slate on `--rack-cast`'s rule (pure black over a near-white
+   * page reads as dirt), and the two wide teal halos come off almost
+   * entirely — a glow is light added to a ground, and there is no headroom
+   * above a page this bright for one to be seen in.
+   */
+  --panel-case-ice-shadow: inset 0 4px 0 rgba(255, 255, 255, 0.82),
+    inset 0 -4px 0 rgba(4, 26, 34, 0.55), inset 4px 0 0 rgba(255, 255, 255, 0.34),
+    inset -4px 0 0 rgba(4, 26, 34, 0.34), 0 0 0 1px rgba(11, 109, 99, 0.5),
+    0 0 0 4px rgba(15, 23, 42, 0.13), 0 4px 7px rgba(15, 23, 42, 0.22),
+    0 36px 62px -22px rgba(15, 23, 42, 0.42), 0 96px 150px -40px rgba(15, 23, 42, 0.34),
+    0 0 60px -14px rgba(13, 148, 136, 0.2);
+  --panel-case-ice-specular: linear-gradient(
+    104deg,
+    transparent 10%,
+    rgba(255, 255, 255, 0.26) 32%,
+    transparent 52%
+  );
+  --panel-case-ice-step: 0 0 0 1px rgba(4, 26, 34, 0.4), inset 0 1px 0 rgba(255, 255, 255, 0.34);
+  /* The page under the part, slate and much weaker: a light page darkened to
+     near-black under a drawer would read as a modal backdrop rather than as
+     the shadow of something standing over it. */
+  --panel-case-ice-scrim: linear-gradient(
+    to top,
+    rgba(15, 23, 42, 0.26) 0%,
+    rgba(15, 23, 42, 0.16) 30%,
+    rgba(15, 23, 42, 0.06) 66%,
+    transparent 100%
+  );
+  /*
+   * A list row as a raised ice tile, inverted: near-white stock, the chamfer
+   * turned over (white top lip, slate underside) and a slate cast.
+   *
+   * **The binding band inverts with it**, which is the thing to know before
+   * moving any of this: dark ink on a pale tile is worst where the tile is
+   * *darkest*, where light ink on a dark one was worst where it was lightest.
+   * So the ramp is shallow here and deep there for the same reason. Its fill
+   * separates from the glass by only 1.17 — which is the light scheme's own
+   * figure for a tile on a readout (1.11 shipped) and correct: in light a
+   * raised part is drawn by its chamfer and its cast, not by its fill.
+   */
+  --stat-tile-bg: linear-gradient(180deg, #fbfdfe 0%, #f3f7fa 26%, #ebf1f6 62%, #e3ebf1 100%);
+  --stat-tile-shadow: inset 0 1.5px 0 rgba(255, 255, 255, 0.95),
+    inset 0 -1.5px 0 rgba(15, 23, 42, 0.16), inset 1px 0 0 rgba(255, 255, 255, 0.7),
+    inset -1px 0 0 rgba(15, 23, 42, 0.08), 0 1px 2px rgba(15, 23, 42, 0.14),
+    0 7px 13px -9px rgba(15, 23, 42, 0.3);
+  --stat-pin-ice-left-shadow: inset 0 1.5px 0 rgba(255, 255, 255, 0.95),
+    inset 0 -1.5px 0 rgba(15, 23, 42, 0.16), 5px 0 10px -3px rgba(15, 23, 42, 0.26);
+  --stat-pin-ice-right-shadow: inset 0 1.5px 0 rgba(255, 255, 255, 0.95),
+    inset 0 -1.5px 0 rgba(15, 23, 42, 0.16), -5px 0 10px -3px rgba(15, 23, 42, 0.26);
+  /* The glass behind the tiles: a pale cool slate, de-greened the same way the
+     dark one is, with the scanlines a dark hairline rather than a light one. */
+  --stat-glass-ice-bg: linear-gradient(180deg, #e6ecf2, #dce4ec);
+  --stat-glass-ice-scanlines: repeating-linear-gradient(
+    to bottom,
+    rgba(15, 23, 42, 0.05) 0 1px,
+    transparent 1px 3px
+  );
+  --stat-glass-ice-shadow: inset 0 3px 9px rgba(15, 23, 42, 0.18),
+    inset 0 0 0 1px rgba(15, 23, 42, 0.14), 0 1px 0 rgba(255, 255, 255, 0.9);
+  --stat-window-bezel: 0 0 0 1px rgba(15, 23, 42, 0.2), 0 0 0 2px rgba(255, 255, 255, 0.5),
+    0 9px 18px -6px rgba(15, 23, 42, 0.3);
+  /*
+   * Ink on ice, dark and still neutral — the same de-greening, the other way
+   * up. Measured across the **whole** tile and the whole glass rather than a
+   * band, on the dark half's reason: line 10.86/10.19, label 6.44/6.04, muted
+   * 5.30/4.97, and the dash 3.37/3.16 against the 3:1 a mark owes. Muted
+   * clears 4.5 here where the app's own light `--readout-muted` measures 3.85
+   * on its readout; a finish is not the place to relax a floor.
+   */
+  --stat-ice-line: #20333e;
+  --stat-ice-label: #3a5667;
+  --stat-ice-muted: #436377;
+  /* Lifted for the dark half's reason — the non-live clock is a word in this
+     ink too. 4.45–5.26 on the tile against the 3.9 the shipped token reads,
+     and still quieter than `--readout-muted`'s 5.30. */
+  --stat-ice-zero: #4b6f85;
+  /* A figure well cut into a pale tile, and the same well lit: a slate alpha
+     with the chamfer turned over, and the ring on the light accent. */
+  --stat-figure-well-ice-bg: rgba(15, 23, 42, 0.09);
+  --stat-figure-well-ice-shadow: inset 0 2px 5px rgba(15, 23, 42, 0.2),
+    inset 0 -1px 0 rgba(255, 255, 255, 0.92);
+  --stat-tag-lit-ice-shadow: inset 0 2px 5px rgba(15, 23, 42, 0.2),
+    inset 0 -1px 0 rgba(255, 255, 255, 0.92), 0 0 0 1px rgba(11, 109, 99, 0.55),
+    0 0 18px -6px var(--accent-glow);
+  /* The face mount in a row: pale, cool, and cast rather than haloed. */
+  --stat-bezel-ice-bg: linear-gradient(180deg, #ffffff, #d3dee6);
+  --stat-bezel-ice-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.95),
+    inset 0 -2px 4px rgba(15, 23, 42, 0.14), 0 2px 5px -2px rgba(15, 23, 42, 0.24);
+  /*
+   * The recess the ledge sits in — **pale, where the dark half's is the
+   * deepest hole on the part**, and the contents are what decide it rather
+   * than the geometry.
+   *
+   * A hole is darker than the part it is cut into, which is why the dark half
+   * goes near-black; cut into a *saturated* case that rule says near-black
+   * here too, and a render is what refused it. What sits in this recess is the
+   * search field and its placeholder, inked `--billet-name` and
+   * `--readout-label` — both **dark** in the light scheme — so a dark well
+   * makes the one control on the ledge unreadable. It is the bar's own
+   * argument one recess down: a surface is inked for what it holds.
+   *
+   * Pale is also the consistent answer rather than merely the legible one.
+   * Everything a reader touches on this board — this ledge, the list glass and
+   * the pane beside it — is a lit surface set into a dark frame, and the two
+   * windows are already pale here. A dark ledge between them would be the one
+   * hole in an instrument whose other openings are all lit.
+   */
+  --case-well-ice-bg: #dde6ec;
+  --case-well-ice-shadow: inset 0 8px 18px rgba(15, 23, 42, 0.16),
+    inset 0 2px 0 rgba(15, 23, 42, 0.12), inset 0 0 0 1px rgba(15, 23, 42, 0.14),
+    inset 0 -1px 0 rgba(255, 255, 255, 0.9);
 }
 
 @theme inline {

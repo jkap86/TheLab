@@ -507,9 +507,19 @@ export const CONSOLE_MILLED_WELL =
  * {@link CONSOLE_MILLED_WELL} is the one place the two materials' grammar is
  * written down, and it is the reason this note says so rather than the
  * constant being deleted.
+ *
+ * **The hint is `image:` even though the fill is flat**, and that is what lets
+ * a finish replace the channel with a part. `--row-well-bg` is two flat stops
+ * rather than a colour for exactly this: the gametime board's ice finish
+ * ({@link CONSOLE_ICE}) overrides it with a gradient, and an arbitrary
+ * background takes whichever property its hint names — so a gradient under a
+ * `color:` hint is an invalid declaration, dropped without a word, and every
+ * row on that board renders transparent. It is `--pip-lit-bg`'s own trap, and
+ * the reason this constant's three readers are all on one page is what makes
+ * the hint safe to state once here.
  */
 export const CONSOLE_ROW_WELL =
-  "bg-[color:var(--row-well-bg)] shadow-[var(--row-well-shadow)]";
+  "bg-[image:var(--row-well-bg)] shadow-[var(--row-well-shadow)]";
 
 /**
  * A row **standing on** that glass instead: the tile every pane row is cut
@@ -749,6 +759,82 @@ export const CONSOLE_METAL =
   "[--housing-bg:var(--housing-metal)] [--housing-shadow:var(--housing-metal-shadow)] " +
   "[--plate-raised-bg:var(--plate-metal)] [--plate-raised-shadow:var(--plate-metal-shadow)] " +
   "[--key-bg:var(--key-metal)]";
+
+/**
+ * The gametime stat board's **ice finish**, as token overrides on its own case.
+ *
+ * {@link CONSOLE_METAL}'s pattern at panel scale, and the same reason it is a
+ * finish rather than a component: every surface inside that board already
+ * names one of these tokens, so overriding them on the case is the whole of
+ * the application and the cascade does the rest. Nothing here names a radius,
+ * a padding or a size — the board's own lift, bezel gutter and window bezels
+ * are class changes at their call sites, because those are *shape*.
+ *
+ * **It re-finishes the rows as parts rather than channels**, which is the one
+ * override that is not a straight swap. `--row-well-*` is the channel
+ * {@link CONSOLE_ROW_WELL} cuts into the glass; here it takes the tile stock
+ * and the tile's four-edge chamfer, so the same three call sites draw a row
+ * standing on the glass instead. That is only expressible because
+ * `--row-well-bg` is a `background-image` — see that constant, which is where
+ * the trap is written down.
+ *
+ * **And it de-greens the ink.** `--readout-line` / `-label` / `-muted` and
+ * `--stat-zero-ink` are mint over teal glass; over ice-steel they read as a
+ * cast rather than as ink. What stays teal is only the signal — the live
+ * clock, a picked row's name, the lit `Started` well and a lit row's halo.
+ */
+export const CONSOLE_ICE =
+  "[--panel-case-bg:var(--panel-case-ice-bg)] [--panel-case-shadow:var(--panel-case-ice-shadow)] " +
+  "[--case-well-bg:var(--case-well-ice-bg)] [--case-well-shadow:var(--case-well-ice-shadow)] " +
+  "[--row-well-bg:var(--stat-tile-bg)] [--row-well-shadow:var(--stat-tile-shadow)] " +
+  "[--stat-pin-left-shadow:var(--stat-pin-ice-left-shadow)] " +
+  "[--stat-pin-right-shadow:var(--stat-pin-ice-right-shadow)] " +
+  "[--readout-bg:var(--stat-glass-ice-bg)] [--readout-scanlines:var(--stat-glass-ice-scanlines)] " +
+  "[--glass-shadow:var(--stat-glass-ice-shadow)] " +
+  "[--readout-line:var(--stat-ice-line)] [--readout-label:var(--stat-ice-label)] " +
+  "[--readout-muted:var(--stat-ice-muted)] [--stat-zero-ink:var(--stat-ice-zero)] " +
+  "[--figure-well-bg:var(--stat-figure-well-ice-bg)] " +
+  "[--figure-well-shadow:var(--stat-figure-well-ice-shadow)] " +
+  "[--tag-lit-shadow:var(--stat-tag-lit-ice-shadow)] " +
+  "[--bezel-bg:var(--stat-bezel-ice-bg)] [--bezel-shadow:var(--stat-bezel-ice-shadow)]";
+
+/**
+ * The ice bar's stock and its **inverted ink** — the one place the dark scheme
+ * carries a pale plate, and the reason is legibility rather than taste: the
+ * billet ink family is near-white, and near-white ink on near-white stock is
+ * not ink. So the plate states a dark family of its own.
+ *
+ * **Applied to the bar alone and never to the case.** The two are a pale part
+ * and the darker frame it sits in, and that relationship is what makes every
+ * ratio below hold in *both* schemes: the light scheme inverts the case under
+ * this plate rather than the plate, so nothing here needs a counterpart. See
+ * the light block in `globals.css`, which is where that decision is argued.
+ *
+ * Measured against the band of the plate each run of type actually lands on —
+ * a `--fs-10` label centred in a 52px strip occupies 35.6–64.4% of it:
+ * `--billet-label` 5.35:1, `--billet-name` 14.1:1 on the band under it, and
+ * `--billet-accent` 5.88:1 in its own ice well.
+ *
+ * **`--accent-glow` is overridden here too**, so the bar's `Top` figure takes
+ * the light halo rather than the dark one. That is right for a pale plate and
+ * would be wrong for a lit lamp, so anything added to this bar later inherits
+ * a decision it should check.
+ */
+export const BILLET_ICE_INK =
+  "[--brush-fine:var(--stat-bar-ice-brush)] " +
+  "[--billet-name:#08262b] [--billet-figure:#0d3037] [--billet-label:#2c5a63] " +
+  "[--billet-accent:#064a45] " +
+  "[--billet-name-shadow:0_1px_0_rgba(255,255,255,0.85)] " +
+  "[--standing-engrave:0_-1px_0_rgba(15,23,42,0.26),0_1px_0_rgba(255,255,255,0.92)] " +
+  "[--standing-label-shadow:0_1px_0_rgba(255,255,255,0.9)] " +
+  "[--billet-well-bg:linear-gradient(180deg,#9fcdd7,#d8eff4)] " +
+  "[--billet-well-shadow:inset_0_2px_5px_rgba(15,23,42,0.24),inset_0_-1px_0_rgba(255,255,255,0.92)] " +
+  "[--groove:linear-gradient(to_bottom,transparent,rgba(15,23,42,0.3),transparent)] " +
+  "[--groove-highlight:1px_0_0_rgba(255,255,255,0.9)] " +
+  "[--billet-grain:repeating-linear-gradient(to_bottom,rgba(15,23,42,0.035)_0_1px,transparent_1px_3px)] " +
+  "[--billet-specular:linear-gradient(104deg,transparent_18%,rgba(255,255,255,0.7)_40%,transparent_58%)] " +
+  "[--pip-lit-bg:linear-gradient(180deg,#14a294,#0b6d63)] " +
+  "[--accent-glow:rgba(13,148,136,0.42)]";
 
 /**
  * A lit window a reader can *press* — **and nothing draws one any more.**
