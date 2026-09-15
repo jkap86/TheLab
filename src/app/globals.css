@@ -1616,17 +1616,17 @@
    * outside rather than as another shade of console.
    */
   --panel-case-ice-bg: var(--brush-fine),
-    linear-gradient(104deg, transparent 8%, rgba(214, 252, 255, 0.2) 28%, transparent 46%),
-    linear-gradient(258deg, transparent 22%, rgba(214, 252, 255, 0.1) 42%, transparent 58%),
+    linear-gradient(104deg, transparent 8%, rgba(214, 252, 255, 0.12) 28%, transparent 46%),
+    linear-gradient(258deg, transparent 22%, rgba(214, 252, 255, 0.06) 42%, transparent 58%),
     linear-gradient(
       180deg,
-      #d9f9fc 0%,
-      #9bdce5 5%,
-      #66b3c1 19%,
-      #7fcbd6 35%,
-      #4a8d9b 55%,
-      #336876 77%,
-      #20495a 100%
+      #92c6cf 0%,
+      #68a2ae 5%,
+      #427685 19%,
+      #528e9c 35%,
+      #326471 55%,
+      #244d58 77%,
+      #183642 100%
     );
   /*
    * Four 4px chamfer insets, a teal rim inside a black ring, three casts and
@@ -1637,12 +1637,12 @@
    * 4px where the flat case spends 3, because this part is lifted off the page
    * and a chamfer is how much of the part's own edge a reader can see.
    */
-  --panel-case-ice-shadow: inset 0 4px 0 rgba(224, 253, 255, 0.8),
-    inset 0 -4px 0 rgba(0, 0, 0, 0.8), inset 4px 0 0 rgba(224, 253, 255, 0.28),
-    inset -4px 0 0 rgba(0, 0, 0, 0.52), 0 0 0 1px rgba(0, 255, 229, 0.62),
+  --panel-case-ice-shadow: inset 0 4px 0 rgba(224, 253, 255, 0.5),
+    inset 0 -4px 0 rgba(0, 0, 0, 0.8), inset 4px 0 0 rgba(224, 253, 255, 0.18),
+    inset -4px 0 0 rgba(0, 0, 0, 0.52), 0 0 0 1px rgba(0, 255, 229, 0.34),
     0 0 0 4px rgba(0, 0, 0, 0.78), 0 4px 7px rgba(0, 0, 0, 0.7),
     0 36px 62px -22px rgba(0, 0, 0, 0.96), 0 96px 150px -40px #000,
-    0 0 60px -14px rgba(0, 255, 229, 0.42), 0 0 150px -20px rgba(0, 255, 229, 0.5);
+    0 0 60px -14px rgba(0, 255, 229, 0.2), 0 0 150px -20px rgba(0, 255, 229, 0.22);
   /*
    * The raking specular across the face, and the milled step cut round it
    * inside the chamfer. A layer and a ring rather than two more background
@@ -1652,11 +1652,11 @@
   --panel-case-ice-specular: linear-gradient(
     104deg,
     transparent 10%,
-    rgba(224, 253, 255, 0.22) 32%,
+    rgba(224, 253, 255, 0.13) 32%,
     transparent 52%
   );
   --panel-case-ice-step: 0 0 0 1px rgba(0, 40, 44, 0.55),
-    inset 0 1px 0 rgba(224, 253, 255, 0.3);
+    inset 0 1px 0 rgba(224, 253, 255, 0.18);
   /*
    * The page under the part. A part standing over a page has to be standing
    * over something, and the two casts above fall on the card nearest the foot
@@ -1678,17 +1678,45 @@
    * on a near-white plate is not there at all.
    */
   --stat-bar-ice-bg: var(--stat-bar-ice-brush),
-    linear-gradient(104deg, transparent 12%, rgba(255, 255, 255, 0.55) 34%, transparent 54%),
-    linear-gradient(180deg, #f4feff 0%, #dcf6fa 20%, #bfeaf2 50%, #9bd8e3 78%, #82c8d5 100%);
+    linear-gradient(104deg, transparent 12%, rgba(255, 255, 255, 0.32) 34%, transparent 54%),
+    linear-gradient(180deg, #cde9ef 0%, #b5dbe4 20%, #94c6d2 50%, #82b9c6 78%, #6fa9b8 100%);
   --stat-bar-ice-brush: repeating-linear-gradient(
     90deg,
-    rgba(15, 23, 42, 0.05) 0 1px,
+    rgba(15, 23, 42, 0.06) 0 1px,
     transparent 1px 4px
   );
-  --stat-bar-ice-shadow: inset 0 2.5px 0 rgba(255, 255, 255, 0.95),
-    inset 0 -2.5px 0 rgba(15, 23, 42, 0.34), inset 2.5px 0 0 rgba(255, 255, 255, 0.8),
-    inset -2.5px 0 0 rgba(15, 23, 42, 0.22), 0 1px 0 rgba(0, 255, 229, 0.45),
+  --stat-bar-ice-shadow: inset 0 2.5px 0 rgba(255, 255, 255, 0.8),
+    inset 0 -2.5px 0 rgba(15, 23, 42, 0.4), inset 2.5px 0 0 rgba(255, 255, 255, 0.6),
+    inset -2.5px 0 0 rgba(15, 23, 42, 0.26), 0 1px 0 rgba(0, 255, 229, 0.22),
     0 4px 6px rgba(0, 0, 0, 0.58), 0 16px 26px -10px #000, 0 32px 50px -24px #000;
+  /*
+   * A channel cut into that plate — the shares consoles' tab caps travel in
+   * one, and the stat board has no such control, which is why the ice bundle
+   * never met this.
+   *
+   * **`--rack-channel-bg` cannot serve it**, and its own note is where the
+   * reason is written: it is a black alpha, safe only where the stock it is
+   * cut into is dark in both themes. This stock is the one pale surface in the
+   * dark scheme, so 52% black on it is not a channel milled into a part but a
+   * hole punched through one — and the ink that travels in it is the *dark*
+   * family, which put the unlit cap at **1.5:1** against its own floor. It is
+   * the finding that token already records at the rack's phone caps and at the
+   * filters panel's rails, a third surface along.
+   *
+   * So it is the same recess the light scheme cuts into pale stock: read off
+   * its shadow rather than off a fill, with a lit lower lip closing it. The
+   * tint is lighter than that scheme's 0.1 because the ink here is darker than
+   * the one it carries there — measured at the band the glyphs occupy,
+   * `--billet-label` reads 5.2–6.3 on this floor where 0.1 would leave it at
+   * 4.3 and the inset shadow would take it under.
+   *
+   * **Absent from the light block, on the plate's own terms**: the bar is the
+   * surface whose counterpart is itself, so a channel cut into it is the same
+   * channel in both schemes.
+   */
+  --stat-bar-ice-channel-bg: rgba(15, 23, 42, 0.05);
+  --stat-bar-ice-channel-shadow: inset 0 4px 10px rgba(15, 23, 42, 0.2),
+    inset 0 1px 0 rgba(15, 23, 42, 0.14), inset 0 -1px 0 rgba(255, 255, 255, 0.9);
   /*
    * A list row as a raised ice tile: `--tile-shadow`'s chamfer and short cast,
    * cut from ice-steel instead of `--billet-bg`.
@@ -1714,13 +1742,18 @@
    * linear space to hold the hue, until `--readout-muted` — the quietest
    * *word* on a row, and therefore the one owed 4.5 — clears it across the
    * **whole** tile rather than across a band that goes stale when the type
-   * does. Measured on the four stops below: line 7.19–12.60, label
-   * 5.92–10.38, muted 4.70–8.23, the QB accent and the live clock 6.86–12.02,
-   * and the dash 3.52–5.06 against the 3:1 a mark owes.
+   * does.
+   *
+   * **The stock has since been dimmed a step** with the rest of the finish,
+   * and every one of those ratios *improved* — the tile got darker under an
+   * ink family that only went a shade quieter. Measured on the four stops
+   * below: line 8.05–12.75, label 6.46–10.24, muted 5.04–7.98, the QB accent
+   * and the live clock 8.10–12.84, and the dash 4.36–5.97 against the 3:1 a
+   * mark owes.
    */
-  --stat-tile-bg: linear-gradient(180deg, #38555f 0%, #2d4852 26%, #213b45 62%, #182f38 100%);
-  --stat-tile-shadow: inset 0 1.5px 0 rgba(236, 250, 255, 0.6),
-    inset 0 -1.5px 0 rgba(0, 0, 0, 0.62), inset 1px 0 0 rgba(236, 250, 255, 0.16),
+  --stat-tile-bg: linear-gradient(180deg, #2f4a54 0%, #263f48 26%, #1d343d 62%, #142a32 100%);
+  --stat-tile-shadow: inset 0 1.5px 0 rgba(236, 250, 255, 0.42),
+    inset 0 -1.5px 0 rgba(0, 0, 0, 0.62), inset 1px 0 0 rgba(236, 250, 255, 0.1),
     inset -1px 0 0 rgba(0, 0, 0, 0.42), 0 1px 2px rgba(0, 0, 0, 0.5),
     0 7px 13px -9px rgba(0, 0, 0, 0.88);
   /*
@@ -1733,9 +1766,9 @@
    * which is the fault `--stat-pin-lip` was written to prevent, one finish
    * over.
    */
-  --stat-pin-ice-left-shadow: inset 0 1.5px 0 rgba(236, 250, 255, 0.6),
+  --stat-pin-ice-left-shadow: inset 0 1.5px 0 rgba(236, 250, 255, 0.42),
     inset 0 -1.5px 0 rgba(0, 0, 0, 0.62), 5px 0 10px -3px rgba(0, 0, 0, 0.8);
-  --stat-pin-ice-right-shadow: inset 0 1.5px 0 rgba(236, 250, 255, 0.6),
+  --stat-pin-ice-right-shadow: inset 0 1.5px 0 rgba(236, 250, 255, 0.42),
     inset 0 -1.5px 0 rgba(0, 0, 0, 0.62), -5px 0 10px -3px rgba(0, 0, 0, 0.8);
   /*
    * The glass behind the tiles, de-greened. `--readout-bg` is a teal-black
@@ -1743,21 +1776,21 @@
    * green surface — which reads as a cast on the tiles rather than as a
    * colour of its own.
    */
-  --stat-glass-ice-bg: linear-gradient(180deg, #0a1218, #101a21);
+  --stat-glass-ice-bg: linear-gradient(180deg, #080f14, #0d161c);
   --stat-glass-ice-scanlines: repeating-linear-gradient(
     to bottom,
-    rgba(214, 236, 255, 0.05) 0 1px,
+    rgba(214, 236, 255, 0.04) 0 1px,
     transparent 1px 3px
   );
   --stat-glass-ice-shadow: inset 0 3px 9px rgba(0, 0, 0, 0.88),
-    inset 0 0 0 1px rgba(0, 0, 0, 0.62), 0 1px 0 rgba(236, 250, 255, 0.12);
+    inset 0 0 0 1px rgba(0, 0, 0, 0.62), 0 1px 0 rgba(236, 250, 255, 0.08);
   /*
    * A window set into the case face: a 1px dark ring, a 2px lit chamfer
    * outside it, and a cast onto the metal. Composed into one list beside
    * `--glass-shadow` at the call site rather than appended as a second
    * `shadow-[…]`, which would replace it.
    */
-  --stat-window-bezel: 0 0 0 1px rgba(0, 0, 0, 0.78), 0 0 0 2px rgba(236, 250, 255, 0.09),
+  --stat-window-bezel: 0 0 0 1px rgba(0, 0, 0, 0.78), 0 0 0 2px rgba(236, 250, 255, 0.06),
     0 9px 18px -6px rgba(0, 0, 0, 0.88);
   /*
    * Ink on ice: the readout trio and the zero dash, **neutral**.
@@ -1767,37 +1800,41 @@
    * survives the finish is only the signal — the live clock, a picked row's
    * name, the lit `Started` well and the halo on a lit row.
    */
-  --stat-ice-line: #eef4f8;
-  --stat-ice-label: #d3e0e8;
-  --stat-ice-muted: #b9c9d4;
+  --stat-ice-line: #e7eef4;
+  --stat-ice-label: #c9d8e2;
+  --stat-ice-muted: #aec0cd;
   /*
-   * **0.66 rather than the 0.55 the bundle specifies**, because this token is
-   * not only the dash. `clockInk` draws a game that is not live in it too —
-   * `Wed 4:56 PM`, `Final` — which are words, where the em dash it is named
-   * for is a mark. The shipped token is documented at 4.1 dark against the 3:1
-   * a mark owes, and on this tile 0.55 is 3.52: still clear of the mark's
-   * floor, and a step down from what the board reads today for the run of type
-   * beside it. At 0.66 it is 4.32–6.59 and still the quietest thing on the row
-   * (`--readout-muted` is 4.70), which is the hierarchy the bundle drew.
+   * **This token is not only the dash**, which is what its value is set by:
+   * `clockInk` draws a game that is not live in it too — `Wed 4:56 PM`,
+   * `Final` — which are words, where the em dash it is named for is a mark.
+   *
+   * It read 0.66 against the brighter tile, over the ice bundle's own 0.55,
+   * on exactly that argument: 0.55 measured 3.52 there, clear of a mark's 3:1
+   * and too quiet for a word. **The dimming pass resolves that deviation
+   * rather than reversing it** — its 0.6 on the darker tile is 4.36–5.97,
+   * which is better than the 0.66 it replaces ever read (4.32–6.59 on the old
+   * stock at its worst band), so the run of type is legible at the value the
+   * design asked for. It is still the quietest thing on the row
+   * (`--readout-muted` is 5.04), which is the hierarchy the bundle drew.
    */
-  --stat-ice-zero: rgba(236, 250, 255, 0.66);
+  --stat-ice-zero: rgba(236, 250, 255, 0.6);
   /* A figure well cut into a tile, and the same well lit. */
-  --stat-figure-well-ice-bg: rgba(8, 15, 22, 0.44);
-  --stat-figure-well-ice-shadow: inset 0 2px 5px rgba(0, 0, 0, 0.66),
-    inset 0 -1px 0 rgba(236, 250, 255, 0.24);
-  --stat-tag-lit-ice-shadow: inset 0 2px 5px rgba(0, 0, 0, 0.66),
-    inset 0 -1px 0 rgba(236, 250, 255, 0.24), 0 0 0 1px rgba(0, 255, 229, 0.45),
+  --stat-figure-well-ice-bg: rgba(8, 15, 22, 0.5);
+  --stat-figure-well-ice-shadow: inset 0 2px 5px rgba(0, 0, 0, 0.7),
+    inset 0 -1px 0 rgba(236, 250, 255, 0.18);
+  --stat-tag-lit-ice-shadow: inset 0 2px 5px rgba(0, 0, 0, 0.7),
+    inset 0 -1px 0 rgba(236, 250, 255, 0.18), 0 0 0 1px rgba(0, 255, 229, 0.38),
     0 0 18px -6px var(--accent-glow);
   /* The face mount in a row, cooler and without the teal halo. */
-  --stat-bezel-ice-bg: linear-gradient(180deg, #2c3c4a, #0e161d);
-  --stat-bezel-ice-shadow: inset 0 1px 0 rgba(236, 250, 255, 0.26),
+  --stat-bezel-ice-bg: linear-gradient(180deg, #26333f, #0c1318);
+  --stat-bezel-ice-shadow: inset 0 1px 0 rgba(236, 250, 255, 0.2),
     inset 0 -2px 4px rgba(0, 0, 0, 0.85), 0 2px 5px -2px rgba(0, 0, 0, 0.82);
   /* The hole in the case, one step deeper than `--case-well-*` — a hole inside
      a brighter part has further to go before it reads as one. */
-  --case-well-ice-bg: #0b1319;
+  --case-well-ice-bg: #0a1116;
   --case-well-ice-shadow: inset 0 8px 18px rgba(0, 0, 0, 0.92),
     inset 0 2px 0 rgba(0, 0, 0, 0.85), inset 0 0 0 1px rgba(0, 0, 0, 0.6),
-    inset 0 -1px 0 rgba(236, 250, 255, 0.12);
+    inset 0 -1px 0 rgba(236, 250, 255, 0.09);
 }
 
 /*

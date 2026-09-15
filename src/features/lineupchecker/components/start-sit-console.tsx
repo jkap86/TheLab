@@ -10,10 +10,13 @@ import {
 } from "react";
 
 import {
+  BILLET_ICE_INK,
   BilletFinish,
   canonicalReadings,
   CONSOLE_CHIP_TRAY,
   CONSOLE_GLASS,
+  CONSOLE_ICE,
+  CONSOLE_ICE_BAR,
   CONSOLE_KEY_PILL_BARE,
   CONSOLE_MILLED_WELL,
   CONSOLE_PANE_TRACK,
@@ -616,7 +619,7 @@ export function StartSitConsole({
       }}
     >
       <div
-        className={`${START_SIT_BAR_H} pointer-events-auto relative flex h-full w-full max-w-6xl flex-col overflow-hidden rounded-t-[1.125rem] bg-[image:var(--panel-case-bg)] shadow-[var(--panel-case-shadow)]`}
+        className={`${CONSOLE_ICE} ${START_SIT_BAR_H} pointer-events-auto relative flex h-full w-full max-w-6xl flex-col overflow-hidden rounded-t-[1.125rem] bg-[image:var(--panel-case-bg)] shadow-[var(--panel-case-shadow)]`}
       >
         <Bar
           open={open}
@@ -791,7 +794,9 @@ function Bar({
   onList: () => void;
 }) {
   return (
-    <div className="relative flex h-[var(--startsit-bar-h)] w-full shrink-0 items-center gap-2 overflow-hidden bg-[image:var(--billet-bg)] px-2 shadow-[var(--standing-strip-shadow)] sm:gap-3 sm:px-3.5">
+    <div
+      className={`${CONSOLE_ICE_BAR} ${BILLET_ICE_INK} relative flex h-[var(--startsit-bar-h)] w-full shrink-0 items-center gap-2 overflow-hidden bg-[image:var(--billet-bg)] px-2 shadow-[var(--standing-strip-shadow)] sm:gap-3 sm:px-3.5`}
+    >
       <BilletFinish />
       <button
         type="button"

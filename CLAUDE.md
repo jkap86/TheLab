@@ -20486,3 +20486,153 @@ and the finish *improves* it — the same ramp on today's shipped light board is
 rather than the well beneath them. Moving them is a decision about every rank
 figure in the app (league cards, standings, meters, the trades board), which is a
 designer's call rather than a silent edit inside a re-skin of one drawer.
+
+### The three players trays read as one object
+
+The `/gametime` Player Scores board's ice finish read brighter than the rest of
+the console theme, and it was the only one of the three players trays wearing
+it: `/manager`'s **Shares** console and `/lineupchecker`'s **Start / sit**
+console were still the flat billet part. This takes the finish down a step and
+gives it to the other two. Applied from a design handoff. **Nothing about the
+trays' structure, layout, geometry, type, copy or behaviour changes** — no
+route, no query, no contract type, no payload field, no migration. The diff is
+token values, one ink block, one new constant and four class strings.
+
+**It is a finish rather than a component, which is the whole of why it is
+cheap.** `CONSOLE_ICE` is `CONSOLE_METAL`'s pattern at panel scale: every
+surface inside a case already names `--panel-case-*`, `--case-well-*`,
+`--readout-*`, `--glass-shadow`, `--row-well-*` and `--figure-well-*`, so
+adding the constant to the other two cases is the whole of the application and
+the cascade does the rest. Their lists, ledges, panes, rows and windows take it
+without an edit.
+
+**The one surface the cascade could not reach is the bar**, and that is what
+`CONSOLE_ICE_BAR` is. The stat board's bar names `--stat-bar-ice-*` directly
+where those two name `--billet-bg` and `--standing-strip-shadow`, so the finish
+needed an arm for a bar cut from billet stock — a constant beside `CONSOLE_ICE`
+rather than the same two declarations hand-copied into two class strings that
+then drift. It is composed with `BILLET_ICE_INK`, which is **not optional**: it
+puts a pale plate under an ink family that is near-white, and the bar is
+illegible with only the first.
+
+**Light mode is untouched and that is a fact about the bar rather than an
+omission.** Its own block already inverts the *case* under this plate rather
+than the plate, on the argument that the bar is the surface whose counterpart
+is itself — so the dimmed plate, its brush and its casts are shared by both
+schemes, and every ratio `BILLET_ICE_INK` is measured by carries over unchanged.
+The two new consoles pick the light half up for free.
+
+**The ink is re-measured because the plate moved, and two of the three are a
+floor rather than a preference.** On the dimmed stock the previous
+`--billet-label` `#2c5a63` reads **3.81** at the foot of its own band, under the
+4.5 a word owes. At `#1d454d` it is 5.21–6.26 on that band; `--billet-accent`
+`#053f3b` is 5.41 at its well's darkest stop; `--billet-name` is 7.91–9.52 there
+and 6.08 at its worst anywhere on the plate. **Every row ink improved**, which
+is the direction a darker tile under a slightly quieter ink family has to move:
+line 7.19 → 8.05, label 5.92 → 6.46, muted 4.70 → 5.04, the dash 4.32 → 4.36.
+
+**`--stat-ice-zero` takes the bundle's 0.6, and that resolves the repo's earlier
+deviation rather than reversing it.** That token read 0.66 over the ice
+bundle's own 0.55 because it is not only the dash — `clockInk` draws `Wed 4:56
+PM` and `Final` in it, which are words. On the dimmed tile 0.6 measures
+4.36–5.97, better than the 0.66 it replaces ever read on the brighter stock, so
+the run of type is legible at the value the design asked for.
+
+#### The channel the bundle could not have met
+
+One defect, found by measuring rather than by reading, and it is the one thing
+here the handoff could not have known about: **the manager console's bar carries
+its two tab caps in a `CONSOLE_CHANNEL_METAL` recess, and no bar this finish had
+met before has one.** The stat board's `Splits` rail and the start/sit
+console's are both in a *ledge*, cut into the dark case; nothing had ever cut
+`--rack-channel-bg` into the pale plate.
+
+That token is a black alpha, and its own note says it is safe "only where the
+stock it is cut into is dark in both themes". At 52% black on ice it is a hole
+punched through the plate rather than a channel milled into it — and the ink
+travelling in it is the *dark* family, so the unlit `Leaguemates` cap measured
+**1.65:1 on rendered pixels** (1.23–2.03 analytically across the plate). It is
+the third surface to find this, after the rack's own phone caps and the filters
+panel's rails.
+
+**`--stat-bar-ice-channel-*` is the measured replacement**: the recess the light
+scheme already cuts into pale stock — read off its shadow rather than off a
+fill, with a lit lower lip closing it — at a lighter tint than that scheme's,
+because the ink here is darker than the one it carries there. The light
+scheme's own 0.1 leaves the cap at 4.32 before the inset shadow takes it under;
+at 0.05 it is **4.64:1 in dark and 4.60:1 in light**, measured off rendered
+pixels, with the channel still reading as a recess. It is **absent from the
+light block** on the plate's own terms, and **scoped to the bar**, which is what
+keeps it off the two ledge channels that are correct as they are.
+
+#### Verified
+
+Driven over CDP against `next dev` with no `DATABASE_URL` — the boot hook skips
+migrations and the loops log their refusals, which is the server coming up
+healthy against nothing — through a temporary `/preview` route mounting the
+**real** `StatBoard`, `SharesConsole` and `StartSitConsole` over fixtures, then
+deleted. The mechanics are the ones this file records: `--no-proxy-server`,
+`localhost` rather than `127.0.0.1`, a phone viewport from
+`Emulation.setDeviceMetricsOverride` with `mobile: true`, `data-theme` **and**
+`localStorage` seeded before hydration (navigate, write, navigate again),
+`--disable-features=OverlayScrollbar`, the
+`--blink-settings=availablePointerTypes=4,…` flags built as a **template
+literal**, a client-component harness, a CDP client over Node's own `WebSocket`
+since Playwright is not in this project's `node_modules`, a fresh
+`--remote-debugging-port` per run, and the browser at
+`/opt/pw-browsers/chromium-1194/chrome-linux/chrome`.
+
+**120 of 120 assertions pass** at 1280 in both schemes across all three
+consoles: every ice token resolves to the dimmed value, the two new cases take
+the finish, all three bars take the dimmed plate with the re-measured ink, and
+light mode inverts the *case* while the bar keeps its plate. **Twelve phone
+renders at 390 are clean** — shut and open, both schemes, all three — with
+`document.documentElement.scrollWidth` inside the viewport, **zero** unclipped
+elements past it, exactly one `<h1>`, and no console output but the dev
+server's own HMR line.
+
+**The before-state was measured in the same harness** by stashing the tracked
+diff, which is the check that the change is doing something *and* that it moved
+nothing it should not:
+
+| | before | after |
+| --- | --- | --- |
+| case ramp (top stop) | `#d9f9fc` | `#92c6cf` |
+| case accent ring | `rgba(0,255,229,0.62)` | `rgba(0,255,229,0.34)` |
+| bar plate (top stop) | `#f4feff` | `#cde9ef` |
+| bar teal hairline | `rgba(0,255,229,0.45)` | `rgba(0,255,229,0.22)` |
+| row tile (top stop) | `#38555f` | `#2f4a54` |
+| `--billet-label` | `#2c5a63` | `#1d454d` |
+| bar height / case radius / row height | 52 / 22px / 38 | **unchanged** |
+
+The two shares consoles moved further, from the billet console they were — a
+`#000000` row well, `#04100f` teal glass and the `#9ffff2` mint ink family — to
+the dimmed ice case with the dark plate ink, with their own geometry (52 /
+18px) equally unchanged on both sides.
+
+`check:full` from a cleared `.next` — the production build, then lint,
+typecheck and the suite — is clean, and 2,894 unit tests pass.
+
+**Three mechanics cost a run each and are worth writing down.** A custom
+property read back through `getPropertyValue` is the **raw token text**
+(`#2f4a54`) where the same value read through `backgroundImage` is the *used*
+value (`rgb(47, 74, 84)`), so a probe comparing one against the other reports a
+finish that has not applied when it has. The stat board's first `[role="row"]`
+is the **head strip**, which also carries a gradient, so a `.find()` on
+"has a gradient" measures the header and reports the wrong row height. And a
+**modal pixel is the surface of a padded cell and the ink of a tight text
+box** — the trap this file already records — so the pixel sweep reported every
+bar run backwards and its only real use was pointing at the cap, which then had
+to be measured properly by sampling the cap's own padding for the surface.
+
+**Not verified against real data**, which is the gap to close first: every
+number above is a fixture and no database was reachable from here. Four things
+a render cannot check — whether the dimmed board still reads as a part
+*standing over* a real hundred-league page rather than as one more shade of
+console, which is the whole of what the step down trades; how the two newly
+iced consoles read on a real account, where the lists are ~470 and ~1,500 rows
+against this harness's handful; whether the lighter channel still reads as a
+recess to somebody who has not been told it is one, which is the one judgement
+this pass makes on the handoff's behalf; and whether a reader walking
+`/manager` → `/lineupchecker` → `/gametime` now sees one object, which is the
+change's whole claim and the one thing no single-page render can show.
