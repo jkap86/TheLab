@@ -799,6 +799,46 @@ export const CONSOLE_ICE =
   "[--bezel-bg:var(--stat-bezel-ice-bg)] [--bezel-shadow:var(--stat-bezel-ice-shadow)]";
 
 /**
+ * The ice finish's **bar**, for a console whose plate is billet stock.
+ *
+ * {@link CONSOLE_ICE} re-finishes a case and everything set into it, and the
+ * two shares consoles' bars are the one surface it cannot reach: they name
+ * `--billet-bg` and `--standing-strip-shadow` where the stat board's bar names
+ * `--stat-bar-ice-*` directly. So this is the finish's missing arm rather than
+ * a second finish — a constant beside it, on the rule the rest of this file is
+ * written by, because the alternative is the same two declarations hand-copied
+ * into two class strings that then drift.
+ *
+ * **Compose it with {@link BILLET_ICE_INK}**, which is not optional: this puts
+ * a pale plate under an ink family that is near-white, and near-white ink on
+ * near-white stock is not ink. The two are one application and the bar is
+ * illegible with only the first.
+ *
+ * `--stat-bar-ice-shadow`'s cast is drawn for a plate seated in a case, which
+ * is what these bars are, so no second shadow stack is needed.
+ *
+ * **The channel is the third pair, and it is the one the ice bundle could not
+ * have known about**: the manager console's bar carries its two tab caps in a
+ * {@link CONSOLE_CHANNEL_METAL} recess, and no bar the finish had met before
+ * has one — so nothing had ever cut `--rack-channel-bg`'s black alpha into
+ * pale stock. At 52% black it is a hole punched through the plate rather than
+ * a channel milled into it, and the *dark* ink that travels in it reads
+ * **1.5:1**. See the token in `globals.css` for the measured replacement, and
+ * that token's own note for why this is the third surface to find it.
+ *
+ * **It is scoped to the bar, which is what keeps it off the two channels that
+ * are correct as they are**: the start/sit console's and the stat board's both
+ * sit in a *ledge*, cut into the dark case rather than the pale plate, where a
+ * black alpha is the right recess. So this pair reaches exactly one control,
+ * and is inert on the bar that has none.
+ */
+export const CONSOLE_ICE_BAR =
+  "[--billet-bg:var(--stat-bar-ice-bg)] " +
+  "[--standing-strip-shadow:var(--stat-bar-ice-shadow)] " +
+  "[--rack-channel-bg:var(--stat-bar-ice-channel-bg)] " +
+  "[--rack-channel-shadow:var(--stat-bar-ice-channel-shadow)]";
+
+/**
  * The ice bar's stock and its **inverted ink** — the one place the dark scheme
  * carries a pale plate, and the reason is legibility rather than taste: the
  * billet ink family is near-white, and near-white ink on near-white stock is
@@ -810,10 +850,16 @@ export const CONSOLE_ICE =
  * this plate rather than the plate, so nothing here needs a counterpart. See
  * the light block in `globals.css`, which is where that decision is argued.
  *
+ * **The plate is dimmed, so the dark family on it is re-measured**, and two
+ * of these are a floor rather than a preference: the previous
+ * `--billet-label` `#2c5a63` reads 3.81 at the foot of its own band on the
+ * dimmed stock, under the 4.5 a word owes.
+ *
  * Measured against the band of the plate each run of type actually lands on —
  * a `--fs-10` label centred in a 52px strip occupies 35.6–64.4% of it:
- * `--billet-label` 5.35:1, `--billet-name` 14.1:1 on the band under it, and
- * `--billet-accent` 5.88:1 in its own ice well.
+ * `--billet-label` 5.21–6.26, `--billet-name` 7.91–9.52 and `--billet-figure`
+ * 7.00–8.42 on that band (6.08 and 5.38 at their worst anywhere on the
+ * plate), and `--billet-accent` 5.41 at its own well's darkest stop.
  *
  * **`--accent-glow` is overridden here too**, so the bar's `Top` figure takes
  * the light halo rather than the dark one. That is right for a pale plate and
@@ -822,12 +868,12 @@ export const CONSOLE_ICE =
  */
 export const BILLET_ICE_INK =
   "[--brush-fine:var(--stat-bar-ice-brush)] " +
-  "[--billet-name:#08262b] [--billet-figure:#0d3037] [--billet-label:#2c5a63] " +
-  "[--billet-accent:#064a45] " +
+  "[--billet-name:#08262b] [--billet-figure:#0d3037] [--billet-label:#1d454d] " +
+  "[--billet-accent:#053f3b] " +
   "[--billet-name-shadow:0_1px_0_rgba(255,255,255,0.85)] " +
   "[--standing-engrave:0_-1px_0_rgba(15,23,42,0.26),0_1px_0_rgba(255,255,255,0.92)] " +
   "[--standing-label-shadow:0_1px_0_rgba(255,255,255,0.9)] " +
-  "[--billet-well-bg:linear-gradient(180deg,#9fcdd7,#d8eff4)] " +
+  "[--billet-well-bg:linear-gradient(180deg,#84b8c4,#c2e2ea)] " +
   "[--billet-well-shadow:inset_0_2px_5px_rgba(15,23,42,0.24),inset_0_-1px_0_rgba(255,255,255,0.92)] " +
   "[--groove:linear-gradient(to_bottom,transparent,rgba(15,23,42,0.3),transparent)] " +
   "[--groove-highlight:1px_0_0_rgba(255,255,255,0.9)] " +
