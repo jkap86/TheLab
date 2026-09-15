@@ -657,12 +657,14 @@ function Live({
                  stands down with the rest of the page's chrome, and there is
                  nothing left to clear.
 
-                 **7.5rem rather than 5.5 since the ice finish**, and the extra
-                 32px is the part's rather than breath: it is lifted 1.125rem
-                 clear of the bottom edge and framed in 7px of its own face top
-                 and bottom. What sits above the bar is unchanged — only what
-                 is under it grew, and the last card has to clear all of it. */
-              className="relative m-0 mb-[7.5rem] grid list-none grid-cols-1 gap-[1.125rem] p-0 [overflow-anchor:none]"
+                 **6.375rem rather than 5.5**, and the extra 14px is the
+                 part's rather than breath: the case is framed in 7px of its
+                 own face top and bottom (see `ConsoleShell`), so the last card
+                 has to clear the frame as well as the bar. It was 7.5rem while
+                 the board also sat 1.125rem clear of the bottom edge; it is
+                 flush on the fold now, like the other two consoles', and all
+                 three lists spend the same sum. */
+              className="relative m-0 mb-[6.375rem] grid list-none grid-cols-1 gap-[1.125rem] p-0 [overflow-anchor:none]"
             >
               {visible.map((league) => {
                 const open = card.isOpen(league.league_id);

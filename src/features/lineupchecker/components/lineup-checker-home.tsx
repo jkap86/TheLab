@@ -704,7 +704,7 @@ function Checker({
                    console stands down with the rest of the page's chrome, and
                    there is nothing left to clear. It is `leagues-home.tsx`'s
                    own figure for its own bar. */
-                className="relative m-0 mb-[5.5rem] grid list-none grid-cols-1 gap-[1.125rem] p-0 [overflow-anchor:none]"
+                className="relative m-0 mb-[6.375rem] grid list-none grid-cols-1 gap-[1.125rem] p-0 [overflow-anchor:none]"
               >
                 {visible.map((league) => (
                   <LineupCheckCard

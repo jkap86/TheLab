@@ -385,6 +385,9 @@ export {
   FLASK_VESSEL,
 } from "./ui/bubbling-flask";
 export { ConsoleGround } from "./ui/console-ground";
+// The case the three bottom consoles stand in — one shell, so a reader
+// walking between the tools sees one part rather than three drawings of it.
+export { ConsoleShell } from "./ui/console-shell";
 // The parts an expanded card's browser is built from — a billet carrying a
 // ledge and a sheet of glass, the channel a row is cut in it, and the drawer a
 // bench rises out of. They were the manager card's alone and reached through a

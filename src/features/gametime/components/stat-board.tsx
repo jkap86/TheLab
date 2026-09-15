@@ -18,6 +18,7 @@ import {
   CONSOLE_WELL,
   CONSOLE_WINDOW,
   CONSOLE_WINDOW_LEDGE,
+  ConsoleShell,
   DetailLedge,
   FacetChip,
   FacetFoot,
@@ -564,117 +565,91 @@ export function StatBoard({
   const leagues = shares?.starter_league_count ?? 0;
 
   return (
-    /* Fixed to the bottom edge and centred on the shell's own `max-w-6xl`, so
-       the case's shoulders line up with the rack's above. `pointer-events` is
-       off on the section and back on inside it: the gutter either side is
-       transparent, and a page that could not be clicked through it would be a
-       hundred cards behind a pane of glass. */
-    <section
-      aria-label="Player scores"
-      className={`lab-anim pointer-events-none fixed inset-x-0 bottom-[1.125rem] z-40 flex justify-center px-4 transition-[height] duration-[340ms] ease-[cubic-bezier(0.2,0.8,0.2,1)] ${chromeClass}`}
-      style={{
-        height: open
-          ? "calc(100dvh - var(--rack-clear) - 1.125rem)"
-          : "calc(var(--stat-bar-h) + 14px)",
-      }}
+    /* Flush on the fold and centred on the shell's own `max-w-6xl`, so the
+       case's shoulders line up with the rack's above. The frame, the finish
+       and the scrim are `ConsoleShell`'s — this board and the two shares
+       consoles are one part, and it is stated once there.
+
+       **The open height is the whole of what the rack leaves, at every
+       width**, where the two shares consoles cap at 62dvh from `sm` up. That
+       is not a drift: those two are read *against* the grid they narrow, so a
+       case that took the viewport would be a modal with no backdrop — where
+       this one is a reference table of the week's scoring, and the leagues
+       behind it are the lens rather than the subject. */
+    <ConsoleShell
+      label="Player scores"
+      open={open}
+      height={
+        open
+          ? "calc(100dvh - var(--rack-clear))"
+          : "calc(var(--stat-bar-h) + 14px)"
+      }
+      className={`${CONSOLE_ICE} ${STAT_BAR_H} ${chromeClass}`}
     >
-      {/* The page darkens under the part standing over it — `fixed` so it is
-          not bounded by the section's own height, behind the case, and
-          `pointer-events-none` like the section around it. It is drawn *here*
-          rather than beside `ConsoleGround` so it is bounded by this section's
-          `z-40`; the day it has to sit under other fixed chrome it moves to
-          the page. */}
+      <Bar
+        open={open}
+        week={week}
+        basis={basis}
+        leagues={leagues}
+        top={top}
+        detail={detail}
+        onList={clearPick}
+      />
+      {/* Mounted only while up — see the module note. */}
       {open && (
-        <span
-          aria-hidden
-          className="pointer-events-none fixed inset-x-0 bottom-0 top-[34%] -z-[1] bg-[image:var(--panel-case-ice-scrim)]"
-        />
-      )}
-      <div
-        className={`${CONSOLE_ICE} pointer-events-auto relative flex w-full max-w-6xl flex-col overflow-hidden rounded-[1.375rem] bg-[image:var(--panel-case-bg)] p-[7px] shadow-[var(--panel-case-shadow)] ${STAT_BAR_H}`}
-      >
-        {/* The finish: brushed grain, one raking specular, and the milled step
-            cut round the face inside the chamfer. Children rather than three
-            more background layers, on `BilletFinish`'s own rule — and the step
-            is a *shadow* (an inset lip and an outer hairline), which no
-            gradient can draw. */}
-        <span
-          aria-hidden
-          className="pointer-events-none absolute inset-0 bg-[image:var(--billet-grain)]"
-        />
-        <span
-          aria-hidden
-          className="pointer-events-none absolute inset-0 bg-[image:var(--panel-case-ice-specular)]"
-        />
-        <span
-          aria-hidden
-          className="pointer-events-none absolute inset-[4px] rounded-[1.1875rem] shadow-[var(--panel-case-ice-step)]"
-        />
-        <Bar
-          open={open}
-          week={week}
-          basis={basis}
-          leagues={leagues}
-          top={top}
-          detail={detail}
-          onList={clearPick}
-        />
-        {/* Mounted only while up — see the module note. */}
-        {open && (
-          <div className="relative flex min-h-0 flex-1 gap-2 px-1.5 pb-1.5 pt-2.5 sm:gap-3 sm:px-2 sm:pb-2 sm:pt-3">
-            {/* **Below `lg` the pane replaces the list**, which is the design's
-                own phone arrangement: one pane at a time, and the bar's
-                `‹ List` key is the way back. `display: none` on the hidden
-                arm, so exactly one is ever in the accessibility tree. */}
-            <div
-              className={`min-w-0 flex-1 flex-col gap-2 sm:gap-2.5 ${
-                detail ? "hidden lg:flex" : "flex"
-              }`}
-            >
-              <Ledge
-                filters={narrowing}
-                onFilters={onNarrowing}
-                rows={all}
-                shown={rows.length}
-                total={all.length}
-                splits={splits}
-                onSplits={pickSplits}
-                columns={columns}
-                sort={sort}
-                onSort={setSort}
-                trayOpen={trayOpen}
-                onTrayOpen={setTrayOpen}
-              />
-              <List
-                rows={rows}
-                columns={columns}
-                population={population}
-                sort={sort}
-                onSort={setSort}
-                picked={picked}
-                onPick={pick}
-                reading={reading}
-                onPressCount={pressCount}
-                narrowed={rows.length !== all.length}
-              />
-            </div>
-            {/* The right pane stands *beside* the list where there is room and
-                *in front of* it where there is not, and at rest above `lg` it
-                prompts rather than seeding itself with a player. */}
-            <Detail
-              className={detail ? "flex" : "hidden lg:flex"}
-              row={detail}
-              basis={basis}
-              leagues={leagues}
+        <div className="relative flex min-h-0 flex-1 gap-2 px-1.5 pb-1.5 pt-2.5 sm:gap-3 sm:px-2 sm:pb-2 sm:pt-3">
+          {/* **Below `lg` the pane replaces the list**, which is the design's
+              own phone arrangement: one pane at a time, and the bar's
+              `‹ List` key is the way back. `display: none` on the hidden
+              arm, so exactly one is ever in the accessibility tree. */}
+          <div
+            className={`min-w-0 flex-1 flex-col gap-2 sm:gap-2.5 ${
+              detail ? "hidden lg:flex" : "flex"
+            }`}
+          >
+            <Ledge
+              filters={narrowing}
+              onFilters={onNarrowing}
+              rows={all}
+              shown={rows.length}
+              total={all.length}
+              splits={splits}
+              onSplits={pickSplits}
+              columns={columns}
+              sort={sort}
+              onSort={setSort}
+              trayOpen={trayOpen}
+              onTrayOpen={setTrayOpen}
+            />
+            <List
+              rows={rows}
+              columns={columns}
+              population={population}
+              sort={sort}
+              onSort={setSort}
+              picked={picked}
+              onPick={pick}
               reading={reading}
-              onReading={setReading}
-              narrowing={gridNarrowed}
-              onNarrow={toggleGridNarrowed}
+              onPressCount={pressCount}
+              narrowed={rows.length !== all.length}
             />
           </div>
-        )}
-      </div>
-    </section>
+          {/* The right pane stands *beside* the list where there is room and
+              *in front of* it where there is not, and at rest above `lg` it
+              prompts rather than seeding itself with a player. */}
+          <Detail
+            className={detail ? "flex" : "hidden lg:flex"}
+            row={detail}
+            basis={basis}
+            leagues={leagues}
+            reading={reading}
+            onReading={setReading}
+            narrowing={gridNarrowed}
+            onNarrow={toggleGridNarrowed}
+          />
+        </div>
+      )}
+    </ConsoleShell>
   );
 }
 /* ------------------------------------------------------------------ */

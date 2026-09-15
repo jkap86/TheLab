@@ -20443,6 +20443,11 @@ since the worst case it is set against is an en-US afternoon kickoff.
 
 ### The board became a part standing over the page
 
+**Superseded in one line — the lift is gone.** The board sits flush on the
+fold, like the two shares consoles, and the frame it is described in here is
+what those two took; see The three consoles became one case, below. Everything
+else in this section still holds and is what that pass is built on.
+
 A finish pass over the Player Scores board, from a design handoff: the case
 becomes a polished cyan-ice billet lifted off the bottom edge and framed in 7px
 of its own face, its bar a frosted ice plate with the ink inverted, and the list
@@ -20761,3 +20766,142 @@ recess to somebody who has not been told it is one, which is the one judgement
 this pass makes on the handoff's behalf; and whether a reader walking
 `/manager` → `/lineupchecker` → `/gametime` now sees one object, which is the
 change's whole claim and the one thing no single-page render can show.
+
+### The three consoles became one case
+
+The ice pass made the three bottom consoles one *finish* and left them two
+*shapes*. `/gametime`'s Player Scores board sat **1.125rem clear of the bottom
+edge**, fully rounded, framed in 7px of its own face, over a scrim; `/manager`'s
+Shares and `/lineupchecker`'s Start / sit sat flush on the fold with no frame,
+no finish overlays and no scrim — so a reader walking between the tools saw one
+part drawn two ways, which is the drift these convergence passes exist to
+remove. Asked for by the user, in both directions at once: bring the board down
+to where the other two sit, and give the other two the board's look. They are
+one shell now. **Nothing on the wire moved** — no route, no query, no contract
+type, no payload field, no migration — and **no token was added**: every
+surface, gradient and shadow in the frame already had one, light half included.
+
+**Flush and framed are not in tension, which is the whole of how both halves of
+the ask are met.** The case runs to the bottom edge and carries 7px of its own
+face round the plate inside it, so the bar reads as a part *seated in a frame*
+rather than as a strip welded across the foot. What the lift was buying — a part
+standing over the page — the frame and the scrim go on buying without the gap.
+
+**The bottom corners are square**, which is what says the case sits *on* the
+edge rather than floating over it: rounded, they would show the page through two
+notches at the very foot of the screen. So the outer radius is `rounded-t`, and
+the milled step inside it rounds at the top with it. The radius is the board's
+own 22px rather than the shares consoles' 18, because 7px of frame around a
+14px plate is ~21 and 22 reads concentric.
+
+**It is a shared component rather than three copies**, on `CONSOLE_ICE_BAR`'s
+own rule: the alternative is the same chrome hand-copied into three class
+strings that then drift again, which is exactly the state this pass found.
+`features/shared/ui/console-shell.tsx` owns the section, the scrim, the case and
+its three finish overlays; each console passes a label, its `open` flag, a
+height and a class string.
+
+**The height is the caller's, and the disagreement in it is load-bearing.** The
+board opens to the whole of what the rack leaves at every width; the two shares
+consoles cap at 62dvh from `sm` up, because those two are read *against* the
+grid they narrow and a case that took the viewport would be a modal with no
+backdrop — where the board is a reference table of the week's scoring and the
+leagues behind it are the lens rather than the subject. So the shell takes the
+height as an inline style reading custom properties the caller declares through
+`className`, which is forced twice over: the animated, positioned box is the
+section, so a phone arm must reach *it*, and an inline style cannot carry a
+media query.
+
+**`CONSOLE_ICE` moved from the case onto the section**, which is safe and is
+worth stating because it looks like a widening: every entry in that constant is
+a custom-property declaration and custom properties inherit, so the case and
+everything set into it resolve exactly as before. What it buys is one class prop
+instead of two, and the bar-height declaration the inline height reads landing
+on the element that reads it.
+
+**The shut height is the bar plus 14px**, top and bottom, and a caller that
+forgets it squeezes its own bar. All three list clearances are therefore one
+figure now — `mb-[6.375rem]`, which is the 5.5rem of bar-and-breath the two
+shares consoles always spent plus the frame. Gametime's was 7.5rem while it also
+sat clear of the edge.
+
+**The bar gained the board's rounding and nothing else.** Its stock was already
+identical — `CONSOLE_ICE_BAR` overrides `--billet-bg` and
+`--standing-strip-shadow` to the board's own `--stat-bar-ice-*`, and both bars
+already drew `BilletFinish` — so what was left of the difference was a square
+plate against a 14px-rounded one, and 2px of internal padding.
+
+#### What the frame costs, measured
+
+The two shares consoles' bars lose the frame's 14px of width, which is the one
+real risk in the pass and the reason it was measured rather than reasoned about.
+At 390, before and after, in the same harness:
+
+| | bar | content box | fixed content | slack |
+| --- | --- | --- | --- | --- |
+| Shares, before | 358 | 342 | 199.3 | 142.7 |
+| Shares, after | **344** | **324** | 199.3 | **124.7** |
+| Start / sit, before | 358 | 342 | 172.7 | 169.3 |
+| Start / sit, after | **344** | **324** | 172.7 | **151.3** |
+| Player Scores (unchanged) | 344 | 324 | 239.1 | 84.9 |
+
+So both restyled bars still have more room at 390 than the board's own bar has,
+and that bar ships. The fixed content is identical before and after — nothing
+reflowed — and the board's own figures did not move at all, which is the check
+that only its *position* changed.
+
+#### Verified
+
+Driven over CDP against `next dev` with no `DATABASE_URL` — the boot hook skips
+migrations and the loops log their refusals, which is the server coming up
+healthy against nothing — over the **real** `/gametime`, `/manager` and
+`/lineupchecker` pages rather than a preview route, since all three consoles are
+rendered unconditionally rather than behind a data gate. The mechanics are the
+ones this file records: `--no-proxy-server`, `localhost` rather than
+`127.0.0.1`, a phone viewport from `Emulation.setDeviceMetricsOverride` with
+`mobile: true`, `data-theme` **and** `localStorage` written before hydration,
+`--disable-features=OverlayScrollbar`, the
+`--blink-settings=availablePointerTypes=4,…` flags built as a template literal,
+`--no-sandbox`, a CDP client over Node's own `WebSocket` since Playwright is not
+in this project's `node_modules`, and a fresh `--remote-debugging-port` per run.
+
+**All 12 arms pass** — three consoles × 1280 and 390 × dark and light, each shut
+and open — and every figure is identical across the three: flush on the fold
+(`flushGap` 0 shut and open), `padding: 7px` with the bar inset 7 on all four
+sides, case radius **22px top / 0 bottom**, bar radius **14px**, three finish
+overlays with the milled step at `inset: 4px` and a 19px top radius, the scrim
+present open and absent shut, shut height exactly the bar plus 14 (66px at 1280,
+62 at 390), `pointer-events` none on the section and auto on the case,
+`documentElement.scrollWidth` within the viewport, **zero** elements painted past
+it that an ancestor does not clip, exactly one `<h1>`, and **no console output of
+any kind**. The open heights confirm the deliberate difference survived: 810/768
+for the board against 558/768 for the two shares consoles.
+
+`check:full` from a clean tree — the production build, then lint, typecheck and
+the suite — is clean, and 2,903 unit tests pass.
+
+**Two mechanics cost a run each and are worth writing down.** `prettier` is
+**not a dependency of this project** — `npx prettier --write` pulls a stray
+version and reformats a great deal of hand-formatted code that is near its
+default style but not identical to it, which buried the real diff in churn; the
+files were reverted and the edits redone by hand. And `pkill -f <pattern>`
+matching the running command's own line kills the shell (exit 144, no output),
+which this file already records and which was walked into twice.
+
+**One measurement is an artifact rather than a finding**, and it is the one this
+file already names: the bar's content span reports `scrollWidth` 3px over
+`clientWidth` from the caret's `-rotate-90` axis-aligned box. It reads identically
+on the **unchanged** board's bar and at 1280 as well as 390, which is what says
+it is the artifact rather than a clip this pass introduced.
+
+**Not verified against real data**, which is the gap to close first: no database
+was reachable from here, so every console was driven over a page whose reads had
+all failed and whose bars therefore carry their sparsest content. Four things a
+render cannot check — whether a real account's bar content sits in the 18px less
+it now has at 390, which the slack table argues but only a real page settles;
+whether the flush case still reads as a part *standing over* the grid now that
+the gap under it is gone, which is what the lift was buying and what the frame
+and the scrim are being asked to buy instead; whether a reader walking between
+the three tools now sees one object, which is the change's whole claim and the
+one thing no single-page render can show; and whether the square bottom corners
+read as deliberate on a real page rather than as a part that has been cut off.

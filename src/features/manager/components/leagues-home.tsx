@@ -882,7 +882,7 @@ export function LeaguesHome({
               // console stands down with the rest of the page's chrome, and
               // there is nothing left to clear. It is `gametime-home.tsx`'s own
               // figure for its own bar.
-              className="lab-card-contain relative m-0 mb-[5.5rem] mt-2 grid list-none grid-cols-1 gap-[1.125rem] p-0 [overflow-anchor:none]"
+              className="lab-card-contain relative m-0 mb-[6.375rem] mt-2 grid list-none grid-cols-1 gap-[1.125rem] p-0 [overflow-anchor:none]"
             >
               {visible.map((league) => (
                 <LeagueCard

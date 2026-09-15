@@ -29,6 +29,7 @@ import {
   CONSOLE_TILE_DRAWER,
   CONSOLE_TRACK,
   CONSOLE_WINDOW,
+  ConsoleShell,
   CONSOLE_WINDOW_LEDGE,
   CONSOLE_WINDOW_SHELL,
   DetailLedge,
@@ -726,183 +727,179 @@ export function SharesConsole({
   const held = subjects.subjects.length;
 
   return (
-    /* Fixed to the bottom edge and centred on the shell's own `max-w-6xl`, so
-       the case's shoulders line up with the rack's above. `pointer-events` is
-       off on the section and back on inside it: the gutter either side is
-       transparent, and a page that could not be clicked through it would be a
-       hundred cards behind a pane of glass. */
-    <section
-      aria-label="Shares"
-      /**
-       * **The open height is a custom property the cascade sets, and the inline
-       * style only ever reads it.**
-       *
-       * It has to be: the animated, positioned box is this section, so the
-       * phone arm must reach *it* — and an inline style cannot carry a media
-       * query. Written as a height on the case inside instead, the inner box
-       * simply overflowed a section still sized at 62dvh, which at 390 is a
-       * panel whose top half is drawn outside the thing that is supposed to be
-       * sliding. Two whole declarations rather than a base and an override,
-       * and no value interpolated into a class name: Tailwind finds classes by
-       * scanning source text, so a computed one generates nothing at all.
-       *
-       * **62dvh rather than the fold is load-bearing.** The whole reason this
-       * panel is non-modal is that a press narrows the grid behind it, and a
-       * case that took the viewport would be a modal with no backdrop. On a
-       * phone there is no "beside" — one card fills the row — so it takes the
-       * fold, because a 62dvh case over a one-card grid shows a header and half
-       * a card, which is neither the page nor the panel.
-       *
-       * `--rack-clear` is the app rack's own clearance: the console must never
-       * reach under it.
-       */
-      className={`lab-anim pointer-events-none fixed inset-x-0 bottom-0 z-40 flex justify-center px-4 transition-[height] duration-[340ms] ease-[cubic-bezier(0.2,0.8,0.2,1)] [--shares-open-h:calc(100dvh-var(--rack-clear))] sm:[--shares-open-h:min(62dvh,calc(100dvh-var(--rack-clear)))] ${chromeClass}`}
-      style={{
-        height: open ? "var(--shares-open-h)" : "var(--shares-bar-h)",
-      }}
+    /* Flush on the fold and centred on the shell's own `max-w-6xl`, so the
+       case's shoulders line up with the rack's above. The frame, the finish
+       and the scrim are `ConsoleShell`'s — this console, the start/sit one and
+       the gametime stat board are one part, and it is stated once there.
+
+       **The open height is a custom property the cascade sets, and the inline
+       style only ever reads it.**
+
+       It has to be: the animated, positioned box is the shell's section, so
+       the phone arm must reach *it* — and an inline style cannot carry a media
+       query. Written as a height on the case inside instead, the inner box
+       simply overflowed a section still sized at 62dvh, which at 390 is a
+       panel whose top half is drawn outside the thing that is supposed to be
+       sliding. Two whole declarations rather than a base and an override, and
+       no value interpolated into a class name: Tailwind finds classes by
+       scanning source text, so a computed one generates nothing at all.
+
+       **62dvh rather than the fold is load-bearing.** The whole reason this
+       panel is non-modal is that a press narrows the grid behind it, and a
+       case that took the viewport would be a modal with no backdrop. On a
+       phone there is no "beside" — one card fills the row — so it takes the
+       fold, because a 62dvh case over a one-card grid shows a header and half
+       a card, which is neither the page nor the panel.
+
+       `--rack-clear` is the app rack's own clearance: the console must never
+       reach under it. And the shut height is the bar **plus the case's 14px of
+       frame**, top and bottom — see `ConsoleShell`. */
+    <ConsoleShell
+      label="Shares"
+      open={open}
+      height={
+        open ? "var(--shares-open-h)" : "calc(var(--shares-bar-h) + 14px)"
+      }
+      className={`${CONSOLE_ICE} ${SHARES_BAR_H} [--shares-open-h:calc(100dvh-var(--rack-clear))] sm:[--shares-open-h:min(62dvh,calc(100dvh-var(--rack-clear)))] ${chromeClass}`}
     >
-      <div
-        className={`${CONSOLE_ICE} ${SHARES_BAR_H} pointer-events-auto relative flex h-full w-full max-w-6xl flex-col overflow-hidden rounded-t-[1.125rem] bg-[image:var(--panel-case-bg)] shadow-[var(--panel-case-shadow)]`}
-      >
-        <Bar
-          open={open}
-          tab={tab}
-          onTab={selectTab}
-          counted={counted}
-          total={leagueTotal}
-          summary={filterSummary}
-          held={held}
-          back={open && detail !== null}
-          onList={() => setPicked(null)}
-        />
+      <Bar
+        open={open}
+        tab={tab}
+        onTab={selectTab}
+        counted={counted}
+        total={leagueTotal}
+        summary={filterSummary}
+        held={held}
+        back={open && detail !== null}
+        onList={() => setPicked(null)}
+      />
 
-        {/* Mounted only while up — see the module note. */}
-        {open && (
-          <div className="relative flex min-h-0 flex-1 gap-2 p-2 sm:gap-2.5 sm:p-2.5">
-            {/* **Below `lg` the detail replaces the list**, which is the
-                design's own phone arrangement: one pane at a time, and the
-                bar's `‹ List` key is the way back. `display: none` on the
-                hidden arm, so exactly one is ever in the accessibility tree. */}
-            <div
-              className={`min-w-0 flex-1 flex-col gap-2 sm:gap-2.5 lg:flex-[1.6_1_30rem] ${
-                detail ? "hidden lg:flex" : "flex"
-              }`}
-            >
-              <Ledge
-                tab={tab}
-                query={query}
-                onQuery={setQuery}
-                shown={rows.length}
-                total={all.length}
-                filters={filters}
-                onFilters={setFilters}
-                population={population}
-                ageBounds={ageBounds}
-                classBounds={classBounds}
-                facetCount={facetCount}
-                trayOpen={trayOpen}
-                onToggleTray={toggleTray}
-                onClearFilters={clearFilters}
-              />
-              <List
-                rows={rows}
-                cols={cols}
-                sort={sort}
-                onSort={pressSort}
-                picked={picked}
-                onPick={pick}
-                chosen={chosen}
-                loading={read.loading}
-                error={read.error}
-                onRetry={read.retry}
-                empty={
-                  isPlayers
-                    ? "No players rostered in these leagues yet."
-                    : "No leaguemates in these leagues yet."
-                }
-                narrowedEmpty={
-                  isPlayers
-                    ? "No player matches that narrowing."
-                    : "No leaguemate matches that search."
-                }
-                narrowed={rows.length !== all.length}
-              />
-            </div>
+      {/* Mounted only while up — see the module note. */}
+      {open && (
+        <div className="relative flex min-h-0 flex-1 gap-2 p-2 sm:gap-2.5 sm:p-2.5">
+          {/* **Below `lg` the detail replaces the list**, which is the
+              design's own phone arrangement: one pane at a time, and the
+              bar's `‹ List` key is the way back. `display: none` on the
+              hidden arm, so exactly one is ever in the accessibility tree. */}
+          <div
+            className={`min-w-0 flex-1 flex-col gap-2 sm:gap-2.5 lg:flex-[1.6_1_30rem] ${
+              detail ? "hidden lg:flex" : "flex"
+            }`}
+          >
+            <Ledge
+              tab={tab}
+              query={query}
+              onQuery={setQuery}
+              shown={rows.length}
+              total={all.length}
+              filters={filters}
+              onFilters={setFilters}
+              population={population}
+              ageBounds={ageBounds}
+              classBounds={classBounds}
+              facetCount={facetCount}
+              trayOpen={trayOpen}
+              onToggleTray={toggleTray}
+              onClearFilters={clearFilters}
+            />
+            <List
+              rows={rows}
+              cols={cols}
+              sort={sort}
+              onSort={pressSort}
+              picked={picked}
+              onPick={pick}
+              chosen={chosen}
+              loading={read.loading}
+              error={read.error}
+              onRetry={read.retry}
+              empty={
+                isPlayers
+                  ? "No players rostered in these leagues yet."
+                  : "No leaguemates in these leagues yet."
+              }
+              narrowedEmpty={
+                isPlayers
+                  ? "No player matches that narrowing."
+                  : "No leaguemate matches that search."
+              }
+              narrowed={rows.length !== all.length}
+            />
+          </div>
 
-            {/* The right pane stands *beside* the list where there is room and
-                *in front of* it where there is not, and at rest above `lg` it
-                prompts rather than seeding itself with the top row: a pane that
-                opened already answering would claim the reader had asked about
-                somebody. */}
-            <div
-              className={`${CONSOLE_GLASS} min-h-0 flex-col rounded-xl lg:flex-[0_1_26rem] ${
-                detail ? "flex flex-1" : "hidden lg:flex"
-              }`}
-            >
-              <Scanlines />
-              {detail === null ? (
-                <p className="relative z-[1] m-0 flex min-h-0 flex-1 items-center justify-center p-6 text-center font-mono text-[length:var(--fs-11)] uppercase leading-[1.7] tracking-[0.14em] text-[color:var(--readout-label)]">
-                  <span className="max-w-72">
-                    {isPlayers
-                      ? "Press a player to see where you stand on him"
-                      : "Press a leaguemate to see what they roster"}
-                  </span>
-                </p>
-              ) : isPlayers ? (
-                <PlayerDetail
-                  row={detail}
-                  mode={mode}
-                  counts={modeCounts}
-                  leagues={modeLeagues?.[mode] ?? null}
-                  loading={rosters.loading}
-                  error={rosters.error}
-                  onRetry={rosters.retry}
-                  users={leaguemates.data?.users ?? null}
-                  narrowing={Boolean(pickedPlayerSubject)}
-                  onMode={setMode}
-                  onNarrow={() =>
-                    onToggle({ kind: "player", id: detail.id, mode })
-                  }
-                />
-              ) : (
-                <MateDetail
-                  row={detail}
-                  leagues={leagues}
-                  rosters={rosterMap}
-                  loading={rosters.loading}
-                  error={rosters.error}
-                  onRetry={rosters.retry}
-                  players={playerNames}
-                  selfId={selfId}
-                  scope={scope}
-                  onScope={setScope}
-                  showAll={showAll}
-                  onShowAll={() => setShowAll((v) => !v)}
-                  narrowing={chosen.has(detail.slot)}
-                  onNarrow={() =>
-                    onToggle({ kind: "leaguemate", id: detail.id })
-                  }
-                  isPicked={(playerId) =>
-                    chosen.has(
-                      subjectSlot({
-                        kind: "leaguemate-player",
-                        id: leaguematePlayerId(detail.id, playerId),
-                      }),
-                    )
-                  }
-                  onPick={(playerId) =>
-                    onToggle({
+          {/* The right pane stands *beside* the list where there is room and
+              *in front of* it where there is not, and at rest above `lg` it
+              prompts rather than seeding itself with the top row: a pane that
+              opened already answering would claim the reader had asked about
+              somebody. */}
+          <div
+            className={`${CONSOLE_GLASS} min-h-0 flex-col rounded-xl lg:flex-[0_1_26rem] ${
+              detail ? "flex flex-1" : "hidden lg:flex"
+            }`}
+          >
+            <Scanlines />
+            {detail === null ? (
+              <p className="relative z-[1] m-0 flex min-h-0 flex-1 items-center justify-center p-6 text-center font-mono text-[length:var(--fs-11)] uppercase leading-[1.7] tracking-[0.14em] text-[color:var(--readout-label)]">
+                <span className="max-w-72">
+                  {isPlayers
+                    ? "Press a player to see where you stand on him"
+                    : "Press a leaguemate to see what they roster"}
+                </span>
+              </p>
+            ) : isPlayers ? (
+              <PlayerDetail
+                row={detail}
+                mode={mode}
+                counts={modeCounts}
+                leagues={modeLeagues?.[mode] ?? null}
+                loading={rosters.loading}
+                error={rosters.error}
+                onRetry={rosters.retry}
+                users={leaguemates.data?.users ?? null}
+                narrowing={Boolean(pickedPlayerSubject)}
+                onMode={setMode}
+                onNarrow={() =>
+                  onToggle({ kind: "player", id: detail.id, mode })
+                }
+              />
+            ) : (
+              <MateDetail
+                row={detail}
+                leagues={leagues}
+                rosters={rosterMap}
+                loading={rosters.loading}
+                error={rosters.error}
+                onRetry={rosters.retry}
+                players={playerNames}
+                selfId={selfId}
+                scope={scope}
+                onScope={setScope}
+                showAll={showAll}
+                onShowAll={() => setShowAll((v) => !v)}
+                narrowing={chosen.has(detail.slot)}
+                onNarrow={() =>
+                  onToggle({ kind: "leaguemate", id: detail.id })
+                }
+                isPicked={(playerId) =>
+                  chosen.has(
+                    subjectSlot({
                       kind: "leaguemate-player",
                       id: leaguematePlayerId(detail.id, playerId),
-                    })
-                  }
-                />
-              )}
-            </div>
+                    }),
+                  )
+                }
+                onPick={(playerId) =>
+                  onToggle({
+                    kind: "leaguemate-player",
+                    id: leaguematePlayerId(detail.id, playerId),
+                  })
+                }
+              />
+            )}
           </div>
-        )}
-      </div>
-    </section>
+        </div>
+      )}
+    </ConsoleShell>
   );
 }
 
@@ -982,7 +979,7 @@ function Bar({
 }) {
   return (
     <div
-      className={`${CONSOLE_ICE_BAR} ${BILLET_ICE_INK} relative flex h-[var(--shares-bar-h)] w-full shrink-0 items-center gap-2 overflow-hidden bg-[image:var(--billet-bg)] px-2 shadow-[var(--standing-strip-shadow)] sm:gap-3 sm:px-3.5`}
+      className={`${CONSOLE_ICE_BAR} ${BILLET_ICE_INK} relative flex h-[var(--shares-bar-h)] w-full shrink-0 items-center gap-2 overflow-hidden rounded-[0.875rem] bg-[image:var(--billet-bg)] px-2.5 shadow-[var(--standing-strip-shadow)] sm:gap-3 sm:px-3.5`}
     >
       <BilletFinish />
       <button
