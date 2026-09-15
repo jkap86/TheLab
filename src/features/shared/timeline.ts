@@ -410,8 +410,12 @@ export function stopSummary(
  *
  * And it says **the numbers are today's**, which is the one thing a reader
  * would otherwise get exactly backwards. The table above is the card's own, so
- * every figure in it reads as a figure — and a projection, an ADP and a KTC
- * price are all *now*, because this app stores no history of any of the three.
+ * every figure in it reads as a figure — and a projection, a season-to-date
+ * total, an ADP and a KTC price are all *now*, because this app stores no
+ * history of any of the four. The season total is the one a reader is likeliest
+ * to read as historical, and it is not: it is what the players who stood on
+ * that roster have scored **this season**, not what the roster had scored by
+ * the stop, which no stored row could answer.
  * What the past pane answers is therefore a counterfactual, "what would this
  * roster be worth today", and saying so is what separates it from a claim about
  * October. See `timeline-entry` for why that is the question worth answering.

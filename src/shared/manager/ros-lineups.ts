@@ -22,6 +22,15 @@
  * unprojected, not zero) and `adp_value` — never the composite, so the payload
  * cannot leak a tiebreak epsilon into a total.
  *
+ * **Season-to-date points are read onto the answer and never into the
+ * question**, on `ktc_value`'s exact terms one field along. `season_points` is
+ * what a player has already scored, looked up per player and hung on the
+ * `LineupPlayer` the solve produced; it is not in `score` and must not become a
+ * third term in it. The seating is a decision about the weeks *ahead*, and what
+ * a player banked in September says nothing about them — a receiver whose
+ * season ended in October is the whole of what that would get wrong, seated
+ * over a healthy starter on the strength of games that are already over.
+ *
  * **KeepTradeCut is read onto the answer and never into the question.**
  * `ktc_value` is looked up per player and hung on the `LineupPlayer` the solve
  * already produced; it is not in `score` and must not become a third term in
@@ -38,7 +47,7 @@ import type { LeagueLineup, LineupPlayer } from "@/shared/contract";
 import { optimalLineup, recognisedSlots, round, startingSlots } from "../projections/optimal.ts";
 import type { RosterPlayer } from "../projections/optimal.ts";
 import { scoreStatLine } from "../projections/score.ts";
-import type { RosProjections } from "../projections/ros.ts";
+import type { RosProjections, SeasonStats } from "../projections/ros.ts";
 import { adpEntryValue, DEFAULT_STEEPNESS, leagueAdpPool } from "./adp-value.ts";
 import type { AdpEntry } from "./adp-value.ts";
 
@@ -115,12 +124,21 @@ function leagueShape(
  * the module note for why it never joins the ordering. It needs no equivalent
  * of {@link adpEntryValue}, because a KTC row is already a value rather than a
  * position on a board that has to be mapped onto another.
+ *
+ * `seasonStats` is the same board one tense back — what each player has scored
+ * so far, folded off Sleeper's stats feed — and it is scored by this league's
+ * own settings exactly as `projections` is, which is what makes the two
+ * comparable at all. It may be empty on its own terms (a season nothing has
+ * been played of, or a feed that failed) and then every `season_points` is
+ * null, which the all-zero rule turns into an em dash rather than a page of
+ * noughts.
  */
 export function solveLeagueLineup(
   league: RosLineupLeague,
   projections: RosProjections,
   adp: ReadonlyMap<string, AdpEntry>,
   ktc: ReadonlyMap<string, number> = new Map(),
+  seasonStats: SeasonStats = {},
 ): LeagueLineup {
   const { pool, slots, unknown } = leagueShape(
     league.total_rosters,
@@ -133,9 +151,18 @@ export function solveLeagueLineup(
 
   const priced = rostered.map((id) => {
     const line = projections[id];
+    const played = seasonStats[id];
     const points =
       line && line.weeks.length > 0
         ? scoreStatLine(line.stats, league.scoring_settings)
+        : null;
+    // **`weeks` and not the stat line is what says he has played**, which is
+    // the same rule one tense over: an empty list means the feed carries no
+    // line for him at all, where a line summing to nothing is a real zero — a
+    // stashed rookie and a starter held scoreless must not read alike.
+    const scored =
+      played && played.weeks.length > 0
+        ? scoreStatLine(played.stats, league.scoring_settings)
         : null;
     const drafted = adp.get(id);
     const capital =
@@ -144,10 +171,33 @@ export function solveLeagueLineup(
         : adpEntryValue(drafted, pool, DEFAULT_STEEPNESS);
     const player: LineupPlayer = {
       player_id: id,
-      name: line?.name ?? null,
-      positions: line?.positions ?? [],
-      team: line?.team ?? null,
+      // **Identity falls back to the stat board, and the fallback earns its
+      // place on a page the projections feed answers nothing for.** On a past
+      // season there is no rest to project, so `projections` is empty and
+      // nobody has a position — which seats nobody and drops every roster whole
+      // onto the bench. That was already the accepted shape of a past-season
+      // card (the capital split flattens the same way, and says so), and it is
+      // the page where season totals are the *only* lens that answers, so
+      // letting the board that does answer name the players is what makes the
+      // starters/bench split mean something there. In a live season it changes
+      // one thing: a player the projections feed has stopped listing but who
+      // has played is named rather than shown as a bare id.
+      //
+      // **It fires on absence and never on disagreement**, which is one rule
+      // read three ways — a null name, an empty position list and a null team
+      // are each that board saying nothing rather than saying no. The team is
+      // where the distinction does the most work: `RosPlayerProjection`
+      // documents its null as "no real row named one", so it is absent exactly
+      // for the unprojected, and the board that *did* see the player is then
+      // the only thing that knows where he was.
+      name: line?.name ?? played?.name ?? null,
+      positions:
+        line && line.positions.length > 0
+          ? line.positions
+          : (played?.positions ?? []),
+      team: line?.team ?? played?.team ?? null,
       points,
+      season_points: scored,
       adp_value: capital,
       ktc_value: ktc.get(id) ?? null,
     };

@@ -8,6 +8,7 @@ import {
   LAST_REGULAR_WEEK,
   parseRequestedWeek,
   restOfSeasonStart,
+  seasonToDateThrough,
   stateWeek,
 } from "./weeks.ts";
 
@@ -180,5 +181,69 @@ describe("restOfSeasonStart", () => {
 
   test("an unreadable state does not fail the page", async () => {
     assert.equal(await restOfSeasonStart("2026", read(null)), 1);
+  });
+});
+
+describe("seasonToDateThrough", () => {
+  const read = (value: ReturnType<typeof state> | null) => async () => value;
+
+  test("runs through the week being played, off the same field", async () => {
+    // The projections span starts where this one ends, so a page in week 10
+    // reads ten weeks of stats and nine of projections rather than eighteen of
+    // either. One field and one reading, so the two cannot name two weeks.
+    assert.equal(
+      await seasonToDateThrough("2026", read(state({ leg: 10, week: 10, display_week: 9 }))),
+      10,
+    );
+  });
+
+  test("a finished season answers its whole total, where its mirror answers nothing", async () => {
+    // The inversion, and the point of the function: `restOfSeasonStart` reads
+    // null for a past page — correctly, there is no rest — and the very same
+    // season has a complete total, which this is the only lens that answers.
+    const older = read(state({ season: "2026", leg: 2 }));
+    assert.equal(await restOfSeasonStart("2024", older), null);
+    assert.equal(await seasonToDateThrough("2024", older), LAST_REGULAR_WEEK);
+  });
+
+  test("a season ahead of Sleeper's has been played none of", async () => {
+    // Null rather than the widest window: nothing has been scored in it, and
+    // reading the span would be eighteen empty round trips to fold to nothing.
+    assert.equal(
+      await seasonToDateThrough("2027", read(state({ season: "2026", leg: 2 }))),
+      null,
+    );
+  });
+
+  test("a week of 0 takes the whole season rather than week 1", async () => {
+    // Sleeper reports 0 both before a regular season starts and in the months
+    // after one ends, and the two are not distinguishable from the field. Read
+    // as week 1 the second would answer a finished season's total with its
+    // opening Sunday, where the first costs only a set of empty reads.
+    assert.equal(
+      await seasonToDateThrough("2026", read(state({ leg: 0, week: 3 }))),
+      LAST_REGULAR_WEEK,
+    );
+  });
+
+  test("the postseason folds back to the last regular week", async () => {
+    assert.equal(
+      await seasonToDateThrough("2026", read(state({ leg: 21, week: 3 }))),
+      LAST_REGULAR_WEEK,
+    );
+  });
+
+  test("an unreadable state takes the widest honest window", async () => {
+    // Its mirror answers week 1 for the same instinct: each names the widest
+    // window its span can claim, and an unplayed week carries no stat line, so
+    // reaching past the present folds to exactly what has been played.
+    assert.equal(await seasonToDateThrough("2026", read(null)), LAST_REGULAR_WEEK);
+    assert.equal(
+      await seasonToDateThrough(
+        "2026",
+        () => Promise.reject(new Error("upstream")),
+      ),
+      LAST_REGULAR_WEEK,
+    );
   });
 });

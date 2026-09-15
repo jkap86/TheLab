@@ -7,11 +7,12 @@
  * the usual reason.
  *
  * **One solve per roster is the whole design.** `solveLeagueLineup` already
- * prices every player's points, draft capital *and* KeepTradeCut value onto the
- * lineup it returns, so nine of the ten metrics fall out of the solves the
- * rank needs anyway — there is no second valuation pass to drift from the
- * first. The ninth, `ktc_picks`, is the one thing not on a player, and it
- * arrives priced for the same reason. Every solve is returned,
+ * prices every player's rest-of-season points, his season-to-date points, his
+ * draft capital *and* his KeepTradeCut value onto the lineup it returns, so
+ * twelve of the thirteen metrics fall out of the solves the rank needs anyway —
+ * there is no second valuation pass to drift from the first. The thirteenth,
+ * `ktc_picks`, is the one thing not on a player, and it arrives priced for the
+ * same reason. Every solve is returned,
  * totals attached: the expanded card lets the reader open any team in the
  * league, so the payload carries all of them, not just the manager's.
  * (It used to discard the others; the team picker is what reversed that.)
@@ -43,8 +44,9 @@
  * spelled twice is a rank the card looks up and does not find.
  *
  * **A metric ranks null when every roster in the league totals zero on it.**
- * That one rule covers every degenerate case — no projections read (both ROS
- * metrics zero everywhere), no synced drafts (all three capital metrics), an
+ * That one rule covers every degenerate case — no projections read (all three
+ * ROS metrics zero everywhere), a season nobody has played a week of (all three
+ * season metrics), no synced drafts (all three capital metrics), an
  * unreadable KTC board (all four KTC metrics), and a league read on the redraft
  * market, which carries no rookie-pick rows so `ktc_picks` is zero for
  * everyone. "1st of 12" among all-zero totals is a claim, not an answer. Ties
@@ -66,7 +68,7 @@ import type {
 import { positionKeySuffix, slotKeySuffix } from "../ktc/columns.ts";
 import { round } from "../projections/optimal.ts";
 import { playsPosition } from "../projections/positions.ts";
-import type { RosProjections } from "../projections/ros.ts";
+import type { RosProjections, SeasonStats } from "../projections/ros.ts";
 import {
   adpEntryValue,
   DEFAULT_STEEPNESS,
@@ -95,7 +97,8 @@ export type RankLeague = {
 };
 
 /**
- * All ten metric totals off one solved lineup and the roster's pick portfolio.
+ * All thirteen metric totals off one solved lineup and the roster's pick
+ * portfolio.
  * Exported for the tests: the sums here are what the ranks compare, so their
  * edge rules — an unpriced player counts zero on every scale, the ROS bench
  * re-rounds the way the starters total already is — are pinned where they live.
@@ -158,6 +161,15 @@ export function lineupMetricTotals(
       ? lineup.projected_points
       : round(sumOf(roster.starters, (player) => player.points));
   const bench = round(sumOf(roster.bench, (player) => player.points));
+  // **Both halves summed here, where the projection's starters half is read off
+  // the lineup.** That asymmetry is the field rather than a second convention:
+  // `projected_points` exists because the card prints it beside the rank, so a
+  // second summation could only ever disagree with the number on screen. There
+  // is no such field for what a roster has scored — nothing prints it but these
+  // totals — so the two halves take the same `round` the bench above already
+  // does, which is the convention the solver itself used.
+  const played = round(sumOf(roster.starters, (player) => player.season_points));
+  const benched = round(sumOf(roster.bench, (player) => player.season_points));
   return {
     // **Summed from the two halves rather than from the roster**, so the three
     // reconcile exactly — `ros_total = ros_starters + ros_bench` — the way the
@@ -169,6 +181,14 @@ export function lineupMetricTotals(
     ros_total: round(starters + bench),
     ros_starters: starters,
     ros_bench: bench,
+    // The same three-way reconciliation one tense back:
+    // `season_total = season_starters + season_bench`, summed from the halves
+    // rather than from the roster so a reader adding the tiles up cannot find
+    // the sum wrong. The outer `round` is float dust — both operands already
+    // carry two decimals — and not a third rounding.
+    season_total: round(played + benched),
+    season_starters: played,
+    season_bench: benched,
     ...capitalTotalsOf(roster, (player) => player.adp_value),
     ...ktcTotalsOf(
       roster,
@@ -524,6 +544,23 @@ export function rankLeagueLineups(
    * the pane draws a dash for.
    */
   teamTotals: ReadonlySet<string> = NO_TEAM_TOTALS,
+  /**
+   * What every player has **scored so far this season**, folded off Sleeper's
+   * stats feed — `projections`' backward-looking twin, and the board the three
+   * `season_*` metrics are summed from.
+   *
+   * **Appended rather than placed beside `projections`, which is where it
+   * belongs by meaning.** This function has grown by appending since it was
+   * written — the variants, the two narrowing axes, the forced ADP boards and
+   * the carried totals each arrived at the end — and every caller passes the
+   * list positionally, so a board inserted among them would rewrite thirty call
+   * sites to move a default nobody reads. It is optional with an empty default
+   * on `ktc`'s exact terms, and empty is a real state rather than a fallback: a
+   * season nothing has been played of, a feed that failed, or a caller that has
+   * no use for the metric. Every `season_points` is then null, and the
+   * all-zero rule turns the three into em dashes rather than into noughts.
+   */
+  seasonStats: SeasonStats = {},
 ): {
   lineup: LeagueLineup | null;
   ranks: ColumnRanks;
@@ -537,7 +574,7 @@ export function rankLeagueLineups(
       scoring_settings: league.scoring_settings,
       players: roster.players,
     };
-    const lineup = solveLeagueLineup(one, projections, adp, ktc);
+    const lineup = solveLeagueLineup(one, projections, adp, ktc, seasonStats);
     const totals = lineupMetricTotals(
       lineup,
       pickValues.get(roster.roster_id) ?? 0,
@@ -780,7 +817,7 @@ function narrowingsOf(
 }
 
 /**
- * The ten ranks as one literal, given something that ranks a metric.
+ * The thirteen ranks as one literal, given something that ranks a metric.
  *
  * A function rather than a list of the ids because **the literal is the
  * compiler seam**: `LineupRanks` is exhaustive, so a metric added to the
@@ -796,6 +833,9 @@ function baseRanks(
     ros_total: rankOn("ros_total"),
     ros_starters: rankOn("ros_starters"),
     ros_bench: rankOn("ros_bench"),
+    season_total: rankOn("season_total"),
+    season_starters: rankOn("season_starters"),
+    season_bench: rankOn("season_bench"),
     capital_total: rankOn("capital_total"),
     capital_bench: rankOn("capital_bench"),
     capital_starters: rankOn("capital_starters"),

@@ -35,8 +35,13 @@ import type {
   KtcVariantPricing,
   ManagerLeagueRow,
 } from "@/shared/manager";
-import { getRosProjections, restOfSeasonStart } from "@/shared/projections";
-import type { RosProjections } from "@/shared/projections";
+import {
+  getRosProjections,
+  getSeasonStats,
+  restOfSeasonStart,
+  seasonToDateThrough,
+} from "@/shared/projections";
+import type { RosProjections, SeasonStats } from "@/shared/projections";
 import { getActiveSeason, parseRequestedSeason } from "@/shared/season";
 import { getNflState } from "@/shared/sleeper";
 import { resolveManagerUser } from "@/shared/user";
@@ -78,6 +83,18 @@ export const dynamic = "force-dynamic";
  * A failed projections span degrades the same way rather than failing the
  * route: `from_week: null` plus per-player null points is the fallback working,
  * and the reader can see which lens priced the page.
+ *
+ * **The second half of the season is read too, and it is the same span run
+ * backwards.** `seasonToDateThrough` answers which weeks have been *played*,
+ * and the stat lines of those weeks are folded and scored by each league's own
+ * settings exactly as the projections are — which is what makes the three
+ * `season_*` metrics comparable with the three `ros_*` ones rather than merely
+ * adjacent to them. The two spans meet at the week being played, so a page in
+ * week 10 costs ten stat requests and nine projection ones rather than eighteen
+ * of either, and both boards are cached process-wide and shared by every
+ * league on the page. `season_through` is the reader's own provenance for it,
+ * on `from_week`'s exact terms, and a span nobody could read dashes the three
+ * metrics rather than zeroing them.
  *
  * **KeepTradeCut is the third valuation and the only one the reader steers**,
  * and they now steer it per column rather than per page. Every league is priced
@@ -192,6 +209,7 @@ async function readLineups(
       const empty: ManagerLineupsPayload = {
         season,
         from_week: null,
+        season_through: null,
         ktc: [],
         leagues: {},
       };
@@ -224,8 +242,9 @@ async function readLineups(
     // span still leaves `from_week: null` and a failed market is still simply
     // absent — and `restOfSeasonStart` still throws the route into its 500,
     // which `Promise.all` propagates exactly as the sequence did.
-    const [ros, ktc] = await Promise.all([
+    const [ros, played, ktc] = await Promise.all([
       readRosProjections(season),
+      readSeasonStats(season),
       readKtcMarkets(leagues, forced),
     ]);
     const { projections, coveredFrom } = ros;
@@ -280,6 +299,11 @@ async function readLineups(
         // never offers such a set, having built its keys from these very
         // leagues.
         seats,
+        // Page-wide for the narrowings' reason: what a player has scored is a
+        // fact about him rather than about any league, and it is each league's
+        // own `scoring_settings` that turns that stat line into points —
+        // which happens inside the solve, where the league is.
+        played.board,
       );
       // A null answer means the store moved between the query and here — the
       // league drops out of the payload, as it always has for roster-less ones.
@@ -289,6 +313,7 @@ async function readLineups(
     const payload: ManagerLineupsPayload = {
       season,
       from_week: coveredFrom,
+      season_through: played.through,
       ktc: ktc.stamps,
       leagues: solved,
     };
@@ -340,6 +365,39 @@ async function readRosProjections(season: string): Promise<{
     // draft capital and `from_week: null` says which lens answered.
     console.warn(`[lineups] projections unavailable for ${season}:`, error);
     return { projections: {}, coveredFrom: null };
+  }
+}
+
+/**
+ * The season-to-date span and the stat lines that cover it.
+ *
+ * {@link readRosProjections}' mirror, and deliberately its twin down to the
+ * degradation: a span nobody could fetch answers `season_through: null` and an
+ * empty board, which prices every player's season points at null and leaves
+ * the three `season_*` metrics ranked null league-wide by the all-zero rule.
+ * The page keeps every other lens, exactly as a failed projections span keeps
+ * draft capital.
+ *
+ * The state read it shares with its mirror costs nothing: `getNflState` is
+ * memoized, so the two arms of the `Promise.all` above ask one question of one
+ * answer. **A state that throws is caught here where its mirror rethrows**,
+ * which is not an inconsistency — `restOfSeasonStart` failing is the route's
+ * 500 because a page cannot be drawn without knowing which weeks it is about,
+ * where this span decides one column family and has an honest empty to fall to.
+ */
+async function readSeasonStats(season: string): Promise<{
+  board: SeasonStats;
+  through: number | null;
+}> {
+  const through = await seasonToDateThrough(season, getNflState).catch(
+    () => null,
+  );
+  if (through === null) return { board: {}, through: null };
+  try {
+    return { board: await getSeasonStats(season, through), through };
+  } catch (error) {
+    console.warn(`[lineups] season stats unavailable for ${season}:`, error);
+    return { board: {}, through: null };
   }
 }
 

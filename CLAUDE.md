@@ -1838,6 +1838,157 @@ measurement, on `KTC_SYNC=off`'s spelling. It serialises exactly once either
 way: the quiet path hands the object to `Response.json`, the loud path
 stringifies, measures the string and builds the response from it.
 
+### Season total points, the projection's other tense
+
+A fourth value on the manager card's columns — what a roster has actually
+**scored** so far this season — crossed with the same three scopes the
+projection beside it takes, so `season_total`, `season_starters` and
+`season_bench` join the ten metric ids. Asked for as "another category, much
+like rest of season projection", and it is that almost to the line: one number
+per player, scored by the league's own settings, summed into the two halves and
+ranked across the league's stored rosters. **It needed no migration** — nothing
+here stores a stat line — and nothing about the seating moved.
+
+**Two spans of one feed, and they meet at the week being played.**
+`projections/nfl/<season>/<week>` and `stats/nfl/<season>/<week>` answer the
+identical envelope (`category: "stat"` on the second), which `week-stats-read`
+has read one week at a time since gametime landed. So `season-read.ts` is
+`ros-read.ts`'s fetch over `ros.ts`'s fold: weeks 1 through the week being
+played, folded by `createRosFold` and scored by `scoreStatLine`. **One fold and
+one scoring table for both feeds is what makes the two figures comparable**
+rather than merely adjacent — a TE-premium league's season total and its
+projection are on one ruler by construction. `restOfSeasonStart` says where the
+projections span starts and `seasonToDateThrough` says where the stat span ends,
+so a page in week 10 costs ten stat requests and nine projection ones: **nineteen
+between them in any week of the season** rather than nineteen in one and eighteen
+in the other.
+
+**`seasonToDateThrough` is its mirror and inverts on exactly one arm, which is
+the point.** A finished season has no rest to project — that function correctly
+reads null — and the very same season has a complete, meaningful total, so an
+older page answers the whole regular season and this is the one lens that
+answers there at all. A season ahead of the one being played answers **null**
+rather than the widest window: nothing has been scored in it, and the span would
+be eighteen empty round trips folding to the same nothing. And where its mirror
+falls back to week 1 on an unreadable state, this falls back to week 18 — the
+same instinct, not the opposite one: each names the widest window its span can
+honestly claim, and **an unplayed week carries no stat line**, so reaching past
+the present folds to exactly what has been played and costs only the trips.
+
+**A `leg` of 0 takes that widest window too**, and it is the one arm about the
+calendar rather than about the request. Sleeper reports 0 both before a regular
+season starts and in the months after one ends, and the two are not
+distinguishable from the field; read as week 1 the second would answer a
+finished season's total with its opening Sunday, where the first is only a set
+of empty reads. It is the one place this deliberately does not `clampWeek`.
+
+**Null is not zero, and here the distinction has a second edge.** The stats feed
+carries only players with a line, so a stashed rookie has no row at all where a
+starter held scoreless has one summing to nothing — `season_points` is null for
+the first and a real `0` for the second, and `weeks.length` is what tells them
+apart, never the stat line. Reading the row's *existence* instead would give
+every unplayed player a confident zero; `ros-lineups.test.ts` pins that with a
+player the board lists and has no real week for, which is the state
+`createRosFold` actually produces.
+
+**It is read onto the answer and never into the question**, on `ktc_value`'s
+exact terms. The seating is a decision about the weeks *ahead*: a receiver whose
+season ended in October is the whole of what reading it into `score` would get
+wrong, seated over a healthy starter on the strength of games already over. The
+solve is untouched and the three season totals are summed off the lineup it
+already produced — `season_total = season_starters + season_bench`, from the two
+halves rather than from the roster, so a reader adding the tiles up cannot find
+the sum wrong. **Both halves are summed here where the projection's starters
+half is read off `projected_points`**, and that asymmetry is the field rather
+than a second convention: that number is printed beside its own rank, so a
+second summation could only ever disagree with what is on screen, and there is
+no such field for what a roster has scored.
+
+**Identity now falls back to the stat board, and that is a change to the three
+capital metrics too.** On a past season `restOfSeasonStart` reads nothing, so
+`projections` is empty and *nobody has a position* — which seats nobody and
+drops every roster whole onto the bench. That was already the accepted shape of
+a past-season card (`capital_starters` flattens the same way and says so), and
+it is the page where season totals are the only lens that answers, so letting
+the board that *does* answer name the players is what makes the split mean
+something there. **It fires on absence and never on disagreement** — a null
+name, an empty position list and a null team are each the projections board
+saying nothing rather than saying no — and the team is where that does the most
+work: `RosPlayerProjection` documents its null as "no real row named one", so it
+is absent exactly for the unprojected, and the board that saw the player play is
+then the only thing that knows where he was.
+
+**The client gains one value and no new grammar.** `ColumnValue` is
+`projection | season | capital | ktc`, `Lens` is `points | season | capital |
+ktc`, and the picker's grid fills three of the four scopes — the fourth being
+the pick column, which stays the grid's one gap for the reason it already was: a
+draft pick is not a player, so it has scored nothing on the same terms it has no
+projection. It reads neither pricing axis (`PRICED_BY` is `"none"`), so a season
+column can never occupy two bays on a board or name a second key.
+
+**The label is `Season` rather than `Season pts`, and the missing word is a
+measurement.** The tile's unit line is `--fs-10` untracked in a 65px label box
+at 390 — nine characters of IBM Plex Mono, the figure `Draft cap`, `KTC start`
+and `KTC picks` are all set against — and a tenth clips silently inside the
+window's own `overflow-hidden`. What the word would have added is on the line
+under it, which names the scope in the same grammar the three projection tiles
+use.
+
+**The timeline carries a second board**, so a season column answers at a past
+stop rather than blanking on the scrub. It is the same trim over the same ids
+and the same scored keys, and the counterfactual the caveat already states
+covers it — what a past stop answers is not what those players had scored *by
+then*, which nothing here records, but what the roster that stood at that moment
+has scored **this season**.
+
+#### Verified
+
+Under Node's own runner, `check:full` from a cleared `.next` is clean — the
+production build, then lint, typecheck and the suite — and **2,933 tests pass**
+(27 more). What is new: `seasonToDateThrough`'s six arms including the `leg` of
+0 and the inversion against its mirror; the two boards read apart, the
+null/zero/absent trio, the identity fallback and the proof that the seating does
+not move; the three totals' reconciliation whole and narrowed, a season total
+standing where no projection was read at all, and the three ranks answering on
+their own board and dashing without one; the pricing seam; and the timeline's
+past stop. `season-wiring.test.ts` pins textually that all three readers — both
+lineup routes and the timeline's pricing — read the span, fetch the board, hand
+it to the solve and report `season_through`, on `crawl-writes.test.ts`' terms
+and for its reason: a caller that stopped defaults to an empty board, and the
+three metrics turn into em dashes on a perfectly healthy 200 beside three ROS
+columns that still answer. **Four deliberate mutations were checked against it**
+and two survived the first spelling — a route reporting `season_through: null`
+instead of the span it read, and the unplayed/scoreless distinction — so both
+pins were tightened until they failed.
+
+**Driven over CDP** against `next dev` with no `DATABASE_URL`, through a
+temporary `/preview` route mounting the real `LineupColumnsDialog` and
+`LineupLensKeys`, then deleted — because the three width decisions here are the
+kind that render perfectly while being wrong. At 390 and 1280 in both schemes
+the picker's Value track carries four keys (`PROJ · SEASON · CAPITAL · KTC`)
+with **nothing clipped in any of its six tracks**, and the lens track carries
+four at 275.7px, unclipped — it draws from `lg` up, where a pane is ~552px, and
+below that the pane's `<select>` simply gains an option. Every tile label was
+measured as *text* rather than inside a box that happens to be wide enough, with
+a `Range` over the node's own contents in the real font: **`SEASON` is 41.02px
+against the 65px box**, where `Draft cap` and `KTC start` already sit at 61.52
+and `Season pts` would have been ~68. One `<h1>`, no page overflow, and no
+console output beyond the dev server's own React-DevTools and HMR lines.
+
+**Not verified against real data**, which is the gap to close first: no database
+and no route to Sleeper from where this was built, so every figure above is a
+fixture or a measurement of type. Four things neither can say — whether
+Sleeper's stats feed answers the span at the shape `SleeperProjection` describes
+for a *played* week, which is the one claim the whole read rests on and which
+the first live page settles; what nineteen requests actually cost on a cold
+lineups read against a real limiter, and whether fifteen minutes is the right
+TTL for a board whose newest week moves during games; whether the identity
+fallback changes any seating in a *live* season, which needs a player the
+projections feed has stopped listing and the stats feed still carries; and
+whether a reader reads `Season` over `Starters` as points rather than as
+something else, which is the one judgement the shortened label makes on their
+behalf.
+
 ### The KeepTradeCut columns
 
 `ktc_starters`, `ktc_bench`, `ktc_picks` and `ktc_total` price a roster on

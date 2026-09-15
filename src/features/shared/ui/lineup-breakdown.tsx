@@ -98,7 +98,12 @@ export type { Lens };
  */
 function figure(value: number | null, lens: Lens): string {
   if (value == null) return "—";
-  return lens === "points" ? value.toFixed(1) : value.toLocaleString("en-US");
+  // Both point lenses take the decimal: they are one unit in two tenses, and a
+  // season total rounded to a whole number beside a projection carrying a
+  // tenth would read as two different kinds of figure.
+  return lens === "points" || lens === "season"
+    ? value.toFixed(1)
+    : value.toLocaleString("en-US");
 }
 
 /**
@@ -121,13 +126,11 @@ export function lineupTotal(lineup: LeagueLineup, lens: Lens): string | null {
       : null;
   }
   const total = lineup.starters.reduce(
-    (sum, seat) =>
-      sum +
-      ((lens === "capital" ? seat.player?.adp_value : seat.player?.ktc_value) ??
-        0),
+    (sum, seat) => sum + (lensValue(seat.player, lens) ?? 0),
     0,
   );
-  return total > 0 ? total.toLocaleString("en-US") : null;
+  if (total <= 0) return null;
+  return lens === "season" ? total.toFixed(1) : total.toLocaleString("en-US");
 }
 
 /**
@@ -140,12 +143,22 @@ export function lineupTotal(lineup: LeagueLineup, lens: Lens): string | null {
  */
 export const LINEUP_LENS_LABELS: Record<Lens, { key: string; unit: string }> = {
   points: { key: "Points", unit: "pts" },
+  season: { key: "Season", unit: "pts" },
   capital: { key: "Capital", unit: "cap" },
   ktc: { key: "KTC", unit: "ktc" },
 };
 
-/** In control order — the two derived from this page's own data, then the market. */
-export const LENSES: readonly Lens[] = ["points", "capital", "ktc"];
+/**
+ * In control order — the two tenses of this page's own points, then its draft
+ * capital, then the market.
+ *
+ * **Four keys where the ledge was measured for three**, which is a width to
+ * watch rather than one that has moved: the roster pane's ledge draws these as
+ * keys from `lg` up, where the track has room, and as a single `<select>` below
+ * it — the arrangement that exists because three keys do not fit a ~165px pane.
+ * A fourth costs the select an option and the track ~44px of its own.
+ */
+export const LENSES: readonly Lens[] = ["points", "season", "capital", "ktc"];
 
 /**
  * A lens's total unit.

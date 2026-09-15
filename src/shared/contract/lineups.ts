@@ -32,6 +32,33 @@ export type LineupPlayer = {
    */
   points: number | null;
   /**
+   * What he has actually **scored so far this season**, under that same
+   * scoring — the weeks already played, summed and scored once.
+   *
+   * {@link points}' backward-looking twin, and deliberately the same shape: one
+   * number per player, scored by the league's own settings, summed into
+   * starters and bench by the three `season_*` metrics exactly as the three
+   * `ros_*` metrics sum this field's neighbour. The two are different readings
+   * of one roster rather than two units — what a lineup is heading for, and
+   * what it has banked — which is why they share a decimal scale and a tile
+   * grammar.
+   *
+   * **Null is "no line", not zero**, on {@link points}' own terms and with one
+   * more case behind it: Sleeper's stats feed carries only players with a stat
+   * line, so a player who has not taken the field has no row at all — which is
+   * a different fact from a player who played and scored nothing, and that
+   * second one is a real `0`. A rookie stashed all year and a starter held to
+   * zero must not read alike.
+   *
+   * **It plays no part in the seating**, on `ktc_value`'s exact terms. The
+   * lineup is solved on projections first and draft capital second (see
+   * `manager/ros-lineups`); this is hung on an already-seated player and read
+   * back for the totals. Points a player has already scored say nothing about
+   * the weeks a rest-of-season lineup is being set for, and letting them seat
+   * one would bench a healthy starter under a player whose season is over.
+   */
+  season_points: number | null;
+  /**
    * The fallback key: draft capital from `adpValue` over the drafts already
    * synced for this manager's leagues, on the board matching the league's
    * superflex setting. Null when those drafts never priced the player.
@@ -85,6 +112,9 @@ export type LineupMetricId =
   | "ros_total"
   | "ros_starters"
   | "ros_bench"
+  | "season_total"
+  | "season_starters"
+  | "season_bench"
   | "capital_total"
   | "capital_bench"
   | "capital_starters"
@@ -103,7 +133,8 @@ export type MetricRank = { rank: number; of: number };
 
 /**
  * Null where the metric is degenerate league-wide — every roster totals zero,
- * which is what no projections (all three ROS metrics), no synced drafts (all
+ * which is what no projections (all three ROS metrics), a season nobody has
+ * played a week of yet (all three season metrics), no synced drafts (all
  * three capital metrics) and an unreadable or empty KTC board (all four KTC metrics)
  * look like. "1st of 12" among all-zero totals would be a claim; the card
  * renders an em dash instead.
@@ -426,6 +457,18 @@ export type ManagerLineupsPayload = {
    */
   from_week: number | null;
   /**
+   * Last week the **season-to-date** window covers, or null where none was read
+   * — a season nothing has been played of, or a feed that failed.
+   *
+   * {@link from_week}'s mirror, and the pair is what says which lens answered
+   * on each side: the projections span runs from `from_week` to the end of the
+   * regular season and the stat span runs from week 1 to here. Null degrades
+   * the three `season_*` metrics to zero league-wide, which the all-zero rule
+   * reads as an em dash — the same shape a failed projections span already has,
+   * and never a page of confident noughts.
+   */
+  season_through: number | null;
+  /**
    * Every KeepTradeCut market that answered this request, and when each was
    * scraped. Empty where nothing could be read at all — an unreadable board,
    * which the route degrades to rather than failing over, exactly as it does
@@ -477,6 +520,8 @@ export type LeagueLineupPayload = {
   season: string;
   /** As {@link ManagerLineupsPayload.from_week} — null orders on capital alone. */
   from_week: number | null;
+  /** As {@link ManagerLineupsPayload.season_through} — null dashes the season metrics. */
+  season_through: number | null;
   /** As {@link ManagerLineupsPayload.ktc}; at most one market, this league's. */
   ktc: readonly KtcBoardStamp[];
   /** Null where the league has no stored rosters to solve — see above. */

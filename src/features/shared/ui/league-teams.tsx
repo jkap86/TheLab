@@ -151,15 +151,23 @@ import { TeamsColumnDialog } from "./teams-column-dialog";
  * the column agreeing with the rows it sorts.
  */
 function formatTotal(metric: LineupMetricId, value: number): string {
-  if (metric === "ros_starters" || metric === "ros_bench") {
+  if (
+    metric === "ros_starters" ||
+    metric === "ros_bench" ||
+    metric === "ros_total" ||
+    metric === "season_total" ||
+    metric === "season_starters" ||
+    metric === "season_bench"
+  ) {
     return value.toFixed(1);
   }
   return value.toLocaleString("en-US");
 }
 
-/** Which of the three bench totals the current lens is asking for. */
+/** Which of the four bench totals the current lens is asking for. */
 const BENCH_METRIC: Record<Lens, LineupMetricId> = {
   points: "ros_bench",
+  season: "season_bench",
   capital: "capital_bench",
   ktc: "ktc_bench",
 };
@@ -168,10 +176,10 @@ const BENCH_METRIC: Record<Lens, LineupMetricId> = {
  * The lens a column's value axis *is*.
  *
  * **Two names for one axis, and the map exists only to say which of the two a
- * given surface speaks.** `Lens` is `points | capital | ktc` and `ColumnValue`
- * is `projection | capital | ktc`: the same three readings of a roster, differing
- * in one word because the breakdown named them for the figures it prints and
- * the picker names them for the metrics it composes. Collapsing the two types
+ * given surface speaks.** `Lens` is `points | season | capital | ktc` and
+ * `ColumnValue` is `projection | season | capital | ktc`: the same four readings
+ * of a roster, differing in one word because the breakdown named them for the
+ * figures it prints and the picker names them for the metrics it composes. Collapsing the two types
  * would be the tidier change and the wrong one — a lens is a *display* choice
  * on a pane where a value is one axis of a stored column — so what is here is
  * the join, in one place, rather than a `value === "projection" ? …` at each
@@ -179,6 +187,7 @@ const BENCH_METRIC: Record<Lens, LineupMetricId> = {
  */
 const LENS_OF_VALUE: Record<ColumnValue, Lens> = {
   projection: "points",
+  season: "season",
   capital: "capital",
   ktc: "ktc",
 };
@@ -186,6 +195,7 @@ const LENS_OF_VALUE: Record<ColumnValue, Lens> = {
 /** The same join read the other way, for a press on the lens keys. */
 const VALUE_OF_LENS: Record<Lens, ColumnValue> = {
   points: "projection",
+  season: "season",
   capital: "capital",
   ktc: "ktc",
 };

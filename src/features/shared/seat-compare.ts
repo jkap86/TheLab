@@ -22,17 +22,20 @@ import { median } from "./rank-ramp.ts";
  */
 
 /**
- * The three figures a solved roster can be read on. A type here rather than in
+ * The four figures a solved roster can be read on. A type here rather than in
  * the component, so the comparison can be tested without React — the runtime
  * list (`LENSES`) and the labels stay with the keys that draw them.
  */
-export type Lens = "points" | "capital" | "ktc";
+export type Lens = "points" | "season" | "capital" | "ktc";
 
 /**
- * What one lens reads off a player. **Null is not zero, in all three** — an
- * unprojected stash, a player no synced draft priced, and one off KeepTradeCut's
- * board are each an absent answer rather than a worthless one, which is what
- * every rule below turns on.
+ * What one lens reads off a player. **Null is not zero, in all four** — an
+ * unprojected stash, a player who has not taken the field, one no synced draft
+ * priced, and one off KeepTradeCut's board are each an absent answer rather
+ * than a worthless one, which is what every rule below turns on. The season
+ * lens has the sharpest version of it: a player held scoreless has a real `0`
+ * where a player with no stat line at all has none, and the two must not colour
+ * or compare alike.
  */
 export function lensValue(
   player: LineupPlayer | null | undefined,
@@ -40,6 +43,7 @@ export function lensValue(
 ): number | null {
   if (!player) return null;
   if (lens === "points") return player.points;
+  if (lens === "season") return player.season_points;
   if (lens === "capital") return player.adp_value;
   return player.ktc_value;
 }

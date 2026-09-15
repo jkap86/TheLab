@@ -8,8 +8,13 @@ import { getKtcBoards, isSuperflexLineup, ktcBoardValue } from "@/shared/ktc";
 import { resolveKtcFormat } from "@/shared/ktc/board-choice";
 import { leaguePickBoard, lookupManagerDraftAdp, pickValue } from "@/shared/manager";
 import type { DraftPickAsset, ManagerLeagueRow } from "@/shared/manager";
-import { getRosProjections, restOfSeasonStart } from "@/shared/projections";
-import type { RosProjections } from "@/shared/projections";
+import {
+  getRosProjections,
+  getSeasonStats,
+  restOfSeasonStart,
+  seasonToDateThrough,
+} from "@/shared/projections";
+import type { RosProjections, SeasonStats } from "@/shared/projections";
 import { getNflState } from "@/shared/sleeper";
 
 import type { TimelineSeason } from "./read";
@@ -85,8 +90,9 @@ export async function readTimelinePricing({
       ? isSuperflexLineup(ruler.roster_positions)
       : qbBoard === "sf";
 
-  const [projections, adp, ktc] = await Promise.all([
+  const [projections, played, adp, ktc] = await Promise.all([
     readProjections(season),
+    readSeasonStats(season),
     readAdp(managerUserId, season, superflex),
     readKtc(ruler, board, superflex),
   ]);
@@ -130,6 +136,15 @@ export async function readTimelinePricing({
       playerIds,
       ruler.scoring_settings,
     ),
+    // The same trim over the same ids and the same scored keys — one function,
+    // because the two boards are one shape and a second copy of the stat-key
+    // filter is a second chance for a season total to be summed from a category
+    // the league does not score.
+    season_stats: trimProjections(
+      played.board,
+      playerIds,
+      ruler.scoring_settings,
+    ),
     adp: Object.fromEntries(
       [...playerIds].flatMap((id) => {
         const entry = adp.get(id);
@@ -144,6 +159,7 @@ export async function readTimelinePricing({
     ),
     picks,
     from_week: projections.fromWeek,
+    season_through: played.through,
     ktc: ktc.answered,
   };
 
@@ -163,6 +179,26 @@ async function readProjections(
     // draft capital and `from_week: null` says which lens answered.
     console.warn(`[timeline] projections unavailable for ${season}:`, error);
     return { board: {}, fromWeek: null };
+  }
+}
+
+/**
+ * The season-to-date span, on {@link readProjections}' three readings run the
+ * other way — and with its degradation: a span nobody could read leaves the
+ * three `season_*` metrics ranked null by the all-zero rule rather than zeroed.
+ */
+async function readSeasonStats(
+  season: string,
+): Promise<{ board: SeasonStats; through: number | null }> {
+  const through = await seasonToDateThrough(season, getNflState).catch(
+    () => null,
+  );
+  if (through === null) return { board: {}, through: null };
+  try {
+    return { board: await getSeasonStats(season, through), through };
+  } catch (error) {
+    console.warn(`[timeline] season stats unavailable for ${season}:`, error);
+    return { board: {}, through: null };
   }
 }
 
@@ -236,7 +272,7 @@ async function readKtc(
 }
 
 /**
- * Today's projections, trimmed twice.
+ * One of today's two stat boards, trimmed twice.
  *
  * **To the players the timeline can name**, since the board is every player the
  * feed mentioned and a stop can only ever seat someone a roster held.

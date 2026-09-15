@@ -33,8 +33,13 @@ import type {
   ManagerLeagueRow,
 } from "@/shared/manager";
 import type { AdpEntry } from "@/shared/manager";
-import { getRosProjections, restOfSeasonStart } from "@/shared/projections";
-import type { RosProjections } from "@/shared/projections";
+import {
+  getRosProjections,
+  getSeasonStats,
+  restOfSeasonStart,
+  seasonToDateThrough,
+} from "@/shared/projections";
+import type { RosProjections, SeasonStats } from "@/shared/projections";
 import { getActiveSeason, parseRequestedSeason } from "@/shared/season";
 import { getNflState } from "@/shared/sleeper";
 import { resolveManagerUser } from "@/shared/user";
@@ -155,6 +160,7 @@ async function readLeagueLineup(
       const empty: LeagueLineupPayload = {
         season,
         from_week: null,
+        season_through: null,
         ktc: [],
         entry: null,
       };
@@ -180,8 +186,9 @@ async function readLeagueLineup(
     // otherwise**, which is what `auto` means on both axes everywhere else.
     const superflex =
       qb === "auto" ? isSuperflexLineup(league.roster_positions) : qb === "sf";
-    const [projections, adp, ktc] = await Promise.all([
+    const [projections, played, adp, ktc] = await Promise.all([
       readProjections(season),
+      readSeasonStats(season),
       readAdp(managerUserId, season, superflex),
       readKtc(league, board, superflex),
     ]);
@@ -217,6 +224,7 @@ async function readLeagueLineup(
     const payload: LeagueLineupPayload = {
       season,
       from_week: projections.fromWeek,
+      season_through: played.through,
       ktc: ktc.stamp === null ? [] : [ktc.stamp],
       entry: solveLeagueEntry(
         league,
@@ -230,6 +238,9 @@ async function readLeagueLineup(
         adpVariants,
         seats,
         teamTotals,
+        // What every player has scored so far — the three `season_*` metrics'
+        // board, read on the same terms the batched route reads it.
+        played.board,
       ),
     };
     // The other half of the manager page's split, measured beside it: this is
@@ -295,6 +306,30 @@ async function readProjections(
     // draft capital and `from_week: null` says which lens answered.
     console.warn(`[league] projections unavailable for ${season}:`, error);
     return { board: {}, fromWeek: null };
+  }
+}
+
+/**
+ * The season-to-date span and the stat lines that cover it — the mirror of
+ * {@link readProjections}, on `seasonToDateThrough`'s three readings.
+ *
+ * Its own degradation, and it is the projections span's: a span nobody could
+ * read answers `season_through: null` and an empty board, which prices every
+ * player's season points at null and leaves the three `season_*` metrics ranked
+ * null league-wide by the all-zero rule. The card keeps every other lens.
+ */
+async function readSeasonStats(
+  season: string,
+): Promise<{ board: SeasonStats; through: number | null }> {
+  const through = await seasonToDateThrough(season, getNflState).catch(
+    () => null,
+  );
+  if (through === null) return { board: {}, through: null };
+  try {
+    return { board: await getSeasonStats(season, through), through };
+  } catch (error) {
+    console.warn(`[league] season stats unavailable for ${season}:`, error);
+    return { board: {}, through: null };
   }
 }
 

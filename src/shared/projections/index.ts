@@ -5,8 +5,15 @@
 // does. This barrel reaches the network via `ros-read`, so it is server-only.
 
 export { getRosProjections, ROS_PROJECTIONS_TTL_MS } from "./ros-read";
-export { assembleRosProjections } from "./ros";
-export type { RosPlayerProjection, RosProjections, RosWeek } from "./ros";
+export { assembleRosProjections, createRosFold } from "./ros";
+export type {
+  RosFold,
+  RosPlayerProjection,
+  RosProjections,
+  RosWeek,
+  SeasonStats,
+} from "./ros";
+export { getSeasonStats, SEASON_STATS_TTL_MS } from "./season-read";
 export { getWeekProjections, WEEK_PROJECTIONS_TTL_MS } from "./week-read";
 export { getWeekStats, statsStamp, WEEK_STATS_TTL_MS } from "./week-stats-read";
 export type { WeekStatsRead } from "./week-stats-read";
@@ -21,7 +28,12 @@ export {
   parseRequestedWeek,
 } from "./weeks";
 export type { RequestedWeek } from "./weeks";
-export { currentWeek, restOfSeasonStart } from "./weeks";
+export {
+  currentWeek,
+  restOfSeasonStart,
+  seasonToDateThrough,
+  stateWeek,
+} from "./weeks";
 export {
   KICKOFF_BUFFER_MS,
   kickoffMoves,

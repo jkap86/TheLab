@@ -13,7 +13,10 @@ import type {
   RankVariant,
 } from "../../shared/manager/league-ranks.ts";
 import { NO_MANAGER } from "../../shared/manager/league-teams.ts";
-import type { RosProjections } from "../../shared/projections/ros.ts";
+import type {
+  RosProjections,
+  SeasonStats,
+} from "../../shared/projections/ros.ts";
 import type {
   LeagueLineupEntry,
   LeagueTeam,
@@ -120,6 +123,10 @@ export function timelineEntry(
   const seasonRosterId = seasonRoster?.roster_id ?? null;
 
   const projections: RosProjections = pricing?.projections ?? {};
+  // A payload written before this board existed carries none, which reads as
+  // the same empty a failed span does: the three season metrics dash rather
+  // than zero, and every other column on the stop is unchanged.
+  const seasonStats: SeasonStats = pricing?.season_stats ?? {};
   const adp = boardMap(pricing?.adp, ADP_MAPS);
   const ktc = boardMap(pricing?.ktc_values, KTC_MAPS);
 
@@ -182,6 +189,7 @@ export function timelineEntry(
     adpVariants,
     column && column.slots.length > 0 ? [column.slots] : [],
     column ? new Set([lineupColumnKey(column)]) : undefined,
+    seasonStats,
   );
 
   const named = new Map(rosters.map((r) => [r.roster_id, r.name]));

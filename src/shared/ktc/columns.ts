@@ -50,8 +50,9 @@ import { parseKtcBoardChoice, parseKtcLineupChoice } from "./board-choice.ts";
  * are three readings of one fact and asking them separately is how a metric
  * could come to read a market it is not priced on. The three answers are:
  *
- * - `"none"` — points, scored under the league's own scoring settings. No board
- *   enters them, so a projection column carries neither axis.
+ * - `"none"` — points, scored under the league's own scoring settings, whether
+ *   projected or already banked. No board enters them, so neither a projection
+ *   column nor a season-to-date one carries either axis.
  * - `"adp"` — the draft-capital curve, off the drafts this manager's leagues
  *   actually ran. There is no ADP *market* — nobody publishes a second one —
  *   but the fold does split superflex drafts from standard ones, because a
@@ -66,6 +67,12 @@ const PRICED_BY: Record<LineupMetricId, PricedBy> = {
   ros_total: "none",
   ros_starters: "none",
   ros_bench: "none",
+  // Points already scored, under the league's own settings — the same answer
+  // the projection above gives one tense over, and for the identical reason:
+  // no board enters a number a scoring table produced.
+  season_total: "none",
+  season_starters: "none",
+  season_bench: "none",
   capital_total: "adp",
   capital_bench: "adp",
   capital_starters: "adp",

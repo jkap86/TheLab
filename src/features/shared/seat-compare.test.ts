@@ -7,7 +7,12 @@ import { lensValue, seatComparisons, slotMedians } from "./seat-compare.ts";
 
 function player(
   id: string,
-  figures: Partial<Pick<LineupPlayer, "points" | "adp_value" | "ktc_value">>,
+  figures: Partial<
+    Pick<
+      LineupPlayer,
+      "points" | "season_points" | "adp_value" | "ktc_value"
+    >
+  >,
 ): LineupPlayer {
   return {
     player_id: id,
@@ -15,6 +20,7 @@ function player(
     positions: ["WR"],
     team: null,
     points: figures.points ?? null,
+    season_points: figures.season_points ?? null,
     adp_value: figures.adp_value ?? null,
     ktc_value: figures.ktc_value ?? null,
   };
@@ -45,6 +51,9 @@ function team(
       ros_total: 0,
       ros_starters: 0,
       ros_bench: 0,
+      season_total: 0,
+      season_starters: 0,
+      season_bench: 0,
       capital_total: 0,
       capital_bench: 0,
       capital_starters: 0,
@@ -59,14 +68,24 @@ function team(
 
 describe("lensValue", () => {
   test("each lens reads its own field", () => {
-    const p = player("x", { points: 12.5, adp_value: 4000, ktc_value: 6200 });
+    const p = player("x", {
+      points: 12.5,
+      season_points: 88.4,
+      adp_value: 4000,
+      ktc_value: 6200,
+    });
     assert.equal(lensValue(p, "points"), 12.5);
     assert.equal(lensValue(p, "capital"), 4000);
+    assert.equal(lensValue(p, "season"), 88.4);
     assert.equal(lensValue(p, "ktc"), 6200);
   });
 
   test("an absent figure is null, not zero", () => {
     assert.equal(lensValue(player("x", { points: 9 }), "ktc"), null);
+    assert.equal(lensValue(player("x", { points: 9 }), "season"), null);
+    // A player held scoreless is a real zero where a player with no line at
+    // all is null, and the lens must keep the two apart.
+    assert.equal(lensValue(player("x", { season_points: 0 }), "season"), 0);
     assert.equal(lensValue(null, "points"), null);
     assert.equal(lensValue(undefined, "points"), null);
   });

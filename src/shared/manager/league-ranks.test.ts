@@ -15,7 +15,7 @@ import {
   rankLeagueLineups,
 } from "./league-ranks.ts";
 import type { LeagueRosterRow, RankLeague } from "./league-ranks.ts";
-import type { RosProjections } from "../projections/ros.ts";
+import type { RosProjections, SeasonStats } from "../projections/ros.ts";
 import type { AdpEntry } from "./adp-value.ts";
 
 /** A one-starter league, so a roster's total is its best player's points. */
@@ -72,6 +72,7 @@ function lineupFixture(): LeagueLineup {
           positions: ["WR"],
           team: null,
           points: 7.5,
+          season_points: 40.5,
           adp_value: 100,
           ktc_value: 6000,
         },
@@ -85,6 +86,7 @@ function lineupFixture(): LeagueLineup {
         positions: [],
         team: null,
         points: 2.25,
+        season_points: 11.75,
         adp_value: null,
         ktc_value: 1500,
       },
@@ -94,6 +96,7 @@ function lineupFixture(): LeagueLineup {
         positions: [],
         team: null,
         points: null,
+        season_points: 6.25,
         adp_value: 40,
         ktc_value: null,
       },
@@ -118,12 +121,16 @@ function narrowableFixture(): LeagueLineup {
     points: number | null,
     adp: number | null,
     ktc: number | null,
+    // Ten times the projection, so a narrowed season total can only be right
+    // for one reason and is never confusable with the figure beside it.
+    season: number | null = points === null ? null : points * 10,
   ) => ({
     player_id: id,
     name: null,
     positions,
     team: null,
     points,
+    season_points: season,
     adp_value: adp,
     ktc_value: ktc,
   });
@@ -163,6 +170,12 @@ describe("lineupMetricTotals — a position narrowing", () => {
       ros_total: 24,
       ros_starters: 18,
       ros_bench: 6,
+      // The fixture's season figures are ten times its projections, so the
+      // narrowing lands on the same two players on this lens as on the other
+      // three — the claim being that one narrowing answers for all of them.
+      season_total: 240,
+      season_starters: 180,
+      season_bench: 60,
       capital_total: 250,
       capital_bench: 50,
       capital_starters: 200,
@@ -249,6 +262,13 @@ describe("lineupMetricTotals", () => {
       ros_total: 9.75,
       ros_starters: 7.5,
       ros_bench: 2.25,
+      // The bench's 18 is 11.75 + 6.25, and the second of those belongs to the
+      // fixture's player with **no** projection at all — the two boards are
+      // read apart, so a player who has played and is not projected counts
+      // here and nowhere on the ROS line above.
+      season_total: 58.5,
+      season_starters: 40.5,
+      season_bench: 18,
       capital_total: 140,
       capital_bench: 40,
       capital_starters: 100,
@@ -271,6 +291,48 @@ describe("lineupMetricTotals", () => {
       narrowed.ros_total,
       narrowed.ros_starters + narrowed.ros_bench,
     );
+  });
+
+  // The same reconciliation one tense back, and it is the reason both halves
+  // are summed here rather than one of them read off the lineup: there is no
+  // `projected_points` for what a roster has scored, so the two take the same
+  // `round` and their sum has to come out of them.
+  test("the three season metrics reconcile, whole and narrowed", () => {
+    const whole = lineupMetricTotals(lineupFixture(), 9000);
+    assert.equal(
+      whole.season_total,
+      whole.season_starters + whole.season_bench,
+    );
+    const narrowed = lineupMetricTotals(narrowableFixture(), 9000, ["QB"]);
+    assert.equal(
+      narrowed.season_total,
+      narrowed.season_starters + narrowed.season_bench,
+    );
+  });
+
+  // Null is not zero and zero is not null, which on this lens is the whole
+  // distinction: a stashed rookie has no stat line and a starter held scoreless
+  // has a real one. Both add nothing to a sum, and only the second says so.
+  test("a scoreless player counts zero and an unplayed one counts nothing", () => {
+    const lineup = lineupFixture();
+    lineup.bench[0]!.season_points = 0;
+    lineup.bench[1]!.season_points = null;
+    assert.equal(lineupMetricTotals(lineup).season_bench, 0);
+    assert.equal(lineupMetricTotals(lineup).season_starters, 40.5);
+  });
+
+  // The season board is read where the projections board says nothing, which is
+  // the state a past season's page is in for every player on it.
+  test("a season total stands where no projection was read at all", () => {
+    const lineup = lineupFixture();
+    for (const seat of lineup.starters) {
+      if (seat.player) seat.player.points = null;
+    }
+    for (const player of lineup.bench) player.points = null;
+    lineup.projected_points = 0;
+    const totals = lineupMetricTotals(lineup);
+    assert.equal(totals.ros_total, 0);
+    assert.equal(totals.season_total, 58.5);
   });
 
   // The reason the four KTC metrics are arranged the way they are: a reader
@@ -520,6 +582,57 @@ describe("rankLeagueLineups", () => {
     assert.equal(rosters.length, 2);
   });
 
+  test("the season metrics rank on their own board, not the projections one", () => {
+    // The two boards are read apart, which the fixture makes visible by
+    // inverting them: `me` is projected the better week and `t2` has banked the
+    // better season, so a single board answering both would rank the two
+    // families alike.
+    const board: RosProjections = {
+      a: projected("a", ["WR"], { rec: 20 }),
+      b: projected("b", ["WR"], { rec: 5 }),
+    };
+    const season: SeasonStats = {
+      a: projected("a", ["WR"], { rec: 30 }),
+      b: projected("b", ["WR"], { rec: 200 }),
+    };
+    const l = league([roster(1, "me", ["a"]), roster(2, "t2", ["b"])]);
+    const { ranks } = rankLeagueLineups(
+      l,
+      "me",
+      board,
+      NO_ADP,
+      new Map(),
+      new Map(),
+      [],
+      [],
+      [],
+      [],
+      undefined,
+      season,
+    );
+
+    assert.deepEqual(ranks.ros_starters, { rank: 1, of: 2 });
+    assert.deepEqual(ranks.season_starters, { rank: 2, of: 2 });
+    assert.deepEqual(ranks.season_total, { rank: 2, of: 2 });
+  });
+
+  test("with no stat board the season ranks are null while ROS still answers", () => {
+    // The degradation a span nobody could read has, and it is the projections
+    // span's own one lens over: the card keeps every other column and draws an
+    // em dash on these three rather than a page of confident noughts.
+    const board: RosProjections = {
+      a: projected("a", ["WR"], { rec: 5 }),
+      b: projected("b", ["WR"], { rec: 3 }),
+    };
+    const l = league([roster(1, "me", ["a"]), roster(2, "t2", ["b"])]);
+    const { ranks } = rankLeagueLineups(l, "me", board, NO_ADP);
+
+    assert.deepEqual(ranks.ros_starters, { rank: 1, of: 2 });
+    assert.equal(ranks.season_total, null);
+    assert.equal(ranks.season_starters, null);
+    assert.equal(ranks.season_bench, null);
+  });
+
   test("a manager holding no roster gets a null lineup and null ranks", () => {
     const board: RosProjections = { w1: projected("w1", ["WR"], { rec: 5 }) };
     const l = league([roster(1, "t1", ["w1"])]);
@@ -530,6 +643,9 @@ describe("rankLeagueLineups", () => {
       ros_total: null,
       ros_starters: null,
       ros_bench: null,
+      season_total: null,
+      season_starters: null,
+      season_bench: null,
       capital_total: null,
       capital_bench: null,
       capital_starters: null,
@@ -715,11 +831,14 @@ describe("rankLeagueLineups — per-column team totals", () => {
   });
 });
 
-/** The ten metric ids, so a stray key in the un-narrowed answer is visible. */
-const TEN: LineupMetricId[] = [
+/** Every metric id, so a stray key in the un-narrowed answer is visible. */
+const BASE_METRICS: LineupMetricId[] = [
   "ros_total",
   "ros_starters",
   "ros_bench",
+  "season_total",
+  "season_starters",
+  "season_bench",
   "capital_total",
   "capital_bench",
   "capital_starters",
@@ -951,7 +1070,7 @@ describe("rankLeagueLineups — a position narrowing", () => {
   // The regression that matters most. Every column on the page that has not
   // narrowed reads a bare metric id, so a set on the request must add keys and
   // never rename one — an `all` token on the ten would blank every card.
-  test("the ten keep their bare names and their answers when sets are asked for", () => {
+  test("the base metrics keep their bare names and their answers when sets are asked for", () => {
     const plain = rankLeagueLineups(narrowableLeague(), "me", BOARD, NO_ADP);
     const narrowed = rankLeagueLineups(
       narrowableLeague(),
@@ -964,17 +1083,17 @@ describe("rankLeagueLineups — a position narrowing", () => {
       [["QB"], ["TE", "WR"]],
     );
 
-    assert.deepEqual(Object.keys(plain.ranks).sort(), [...TEN].sort());
-    for (const metric of TEN) {
+    assert.deepEqual(Object.keys(plain.ranks).sort(), [...BASE_METRICS].sort());
+    for (const metric of BASE_METRICS) {
       assert.deepEqual(narrowed.ranks[metric], plain.ranks[metric]);
     }
     // …and the sets that were asked for are all ten each, beside them.
     assert.deepEqual(
       Object.keys(narrowed.ranks).sort(),
       [
-        ...TEN,
-        ...TEN.map((metric) => key(metric, ["QB"])),
-        ...TEN.map((metric) => key(metric, ["TE", "WR"])),
+        ...BASE_METRICS,
+        ...BASE_METRICS.map((metric) => key(metric, ["QB"])),
+        ...BASE_METRICS.map((metric) => key(metric, ["TE", "WR"])),
       ].sort(),
     );
   });
@@ -994,7 +1113,7 @@ describe("rankLeagueLineups — a position narrowing", () => {
       [["DL"]],
     );
 
-    for (const metric of TEN) {
+    for (const metric of BASE_METRICS) {
       assert.equal(ranks[key(metric, ["DL"])], null);
     }
     // The un-narrowed answers are untouched by the empty narrowing beside them.
@@ -1232,7 +1351,7 @@ describe("rankLeagueLineups — a slot narrowing", () => {
     });
   });
 
-  test("the ten keep their bare names when seats are asked for", () => {
+  test("the base metrics keep their bare names when seats are asked for", () => {
     // The regression that matters most, one axis over: every column that has not
     // narrowed reads a bare metric id, so a set on the request must add keys and
     // never rename one.
@@ -1249,12 +1368,12 @@ describe("rankLeagueLineups — a slot narrowing", () => {
       [],
       [["FLEX"]],
     );
-    for (const metric of TEN) {
+    for (const metric of BASE_METRICS) {
       assert.deepEqual(narrowed.ranks[metric], plain.ranks[metric]);
     }
     assert.deepEqual(
       Object.keys(narrowed.ranks).sort(),
-      [...TEN, ...TEN.map((metric) => key(metric, [], null, ["FLEX"]))].sort(),
+      [...BASE_METRICS, ...BASE_METRICS.map((metric) => key(metric, [], null, ["FLEX"]))].sort(),
     );
   });
 

@@ -36,6 +36,26 @@ const pricing: NonNullable<RosterTimelinePayload["pricing"]> = {
       team: null,
     },
   },
+  // The same two, one tense back — a different figure apiece, so a season total
+  // at a past stop can only be right for one reason.
+  season_stats: {
+    star: {
+      player_id: "star",
+      stats: { pass_td: 30 },
+      weeks: [1, 2, 3],
+      name: "Star",
+      positions: ["QB"],
+      team: null,
+    },
+    scrub: {
+      player_id: "scrub",
+      stats: { pass_td: 6 },
+      weeks: [1, 2, 3],
+      name: "Scrub",
+      positions: ["QB"],
+      team: null,
+    },
+  },
   adp: { star: { board: "full", adp: 1 } },
   ktc_values: { star: 9000, scrub: 1000 },
   picks: {
@@ -43,6 +63,7 @@ const pricing: NonNullable<RosterTimelinePayload["pricing"]> = {
     "2027|1|2": { slot: 7, origin_name: "Beta", value: 3000 },
   },
   from_week: 1,
+  season_through: 3,
   ktc: { board: "dynasty", updated_at: null },
 };
 
@@ -138,6 +159,34 @@ describe("timelineEntry", () => {
     // the star carries a number on it.
     assert.ok((teamOf(before, 1)?.totals.capital_total ?? 0) > 0);
     assert.equal(teamOf(now, 1)?.totals.capital_total, 0);
+  });
+
+  test("a season column answers at a past stop rather than blanking on the scrub", () => {
+    // The star has banked 120 (30 passing touchdowns at 4) and the scrub 24, so
+    // the swap moves this column exactly as it moves the three beside it. Left
+    // off the payload, a reader who had chosen a season tile would watch the
+    // figure they were reading turn into an em dash because they moved the rail.
+    const now = timelineEntry(payload, 0, 1);
+    const before = timelineEntry(payload, 1, 1);
+
+    assert.equal(teamOf(now, 1)?.totals.season_starters, 24);
+    assert.equal(teamOf(before, 1)?.totals.season_starters, 120);
+    // And it is its own board: the ROS figures over the same two stops are 20
+    // and 40, so one board answering both would give the same two numbers.
+    assert.equal(teamOf(now, 1)?.totals.ros_starters, 20);
+  });
+
+  test("a payload with no stat board dashes the season metrics alone", () => {
+    // Which is what a payload written before the board existed carries, and
+    // what a failed span leaves — the card keeps every other column.
+    const without = {
+      ...payload,
+      pricing: { ...pricing, season_stats: {}, season_through: null },
+    };
+    const entry = timelineEntry(without, 1, 1);
+    assert.equal(teamOf(entry, 1)?.totals.season_starters, 0);
+    assert.equal(entry?.ranks.season_starters, null);
+    assert.equal(teamOf(entry, 1)?.totals.ros_starters, 40);
   });
 
   test("a rewound pick goes back to the roster that sent it, priced from its cell", () => {

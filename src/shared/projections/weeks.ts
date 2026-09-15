@@ -151,6 +151,70 @@ export async function restOfSeasonStart(
 }
 
 /**
+ * The last week "season to date" means for a page, or null where the season has
+ * had none played.
+ *
+ * {@link restOfSeasonStart}'s mirror — that one answers where the projections
+ * span *starts* and this answers where the stat span *ends*, so between them
+ * the two cover the season and meet at the week being played. It takes its
+ * state reader as an argument for that function's reason, and the two are
+ * deliberately asked of the same state.
+ *
+ * Three arms, and **only one of them is the same call its mirror makes**:
+ *
+ * - the page's season is the one being played → through the current week,
+ *   which is the week already partly in the books. A week nobody has finished
+ *   contributes what has been scored in it so far, which is what "so far this
+ *   season" means on a Sunday afternoon;
+ * - the page is on an *older* season → the whole regular season. **This is the
+ *   inversion, and it is the point**: a finished season has no rest to project
+ *   and `restOfSeasonStart` correctly reads nothing, where the very same season
+ *   has a complete and perfectly meaningful total. The one lens that answers
+ *   for a past page is this one;
+ * - the page names a season ahead of the one being played → null. Nothing has
+ *   been scored in it, and reading the span anyway would be eighteen empty
+ *   round trips to fold to the same nothing.
+ *
+ * **A state nobody could read answers the whole regular season, where its
+ * mirror answers week 1** — and both are the same instinct rather than
+ * opposite ones. Each names the widest window its span can honestly claim: an
+ * unplayed week carries no stat line, so a span reaching past the present folds
+ * to exactly what has been played and costs only the round trips. Its mirror
+ * has the same property in the other direction.
+ *
+ * **A `leg` of 0 takes that widest window too**, which is the one arm that is
+ * about the calendar rather than about the request. Zero is the week Sleeper
+ * reports both *before* a regular season starts and in the months after one
+ * ends (see {@link stateWeek}), and the two are not distinguishable from the
+ * field. Read as week 1 the second would answer a finished season's total with
+ * its opening Sunday, which is a wrong number where the first is only a set of
+ * empty reads.
+ */
+export async function seasonToDateThrough(
+  season: string,
+  readState: () => Promise<NflStateLike | null>,
+): Promise<number | null> {
+  const state = await readState().catch(() => null);
+  if (!state) return LAST_REGULAR_WEEK;
+
+  if (state.season === season) {
+    const week = stateWeek(state);
+    // Never `clampWeek`, which folds 0 up to 1 — see the note above for why
+    // this one case has to widen instead.
+    return Number.isFinite(week) && week >= 1
+      ? Math.min(Math.trunc(week), LAST_REGULAR_WEEK)
+      : LAST_REGULAR_WEEK;
+  }
+
+  const requested = Number(season);
+  const current = Number(state.season);
+  if (Number.isFinite(requested) && Number.isFinite(current) && requested > current) {
+    return null;
+  }
+  return LAST_REGULAR_WEEK;
+}
+
+/**
  * The week a live or lineup tool reads when the caller named none, or null
  * when the season has none left to read.
  *

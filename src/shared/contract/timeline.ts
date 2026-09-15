@@ -81,8 +81,9 @@ export type RosterTimelinePayload = {
 };
 
 /**
- * What a rewound roster is priced against: today's projections, today's draft
- * capital, today's KeepTradeCut market and today's pick grid.
+ * What a rewound roster is priced against: today's projections, today's stat
+ * lines, today's draft capital, today's KeepTradeCut market and today's pick
+ * grid.
  *
  * **The question a past stop answers is a counterfactual, not a reconstruction
  * of the numbers as they stood.** Nothing here is a historical price — this
@@ -148,6 +149,21 @@ export type TimelinePricingPayload = {
    * what separates "no projection" from "a projected zero".
    */
   projections: Record<string, TimelineProjectionPayload>;
+  /**
+   * Today's **season-to-date** line for every player the timeline can name —
+   * {@link projections}' twin one tense back, trimmed exactly as it is and for
+   * the same two reasons.
+   *
+   * It is here because the card in front of the rail can carry a season column,
+   * and a stop that could not answer one would blank it on the scrub — a
+   * reader watching the figure they were reading turn into an em dash because
+   * they moved the control. What a past stop answers with it is the same
+   * counterfactual the rest of this payload answers: not what those players had
+   * scored *by then*, which nothing here records, but what the roster that
+   * stood at that moment has scored **this season**. The caveat under the panes
+   * is what says so, and it says it for all four valuations at once.
+   */
+  season_stats: Record<string, TimelineProjectionPayload>;
   /** Today's average draft position for the same players, and its board. */
   adp: Record<string, { board: "full" | "rookie"; adp: number }>;
   /** Today's KTC price on **this league's** market and QB board; unpriced absent. */
@@ -175,6 +191,8 @@ export type TimelinePricingPayload = {
   picks: Record<string, TimelinePickCellPayload>;
   /** Which week the projections start from; null when none were read. */
   from_week: number | null;
+  /** Which week the stat span runs through; null when none was read. */
+  season_through: number | null;
   /** Which KTC market answered and when it was scraped; null on a failed read. */
   ktc: { board: KtcFormat; updated_at: string | null } | null;
 };

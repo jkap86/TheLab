@@ -53,6 +53,7 @@ describe("what prices a metric", () => {
     assert.equal(isKtcMetric("ktc_total"), true);
     assert.equal(isKtcMetric("ktc_picks"), true);
     assert.equal(isKtcMetric("ros_starters"), false);
+    assert.equal(isKtcMetric("season_total"), false);
     assert.equal(isKtcMetric("capital_total"), false);
   });
 
@@ -61,6 +62,7 @@ describe("what prices a metric", () => {
     assert.equal(isAdpMetric("capital_starters"), true);
     assert.equal(isAdpMetric("ktc_total"), false);
     assert.equal(isAdpMetric("ros_total"), false);
+    assert.equal(isAdpMetric("season_total"), false);
   });
 
   test("and a QB board is read by both valuations, by no projection", () => {
@@ -73,6 +75,22 @@ describe("what prices a metric", () => {
     assert.equal(readsQbBoard("capital_bench"), true);
     assert.equal(readsQbBoard("ros_total"), false);
     assert.equal(readsQbBoard("ros_starters"), false);
+    // Points already banked are points too: a scoring table produced them, so
+    // there is no board for a season column to name and it can never occupy a
+    // second bay on one.
+    assert.equal(readsQbBoard("season_total"), false);
+    assert.equal(readsQbBoard("season_bench"), false);
+  });
+
+  test("a season column is keyed by its bare metric id whatever it carries", () => {
+    // The belt to `column()`'s braces: a stored value hand-edited or written by
+    // a later build must not be able to name a second, indistinguishable copy
+    // of a column on an axis its metric does not read.
+    assert.equal(lineupColumnKey(col("season_total")), "season_total");
+    assert.equal(
+      lineupColumnKey(col("season_total", "dynasty", "sf")),
+      "season_total",
+    );
   });
 });
 

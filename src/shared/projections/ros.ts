@@ -57,6 +57,26 @@ export type RosPlayerProjection = {
 /** Player id → their rest-of-season line, for every id the feed mentioned. */
 export type RosProjections = Record<string, RosPlayerProjection>;
 
+/**
+ * The same board folded off the **stats** feed instead: what each player has
+ * actually scored so far, rather than what he is projected to.
+ *
+ * An alias rather than a type of its own, because it is the same fold of the
+ * same envelope — `stats/nfl/<season>/<week>` answers what
+ * `projections/nfl/<season>/<week>` does with `category: "stat"` — and one fold
+ * for both feeds is what keeps a league's own `scoring_settings` meaning the
+ * same thing applied to either. What it buys is that a signature taking both
+ * says which is which: the two are structurally identical, so a parameter
+ * named for its shape could be handed the wrong board and typecheck.
+ *
+ * The fields read the same way one tense over. `stats` is the summed line,
+ * `weeks` are the weeks that contributed a real one — **empty means he has no
+ * line at all**, which is the state that separates a stashed rookie from a
+ * starter held to nothing — and the identity half is exactly as
+ * {@link RosPlayerProjection} documents it.
+ */
+export type SeasonStats = RosProjections;
+
 /** One fetched week: which week it was, and every row the feed sent for it. */
 export type RosWeek = {
   week: number;

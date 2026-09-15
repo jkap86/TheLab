@@ -483,18 +483,22 @@ describe("the value × scope grid", () => {
     assert.equal(seen.size, LINEUP_METRIC_IDS.length);
   });
 
-  test("the two holes are the two the design names, and no others", () => {
+  test("the holes are the ones the design names, and no others", () => {
     const holes: string[] = [];
     for (const value of COLUMN_VALUES) {
       for (const scope of COLUMN_SCOPES) {
         if (!metricAt(value, scope)) holes.push(`${value}:${scope}`);
       }
     }
-    // Only KeepTradeCut prices a pick, so picks are absent under the other two
-    // bases — and that is the grid's one remaining gap since `ros_total` filled
-    // `projection:all`. Anything else appearing here is a metric that quietly
-    // stopped being reachable.
-    assert.deepEqual(holes.sort(), ["capital:picks", "projection:picks"]);
+    // Only KeepTradeCut prices a pick, so picks are absent under the other
+    // three bases — and that one column of the grid is its whole remaining gap
+    // since `ros_total` filled `projection:all`. Anything else appearing here
+    // is a metric that quietly stopped being reachable.
+    assert.deepEqual(holes.sort(), [
+      "capital:picks",
+      "projection:picks",
+      "season:picks",
+    ]);
   });
 
   test("a hole always carries a reason and a cell never does", () => {

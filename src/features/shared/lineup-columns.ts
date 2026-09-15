@@ -111,13 +111,21 @@ const METRIC_ORDER: Record<LineupMetricId, number> = {
   ros_total: 0,
   ros_starters: 1,
   ros_bench: 2,
-  capital_total: 3,
-  capital_bench: 4,
-  capital_starters: 5,
-  ktc_total: 6,
-  ktc_starters: 7,
-  ktc_bench: 8,
-  ktc_picks: 9,
+  // Beside the projections rather than after the two valuations, because the
+  // two are one reading in two tenses — what a roster is heading for and what
+  // it has banked — and a reader comparing them wants them adjacent. Renumbering
+  // the six below moves nothing for anybody: the sort is by these numbers, so
+  // what a stored selection holds keeps exactly the relative order it had.
+  season_total: 3,
+  season_starters: 4,
+  season_bench: 5,
+  capital_total: 6,
+  capital_bench: 7,
+  capital_starters: 8,
+  ktc_total: 9,
+  ktc_starters: 10,
+  ktc_bench: 11,
+  ktc_picks: 12,
 };
 
 /** Every metric the columns dialog offers, in canonical column order. */
@@ -168,6 +176,31 @@ export const LINEUP_METRIC_LABELS: Record<
     unit: "Proj pts",
     scope: "Bench",
     option: "Projected points — bench, rest of season.",
+  },
+  // **`Season` and not `Season pts`, and the missing word is a measurement.**
+  // The tile's unit line is `--fs-10` untracked in a ~65px label box at 390,
+  // which is nine characters of IBM Plex Mono — the figure `Draft cap`,
+  // `KTC start` and `KTC picks` are all set against. A tenth clips, silently,
+  // inside the window's own `overflow-hidden`. What the word would have added
+  // is already on the line under it, which names the scope in the same grammar
+  // the three projection tiles use.
+  season_total: {
+    column: "Season total",
+    unit: "Season",
+    scope: "Roster",
+    option: "Points scored — the whole roster, season to date.",
+  },
+  season_starters: {
+    column: "Season starters",
+    unit: "Season",
+    scope: "Starters",
+    option: "Points scored — starters, season to date.",
+  },
+  season_bench: {
+    column: "Season bench",
+    unit: "Season",
+    scope: "Bench",
+    option: "Points scored — bench, season to date.",
   },
   capital_total: {
     column: "Capital",
@@ -230,21 +263,29 @@ export const LINEUP_METRIC_LABELS: Record<
  *   exhaustive `Record<LineupMetricId, …>`s.
  * - **Picks are not a roster scope.** They are the one thing on a card that is
  *   not a player, and only KeepTradeCut prices them — there is no ADP pick
- *   ladder in this repo and a pick has no projection because it is not a player
- *   yet. So `Picks` is a fourth scope key, live under KTC and greyed under the
- *   other two. That is the grid's one remaining gap, and it is a reading that
- *   cannot exist rather than one this app has not built.
+ *   ladder in this repo, a pick has no projection because it is not a player
+ *   yet, and it has scored nothing for the same reason. So `Picks` is a fourth
+ *   scope key, live under KTC and greyed under the other three. That is the
+ *   grid's one remaining gap, and it is a reading that cannot exist rather than
+ *   one this app has not built.
+ * - **`Season` is the fourth value and the second reading of one unit.** It is
+ *   points, scored under the league's own settings exactly as the projection
+ *   beside it is — what a roster has banked, where that one is what it is
+ *   heading for. It reads neither pricing axis for the projection's reason (no
+ *   board produces a number a scoring table already did) and fills three of the
+ *   four scopes, the fourth being the pick gap above.
  *
  * {@link METRIC_AXES} is the **fifth** exhaustive `Record<LineupMetricId, …>`
  * in the compiler seam, and the grid is derived from it rather than written
  * twice: a metric that named one pairing in the table and another in the grid
  * would be a picker whose keys light on a column it does not set.
  */
-export type ColumnValue = "projection" | "capital" | "ktc";
+export type ColumnValue = "projection" | "season" | "capital" | "ktc";
 export type ColumnScope = "starters" | "bench" | "all" | "picks";
 
 export const COLUMN_VALUES: readonly ColumnValue[] = [
   "projection",
+  "season",
   "capital",
   "ktc",
 ];
@@ -257,6 +298,7 @@ export const COLUMN_SCOPES: readonly ColumnScope[] = [
 
 export const COLUMN_VALUE_LABELS: Record<ColumnValue, string> = {
   projection: "Proj",
+  season: "Season",
   capital: "Capital",
   ktc: "KTC",
 };
@@ -562,6 +604,9 @@ const METRIC_AXES: Record<LineupMetricId, [ColumnValue, ColumnScope]> = {
   ros_total: ["projection", "all"],
   ros_starters: ["projection", "starters"],
   ros_bench: ["projection", "bench"],
+  season_total: ["season", "all"],
+  season_starters: ["season", "starters"],
+  season_bench: ["season", "bench"],
   capital_total: ["capital", "all"],
   capital_bench: ["capital", "bench"],
   capital_starters: ["capital", "starters"],

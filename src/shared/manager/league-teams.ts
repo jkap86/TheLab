@@ -31,7 +31,7 @@ import { ktcPickPrice, pickTier } from "../ktc/picks.ts";
 import { sleeperAvatarUrl } from "../sleeper/avatar.ts";
 import type { KtcPickPrice } from "../ktc/picks.ts";
 import { ktcBoardValue } from "../ktc/roster.ts";
-import type { RosProjections } from "../projections/ros.ts";
+import type { RosProjections, SeasonStats } from "../projections/ros.ts";
 import type { AdpEntry } from "./adp-value.ts";
 import { leaguePickBoard, pickCellKey } from "./draft-picks.ts";
 import type { LeaguePickBoard, PickLeague } from "./draft-picks.ts";
@@ -191,6 +191,13 @@ export function solveLeagueEntry(
    * numbers are kept rather than recomputed.
    */
   teamTotals: ReadonlySet<string> = new Set(),
+  /**
+   * What every player has scored so far this season — `projections`' twin one
+   * tense back, and what the three `season_*` metrics are summed from. Appended
+   * rather than placed beside it on {@link rankLeagueLineups}' own reasoning;
+   * empty is a real state, and the three metrics then dash rather than zero.
+   */
+  seasonStats: SeasonStats = {},
 ): LeagueLineupEntry | null {
   const solved = solveLeague(
     league,
@@ -204,6 +211,7 @@ export function solveLeagueEntry(
     adpVariants,
     slotSets,
     teamTotals,
+    seasonStats,
   );
   if (!solved) return null;
   const { ranks, rosters, picks } = solved;
@@ -268,6 +276,8 @@ export function solveLeagueRanks(
   positionSets: readonly (readonly LineupPosition[])[] = [],
   adpVariants: readonly AdpVariant[] = [],
   slotSets: readonly (readonly LineupSlot[])[] = [],
+  /** As {@link solveLeagueEntry}'s — what each player has scored so far. */
+  seasonStats: SeasonStats = {},
 ): ColumnRanks | null {
   const solved = solveLeague(
     league,
@@ -281,6 +291,7 @@ export function solveLeagueRanks(
     adpVariants,
     slotSets,
     NO_TEAM_TOTALS,
+    seasonStats,
   );
   return solved ? solved.ranks : null;
 }
@@ -309,6 +320,7 @@ function solveLeague(
   adpVariants: readonly AdpVariant[],
   slotSets: readonly (readonly LineupSlot[])[],
   teamTotals: ReadonlySet<string>,
+  seasonStats: SeasonStats,
 ): {
   ranks: ColumnRanks;
   rosters: ReturnType<typeof rankLeagueLineups>["rosters"];
@@ -342,6 +354,7 @@ function solveLeague(
     adpVariants,
     slotSets,
     teamTotals,
+    seasonStats,
   );
   // Only where a manager was *named*: a league-scoped read has no lineup of its
   // own to miss, and answering null there would be refusing to draw a league
