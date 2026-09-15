@@ -4,6 +4,7 @@ import {
   pool,
   withBlockingAdvisoryLock,
 } from "@/shared/db";
+import { stateWeek } from "@/shared/projections/weeks";
 import { peekActiveSeason } from "@/shared/season";
 import {
   getLeague,
@@ -163,9 +164,17 @@ const emptyCounts = (): LeagueCounts => ({
  * transaction fetch. Split from {@link getSyncClock} for callers that already
  * hold the state — the crawler derives this, the season and its freshness tier
  * from one fetch.
+ *
+ * **The field is `stateWeek`'s rather than `state.week`, so the sync's ceiling
+ * and the page's heading read one answer.** All regular season the two agree,
+ * which is what makes this safe to change mid-season; where they differ it is
+ * the preseason, and there `week` counts preseason games — a ceiling of 3 in
+ * August, backfilling three weeks of a season that has not started and leaving
+ * the stored max where the next sync reads it. The floor this function has
+ * always applied is written for `leg`'s 0, which is the reading it now gets.
  */
 export function flooredWeek(state: SleeperNflState | null): number {
-  return Math.max(state?.week ?? 1, 1);
+  return Math.max(state ? stateWeek(state) : 1, 1);
 }
 
 /**

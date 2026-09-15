@@ -79,13 +79,47 @@ export function clampWeek(week: number): number {
 }
 
 /**
+ * The regular-season week Sleeper's state names — one field, read once.
+ *
+ * **`leg` rather than `week` or `display_week`, and the three are not
+ * interchangeable.** `week` is the week within whatever `season_type` is
+ * running, so in the preseason it counts preseason games under a number that
+ * reads like a regular-season week. `display_week` is Sleeper's own hint about
+ * what a UI should show, and it *lags the roll-over*: on the Tuesday after week
+ * 1's last game it still read 1 while the week being prepared for was 2, which
+ * is the whole of the bug this replaced — a page confidently headed `Week 1`
+ * with nothing in it wrong except the number. `leg` is the week of the regular
+ * season and nothing else: 0 before it starts, and the week being played or
+ * prepared for once it has.
+ *
+ * **A `leg` of 0 is an answer rather than an absence**, so the fall-through is
+ * on the field being *missing* and never on it being falsy. The offseason's 0
+ * says "the season ahead is whole", which every caller here clamps to week 1;
+ * read as absent it would fall through to `week` and answer a preseason game's
+ * number. `week` is the fallback because it is the field `leg` agrees with all
+ * regular season, so a state that somehow carries no `leg` degrades to what
+ * this module read before. `display_week` is deliberately not in the ladder at
+ * all: it is the reading that was wrong, and it stays on the type and in
+ * `week:doctor`'s output so the difference can still be *seen*.
+ *
+ * Unclamped, deliberately. The callers want different ceilings — a page is
+ * bounded by the regular season, a sync's fetch window is bounded by what
+ * Sleeper will answer for — so the field is resolved here once and the bound is
+ * each caller's own.
+ */
+export function stateWeek(state: NflStateLike): number {
+  const { leg } = state;
+  return typeof leg === "number" && Number.isFinite(leg) ? leg : state.week;
+}
+
+/**
  * The first week "rest of season" means for a page, or null where the season
  * has none left to project.
  *
  * Deliberately conservative about claiming a week, in three cases:
  *
  * - the page's season and Sleeper's current season agree → from the current
- *   week (floored at 1: preseason is week 0, and the season ahead is whole);
+ *   week (floored at 1: preseason is `leg` 0, and the season ahead is whole);
  * - the page is on an *older* season → there is no rest-of-season, and no
  *   projections are read at all;
  * - the state call failed or named some other future — week 1, the widest
@@ -100,13 +134,13 @@ export function clampWeek(week: number): number {
  */
 export async function restOfSeasonStart(
   season: string,
-  readState: () => Promise<{ season: string; week: number } | null>,
+  readState: () => Promise<NflStateLike | null>,
 ): Promise<number | null> {
   const state = await readState().catch(() => null);
   if (!state) return 1;
 
   if (state.season === season) {
-    return Math.min(Math.max(state.week, 1), LAST_REGULAR_WEEK);
+    return clampWeek(stateWeek(state));
   }
   const requested = Number(season);
   const current = Number(state.season);
@@ -120,11 +154,12 @@ export async function restOfSeasonStart(
  * The week a live or lineup tool reads when the caller named none, or null
  * when the season has none left to read.
  *
- * `display_week` rather than `week`: Sleeper advances it to the week whose
- * games are *next* once the current week's have been played, which is the
- * week somebody setting or watching a lineup is asking about. A season Sleeper
- * has moved past has no week left, and a state call that fails answers week 1
- * — the widest honest window, the fallback the lineups route takes too.
+ * The field it reads — and why it is no longer `display_week` — is
+ * {@link stateWeek}'s own note. A season Sleeper has moved past has no week
+ * left, and a state call that fails answers week 1: the widest honest window,
+ * the fallback the lineups route takes too, and the one this module's own
+ * history is a warning about — see `sleeper/memoize-nfl-state`'s `holdLastGood`,
+ * which is what stops a *busy minute* reaching this branch at all.
  *
  * Takes its state reader as an argument on `restOfSeasonStart`'s terms: two
  * routes and a streaming room all ask this, and the module stays free of the
@@ -132,13 +167,13 @@ export async function restOfSeasonStart(
  */
 export async function currentWeek(
   season: string,
-  readState: () => Promise<Pick<NflStateLike, "season" | "week" | "display_week"> | null>,
+  readState: () => Promise<NflStateLike | null>,
 ): Promise<number | null> {
   const state = await readState().catch(() => null);
   if (!state) return 1;
 
   if (state.season === season) {
-    return clampWeek(state.display_week || state.week);
+    return clampWeek(stateWeek(state));
   }
   const requested = Number(season);
   const current = Number(state.season);
@@ -148,5 +183,12 @@ export async function currentWeek(
   return 1;
 }
 
-/** The three fields of Sleeper's NFL state this module reads. */
-type NflStateLike = { season: string; week: number; display_week: number };
+/**
+ * The fields of Sleeper's NFL state this module reads.
+ *
+ * `leg` is optional because a hand-built stub — the verification scripts', a
+ * fixture's — may carry only the two fields that existed before it was read,
+ * and {@link stateWeek}'s ladder is what makes that degrade rather than throw.
+ * A real `SleeperNflState` always carries it.
+ */
+type NflStateLike = { season: string; week: number; leg?: number | null };

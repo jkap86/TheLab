@@ -402,6 +402,156 @@ held on a busy dyno; and whether the manager lookup's exception — the one cach
 that keeps its producer under the caller's class — is the right call against a
 real burst of distinct usernames.
 
+### A week the app cannot read is not week 1
+
+Reported as the app showing week 1 in week 2. `currentWeek` resolves the week a
+page shows when the caller named none, and it answered **1** in three unrelated
+cases: the `state/nfl` read failed, Sleeper answered a null body, or the state's
+season was not the page's and was not older than it. Each is the honest widest
+window in the abstract, and for one week a year each is indistinguishable from
+the truth — so the fallback shipped invisible and came due in week 2, as a page
+confidently headed `Week 1` with nothing in the payload, the log or the UI able
+to say the number was invented.
+
+**The season already had the ladder and the week had none**, and that asymmetry
+is the whole of the bug. `shared/season` serves the last value it resolved
+through an outage and only then reaches for the compiled-in constant, on the
+rule that a stale answer beats none; the week fell from Sleeper straight to a
+literal. `holdLastGood` in `sleeper/memoize-nfl-state.ts` is the missing rung —
+what Sleeper says now, else what it last said, else nothing, and *then* the
+caller's fallback — so `currentWeek`'s `1` answers a cold process rather than a
+busy minute.
+
+**It wraps the bounded wait, not just the fetch**, and that order is the
+load-bearing half: a read shed by an interactive budget fails *after* the memo
+(`awaitShared`), and a reader whose own twelve seconds ran out is the failure
+most likely to be live on a page somebody is waiting on. Wrapped inside the memo
+it would have covered a broken upstream and missed a busy one. It is cached on
+`globalThis` beside the memo for that module's reason: a per-bundle copy holds a
+per-bundle last-good state, so the one route that happened to read Sleeper would
+be the only one able to survive the next outage.
+
+**A null body counts as a failure here rather than an answer.** `sleeperGet`
+folds a missing body to the caller's fallback, so an unreachable `state/nfl` and
+an empty one arrive spelled identically — and neither is Sleeper saying the
+season has no state, which it spells with a real object whose `week` is 0.
+**A stale state is served indefinitely**, which is the season resolver's own
+trade: a TTL says when to try again, not when to stop trusting what we have.
+
+**`npm run week:doctor` is what names the cause**, in `ktc:doctor`'s idiom and
+for its reason — four faults, one symptom, and only two of them leave a trace.
+It reads the raw state *past* the hold (so stage 1 is what Sleeper publishes and
+stage 3 is what the app will serve, and the difference is the diagnosis), prints
+which branch of `currentWeek` decided and whether that was a reading or a
+fallback, and asks the scoreboard whether the week being shown has already been
+played — the one case where the app is faithfully reporting a `display_week`
+Sleeper has not advanced. Read-only, and it needs no database: the week chain is
+Sleeper and arithmetic, so it is safe to point at production. It deep-imports
+`projections/weeks` rather than the barrel, which reaches `@/shared/db`.
+
+#### Verified
+
+Under Node's own runner: 2,880 tests pass (six more — the held state through a
+failed read, a cold process still throwing, a null body falling back where a
+good state is held and answering null where none is, a recovered read replacing
+the held one, and the hold surviving a wait shed outside the memo). `build`,
+`typecheck` and `lint` are clean.
+
+The doctor was driven against this sandbox, where the proxy refuses
+`api.sleeper.app` — which reproduces the fault exactly and is the one arm a test
+cannot reach: stage 1 `UNREACHABLE`, stage 3 `week 1 … FELL BACK`, verdict *the
+week is a fallback*.
+
+**Not verified against real traffic**, which is the gap to close first: Sleeper
+is unreachable from where this was built, so **which** of the two causes is live
+on the deployment is unknown — a failed state read, or a `display_week` Sleeper
+has genuinely not rolled past a finished week 1. The doctor answers that in one
+command and the fix is correct under either, but only under the first does it
+change what the page shows. Three things a test cannot say: whether the held
+state is ever actually served in production, which a live `week:doctor` would
+show as stage 1 failing while stage 3 answers; how long Sleeper takes to advance
+`display_week` after a week's last game, which is what decides whether the app
+should derive the week from the scoreboard rather than trust that field; and
+whether a frozen week during a long outage reads better than a wrong one, which
+is the trade this takes on the season resolver's authority rather than its own.
+
+### The week is `leg`
+
+The section above shipped the ladder and left the field open: it named two
+possible live causes and said the doctor would settle which. It is the second,
+sharpened, and it was settled by the report rather than by a doctor run —
+**the app was reading the wrong field.** `currentWeek` preferred Sleeper's `display_week`, which is
+that API's own hint about what a UI should show and which *lags the roll-over by
+about a day*: on the Tuesday after week 1's last game it still read 1 while the
+week everybody was preparing for was 2. So the page was not falling back at all.
+It was faithfully reporting a field that was faithfully behind.
+
+**`leg` is the week of the regular season, and the three fields are not
+interchangeable.** `week` is the week within whatever `season_type` is running,
+so in August it counts preseason games under a number that reads exactly like a
+regular-season week; `display_week` is the UI hint; `leg` is 0 before the season
+starts and the week being played or prepared for once it has. That is the
+question every reader here was asking, so `stateWeek` in
+`shared/projections/weeks.ts` is the one place it is answered and the three
+readers take it: `currentWeek` (the week a page shows), `restOfSeasonStart`
+(which weeks a span still prices) and `manager/sync`'s `flooredWeek` (the
+ceiling on a league's week-keyed fetches).
+
+**A `leg` of 0 is an answer rather than an absence**, which is the rule in it
+that is silent when wrong. The fall-through is on the field being *missing* and
+never on it being falsy: read as absent, the offseason's 0 would fall through to
+`week` and answer a preseason game's number — the exact failure the field change
+exists to remove, reintroduced by the truthiness that looks like a tidy default.
+`week` is the fallback, because it is the field `leg` agrees with all regular
+season, so a stub or a Sleeper that stopped sending `leg` degrades to what this
+module read before. **`display_week` is deliberately not in the ladder at all**
+— it is the reading that was wrong — and it stays on the type and in the
+doctor's stage 1 so the difference can still be *seen*.
+
+**Two of the three readers change nothing today, and that is what made this safe
+to land mid-season.** All regular season `leg` and `week` agree, so
+`restOfSeasonStart` and `flooredWeek` are behaviourally identical on the
+deployment as it stands; where they differ is the preseason, and both of those
+functions' own doc comments already claimed `leg`'s semantics (*"preseason is
+week 0"*, *"offseason moves are logged at week 1 while Sleeper's state reports
+week 0"*) while reading `week`. The change is the code catching up with what it
+said about itself. The postseason is the third divergence and falls the right
+way too: a page clamps to `LAST_REGULAR_WEEK` rather than believing `week`'s
+playoff-week 1, and the sync's window opens onto the playoff weeks that exist
+instead of stopping at a number that names the wrong ones.
+
+**`week:doctor` names the field now**, which is the half of it that outlives this
+change: stage 1 prints all three and says so when `leg` and `display_week`
+disagree (the ordinary Tuesday state, and the one that used to be invisible),
+stage 3's `because` line names the field it took and its value, and the verdict's
+"this is what Sleeper publishes" is now a claim about `leg`.
+
+#### Verified
+
+Under Node's own runner: 2,894 tests pass (14 more — the field ladder's four
+arms including a `leg` of 0 and a state carrying none, and `currentWeek` and
+`restOfSeasonStart`, neither of which had a test before, across the preseason,
+the postseason, an older season, a season ahead and both unreadable states).
+`build`, `typecheck` and `lint` are clean, and the doctor runs.
+
+Driven against this sandbox, where the proxy refuses `api.sleeper.app`: the
+chain reproduces the *other* cause exactly — stage 1 `UNREACHABLE`, stage 3
+`week 1 … FELL BACK`, verdict *the week is a fallback* — which is the arm a unit
+test cannot reach and the one the hold above was built for.
+
+**Not verified against real traffic**, which is the gap to close first and is
+now a narrower one: Sleeper is unreachable from where this was built, so the
+field change follows the report and Sleeper's documented semantics rather than a
+live reading of `leg` beside `display_week`. One `week:doctor` against the
+deployment confirms it in a line — stage 1 printing the two disagreeing is the
+whole of the evidence. Three things a test still cannot say: how far ahead of
+`display_week` `leg` actually runs, and therefore whether any reader wants the
+lagging field back for something; whether `leg` counts past 18 in the postseason
+as the clamp assumes, which decides whether the sync's widened window is the
+playoff weeks or nothing; and whether `leg` is ever absent on a live response,
+which is the one case the fallback exists for and which nothing has seen.
+
+
 ### Known drift
 
 `sleeper/limiter.ts` is now the whole file, admission half included — the

@@ -1,5 +1,5 @@
 import { sleeperGet, sleeperUrl } from "./client";
-import { memoizeNflState } from "./memoize-nfl-state";
+import { holdLastGood, memoizeNflState } from "./memoize-nfl-state";
 import { withBackgroundSleeper } from "./request-policy";
 import { awaitShared } from "./shared-wait";
 import type { SleeperNflState } from "./types/sleeper.types";
@@ -43,10 +43,36 @@ function fetchNflState(): Promise<SleeperNflState | null> {
  * memo's whole state is its closure, so the closure is what is shared.
  */
 const MEMO_KEY = Symbol.for("thelab.sleeper.nfl-state");
+const HELD_KEY = Symbol.for("thelab.sleeper.nfl-state.held");
 const globalScope = globalThis as typeof globalThis & {
   [MEMO_KEY]?: ReturnType<typeof memoizeNflState>;
+  [HELD_KEY]?: ReturnType<typeof holdLastGood>;
 };
 const memoized = (globalScope[MEMO_KEY] ??= memoizeNflState(fetchNflState));
+
+/**
+ * The two halves a caller gets, composed in this order and only this one.
+ *
+ * The **waiter** is inside: the memo hands over whatever fetch is in flight and
+ * this caller waits on it only as long as its own request has left. Timing out
+ * does not touch the fetch — it goes on filling the memo for the next reader
+ * and for whichever loop needed it. See `./shared-wait`.
+ *
+ * The **hold** is outside, and that is the load-bearing half of the order: a
+ * wait shed by an interactive budget is one of the three ways this read fails,
+ * and it fails *after* the memo. Wrapped the other way round the hold would
+ * cover a broken fetch and miss a busy minute, which is the failure most likely
+ * to be live on a page a reader is actually waiting on. See `holdLastGood`.
+ *
+ * Cached on `globalThis` for the reason the memo beside it is: a per-bundle
+ * copy would hold a per-bundle last-good state, so the route that happened to
+ * read Sleeper successfully would be the only one able to survive the next
+ * outage — a fallback that works on some pages and not others, with nothing
+ * able to tell them apart.
+ */
+const held = (globalScope[HELD_KEY] ??= holdLastGood(() =>
+  awaitShared(memoized(), { label: "the NFL state" }),
+));
 
 /**
  * Current NFL state. In the offseason `week` is 0 and `season_type` is "off";
@@ -54,11 +80,22 @@ const memoized = (globalScope[MEMO_KEY] ??= memoizeNflState(fetchNflState));
  *
  * Memoized for a minute (`memoize-nfl-state`): five routes read it per request
  * and three loops per tick, and none of them wants a fresher answer than that.
+ * Behind that, the last state actually read is held and served when a fresh one
+ * cannot be — so a caller's fallback answers a *cold* process rather than a
+ * momentary outage. See {@link holdLastGood}.
  */
 export function getNflState(): Promise<SleeperNflState | null> {
-  // The waiter half: the memo hands over whatever fetch is in flight and this
-  // caller waits on it only as long as its own request has left. Timing out
-  // does not touch the fetch — it goes on filling the memo for the next reader
-  // and for whichever loop needed it. See `./shared-wait`.
-  return awaitShared(memoized(), { label: "the NFL state" });
+  return held();
 }
+
+/**
+ * The last state this process read, or null if it has never read one.
+ *
+ * Exported for the diagnostic (`npm run week:doctor`), which has to be able to
+ * say *which* of the two answers a caller got — a fresh read or the held one —
+ * and cannot tell from the value alone.
+ */
+export function lastGoodNflState(): SleeperNflState | null {
+  return held.lastGood();
+}
+
