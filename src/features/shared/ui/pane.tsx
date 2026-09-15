@@ -33,9 +33,12 @@ import { Scanlines } from "./card-plate";
  * **`DrawerRow` used to live here and is gone.** It was one of four row
  * components that had drifted apart; all four are {@link PaneRow} now, and a
  * drawer's rows are that part with `ground="drawer"` — one step less cast,
- * since they sit on a part rather than on glass. Everything the *drawer* is
- * made of is untouched: {@link DrawerBar}, {@link PaneDrawer},
- * {@link DRAWER_BAR_HEIGHT} and the `--bars` sums do not move.
+ * since they sit on a part rather than on glass.
+ *
+ * **A pane is three parts top to bottom — {@link PaneLedge}, {@link PaneGlass}
+ * and, where it has a drawer, {@link PaneFoot}** — and the drawer's keys stand
+ * on the third rather than across the floor of the second. See
+ * {@link DrawerBar} for why they moved.
  */
 
 /**
@@ -186,76 +189,133 @@ export function PaneGlass({
 }
 
 /**
+ * The machined strip below a pane's glass that its drawer keys stand on.
+ *
+ * **The ledge's own surface, mirrored to the pane's other end**, so a pane
+ * reads top to bottom as its control, its list and its drawers: the ledge above
+ * the glass carries what orders the rows, and the foot below it carries what
+ * opens a reading behind them. Neither is on the glass, which is what says
+ * neither is a row. It is the fix for the bars having read as two more rows of
+ * the roster — see {@link DrawerBar}.
+ *
+ * **`mt` is the glass's own**, `mt-[3px] lg:mt-1.5`, so the gap under the glass
+ * is the gap over it and the three parts sit on one rhythm.
+ *
+ * **The bottom padding is two pixels deeper than the top** for the key's 3px
+ * riser: `--key-metal-shadow` stands each key on a shadow rather than on layout,
+ * so a foot padded evenly would let the lowest key's riser run to its edge. The
+ * 5px between two keys is the same riser plus the 2px of foot a reader needs to
+ * see that they are two parts rather than one.
+ */
+export function PaneFoot({ children }: { children: ReactNode }) {
+  return (
+    <div
+      className={`${CONSOLE_WINDOW_LEDGE} mt-[3px] flex shrink-0 flex-col gap-[5px] rounded-lg px-1 pb-1.5 pt-1 lg:mt-1.5 lg:px-1.5`}
+    >
+      {children}
+    </div>
+  );
+}
+
+/**
  * Which reading a pane's drawer is showing.
  *
  * Two names rather than one because the manager card's roster pane carries two
- * bars — the bench and the portfolio — and the lineup checker's lineup pane
- * carries the first alone. The heights below are keyed by it so both cards read
- * one spelling of the arithmetic.
+ * keys — the bench and the portfolio — and the lineup checker's and gametime's
+ * lineup panes carry the first alone.
  */
 export type DrawerTray = "bench" | "picks";
 
 /**
- * The two bars' own heights — **34px at `lg` and 30 below it for the bench
- * bar, 30 at both for the picks bar** — which are also what a drawer sits on.
+ * A drawer key's shape, type and travel, carrying **no surface, no border
+ * colour and no ink** — {@link drawerBarClass} composes it with one of the two
+ * states below, and nothing else should.
  *
- * A drawer's `bottom` and its `max-height` are functions of the bars' sum, and
- * the sum follows the breakpoint, so it is written as a CSS custom property on
- * the drawer (`--bars`, in {@link DRAWER_BARS}) by a class per arm and the two
- * inline values read it back: the drawer sits on its bars at every width with
- * no measurement, and a `ResizeObserver` for two constants is the wrong tool.
+ * **40px, and 44 on a touch device.** The bars were 30px (34 for the bench at
+ * `lg`), which is a thin target for the one control on the pane that opens
+ * anything — and on a phone it was 14px under the 44 every other cap, key and
+ * menu in this app is held to. The height no longer feeds a sum anybody has to
+ * keep in step: the keys stand on the pane's foot rather than on the glass, so
+ * the drawer sits on the glass's own floor ({@link PaneDrawer}) and the
+ * `--bars` records that had to be spelled beside every height are gone.
  *
- * **Both records are spelled literally rather than templated off a number.**
- * Tailwind finds classes by scanning source text, and a class assembled from a
- * template literal is generated for nothing — driven, the bench bar rendered
- * 30px at `lg` because `lg:h-[34px]` did not exist in the stylesheet. So the
- * arithmetic is in this comment and the spelling is below, side by side: an
- * edit to a bar's height is an edit to its class *and* to every `--bars` arm
- * that sums it, or the drawer sits off its bars by the difference.
- */
-export const DRAWER_BAR_HEIGHT: Record<DrawerTray, string> = {
-  bench: "h-[30px] lg:h-[34px]",
-  picks: "h-[30px] lg:h-[30px]",
-};
-
-/** The `--bars` sum per combination of bars present, in the order drawn. */
-export const DRAWER_BARS: Record<string, string> = {
-  bench: "[--bars:30px] lg:[--bars:34px]",
-  picks: "[--bars:30px] lg:[--bars:30px]",
-  "bench,picks": "[--bars:60px] lg:[--bars:64px]",
-};
-
-/**
- * The stock both bars are cut from.
+ * **`bg-origin-border`**, because the key carries a border for its lit rim and
+ * the border is transparent at rest: a background image is positioned against
+ * the padding box by default and *repeats* into the border, which paints the
+ * gradient's dark foot as a 1px line across the key's top edge and its lit head
+ * along the bottom — a bevel drawn upside down, one pixel deep.
+ *
+ * **`translate`, not `transform`, in the transition list.** Tailwind v4's
+ * `translate-y-*` sets the `translate` property, so a list naming `transform`
+ * names a property that never moves and the press jumps rather than travels.
  *
  * **The tracking goes below `lg` and the gutter tightens with it**, which is
  * the card's own rule about its tile labels one plane up and is a measurement
- * rather than a taste: a bar is ~160px at 390 and `BENCH · 7` at
- * `tracking-[0.12em]` needs 81 of the 80 it has, so it truncated to `BENCH ·…`
- * and lost the one number it is read for. Letter-spacing is the first thing to
- * spend, because the count is what the bar says and the place beside it is what
- * it says next.
+ * rather than a taste: at 390 a key has too little width for `BENCH · 7` at
+ * `tracking-[0.12em]` beside its place and its caret, so it truncated and lost
+ * the one number it is read for. Letter-spacing is the first thing to spend,
+ * because the count is what the key says and the place beside it is what it
+ * says next.
  */
-export const DRAWER_BAR =
-  "lab-anim flex w-full cursor-pointer items-center gap-1.5 bg-[image:var(--billet-bg)] px-1.5 text-left " +
-  "font-mono text-[length:var(--fs-11)] uppercase tracking-[0.02em] shadow-[var(--standing-strip-shadow)] " +
-  "transition-colors duration-200 focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-active/60 " +
-  "lg:gap-2.5 lg:px-3 lg:text-[length:var(--fs-12-5)] lg:tracking-[0.12em]";
+const DRAWER_BAR =
+  "lab-anim flex h-10 w-full cursor-pointer items-center gap-1.5 rounded-md border bg-origin-border px-2 text-left " +
+  "font-mono text-[length:var(--fs-11)] uppercase tracking-[0.02em] " +
+  "transition-[translate,box-shadow,color,border-color] duration-150 " +
+  "focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-active/60 " +
+  "touch:h-11 lg:gap-2.5 lg:px-3 lg:text-[length:var(--fs-12-5)] lg:tracking-[0.12em]";
 
 /**
- * One bar pinned to the bottom of a pane's glass.
+ * A key at rest: **brushed key metal, not billet** — which is the whole of why
+ * it stopped reading as one more roster row.
  *
- * **Billet stock over the glass, not another row of it.** The bar is a part
- * bolted across the list — that is what says the drawer behind it is a separate
- * reading rather than the list continuing — and it takes the standing strip's
- * own chamfer for it.
+ * The bars were cut from `--billet-bg` under `--standing-strip-shadow`: the
+ * tiles' own stock under the tiles' own kind of chamfer, run the tiles' full
+ * width with no gap after the last of them. `--key-metal` is the face a key on
+ * a machined surface wears (`BILLET_KEY_CHROME`'s raised half) — brighter at
+ * the head and grained where the tiles are flat slate — and
+ * `--key-metal-shadow` stands it on a 3px riser, so it reads as a thing to
+ * press and the press travels.
+ */
+const DRAWER_KEY_REST =
+  "border-transparent bg-[image:var(--key-metal)] text-[color:var(--billet-name)] " +
+  "shadow-[var(--key-metal-shadow)] hover:text-[color:var(--billet-accent)] " +
+  "active:translate-y-0.5 active:shadow-[var(--key-metal-shadow-pressed)]";
+
+/**
+ * A key whose reading is up: **held down and lit.** The riser collapses to the
+ * pressed one and stays there, the border takes the accent and the key throws
+ * the accent's halo — so which of two keys owns the open drawer is something a
+ * reader sees rather than infers from a caret's angle.
+ *
+ * Spelled whole rather than composed onto the rest state: each is one base
+ * `shadow-[…]` and one base `border-*`, and a second of either appended to the
+ * first is settled by Tailwind's emit order rather than by the key's state.
+ */
+const DRAWER_KEY_OPEN =
+  "translate-y-0.5 border-active/45 bg-[image:var(--key-metal)] text-[color:var(--billet-accent)] " +
+  "shadow-[var(--key-metal-shadow-pressed),0_0_16px_-6px_var(--accent-glow)]";
+
+/** A drawer key's whole class string, for the state it is in. */
+export function drawerBarClass(open: boolean): string {
+  return `${DRAWER_BAR} ${open ? DRAWER_KEY_OPEN : DRAWER_KEY_REST}`;
+}
+
+/**
+ * A drawer key's face: what it is called, what it reads, and a caret.
+ *
+ * It used to be a bar pinned across the bottom of the glass, argued for as
+ * "billet stock over the glass, not another row of it" — a part bolted across
+ * the list. What a reader saw was the opposite: the tiles' stock, the tiles'
+ * width and no gap, so the bench read as two more rows of the roster. The key
+ * stands on the pane's foot now ({@link PaneFoot}), below the glass, and the
+ * drawer rises out of the glass's floor directly above it.
  *
  * A real `<button>`, where the design prototype draws a `role="button"` div: a
- * bar is a control and the platform already knows how to make one reachable,
+ * key is a control and the platform already knows how to make one reachable,
  * announce its state and fire it from a keyboard. The caller owns the button —
- * this is its face — so `aria-expanded` is true only on the bar whose reading
- * is up, which is accurate: one drawer, and at most one of two bars has it
- * open.
+ * this is its face, and {@link drawerBarClass} its surface — so `aria-expanded`
+ * is true only on the key whose reading is up, which is accurate: one drawer,
+ * and at most one of two keys has it open.
  */
 export function DrawerBar({
   open,
@@ -290,19 +350,25 @@ export function DrawerBar({
 }
 
 /**
- * The box a drawer's rows rise in, anchored to its bars.
+ * The box a drawer's rows rise in, anchored to the glass's floor.
  *
  * **Anchored at the bottom, so growing its `max-height` *is* the upward
  * accordion** — no measurement, and no transform that would blur the type under
- * it. The cap is the glass less the bars it sits on and a little of the list, so
- * a reader can always see what the drawer is rising over.
+ * it. It rises out of the glass directly above the key that opened it, and the
+ * cap is the glass less a little of the list, so a reader can always see what
+ * the drawer is rising over.
  *
- * **`max()` and not the bare `calc`**, which is what the design specifies and
- * what goes silently wrong on a short viewport: the panel's cap can leave a
- * glass shorter than the bars themselves, and a negative `max-height` clamps to
- * zero — a lit bar with a rotated caret that opens nothing. Floored, a cramped
- * drawer overflows upward instead and is clipped by the glass, which shows less
- * than it wants and never nothing.
+ * **It used to sit on the bars, at `bottom: var(--bars)`**, when they were
+ * pinned inside the glass — which made its `bottom` and its cap functions of a
+ * sum written out as a class per breakpoint and per combination of bars. The
+ * keys stand on the pane's foot now, outside the glass ({@link PaneFoot}), so
+ * the drawer stands on the glass's own 3px frame: the same inset it keeps at
+ * its sides.
+ *
+ * **`max()` and not the bare `calc`**: on a short viewport the panel's cap can
+ * leave a glass shorter than a drawer is any use at, and a bare `calc` would
+ * size it to that sliver. Floored, a cramped drawer overflows upward instead and
+ * is clipped by the glass, which shows less than it wants and never nothing.
  *
  * **Kept mounted while shut**, or it would have no closed state to animate
  * from, and `inert` is what keeps its rows out of the tab order while it is —
@@ -322,23 +388,21 @@ export function DrawerBar({
 export function PaneDrawer({
   id,
   open,
-  bars,
   children,
 }: {
   id: string;
   open: boolean;
-  /** The `--bars` sum for the bars below it — see {@link DRAWER_BARS}. */
-  bars: string;
   children: ReactNode;
 }) {
   return (
     <div
       id={id}
       inert={!open}
-      className={`lab-anim absolute inset-x-[3px] z-[2] flex flex-col overflow-hidden rounded-[0.625rem] bg-[image:var(--billet-bg)] shadow-[var(--billet-shadow),0_-22px_34px_-14px_rgba(0,0,0,0.9)] [transition:max-height_340ms_cubic-bezier(0.2,0.8,0.2,1),opacity_200ms_ease,padding_340ms_cubic-bezier(0.2,0.8,0.2,1)] ${bars}`}
+      className="lab-anim absolute inset-x-[3px] bottom-[3px] z-[2] flex flex-col overflow-hidden rounded-[0.625rem] bg-[image:var(--billet-bg)] shadow-[var(--billet-shadow),0_-22px_34px_-14px_rgba(0,0,0,0.9)] [transition:max-height_340ms_cubic-bezier(0.2,0.8,0.2,1),opacity_200ms_ease,padding_340ms_cubic-bezier(0.2,0.8,0.2,1)]"
       style={{
-        bottom: "var(--bars)",
-        maxHeight: open ? "max(5.75rem, calc(100% - var(--bars) - 14px))" : 0,
+        // The 3px frame the drawer stands on, and the 14px of list it leaves
+        // showing above itself at full height.
+        maxHeight: open ? "max(5.75rem, calc(100% - 17px))" : 0,
         padding: open ? 4 : 0,
         opacity: open ? 1 : 0,
         pointerEvents: open ? "auto" : "none",

@@ -141,10 +141,10 @@ export type PaneRowLead = {
    * The cell's width, as a **class string** rather than a number.
    *
    * Tailwind finds classes by scanning source text, so `lg:w-[${n}px]`
-   * assembled from a value generates no CSS at all — the trap
-   * `DRAWER_BAR_HEIGHT` records, where a bar silently rendered at the wrong
-   * height. A caller passes a literal, which is the idiom `DrawerRow`'s own
-   * `leadWidth` already used.
+   * assembled from a value generates no CSS at all — the trap that once
+   * rendered a drawer bar at the wrong height, silently, when its `lg:` height
+   * was templated off a number. A caller passes a literal, which is the idiom
+   * `DrawerRow`'s own `leadWidth` already used.
    */
   width?: string;
   /**
@@ -424,8 +424,9 @@ export function PaneRow({
   // a `hover:shadow-[…]` naming only the glow would *replace* the tile's own
   // chamfer rather than add to it — the row would lose its bevel the moment a
   // pointer crossed it. Two literals rather than one composed with the surface
-  // constant, for the reason `DRAWER_BAR_HEIGHT` is spelled literally: Tailwind
-  // scans source text, and a class assembled from a value generates no CSS.
+  // constant, for the reason every sized class in this file is spelled
+  // literally: Tailwind scans source text, and a class assembled from a value
+  // generates no CSS.
   const hover = selected
     ? ""
     : ground === "drawer"
@@ -485,7 +486,7 @@ function PaneRowFaceMount({
    * The mount's **display, size and text size**, which the caller owns because
    * two rows want three of them: 20/22px here, 40px as a week row's own cell
    * and 17px on that row's first line below `lg`. They are the caller's rather
-   * than a `size` prop for the trap `DRAWER_BAR_HEIGHT` records — Tailwind
+   * than a `size` prop for the trap the lead cell's `width` records — Tailwind
    * scans source text, so a class assembled from a value generates no CSS —
    * and they are kept *out* of the base string for the other one: `size-5` and
    * `size-10` are two base utilities of the same specificity, so which wins

@@ -14475,6 +14475,12 @@ arbitrary and reads as the park having missed.
 
 ### The bench and the picks are drawers
 
+**Superseded in part — see The drawer's bars became keys on a foot, below.**
+The bars are raised keys on a foot below the glass now, and the drawer stands on
+the glass's own floor rather than on them. What is kept from this section is the
+drawer itself: one for both readings, anchored at the bottom, floored with
+`max()`, kept mounted and `inert`, and resolved rather than synced.
+
 Two bars on billet stock pinned to the roster pane's floor — `Bench · N` with
 its total and league place, `Picks · N` with the seasons it spans — over one
 drawer that rises as an accordion.
@@ -14524,6 +14530,112 @@ changed with the move is the em dash: the pills showed *nothing* for an unpriced
 pick on a density argument, and a row has a figure column that is either filled
 or not, so the app's ordinary three-way grammar comes back. It left the
 `features/shared` barrel with the grid, on `local-store.ts`'s rule.
+
+### The drawer's bars became keys on a foot
+
+Reported as two faults, and both were measurable. The collapsed bars were **too
+small to hit** — 30px, 34 for the bench at `lg`, which on a phone is 14px under
+the 44 every other cap, key and menu in this app is held to. And they **blended
+into the roster**: cut from `--billet-bg` under the standing strip's chamfer,
+which is the tiles' own stock under the tiles' own kind of edge, run the tiles'
+full width with no gap after the last of them. A reader saw two thin rows at the
+foot of the list rather than two controls. There was no design bundle; the
+direction is the user's. Nothing on the wire moved — no route, no query, no
+contract type, no migration.
+
+**The keys left the glass.** A pane is three parts now, top to bottom: the
+ledge, the glass and — where it has a drawer — `PaneFoot`, which is the ledge's
+own surface (`CONSOLE_WINDOW_LEDGE`) mirrored to the pane's other end. The ledge
+carries what orders the rows and the foot carries what opens a reading behind
+them, and neither is on the glass, which is what says neither is a row. The foot
+takes the glass's own `mt`, so the gap under the glass is the gap over it. The
+drawer stays inside the glass and rises out of its floor, directly above the key
+that opened it.
+
+**`LineupBreakdown` returns a fragment** — the glass and the foot — because both
+have to be flex items of `Pane`'s column: a wrapper would make them one item and
+the glass would stop shrinking to the room the foot leaves it. `LeagueTeams`
+renders it as a direct child of `Pane`, which is the requirement. The lineup
+checker's and gametime's panes render their own `Pane`, so there the foot is
+simply the glass's next sibling.
+
+**Brushed key metal on a riser, 40px and 44 on touch.** `drawerBarClass(open)`
+composes the key's shape with one of two states, each spelled whole — both are
+one base `shadow-[…]` and one base `border-*`, so a second of either appended to
+the first would be settled by Tailwind's emit order. At rest the face is
+`--key-metal` (what `BILLET_KEY_CHROME` raises a key to on a machined surface —
+brighter at the head and grained, where the tiles are flat slate) under
+`--key-metal-shadow`'s 3px riser. Open, the key is **held down and lit**: the
+riser collapses to `--key-metal-shadow-pressed`, which is new and has a light
+half, and the border, the ink and a halo take the accent. So which of two keys
+owns the open drawer is something a reader sees rather than infers from a caret.
+
+**The `--bars` arithmetic is gone with the bars.** The drawer's `bottom` and its
+cap were functions of the bars' sum, written as a class per breakpoint and per
+combination of bars (`DRAWER_BARS`) beside two literal height records
+(`DRAWER_BAR_HEIGHT`) that had to move together. With the keys off the glass the
+drawer stands on the glass's 3px frame (`bottom-[3px]`) and caps at
+`max(5.75rem, calc(100% - 17px))`; the key's height is one class,
+`h-10 touch:h-11`, that feeds no sum. Both records and the `bars` prop on
+`PaneDrawer` are deleted, and the four comments that cited `DRAWER_BAR_HEIGHT`
+for the "a templated class generates nothing" rule now state it directly.
+
+**Two things that are silent when wrong, both in the key's class string.**
+`bg-origin-border`: the key carries a border for its lit rim, transparent at
+rest, and a background image positioned against the padding box *repeats* into
+the border — the gradient's dark foot as a 1px line across the top and its lit
+head along the bottom, a bevel upside down. And **`translate`, not `transform`,
+in the transition list**: Tailwind v4's `translate-y-*` sets the `translate`
+property, so a list naming `transform` lets the press jump rather than travel.
+The drawer's own bench/picks swap had the same fault — an 8px slide that jumped
+— and is fixed in the same pass.
+
+**It is all three tools, deliberately**, because the part is shared and a reader
+walking between them sees one object: the manager card's roster pane carries two
+keys, the lineup checker's and gametime's lineup panes carry the bench alone.
+
+**The cost is the foot's height.** Two keys are a 95.5px foot at 1280 (103 on
+touch) where the two bars took 64 inside the glass; one key is 50 (54). The
+`MIN_PARKED` note in `panel-cap.ts` was restated against it and the floor itself
+did not move: at 320px the glass is down to ~85, under the drawer's 92px floor,
+so a drawer opened there overflows upward and is clipped — the documented
+degradation rather than a new one.
+
+#### Verified
+
+Over CDP against `next dev` on the live database — `jkap86`, league
+`1401749224151871488`, deep-linked open on `/manager`, `/lineupchecker` and
+`/gametime` — in a fresh headless Chrome per pointer type: fine at 1280×900 and
+coarse at 390×844 (`mobile: true`), both schemes, DPR 2. Before the change the
+same league measured two 30px bars inside the glass in the Browser pane.
+
+Keys are **40.2px** on the fine pointer and **44px** on the coarse one, on a
+foot of **95.5 / 50.3px** (103 / 54 on touch) sitting **6px** under the glass at
+`lg` and **3px** below it. No label clips anywhere, `scrollWidth` never exceeds
+the viewport, and every page has one `<h1>`. Pressing Bench latches the key
+(`translate: 0 2px`), turns its ink to `--billet-accent` (`#9ffff2` dark,
+`#08554d` light) and its border to the accent at 0.45, and opens a drawer
+standing **3px** off the glass's floor and **14px** under its top (504 of 521 at
+1280). Pressing Picks swaps the reading without collapsing it; pressing it again
+closes the drawer with no key left expanded. The close-ups were read in both
+schemes at both widths: at rest the keys are brushed parts on a ledge below the
+glass's edge, visibly not rows.
+
+The only console error on any page is `Failed to execute 'measure' on
+'Performance': 'NotFound' cannot have a negative time stamp`, and it fires on
+`/tools` too, which nothing here touches — Next's dev tooling.
+
+`typecheck` is clean, `eslint src scripts` is clean, and 2,903 unit tests pass.
+`npm run check` itself stops at lint on this checkout, and not because of this: a
+bare `eslint` walks the git-ignored `.claude/worktrees/` other sessions leave
+behind, generated `.next` validators and all, and every one of its 1,204 errors
+is in one of them.
+
+**Not verified**, and the first is the one that matters: whether the keys now
+read as distinct *enough* to the person who reported them blending in, which is
+a judgement rather than a measurement. Also untested: how much the ~31px the
+foot takes from the starters is felt on a laptop, and the drawer at the
+`MIN_PARKED` floor, which needs a viewport under ~620px tall.
 
 ### Scrollbars, and the token that had to invert
 
@@ -15264,6 +15376,9 @@ in the constants to get there.
   head that promised the place first. It is place, mark, name, total now, and
   the seat row is slot, face, name, team, figure; `DrawerRow` renumbered to
   match and grew a `note` slot between the name and the figure.
+
+**Superseded — see The drawer's bars became keys on a foot.** The bars are 40px
+keys on a foot below the glass now, and the `--bars` sums below went with them.
 
 **The drawer bars are 34px / 30px at `lg` and 30 / 30 below**, and `BAR_HEIGHT`
 became two records spelled *literally*. The first cut templated `h-[${n}px]`

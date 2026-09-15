@@ -107,8 +107,10 @@ export const COLLAPSE_EASE = "cubic-bezier(0.4, 0, 0.2, 1)";
 /**
  * The floor: **what the panel's own parts need, not a round number.** The
  * history bay is ~72px with its margin, a pane's ledge ~62, and the roster
- * pane's two pinned bars 88 — so under about 320px the glass is shorter than
- * the bars standing on it and the drawer has nowhere to open.
+ * pane's foot ~98 with its margin (two 40px drawer keys; 103 on a touch
+ * device, where they are 44) — so at about 320px the glass under the ledge is
+ * down to ~85, under the drawer's own 92px floor, and a drawer opened there
+ * overflows the glass upward and is clipped by it.
  *
  * Below it the panel is simply taller than the room it was given and the
  * **shell** scrolls, which is the behaviour the cap replaces and is the right

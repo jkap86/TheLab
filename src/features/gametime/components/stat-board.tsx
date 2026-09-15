@@ -153,7 +153,7 @@ import type {
  *
  * Whole class strings rather than a value interpolated into one: Tailwind finds
  * classes by scanning source text, so `[--stat-bar-h:${n}]` would generate
- * nothing at all. It is `DRAWER_BAR_HEIGHT`'s rule, one part over.
+ * nothing at all. It is `PaneRow`'s cell-width rule, one part over.
  */
 export const STAT_BAR_H = "[--stat-bar-h:3rem] sm:[--stat-bar-h:3.25rem]";
 

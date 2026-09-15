@@ -393,11 +393,10 @@ export { ConsoleGround } from "./ui/console-ground";
 // past this barrel into `features/shared`'s own internals.
 export {
   DrawerBar,
-  DRAWER_BAR,
-  DRAWER_BAR_HEIGHT,
-  DRAWER_BARS,
+  drawerBarClass,
   Pane,
   PaneDrawer,
+  PaneFoot,
   PaneGlass,
   PaneHead,
   PaneLedge,

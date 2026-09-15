@@ -5,11 +5,10 @@ import { useId, useState, type ReactNode, type RefObject } from "react";
 import type { LineupCheckLeague, LineupCheckPlayer, LineupCheckSeat } from "@/shared/contract";
 import {
   DrawerBar,
-  DRAWER_BAR,
-  DRAWER_BAR_HEIGHT,
-  DRAWER_BARS,
+  drawerBarClass,
   Pane,
   PaneDrawer,
+  PaneFoot,
   PaneGlass,
   PaneHead,
   PaneLedge,
@@ -342,11 +341,11 @@ function LineupPane({
         <ColumnHeads name={pane.title ?? pane.fallback} vs={vs} />
       </PaneLedge>
 
-      {/* A frame rather than a scroller: the seats scroll inside it, the bench
-          drawer rises inside it, and its bar is pinned to the floor.
-          `overflow-hidden` is what keeps the drawer's own corners inside the
-          glass's radius and what stops a mid-animation drawer painting over the
-          pane's edge. */}
+      {/* A frame rather than a scroller: the seats scroll inside it and the
+          bench drawer rises inside it, out of the glass's floor above the key
+          on the pane's foot. `overflow-hidden` is what keeps the drawer's own
+          corners inside the glass's radius and what stops a mid-animation
+          drawer painting over the pane's edge. */}
       <PaneGlass className="flex flex-col overflow-hidden p-[3px]">
         {/* `pr-[9px]`: the scrollbar's gutter, so a figure's last digit clears
             the thumb — the manager card's roster pane makes the same
@@ -382,59 +381,55 @@ function LineupPane({
         </div>
 
         {pane.bench.length > 0 && (
-          <>
-            <PaneDrawer id={drawerId} open={benchOpen} bars={DRAWER_BARS.bench}>
-              <div className="lab-scroll-glass min-h-0 flex-1 overflow-y-auto overflow-x-hidden">
-                <ul className="m-0 list-none p-0">
-                  {pane.bench.map((player) => (
-                    <BenchRow
-                      key={player.player_id}
-                      player={player}
-                      promoted={pane.promoted.includes(player.player_id)}
-                      irMark={irMarkFor(player.player_id, pane.ir)}
-                    />
-                  ))}
-                </ul>
-              </div>
-            </PaneDrawer>
-
-            {/* Above the drawer, so a drawer at full height stops at the bar
-                rather than under it. */}
-            <div className="relative z-[3] shrink-0">
-              <button
-                type="button"
-                onClick={() => setBenchOpen((held) => !held)}
-                aria-expanded={benchOpen}
-                aria-controls={drawerId}
-                className={`${DRAWER_BAR} ${DRAWER_BAR_HEIGHT.bench} ${
-                  benchOpen
-                    ? "text-[color:var(--billet-accent)]"
-                    : "text-[color:var(--billet-name)]"
-                }`}
-              >
-                <DrawerBar open={benchOpen} label={`Bench · ${pane.bench.length}`}>
-                  {starts > 0 && (
-                    // How many of them the optimal lineup would start, which is
-                    // the one thing the bar can say that the count cannot.
-                    //
-                    // **Dropped below `lg`**, which the manager card's own bar
-                    // does with its total for the same reason and is a
-                    // measurement here: this pane is half that card's, so the
-                    // bar is ~155px at 390 and a 62px chip leaves `Bench · 7`
-                    // fifty of the seventy it needs — the count the bar is read
-                    // for, truncated. Nothing is lost that is not one press
-                    // away: every promoted player carries a `start` chip on his
-                    // own row inside the drawer.
-                    <span className="hidden shrink-0 whitespace-nowrap rounded-full border border-active/40 px-1.5 py-0.5 font-mono text-[length:var(--fs-9)] tracking-[0.1em] text-[color:var(--billet-accent)] lg:inline-flex">
-                      {starts} start
-                    </span>
-                  )}
-                </DrawerBar>
-              </button>
+          <PaneDrawer id={drawerId} open={benchOpen}>
+            <div className="lab-scroll-glass min-h-0 flex-1 overflow-y-auto overflow-x-hidden">
+              <ul className="m-0 list-none p-0">
+                {pane.bench.map((player) => (
+                  <BenchRow
+                    key={player.player_id}
+                    player={player}
+                    promoted={pane.promoted.includes(player.player_id)}
+                    irMark={irMarkFor(player.player_id, pane.ir)}
+                  />
+                ))}
+              </ul>
             </div>
-          </>
+          </PaneDrawer>
         )}
       </PaneGlass>
+
+      {/* The bench's key stands on the pane's foot, below the glass, rather
+          than across the glass's floor — see `PaneFoot` for why. */}
+      {pane.bench.length > 0 && (
+        <PaneFoot>
+          <button
+            type="button"
+            onClick={() => setBenchOpen((held) => !held)}
+            aria-expanded={benchOpen}
+            aria-controls={drawerId}
+            className={drawerBarClass(benchOpen)}
+          >
+            <DrawerBar open={benchOpen} label={`Bench · ${pane.bench.length}`}>
+              {starts > 0 && (
+                // How many of them the optimal lineup would start, which is
+                // the one thing the key can say that the count cannot.
+                //
+                // **Dropped below `lg`**, which the manager card's own key
+                // does with its total for the same reason and is a
+                // measurement here: this pane is half that card's, so the
+                // key is ~150px at 390 and a 62px chip leaves `Bench · 7`
+                // less than the seventy it needs — the count the key is read
+                // for, truncated. Nothing is lost that is not one press
+                // away: every promoted player carries a `start` chip on his
+                // own row inside the drawer.
+                <span className="hidden shrink-0 whitespace-nowrap rounded-full border border-active/40 px-1.5 py-0.5 font-mono text-[length:var(--fs-9)] tracking-[0.1em] text-[color:var(--billet-accent)] lg:inline-flex">
+                  {starts} start
+                </span>
+              )}
+            </DrawerBar>
+          </button>
+        </PaneFoot>
+      )}
     </Pane>
   );
 }

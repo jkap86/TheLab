@@ -5,11 +5,10 @@ import { useId, useState } from "react";
 import type { GametimeGame, GametimePlayer, GametimeSeat, GametimeSide } from "@/shared/contract";
 import {
   DrawerBar,
-  DRAWER_BAR,
-  DRAWER_BAR_HEIGHT,
-  DRAWER_BARS,
+  drawerBarClass,
   Pane,
   PaneDrawer,
+  PaneFoot,
   PaneGlass,
   PaneHead,
   PaneLedge,
@@ -35,8 +34,8 @@ import { gameClockLabel, gameScoreLabel } from "../helpers/live-record";
  * reader can still set is what it is about; this is a scoreboard over a
  * lineup that is being played, so the seats are plain rows and the panes are
  * two lists read across — the same parts (`Pane`, `PaneLedge`, `PaneGlass`,
- * `PaneWeekRow`, a bench behind a pinned drawer bar), the same two row
- * heights, and the same linked scroll, so a reader walking from the checker to
+ * `PaneWeekRow`, a bench behind a drawer key on the pane's foot), the same two
+ * row heights, and the same linked scroll, so a reader walking from the checker to
  * here sees one card over one league.
  *
  * **Each seat carries three figures and the column is the reason a live page
@@ -161,35 +160,31 @@ function LineupPane({
         </div>
 
         {side.bench.length > 0 && (
-          <>
-            <PaneDrawer id={drawerId} open={benchOpen} bars={DRAWER_BARS.bench}>
-              <div className="lab-scroll-glass min-h-0 flex-1 overflow-y-auto overflow-x-hidden">
-                <ul className="m-0 list-none p-0">
-                  {side.bench.map((player) => (
-                    <BenchRow key={player.player_id} player={player} game={gameOf(player, board)} />
-                  ))}
-                </ul>
-              </div>
-            </PaneDrawer>
-
-            <div className="relative z-[3] shrink-0">
-              <button
-                type="button"
-                onClick={() => setBenchOpen((held) => !held)}
-                aria-expanded={benchOpen}
-                aria-controls={drawerId}
-                className={`${DRAWER_BAR} ${DRAWER_BAR_HEIGHT.bench} ${
-                  benchOpen
-                    ? "text-[color:var(--billet-accent)]"
-                    : "text-[color:var(--billet-name)]"
-                }`}
-              >
-                <DrawerBar open={benchOpen} label={`Bench · ${side.bench.length}`} />
-              </button>
+          <PaneDrawer id={drawerId} open={benchOpen}>
+            <div className="lab-scroll-glass min-h-0 flex-1 overflow-y-auto overflow-x-hidden">
+              <ul className="m-0 list-none p-0">
+                {side.bench.map((player) => (
+                  <BenchRow key={player.player_id} player={player} game={gameOf(player, board)} />
+                ))}
+              </ul>
             </div>
-          </>
+          </PaneDrawer>
         )}
       </PaneGlass>
+
+      {side.bench.length > 0 && (
+        <PaneFoot>
+          <button
+            type="button"
+            onClick={() => setBenchOpen((held) => !held)}
+            aria-expanded={benchOpen}
+            aria-controls={drawerId}
+            className={drawerBarClass(benchOpen)}
+          >
+            <DrawerBar open={benchOpen} label={`Bench · ${side.bench.length}`} />
+          </button>
+        </PaneFoot>
+      )}
     </Pane>
   );
 }

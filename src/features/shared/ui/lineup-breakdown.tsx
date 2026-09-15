@@ -18,10 +18,9 @@ import { type Lens, lensValue } from "../seat-compare";
 import { PickRows, pickSpan } from "./draft-picks";
 import {
   DrawerBar,
-  DRAWER_BAR,
-  DRAWER_BAR_HEIGHT,
-  DRAWER_BARS,
+  drawerBarClass,
   PaneDrawer,
+  PaneFoot,
   PaneGlass,
   PaneWeekRow,
   type DrawerTray,
@@ -29,17 +28,17 @@ import {
 
 /**
  * A league card's rest-of-season lineup: the optimal starters in slot order on
- * the pane's glass, with the bench and the roster's draft picks behind two bars
- * pinned to its floor.
+ * the pane's glass, with the bench and the roster's draft picks behind two keys
+ * on the pane's foot below it.
  *
- * **The starters scroll and the two bars do not**, which is the whole shape of
+ * **The starters scroll and the two keys do not**, which is the whole shape of
  * it: the pane is a fixed-height column inside a panel capped to the viewport,
  * so what a reader can reach must not depend on how far they have scrolled. The
  * bench was a disclosure at the bottom of the list — reachable only by
  * scrolling past every starter — and the picks were a grid of season plates
  * *below both panes*, which the cap would have taken out of the panes' own
- * height on every card whether or not anybody opened them. Behind bars they
- * cost 88px and are one press away. See {@link DrawerBar}.
+ * height on every card whether or not anybody opened them. Behind two keys they
+ * cost the foot's height and are one press away. See {@link DrawerBar}.
  *
  * **Each seat is a reading against the league, not against another roster.**
  * It used to be a comparison — the reader's own player as a ghost figure beside
@@ -326,10 +325,9 @@ export type BenchReading = { total: string; place: MetricRank | null };
 /**
  * Which reading the drawer is showing.
  *
- * The type, the two bars' heights and the `--bars` sums they add up to all
- * live in `pane.tsx` since the lineup checker's lineup pane took the same
- * drawer for its bench — see {@link DRAWER_BAR_HEIGHT}, which carries the
- * arithmetic and the reason both records are spelled literally.
+ * The type and the keys' surface live in `pane.tsx` since the lineup checker's
+ * and gametime's lineup panes took the same drawer for their benches — see
+ * {@link drawerBarClass} for the key and {@link PaneFoot} for what it stands on.
  */
 type Tray = DrawerTray;
 
@@ -407,53 +405,60 @@ export function LineupBreakdown({
   };
 
   const benchTone = rankColor(rankPercentile(bench?.place ?? null));
-  const barsVar = DRAWER_BARS[bars.join(",")] ?? "";
   const span = pickSpan(picks);
 
   return (
-    // A frame rather than a scroller: the starters scroll inside it, the drawer
-    // rises inside it, and the bars are pinned to its floor. `overflow-hidden`
-    // is what keeps the drawer's own corners inside the glass's radius and what
-    // stops a mid-animation drawer painting over the pane's edge.
-    <PaneGlass className="flex flex-col overflow-hidden p-[3px]">
-      {/* `pr-[9px]`: the scrollbar's gutter, so a figure's last digit clears
-          the thumb — the standings glass makes the same measurement at its
-          own 11px, and the difference is that this scroller sits 3px inside
-          a frame that already spends some of it. */}
-      <div className="lab-scroll-glass relative min-h-0 flex-1 overflow-y-auto overflow-x-hidden pr-[9px]">
-        <ul className="m-0 list-none p-0">
-          {lineup.starters.map((seat, i) => (
-            <SeatRow
-              key={`${seat.slot}-${i}`}
-              slot={seat.slot}
-              player={seat.player}
-              lens={lens}
-              median={medians[i] ?? 0}
-            />
-          ))}
-        </ul>
+    // **Two of the pane's parts, as a fragment**: the glass the starters scroll
+    // on and the drawer rises in, and the foot the two keys stand on below it.
+    // `LeagueTeams` renders this as a direct child of `Pane`, whose flex column
+    // is what gives the glass the height the foot leaves it — a wrapper here
+    // would make the two one flex item, and the glass would stop shrinking.
+    <>
+      {/* A frame rather than a scroller: the starters scroll inside it and the
+          drawer rises inside it. `overflow-hidden` is what keeps the drawer's
+          own corners inside the glass's radius and what stops a mid-animation
+          drawer painting over the pane's edge. */}
+      <PaneGlass className="flex flex-col overflow-hidden p-[3px]">
+        {/* `pr-[9px]`: the scrollbar's gutter, so a figure's last digit clears
+            the thumb — the standings glass makes the same measurement at its
+            own 11px, and the difference is that this scroller sits 3px inside
+            a frame that already spends some of it. */}
+        <div className="lab-scroll-glass relative min-h-0 flex-1 overflow-y-auto overflow-x-hidden pr-[9px]">
+          <ul className="m-0 list-none p-0">
+            {lineup.starters.map((seat, i) => (
+              <SeatRow
+                key={`${seat.slot}-${i}`}
+                slot={seat.slot}
+                player={seat.player}
+                lens={lens}
+                median={medians[i] ?? 0}
+              />
+            ))}
+          </ul>
 
-        {lineup.unknown_slots.length > 0 && (
-          // A partial lineup must say so — see `unknown_slots` on the contract.
-          // Inside the scroller with the seats it qualifies, rather than pinned
-          // under them: it is part of the lineup's reading, and the two bars
-          // below are the only things on this glass that hold their place.
-          <p className="m-0 px-2 py-2 font-mono text-[length:var(--fs-11)] uppercase tracking-[0.14em] text-foreground/60">
-            Not shown: {lineup.unknown_slots.join(", ")}
-          </p>
-        )}
-      </div>
+          {lineup.unknown_slots.length > 0 && (
+            // A partial lineup must say so — see `unknown_slots` on the
+            // contract. Inside the scroller with the seats it qualifies, rather
+            // than pinned under them: it is part of the lineup's reading, and
+            // the keys on the foot below are the only things on this pane that
+            // hold their place.
+            <p className="m-0 px-2 py-2 font-mono text-[length:var(--fs-11)] uppercase tracking-[0.14em] text-foreground/60">
+              Not shown: {lineup.unknown_slots.join(", ")}
+            </p>
+          )}
+        </div>
 
-      {bars.length > 0 && (
-        <>
-          {/*
-            **One drawer for both readings**, where two over one list would
-            cover it twice — see {@link PaneDrawer} for the box, and `toggle`
-            for why switching does not collapse the one that is up.
-          */}
-          <PaneDrawer id={drawerId} open={open !== null} bars={barsVar}>
+        {bars.length > 0 && (
+          // **One drawer for both readings**, where two over one list would
+          // cover it twice — see {@link PaneDrawer} for the box, and `toggle`
+          // for why switching does not collapse the one that is up.
+          //
+          // `translate` in the swap's transition list, not `transform`:
+          // Tailwind v4's `translate-y-*` sets the `translate` property, so a
+          // list naming `transform` let the 8px slide jump rather than ease.
+          <PaneDrawer id={drawerId} open={open !== null}>
             <div
-              className={`lab-anim lab-scroll-glass min-h-0 flex-1 overflow-y-auto overflow-x-hidden [transition:opacity_160ms_ease,transform_220ms_cubic-bezier(0.2,0.8,0.2,1)] ${
+              className={`lab-anim lab-scroll-glass min-h-0 flex-1 overflow-y-auto overflow-x-hidden [transition:opacity_160ms_ease,translate_220ms_cubic-bezier(0.2,0.8,0.2,1)] ${
                 swapping ? "translate-y-2 opacity-0" : "translate-y-0 opacity-100"
               }`}
             >
@@ -468,75 +473,67 @@ export function LineupBreakdown({
               )}
             </div>
           </PaneDrawer>
+        )}
+      </PaneGlass>
 
-          {/* Above the drawer, so a drawer at full height stops at the bars
-              rather than under them. */}
-          <div className="relative z-[3] shrink-0">
-            {bars.includes("bench") && (
-              <button
-                type="button"
-                onClick={() => toggle("bench")}
-                aria-expanded={open === "bench"}
-                aria-controls={drawerId}
-                className={`${DRAWER_BAR} ${DRAWER_BAR_HEIGHT.bench} ${
-                  open === "bench"
-                    ? "text-[color:var(--billet-accent)]"
-                    : "text-[color:var(--billet-name)]"
-                }`}
-              >
-                <DrawerBar open={open === "bench"} label={`Bench · ${lineup.bench.length}`}>
-                  {bench && (
-                    <>
-                      {/* **The total drops below `lg`**, where the place and
-                          the caret are what the bar is for: at ~165px three
-                          figures and a word leave the word nothing. It is on
-                          the standings row opposite at every width, which is
-                          where a reader compares benches anyway. */}
-                      <span className="hidden shrink-0 tabular-nums text-[color:var(--billet-label)] lg:inline">
-                        {bench.total}
-                      </span>
-                      {/* The place among the league's benches, on the same ramp
-                          the card's rank windows run — and neutral rather than
-                          red where there is no place to report. */}
-                      <span
-                        className="w-7 shrink-0 text-right tabular-nums lg:w-9"
-                        style={{ color: benchTone }}
-                      >
-                        {bench.place ? ordinal(bench.place.rank) : "—"}
-                      </span>
-                    </>
-                  )}
-                </DrawerBar>
-              </button>
-            )}
-
-            {bars.includes("picks") && (
-              <button
-                type="button"
-                onClick={() => toggle("picks")}
-                aria-expanded={open === "picks"}
-                aria-controls={drawerId}
-                className={`${DRAWER_BAR} ${DRAWER_BAR_HEIGHT.picks} ${
-                  open === "picks"
-                    ? "text-[color:var(--billet-accent)]"
-                    : "text-[color:var(--billet-name)]"
-                }`}
-              >
-                <DrawerBar open={open === "picks"} label={`Picks · ${picks.length}`}>
-                  {/* The span is what the bar can say that the count cannot —
-                      how far out the portfolio runs. Dropped below `lg` on the
-                      bench bar's own argument. */}
-                  {span && (
-                    <span className="hidden shrink-0 font-mono text-[length:var(--fs-12)] tracking-[0.08em] tabular-nums text-[color:var(--billet-label)] lg:inline">
-                      {span}
+      {bars.length > 0 && (
+        <PaneFoot>
+          {bars.includes("bench") && (
+            <button
+              type="button"
+              onClick={() => toggle("bench")}
+              aria-expanded={open === "bench"}
+              aria-controls={drawerId}
+              className={drawerBarClass(open === "bench")}
+            >
+              <DrawerBar open={open === "bench"} label={`Bench · ${lineup.bench.length}`}>
+                {bench && (
+                  <>
+                    {/* **The total drops below `lg`**, where the place and the
+                        caret are what the key is for: at ~150px three figures
+                        and a word leave the word nothing. It is on the
+                        standings row opposite at every width, which is where a
+                        reader compares benches anyway. */}
+                    <span className="hidden shrink-0 tabular-nums text-[color:var(--billet-label)] lg:inline">
+                      {bench.total}
                     </span>
-                  )}
-                </DrawerBar>
-              </button>
-            )}
-          </div>
-        </>
+                    {/* The place among the league's benches, on the same ramp
+                        the card's rank windows run — and neutral rather than
+                        red where there is no place to report. */}
+                    <span
+                      className="w-7 shrink-0 text-right tabular-nums lg:w-9"
+                      style={{ color: benchTone }}
+                    >
+                      {bench.place ? ordinal(bench.place.rank) : "—"}
+                    </span>
+                  </>
+                )}
+              </DrawerBar>
+            </button>
+          )}
+
+          {bars.includes("picks") && (
+            <button
+              type="button"
+              onClick={() => toggle("picks")}
+              aria-expanded={open === "picks"}
+              aria-controls={drawerId}
+              className={drawerBarClass(open === "picks")}
+            >
+              <DrawerBar open={open === "picks"} label={`Picks · ${picks.length}`}>
+                {/* The span is what the key can say that the count cannot —
+                    how far out the portfolio runs. Dropped below `lg` on the
+                    bench key's own argument. */}
+                {span && (
+                  <span className="hidden shrink-0 font-mono text-[length:var(--fs-12)] tracking-[0.08em] tabular-nums text-[color:var(--billet-label)] lg:inline">
+                    {span}
+                  </span>
+                )}
+              </DrawerBar>
+            </button>
+          )}
+        </PaneFoot>
       )}
-    </PaneGlass>
+    </>
   );
 }
